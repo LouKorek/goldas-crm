@@ -393,6 +393,10 @@ export function ActionButtons({ onView, onEdit, onDuplicate, onDelete }) {
           onMouseEnter={e=>e.currentTarget.style.background='rgba(96,165,250,0.3)'}
           onMouseLeave={e=>e.currentTarget.style.background='rgba(96,165,250,0.15)'}>👁</button>
       )}
+      <button style={{...BTN,background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
+        title="Delete" onClick={onDelete}
+        onMouseEnter={e=>e.currentTarget.style.background='rgba(248,113,113,0.3)'}
+        onMouseLeave={e=>e.currentTarget.style.background='rgba(248,113,113,0.15)'}>🗑</button>
       <button style={{...BTN,background:'rgba(201,168,76,0.15)',color:'var(--gold)',
                       gridColumn: onView?'auto':'1 / -1'}}
         title="Edit" onClick={onEdit}
@@ -402,10 +406,6 @@ export function ActionButtons({ onView, onEdit, onDuplicate, onDelete }) {
         title="Duplicate" onClick={onDuplicate}
         onMouseEnter={e=>e.currentTarget.style.background='rgba(167,139,250,0.3)'}
         onMouseLeave={e=>e.currentTarget.style.background='rgba(167,139,250,0.15)'}>⧉</button>
-      <button style={{...BTN,background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
-        title="Delete" onClick={onDelete}
-        onMouseEnter={e=>e.currentTarget.style.background='rgba(248,113,113,0.3)'}
-        onMouseLeave={e=>e.currentTarget.style.background='rgba(248,113,113,0.15)'}>🗑</button>
     </div>
   );
 }

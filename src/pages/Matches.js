@@ -168,6 +168,7 @@ export default function Matches() {
   const [modal, setModal]     = useState(null);
   const [form, setForm]       = useState(EMPTY);
   const [saving, setSaving]   = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [search, setSearch]   = useState('');
   const { confirm, dialog }   = useConfirm();
 
@@ -285,7 +286,7 @@ export default function Matches() {
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : items.length===0 ? (
         <Empty icon="🏟" message="No matches scheduled."
-          action={!search&&<button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
+          action={items.length===0&&!search&&<button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
       ) : (
         <>
           {upcoming.length > 0 && (

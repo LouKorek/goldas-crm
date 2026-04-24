@@ -29,6 +29,7 @@ export default function Requirements() {
   const [modal, setModal]     = useState(null);
   const [form, setForm]       = useState(EMPTY);
   const [saving, setSaving]   = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [search, setSearch]   = useState('');
   const [filters, setFilters] = useState({});
   const [sort, setSort]       = useState({ field:'clubName', dir:'asc' });

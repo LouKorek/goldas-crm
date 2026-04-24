@@ -328,10 +328,10 @@ export default function Players() {
                       {/* Actions cell - click stops propagation */}
                       <td onClick={e=>e.stopPropagation()}>
                         <div style={{display:'flex',gap:3,flexWrap:'wrap',width:66}}>
-                          <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
-                            title="Edit" onClick={(e)=>{e.stopPropagation();openEdit(p);}}>✏️</button>
                           <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)',transition:'all 0.15s'}}
                             title="Delete" onClick={(e)=>del(p,e)}>🗑</button>
+                          <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
+                            title="Edit" onClick={(e)=>{e.stopPropagation();openEdit(p);}}>✏️</button>
                           {p.profileLink&&(
                             <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
                               target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
