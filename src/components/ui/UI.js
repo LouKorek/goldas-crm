@@ -33,30 +33,61 @@ export function ToastProvider() {
 }
 
 // ── Modal — only X closes it ──────────────────────────────────────
-export function Modal({ title, onClose, children, footer, wide, dirty, viewOnly }) {
+export function Modal({ title, onClose, children, footer, wide, viewOnly }) {
   useEffect(() => {
     const h = (e) => {
-      if (e.key === 'Escape') {
-        if (viewOnly) { onClose(); return; }
-        if (dirty !== false && window.confirm('Discard unsaved changes?')) onClose();
-        else if (dirty === false) onClose();
-      }
+      if (e.key !== 'Escape') return;
+      if (viewOnly) { onClose(); return; }
+      if (window.confirm('Discard unsaved changes?')) onClose();
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose, dirty, viewOnly]);
+  }, [onClose, viewOnly]);
+
+  const handleClose = () => {
+    if (viewOnly) { onClose(); return; }
+    if (window.confirm('Discard unsaved changes?')) onClose();
+  };
+
   return (
     <div className="modal-overlay">
       <div className={`modal-box${wide?' modal-wide':''}`}>
-        <div className="modal-header">
-          <h2 className="modal-title">{title}</h2>
-          <button className="btn btn-ghost btn-icon"
-            onClick={() => { if (viewOnly || window.confirm('Discard unsaved changes?')) onClose(); }}
-            style={{fontSize:18,lineHeight:1,padding:0,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:8}}>×</button>
+        {/* STICKY HEADER */}
+        <div style={{
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+          padding:'18px 24px 14px',
+          background:'var(--surface-2)',
+          borderBottom:'1px solid var(--border)',
+          borderRadius:'var(--radius-xl) var(--radius-xl) 0 0',
+          flexShrink:0,
+          position:'sticky', top:0, zIndex:10,
+        }}>
+          <h2 className="modal-title" style={{fontSize:22,margin:0}}>{title}</h2>
+          <button onClick={handleClose}
+            style={{
+              background:'rgba(255,255,255,0.06)', border:'1px solid var(--border-2)',
+              borderRadius:8, color:'var(--text-2)', cursor:'pointer',
+              width:32, height:32, display:'flex', alignItems:'center',
+              justifyContent:'center', fontSize:18, lineHeight:1, flexShrink:0,
+              transition:'all 0.15s',
+            }}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(248,113,113,0.15)';e.currentTarget.style.color='var(--red)';}}
+            onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,0.06)';e.currentTarget.style.color='var(--text-2)';}}
+          >×</button>
         </div>
-        <div className="modal-body">
+        {/* SCROLLABLE BODY */}
+        <div style={{flex:1, overflowY:'auto', padding:'20px 24px', minHeight:0}}>
           {children}
-          {footer && <div style={{marginTop:24,display:'flex',justifyContent:'flex-end',gap:10,paddingTop:16,borderTop:'1px solid var(--border)'}}>{footer}</div>}
+          {footer && (
+            <div style={{
+              display:'flex', justifyContent:'flex-end', gap:10,
+              paddingTop:16, marginTop:20,
+              borderTop:'1px solid var(--border)',
+              position:'sticky', bottom:0,
+              background:'var(--surface-2)',
+              padding:'14px 0 4px',
+            }}>{footer}</div>
+          )}
         </div>
       </div>
     </div>

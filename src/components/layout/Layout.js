@@ -125,7 +125,7 @@ export default function Layout({ user }) {
 
       {/* Sidebar — desktop */}
       <aside style={{
-        width: 'var(--sidebar-w)',
+        width: 210,
         background: 'var(--surface-1)',
         borderRight: '1px solid var(--border)',
         display: 'flex',
