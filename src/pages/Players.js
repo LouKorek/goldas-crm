@@ -172,7 +172,6 @@ function PlayerView({ player, onClose }) {
         </div>
       </div>
       {docModal && <DocViewer files={docModal.files} title={docModal.title} onClose={()=>setDocModal(null)} />}
-      </div>
     </Modal>
   );
 }
