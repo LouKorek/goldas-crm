@@ -60,8 +60,10 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
           borderBottom:'1px solid var(--border-2)',
           borderRadius:'var(--radius-xl) var(--radius-xl) 0 0',
           flexShrink:0,
-          position:'sticky', top:0, zIndex:20,
-          boxShadow:'0 4px 16px rgba(0,0,0,0.4)',
+          position:'sticky', top:-1,
+          marginTop:-1,
+          zIndex:30,
+          boxShadow:'0 6px 20px rgba(7,15,8,0.95)',
         }}>
           <h2 className="modal-title" style={{fontSize:22,margin:0}}>{title}</h2>
           <button onClick={handleClose}

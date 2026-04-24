@@ -376,8 +376,8 @@ export default function Players() {
                       <td>
                         <ActionButtons onView={()=>setViewPlayer(p)} onEdit={()=>openEdit(p)} onDuplicate={()=>openDup(p)} onDelete={()=>del(p)} />
                       </td>
-                      <td style={{fontWeight:600,verticalAlign:'top',paddingTop:10}}>
-                        <div style={{lineHeight:'20px'}}>{p.fullName}</div>
+                      <td style={{fontWeight:600}}>
+                        <div style={{lineHeight:'20px',fontWeight:600}}>{p.fullName}</div>
                         {(p.profileLink || p.videoLink) && (
                           <div style={{display:'flex',gap:6,marginTop:3}}>
                             {p.profileLink && (
@@ -393,8 +393,8 @@ export default function Players() {
                           </div>
                         )}
                       </td>
-                      <td style={{color:'var(--text-2)',fontSize:12}}>{genderShort}</td>
-                      <td style={{fontSize:12,color:'var(--text-2)',whiteSpace:'nowrap'}}>{dobDisplay}</td>
+                      <td><div style={{lineHeight:'20px',color:'var(--text-2)',fontSize:12}}>{genderShort}</div></td>
+                      <td><div style={{lineHeight:'20px',fontSize:12,color:'var(--text-2)'}}>{dobDisplay}</div></td>
                       <td>
                         <NatFlags nationalities={p.nationalities} />
                         <div style={{marginTop:3}}>
@@ -405,12 +405,12 @@ export default function Players() {
                           }}>{pIsEU?'EU':'Non-EU'}</span>
                         </div>
                       </td>
-                      <td style={{fontWeight:500}}>{p.primaryPosition||'—'}</td>
-                      <td style={{fontSize:12,color:'var(--text-3)'}}>
+                      <td><div style={{lineHeight:'20px',fontWeight:500}}>{p.primaryPosition||'—'}</div></td>
+                      <td>
                         {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0
                           ? p.secondaryPositions.join(', ') : '—'}
                       </td>
-                      <td style={{fontWeight:500,fontSize:12}}>{footShort}</td>
+                      <td><div style={{lineHeight:'20px',fontWeight:500,fontSize:12}}>{footShort}</div></td>
                       <td>
                         <div style={{fontWeight:500}}>{p.isFree?'Free Agent':(p.currentClub||'—')}</div>
                         <div style={{fontSize:11,color:'var(--text-3)'}}>{p.league||''}</div>
@@ -422,8 +422,8 @@ export default function Players() {
                           fontSize:11,
                         }}>{p.contractStatus||'—'}</span>
                       </td>
-                      <td style={{verticalAlign:'top',paddingTop:10}}>
-                        <div style={{color:alertColor(contractDays),fontSize:12,lineHeight:'20px'}}>
+                      <td >
+                        <div style={{color:alertColor(contractDays),fontSize:12,lineHeight:'20px',minHeight:'20px'}}>
                           {p.contractEnd ? fmtDate(p.contractEnd) : '—'}
                         </div>
                         {(p.contractFiles||[]).length>0 && (
@@ -432,8 +432,8 @@ export default function Players() {
                             title="View contract">👁</button>
                         )}
                       </td>
-                      <td style={{verticalAlign:'top',paddingTop:10}}>
-                        <div style={{color:alertColor(reprDays),fontSize:12,lineHeight:'20px'}}>
+                      <td >
+                        <div style={{color:alertColor(reprDays),fontSize:12,lineHeight:'20px',minHeight:'20px'}}>
                           {p.reprEnd ? fmtDate(p.reprEnd) : '—'}
                         </div>
                         {(p.reprFiles||[]).length>0 && (
@@ -442,8 +442,8 @@ export default function Players() {
                             title="View agreement">👁</button>
                         )}
                       </td>
-                      <td style={{verticalAlign:'top',paddingTop:10}}>
-                        <div style={{color:alertColor(passportDays),fontSize:12,lineHeight:'20px'}}>
+                      <td >
+                        <div style={{color:alertColor(passportDays),fontSize:12,lineHeight:'20px',minHeight:'20px'}}>
                           {p.passportExpiry ? fmtDate(p.passportExpiry) : '—'}
                         </div>
                         {(p.passportFiles||[]).length>0 && (
@@ -452,7 +452,7 @@ export default function Players() {
                             title="View passport">👁</button>
                         )}
                       </td>
-                      <td style={{fontSize:12,color:'var(--text-3)'}}>{p.natTeamStatus||'—'}</td>
+                      <td>{p.natTeamStatus||'—'}</td>
                     </tr>
                   );
                 })}
