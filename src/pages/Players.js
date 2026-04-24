@@ -201,6 +201,7 @@ export default function Players() {
   const [docModal, setDocModal] = useState(null);
   const [form, setForm]         = useState(EMPTY_PLAYER);
   const [saving, setSaving]     = useState(false);
+  const [isDirty, setIsDirty]   = useState(false);
   const [search, setSearch]     = useState('');
   const [filters, setFilters]   = useState({});
   const [sort, setSort]         = useState({field:'fullName',dir:'asc'});
@@ -213,7 +214,7 @@ export default function Players() {
     });
   }, []);
 
-  const s = (k) => (v) => setForm(p => ({...p,[k]:v}));
+  const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
 
   const age    = calcAge(f('dob'));
@@ -224,9 +225,9 @@ export default function Players() {
     ? form.leagueManual
     : (form.leagueCountry && form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
-  const openAdd  = () => { setForm({...EMPTY_PLAYER}); setModal('add'); };
-  const openEdit = (p) => { setForm({...EMPTY_PLAYER,...p}); setModal({edit:p}); };
-  const openDup  = (p) => { const {id:_,...rest}=p; setForm({...EMPTY_PLAYER,...rest}); setModal('add'); };
+  const openAdd  = () => { setForm({...EMPTY_PLAYER}); setModal('add'); setIsDirty(false); };
+  const openEdit = (p) => { setForm({...EMPTY_PLAYER,...p}); setModal({edit:p}); setIsDirty(false); };
+  const openDup  = (p) => { const {id:_,...rest}=p; setForm({...EMPTY_PLAYER,...rest}); setModal('add'); setIsDirty(false); };
 
   const validate = () => {
     if (!form.fullName.trim()) return 'Player name is required.';
@@ -375,8 +376,8 @@ export default function Players() {
                       <td>
                         <ActionButtons onView={()=>setViewPlayer(p)} onEdit={()=>openEdit(p)} onDuplicate={()=>openDup(p)} onDelete={()=>del(p)} />
                       </td>
-                      <td style={{fontWeight:600}}>
-                        <div>{p.fullName}</div>
+                      <td style={{fontWeight:600,verticalAlign:'top',paddingTop:10}}>
+                        <div style={{lineHeight:'20px'}}>{p.fullName}</div>
                         {(p.profileLink || p.videoLink) && (
                           <div style={{display:'flex',gap:6,marginTop:3}}>
                             {p.profileLink && (
@@ -421,33 +422,33 @@ export default function Players() {
                           fontSize:11,
                         }}>{p.contractStatus||'—'}</span>
                       </td>
-                      <td>
-                        <div style={{color:alertColor(contractDays),fontSize:12}}>
+                      <td style={{verticalAlign:'top',paddingTop:10}}>
+                        <div style={{color:alertColor(contractDays),fontSize:12,lineHeight:'20px'}}>
                           {p.contractEnd ? fmtDate(p.contractEnd) : '—'}
                         </div>
                         {(p.contractFiles||[]).length>0 && (
                           <button onClick={()=>setDocModal({files:p.contractFiles,title:'Contract'})}
-                            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,padding:0,marginTop:2}}
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,padding:0,display:'block',marginTop:2,opacity:0.7}}
                             title="View contract">👁</button>
                         )}
                       </td>
-                      <td>
-                        <div style={{color:alertColor(reprDays),fontSize:12}}>
+                      <td style={{verticalAlign:'top',paddingTop:10}}>
+                        <div style={{color:alertColor(reprDays),fontSize:12,lineHeight:'20px'}}>
                           {p.reprEnd ? fmtDate(p.reprEnd) : '—'}
                         </div>
                         {(p.reprFiles||[]).length>0 && (
                           <button onClick={()=>setDocModal({files:p.reprFiles,title:'Representation Agreement'})}
-                            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,padding:0,marginTop:2}}
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,padding:0,display:'block',marginTop:2,opacity:0.7}}
                             title="View agreement">👁</button>
                         )}
                       </td>
-                      <td>
-                        <div style={{color:alertColor(passportDays),fontSize:12}}>
+                      <td style={{verticalAlign:'top',paddingTop:10}}>
+                        <div style={{color:alertColor(passportDays),fontSize:12,lineHeight:'20px'}}>
                           {p.passportExpiry ? fmtDate(p.passportExpiry) : '—'}
                         </div>
                         {(p.passportFiles||[]).length>0 && (
                           <button onClick={()=>setDocModal({files:p.passportFiles,title:'Passport'})}
-                            style={{background:'none',border:'none',cursor:'pointer',fontSize:14,padding:0,marginTop:2}}
+                            style={{background:'none',border:'none',cursor:'pointer',fontSize:13,padding:0,display:'block',marginTop:2,opacity:0.7}}
                             title="View passport">👁</button>
                         )}
                       </td>
@@ -465,7 +466,7 @@ export default function Players() {
       {modal && (
         <Modal
           title={modal==='add'?'Add Represented Player':`Edit: ${form.fullName}`}
-          onClose={()=>setModal(null)} wide
+          onClose={()=>setModal(null)} wide isDirty={isDirty}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

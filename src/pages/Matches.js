@@ -182,11 +182,11 @@ export default function Matches() {
     });
   }, []);
 
-  const s = (k) => (v) => setForm(p => ({...p,[k]:v}));
+  const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
 
-  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); };
-  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); };
+  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
+  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
 
   const save = async () => {
     if (!form.homeTeam || !form.awayTeam) { toast.error('Home and away teams are required.'); return; }
@@ -308,7 +308,7 @@ export default function Matches() {
       {modal && (
         <Modal
           title={modal==='add' ? 'Add Match' : 'Edit Match'}
-          onClose={()=>setModal(null)}
+          onClose={()=>setModal(null)} isDirty={isDirty}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

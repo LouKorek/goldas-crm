@@ -78,6 +78,7 @@ export default function Pipeline({ category }) {
   const [form, setForm]     = useState(EMPTY);
   const [cardFor, setCardFor] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
   const [sort, setSort]     = useState({ field:'primaryPosition', dir:'asc' });
@@ -90,15 +91,15 @@ export default function Pipeline({ category }) {
     }, 'playerName');
   }, [path]);
 
-  const s = (k) => (v) => setForm(p => ({...p,[k]:v}));
+  const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
 
   const league = form.leagueMode==='manual' ? form.leagueManual
     : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
-  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); };
-  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); };
-  const openDup  = (p) => { const {id:_, ...rest} = p; setForm({...EMPTY,...rest}); setModal('add'); };
+  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
+  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
+  const openDup  = (p) => { const {id:_, ...rest} = p; setForm({...EMPTY,...rest}); setModal('add'); setIsDirty(false); };
 
   const validate = () => {
     if (!form.playerName.trim()) return 'Player name is required.';
@@ -260,7 +261,7 @@ export default function Pipeline({ category }) {
       {modal && (
         <Modal
           title={modal==='add'?`Add — ${label}`:`Edit: ${form.playerName}`}
-          onClose={()=>setModal(null)} wide
+          onClose={()=>setModal(null)} wide isDirty={isDirty}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}

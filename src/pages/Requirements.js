@@ -40,15 +40,15 @@ export default function Requirements() {
     }, 'clubName');
   }, []);
 
-  const s = (k) => (v) => setForm(p => ({...p,[k]:v}));
+  const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
 
   const league = form.leagueMode==='manual' ? form.leagueManual
     : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
-  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); };
-  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); };
-  const openDup  = (p) => { const {id:_, ...rest} = p; setForm({...EMPTY,...rest}); setModal('add'); };
+  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
+  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
+  const openDup  = (p) => { const {id:_, ...rest} = p; setForm({...EMPTY,...rest}); setModal('add'); setIsDirty(false); };
 
   const validate = () => {
     if (!form.clubName.trim())    return 'Club name is required.';
@@ -187,7 +187,7 @@ export default function Requirements() {
       {modal && (
         <Modal
           title={modal==='add'?'Add Club Requirement':`Edit: ${form.clubName}`}
-          onClose={()=>setModal(null)} wide
+          onClose={()=>setModal(null)} wide isDirty={isDirty}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

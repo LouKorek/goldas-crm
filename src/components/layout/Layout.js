@@ -46,7 +46,7 @@ export default function Layout({ user }) {
       <nav style={{ flex:1, padding:'8px', overflowY:'auto' }}>
         {NAV.map((item, i) => {
           if (item.section) return (
-            <div key={i} style={{ color:'var(--text-3)', fontSize:10, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', padding:'14px 10px 5px' }}>
+            <div key={i} style={{ color:'var(--text-3)', fontSize:9.5, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', padding:'12px 10px 4px' }}>
               {item.section}
             </div>
           );
@@ -84,8 +84,8 @@ export default function Layout({ user }) {
             color:'var(--gold)', fontWeight:700, fontSize:13,
           }}>{info.name?.charAt(0)}</div>
           <div style={{ overflow:'hidden' }}>
-            <div style={{ fontSize:13, color:'var(--text-1)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{info.name}</div>
-            <div style={{ fontSize:11, color:'var(--text-3)' }}>{info.role}</div>
+            <div style={{ fontSize:12, color:'var(--text-1)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{info.name}</div>
+            <div style={{ fontSize:10, color:'var(--text-3)' }}>{info.role}</div>
           </div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => signOut(auth)}

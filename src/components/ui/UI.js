@@ -33,11 +33,11 @@ export function ToastProvider() {
 }
 
 // ── Modal — only X closes it ──────────────────────────────────────
-export function Modal({ title, onClose, children, footer, wide, viewOnly }) {
+export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirty=false }) {
   useEffect(() => {
     const h = (e) => {
       if (e.key !== 'Escape') return;
-      if (viewOnly) { onClose(); return; }
+      if (viewOnly || !isDirty) { onClose(); return; }
       if (window.confirm('Discard unsaved changes?')) onClose();
     };
     document.addEventListener('keydown', h);
@@ -45,7 +45,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly }) {
   }, [onClose, viewOnly]);
 
   const handleClose = () => {
-    if (viewOnly) { onClose(); return; }
+    if (viewOnly || !isDirty) { onClose(); return; }
     if (window.confirm('Discard unsaved changes?')) onClose();
   };
 
@@ -57,10 +57,11 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly }) {
           display:'flex', alignItems:'center', justifyContent:'space-between',
           padding:'18px 24px 14px',
           background:'var(--surface-2)',
-          borderBottom:'1px solid var(--border)',
+          borderBottom:'1px solid var(--border-2)',
           borderRadius:'var(--radius-xl) var(--radius-xl) 0 0',
           flexShrink:0,
-          position:'sticky', top:0, zIndex:10,
+          position:'sticky', top:0, zIndex:20,
+          boxShadow:'0 4px 16px rgba(0,0,0,0.4)',
         }}>
           <h2 className="modal-title" style={{fontSize:22,margin:0}}>{title}</h2>
           <button onClick={handleClose}
@@ -81,11 +82,13 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly }) {
           {footer && (
             <div style={{
               display:'flex', justifyContent:'flex-end', gap:10,
-              paddingTop:16, marginTop:20,
-              borderTop:'1px solid var(--border)',
-              position:'sticky', bottom:0,
+              marginTop:20,
+              borderTop:'1px solid var(--border-2)',
+              position:'sticky', bottom:-20,
               background:'var(--surface-2)',
-              padding:'14px 0 4px',
+              padding:'14px 0 0',
+              zIndex:15,
+              boxShadow:'0 -4px 16px rgba(0,0,0,0.3)',
             }}>{footer}</div>
           )}
         </div>
