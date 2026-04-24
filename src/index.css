@@ -410,8 +410,6 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   .modal-title { font-size: 18px; }
   .modal-scroll-body { padding: 16px 16px 20px; }
   .modal-header-frozen { padding: 14px 16px; }
-}
-  .modal-title { font-size: 18px !important; }
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
   .chip { font-size: 11px; padding: 4px 8px; }
 }
