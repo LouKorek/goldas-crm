@@ -38,7 +38,7 @@ export default function Layout({ user }) {
           </div>
           <div>
             <div style={{ fontFamily:'Cormorant Garamond,serif', fontSize:18, fontWeight:700, color:'var(--gold)', lineHeight:1 }}>Gold A&S</div>
-            <div style={{ fontSize:9.5, color:'var(--text-3)', marginTop:1, letterSpacing:'0.04em' }}>gold-as.com</div>
+            <div style={{ fontSize:9, color:'var(--text-3)', marginTop:1, letterSpacing:'0.04em' }}>gold-as.com</div>
           </div>
         </div>
       </div>
@@ -47,7 +47,7 @@ export default function Layout({ user }) {
       <nav style={{ flex:1, padding:'8px', overflowY:'auto' }}>
         {NAV.map((item, i) => {
           if (item.section) return (
-            <div key={i} style={{ color:'var(--text-3)', fontSize:9, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', padding:'12px 10px 4px' }}>
+            <div key={i} style={{ color:'var(--text-3)', fontSize:8.5, fontWeight:700, letterSpacing:'0.12em', textTransform:'uppercase', padding:'12px 10px 4px' }}>
               {item.section}
             </div>
           );
@@ -85,8 +85,8 @@ export default function Layout({ user }) {
             color:'var(--gold)', fontWeight:700, fontSize:13,
           }}>{info.name?.charAt(0)}</div>
           <div style={{ overflow:'hidden' }}>
-            <div style={{ fontSize:11.5, color:'var(--text-1)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{info.name}</div>
-            <div style={{ fontSize:9.5, color:'var(--text-3)' }}>{info.role}</div>
+            <div style={{ fontSize:10.5, color:'var(--text-1)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{info.name}</div>
+            <div style={{ fontSize:9, color:'var(--text-3)' }}>{info.role}</div>
           </div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => signOut(auth)}
@@ -126,7 +126,7 @@ export default function Layout({ user }) {
 
       {/* Sidebar — desktop */}
       <aside style={{
-        width: collapsed ? 52 : 200,
+        width: collapsed ? 50 : 200,
         background: 'var(--surface-1)',
         borderRight: '1px solid var(--border)',
         display: 'flex',
@@ -170,4 +170,38 @@ export default function Layout({ user }) {
       `}</style>
     </div>
   );
-}
+}        <div style={{ borderTop:'1px solid var(--border)', padding:'8px' }}>
+          {!collapsed && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, padding:'0 4px' }}>
+              <div style={{
+                width:26, height:26, borderRadius:'50%', flexShrink:0,
+                background:'rgba(201,168,76,0.15)', border:'1px solid rgba(201,168,76,0.2)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                color:'var(--gold)', fontWeight:700, fontSize:11,
+              }}>{info.name?.charAt(0)}</div>
+              <div style={{ overflow:'hidden' }}>
+                <div style={{ fontSize:10.5, color:'var(--text-1)', fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{info.name}</div>
+                <div style={{ fontSize:9, color:'var(--text-3)' }}>{info.role}</div>
+              </div>
+            </div>
+          )}
+          <div style={{ display:'flex', gap:5, alignItems:'center', justifyContent: collapsed ? 'center' : 'space-between', padding:'0 2px' }}>
+            {!collapsed && (
+              <button className="btn btn-ghost btn-sm" onClick={() => signOut(auth)}
+                style={{ fontSize:10, color:'var(--red)', borderColor:'rgba(248,113,113,0.2)', padding:'4px 8px' }}>
+                Sign out
+              </button>
+            )}
+            <button
+              onClick={() => setCollapsed(v => !v)}
+              style={{
+                background:'rgba(201,168,76,0.1)', border:'1px solid rgba(201,168,76,0.2)',
+                borderRadius:6, color:'var(--gold)', cursor:'pointer',
+                width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:15, fontWeight:700, transition:'all 0.2s', flexShrink:0,
+              }}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >{collapsed ? '›' : '‹'}</button>
+          </div>
+        </div>
+
