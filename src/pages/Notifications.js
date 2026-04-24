@@ -114,15 +114,13 @@ export default function Notifications() {
     players.forEach(p => {
       if (!p[dateField]) return;
       const d = daysUntil(p[dateField]);
-      if (d === null) return;
-      daysSettings.forEach(threshold => {
-        if (d >= 0 && d <= threshold + 1) {
-          const key = `${p.id}_${dateField}_${threshold}`;
-          if (!alerts.find(a => a.key === key)) {
-            alerts.push({ key, d, card: makeCard(p, d) });
-          }
-        }
-      });
+      if (d === null || d < 0) return;
+      // Only trigger if within the SMALLEST matching threshold
+      const sortedThresholds = [...daysSettings].sort((a,b) => a - b);
+      const matchingThreshold = sortedThresholds.find(t => d <= t);
+      if (matchingThreshold !== undefined) {
+        alerts.push({ key: `${p.id}_${dateField}`, d, card: makeCard(p, d) });
+      }
     });
     return alerts.sort((a,b) => a.d - b.d).map(a => a.card);
   };

@@ -54,8 +54,10 @@ export function Modal({ title, onClose, children, footer, wide, dirty, viewOnly 
             onClick={() => { if (viewOnly || window.confirm('Discard unsaved changes?')) onClose(); }}
             style={{fontSize:18,lineHeight:1,padding:0,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:8}}>×</button>
         </div>
-        {children}
-        {footer && <div style={{marginTop:24,display:'flex',justifyContent:'flex-end',gap:10,paddingTop:16,borderTop:'1px solid var(--border)'}}>{footer}</div>}
+        <div className="modal-body">
+          {children}
+          {footer && <div style={{marginTop:24,display:'flex',justifyContent:'flex-end',gap:10,paddingTop:16,borderTop:'1px solid var(--border)'}}>{footer}</div>}
+        </div>
       </div>
     </div>
   );
@@ -223,8 +225,9 @@ export function PhoneDisplay({ phone }) {
 }
 
 export function LinkIcon({ url, emoji='🔗', label='' }) {
-  if (!url||url==='-') return <span style={{color:'var(--text-3)'}}>—</span>;
-  return <a href={url} target="_blank" rel="noopener noreferrer"
+  if (!url||url==='-'||url==='') return <span style={{color:'var(--text-3)'}}>—</span>;
+  const href = url.startsWith('http://') || url.startsWith('https://') ? url : 'https://' + url;
+  return <a href={href} target="_blank" rel="noopener noreferrer"
     style={{color:'var(--gold)',textDecoration:'none',fontSize:18}} data-tooltip={label||url}>{emoji}</a>;
 }
 
