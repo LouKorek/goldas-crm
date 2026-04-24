@@ -284,8 +284,9 @@ export default function Players() {
       {loading ? (
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length===0 ? (
-        <Empty icon="🤝" message={search||Object.values(filters).some(Boolean)?'No players match.':'No players yet.'}
-          action={!search&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
+        <Empty icon="🤝"
+          message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
+          action={!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
       ) : (
         <div className="card" style={{padding:0,overflow:'hidden'}}>
           <div className="table-wrap">

@@ -78,11 +78,10 @@ input, select, textarea {
   padding: 10px 13px;
   outline: none;
   transition: border-color var(--trans), box-shadow var(--trans);
-  -webkit-text-fill-color: var(--input-text) !important;
 }
-input::placeholder { color: rgba(110,152,112,0.5) !important; }
-textarea::placeholder { color: rgba(110,152,112,0.5) !important; }
-input:focus::placeholder { color: rgba(110,152,112,0.3) !important; }
+
+
+input:focus
 
 input:focus, select:focus, textarea:focus {
   border-color: var(--gold);
@@ -439,8 +438,17 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .data-table tbody tr:nth-child(even) td { background: rgba(18,30,20,1.0); }
 .data-table tbody tr:hover td { background: rgba(201,168,76,0.07) !important; }
 
+
+
+
+input:focus::placeholder, textarea:focus
+
 /* ── Placeholder ─────────────────────────────────────────────────── */
-::placeholder { color: rgba(110,152,110,0.45) !important; opacity: 1 !important; }
-::-webkit-input-placeholder { color: rgba(110,152,110,0.45) !important; }
-::-moz-placeholder { color: rgba(110,152,110,0.45) !important; opacity: 1 !important; }
-input:focus::placeholder, textarea:focus::placeholder { color: rgba(110,152,110,0.25) !important; }
+::placeholder {
+  color: rgba(100, 145, 105, 0.5) !important;
+  opacity: 1 !important;
+}
+input:focus::placeholder,
+textarea:focus::placeholder {
+  color: rgba(100, 145, 105, 0.25) !important;
+}

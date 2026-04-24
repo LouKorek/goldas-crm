@@ -117,15 +117,26 @@ export default function Layout({ user }) {
             </button>
           )}
           {!isMobile && (
-            <button onClick={() => setCollapsed(v => !v)}
-              style={{
-                background:'rgba(201,168,76,0.1)', border:'1px solid rgba(201,168,76,0.2)',
-                borderRadius:6, color:'var(--gold)', cursor:'pointer',
-                width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center',
-                fontSize:14, fontWeight:700, transition:'all 0.2s', flexShrink:0,
-              }}
-              title={collapsed ? 'Expand' : 'Collapse'}
-            >{collapsed ? '›' : '‹'}</button>
+            <div style={{display:'flex',gap:4}}>
+              <button onClick={() => setTheme(t => t==='dark'?'light':'dark')}
+                style={{
+                  background:'rgba(201,168,76,0.08)', border:'1px solid rgba(201,168,76,0.2)',
+                  borderRadius:6, color:'var(--gold)', cursor:'pointer',
+                  width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:13, transition:'all 0.2s', flexShrink:0,
+                }}
+                title={theme==='dark'?'Light Mode':'Dark Mode'}
+              >{theme==='dark'?'☀️':'🌙'}</button>
+              <button onClick={() => setCollapsed(v => !v)}
+                style={{
+                  background:'rgba(201,168,76,0.1)', border:'1px solid rgba(201,168,76,0.2)',
+                  borderRadius:6, color:'var(--gold)', cursor:'pointer',
+                  width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:14, fontWeight:700, transition:'all 0.2s', flexShrink:0,
+                }}
+                title={collapsed ? 'Expand' : 'Collapse'}
+              >{collapsed ? '›' : '‹'}</button>
+            </div>
           )}
         </div>
       </div>
