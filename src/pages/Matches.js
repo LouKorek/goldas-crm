@@ -285,7 +285,7 @@ export default function Matches() {
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : items.length===0 ? (
         <Empty icon="🏟" message="No matches scheduled."
-          action={<button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
+          action={!search&&<button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
       ) : (
         <>
           {upcoming.length > 0 && (

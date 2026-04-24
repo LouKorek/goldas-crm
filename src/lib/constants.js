@@ -351,3 +351,6 @@ export const isBirthdaySoon = (dob, days = 7) => {
 
 // ── Notification advance days ─────────────────────────────────────
 export const ALERT_DAYS = [0, 7, 14, 30, 60, 90];
+
+// ── Position sort order (defensive → offensive) ───────────────────
+export const POSITION_ORDER = {'GK':0,'CB':1,'RB':2,'LB':3,'CDM':4,'CM':5,'CAM':6,'RM':7,'LM':8,'RW':9,'LW':10,'CF':11,'ST':12};

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, PATHS } from 'lib/db';
-import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS,
+import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORDER,
          calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
@@ -234,8 +234,19 @@ export default function Players() {
     if (filters.contractStatus&&p.contractStatus!==filters.contractStatus) return false;
     return true;
   }).sort((a,b)=>{
-    let av=a[sort.field]||'',bv=b[sort.field]||'';
-    if(sort.field==='dob'){av=a.dob||'';bv=b.dob||'';}
+    let av,bv;
+    if (sort.field==='primaryPosition') {
+      av = POSITION_ORDER[a.primaryPosition]??99;
+      bv = POSITION_ORDER[b.primaryPosition]??99;
+      return sort.dir==='asc'?(av-bv):(bv-av);
+    }
+    if (['dob','contractEnd','reprEnd','passportExpiry'].includes(sort.field)) {
+      av = a[sort.field]||'9999';
+      bv = b[sort.field]||'9999';
+    } else {
+      av = a[sort.field]||'';
+      bv = b[sort.field]||'';
+    }
     return sort.dir==='asc'?(av>bv?1:-1):(av<bv?1:-1);
   });
 
@@ -283,18 +294,18 @@ export default function Players() {
                 <tr>
                   <th style={{width:70}}>Actions</th>
                   <SortTh label="🏃‍♂️" field="fullName" sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>G</th>
-                  <th style={{textAlign:'center'}}>🗓️</th>
+                  <SortTh label='G' field='gender' sort={sort} setSort={setSort} />
+                  <SortTh label='🗓️' field='dob' sort={sort} setSort={setSort} />
                   <th style={{textAlign:'center'}}>🌎</th>
-                  <th style={{textAlign:'center'}}>📍</th>
+                  <SortTh label='📍' field='primaryPosition' sort={sort} setSort={setSort} />
                   <th style={{textAlign:'center'}}>Sec 📍</th>
-                  <th style={{textAlign:'center'}}>🦵</th>
+                  <SortTh label='🦵' field='foot' sort={sort} setSort={setSort} />
                   <th>🔰</th>
-                  <th style={{textAlign:'center'}}>📑</th>
-                  <th style={{textAlign:'center'}}>End 📑</th>
-                  <th style={{textAlign:'center'}}>End 🤝</th>
-                  <th style={{textAlign:'center'}}>End 🪪</th>
-                  <th style={{textAlign:'center'}}>🏟️</th>
+                  <SortTh label='📑' field='contractStatus' sort={sort} setSort={setSort} />
+                  <SortTh label='End 📑' field='contractEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='End 🤝' field='reprEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='End 🪪' field='passportExpiry' sort={sort} setSort={setSort} />
+                  <SortTh label='🏟️' field='natTeamStatus' sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth, USERS } from 'lib/firebase';
@@ -22,6 +22,13 @@ const NAV = [
 export default function Layout({ user }) {
   const location             = useLocation();
   const [open, setOpen]      = useState(false);
+  const [theme, setTheme]    = useState(() => localStorage.getItem('theme')||'dark');
+  
+  // Apply theme to body
+  useEffect(() => {
+    document.body.classList.toggle('light-mode', theme==='light');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
   const [collapsed, setCollapsed] = useState(false);
   const info                 = USERS[user?.email] || { name: user?.email, role: 'User' };
 

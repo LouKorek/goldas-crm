@@ -129,8 +129,8 @@ export default function Requirements() {
       {loading ? (
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length === 0 ? (
-        <Empty icon="📋" message={search?'No clubs match your search.':'No club requirements added yet.'}
-          action={!search&&<button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
+        <Empty icon="📋" message={search||Object.values(filters).some(Boolean)?'No club requirements match your search.':'No club requirements added yet.'}
+          action={!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
       ) : (
         <div className="card" style={{padding:0,overflow:'hidden'}}>
           <div className="table-wrap">
