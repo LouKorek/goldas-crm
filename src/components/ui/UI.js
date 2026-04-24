@@ -52,25 +52,26 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
   return (
     <div className="modal-overlay">
       <div className={`modal-box${wide?' modal-wide':''}`}>
-        {/* STICKY HEADER */}
+
+        {/* ── FROZEN HEADER ────────────────────────── */}
         <div style={{
           display:'flex', alignItems:'center', justifyContent:'space-between',
-          padding:'18px 24px 14px',
+          padding:'16px 22px 14px',
           background:'var(--surface-2)',
           borderBottom:'1px solid var(--border-2)',
-          borderRadius:'var(--radius-xl) var(--radius-xl) 0 0',
+          borderRadius:'20px 20px 0 0',
           flexShrink:0,
-          position:'sticky', top:-1,
-          marginTop:-1,
-          zIndex:30,
-          boxShadow:'0 6px 20px rgba(7,15,8,0.95)',
         }}>
-          <h2 className="modal-title" style={{fontSize:22,margin:0}}>{title}</h2>
+          <h2 style={{
+            fontFamily:'Cormorant Garamond,serif',
+            fontSize:21, fontWeight:700,
+            color:'var(--gold)', margin:0,
+          }}>{title}</h2>
           <button onClick={handleClose}
             style={{
-              background:'rgba(255,255,255,0.06)', border:'1px solid var(--border-2)',
+              background:'rgba(255,255,255,0.06)', border:'1px solid var(--border)',
               borderRadius:8, color:'var(--text-2)', cursor:'pointer',
-              width:32, height:32, display:'flex', alignItems:'center',
+              width:30, height:30, display:'flex', alignItems:'center',
               justifyContent:'center', fontSize:18, lineHeight:1, flexShrink:0,
               transition:'all 0.15s',
             }}
@@ -78,22 +79,19 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
             onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,0.06)';e.currentTarget.style.color='var(--text-2)';}}
           >×</button>
         </div>
-        {/* SCROLLABLE BODY */}
-        <div style={{flex:1, overflowY:'auto', padding:'20px 24px', minHeight:0}}>
+
+        {/* ── SCROLLABLE BODY ──────────────────────── */}
+        <div style={{flex:1, overflowY:'auto', padding:'18px 22px 22px', minHeight:0}}>
           {children}
           {footer && (
             <div style={{
               display:'flex', justifyContent:'flex-end', gap:10,
-              marginTop:20,
-              borderTop:'1px solid var(--border-2)',
-              position:'sticky', bottom:-20,
-              background:'var(--surface-2)',
-              padding:'14px 0 0',
-              zIndex:15,
-              boxShadow:'0 -4px 16px rgba(0,0,0,0.3)',
+              marginTop:20, paddingTop:14,
+              borderTop:'1px solid var(--border)',
             }}>{footer}</div>
           )}
         </div>
+
       </div>
     </div>
   );

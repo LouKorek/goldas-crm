@@ -21,7 +21,8 @@ const NAV = [
 
 export default function Layout({ user }) {
   const location       = useLocation();
-  const [open, setOpen] = useState(false); // mobile sidebar
+  const [open, setOpen]       = useState(false); // mobile sidebar
+  const [collapsed, setCollapsed] = useState(false); // desktop collapse
   const info           = USERS[user?.email] || { name: user?.email, role: 'User' };
 
   const NavContent = () => (
@@ -125,7 +126,7 @@ export default function Layout({ user }) {
 
       {/* Sidebar — desktop */}
       <aside style={{
-        width: 210,
+        width: collapsed ? 52 : 200,
         background: 'var(--surface-1)',
         borderRight: '1px solid var(--border)',
         display: 'flex',
@@ -135,6 +136,7 @@ export default function Layout({ user }) {
         height: '100vh',
         flexShrink: 0,
         overflow: 'hidden',
+        transition: 'width 0.22s ease',
       }} className="desktop-sidebar">
         <NavContent />
       </aside>
