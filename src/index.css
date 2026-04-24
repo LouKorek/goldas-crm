@@ -394,13 +394,13 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 14px 22px 18px;
+  padding: 14px 22px 20px;
   margin: 20px -22px -22px;
   border-top: 1px solid var(--border-2);
   position: sticky;
-  bottom: 0;
+  bottom: -22px;
   background: var(--surface-2);
-  box-shadow: 0 -4px 16px rgba(0,0,0,0.35);
+  box-shadow: 0 -6px 20px rgba(0,0,0,0.5);
   z-index: 10;
 }
 
