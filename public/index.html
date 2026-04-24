@@ -2,14 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <!-- PWA / Theme -->
   <meta name="theme-color" content="#0C1A0E" />
-  <title>Gold A&S — Football Agency</title>
-  <meta name="description" content="Gold A&S Football Agency Management System" />
-  <link rel="icon" href="%PUBLIC_URL%/logo.png" />
+  <meta name="application-name" content="Gold A&S" />
+  <meta name="description" content="Gold A&S Football Agency Management" />
+
+  <!-- PWA manifest -->
+  <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+  <!-- iOS PWA support -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Gold A&S" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo.png" />
+
+  <!-- Android -->
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="%PUBLIC_URL%/logo.png" />
+
+  <title>Gold A&S — Football Agency</title>
 </head>
 <body>
   <div id="root"></div>
+
+  <!-- Register Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then(function(reg) {
+            console.log('SW registered:', reg.scope);
+          })
+          .catch(function(err) {
+            console.log('SW registration failed:', err);
+          });
+      });
+    }
+  </script>
 </body>
 </html>
