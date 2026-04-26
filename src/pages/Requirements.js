@@ -47,14 +47,17 @@ function RequirementView({ req, onClose }) {
 
   return (
     <Modal title={req.clubName} onClose={onClose} wide viewOnly>
-      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:20}}>
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:20,flexWrap:'wrap'}}>
         <ClubAvatar name={req.clubName} size={44} />
-        <div>
-          <div style={{fontWeight:600,fontSize:15,color:'var(--text-1)'}}>{req.clubName}</div>
+        <div style={{flex:1}}>
+          <div style={{display:'flex',alignItems:'center',gap:7}}>
+            <span style={{fontWeight:600,fontSize:15,color:'var(--text-1)'}}>{req.clubName}</span>
+            {req.clubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:10,fontWeight:700,padding:'2px 7px'}}>Youth Team 🌱</span>}
+          </div>
           <div style={{fontSize:12,color:'var(--text-3)'}}>{req.league||'League not set'}{req.tablePosition ? ` · #${req.tablePosition} in table` : ''}</div>
         </div>
         {req.gender && (
-          <span className="badge" style={{marginLeft:'auto',background:'var(--surface-3)',color:'var(--text-2)'}}>{req.gender}</span>
+          <span className="badge" style={{background:'var(--surface-3)',color:'var(--text-2)'}}>{req.gender}</span>
         )}
       </div>
 
@@ -99,8 +102,8 @@ function RequirementView({ req, onClose }) {
 
 const EMPTY = {
   gender:'', leagueMode:'select', leagueCountry:'', leagueTier:'', leagueManual:'',
-  clubName:'', tablePosition:'', contactName:'', contactRole:'', contactPhone:'',
-  requiredPosition:'', ageMin:'', ageMax:'', ageNotSpecified:false,
+  clubName:'', clubIsYouth:false, tablePosition:'', contactName:'', contactRole:'',
+  contactPhone:'', requiredPosition:'', ageMin:'', ageMax:'', ageNotSpecified:false,
   transferFee:'', salary:'', notes:'',
 };
 
@@ -250,6 +253,7 @@ export default function Requirements() {
                       <div style={{display:'flex',alignItems:'center',gap:7}}>
                         <ClubAvatar name={p.clubName} />
                         <span style={{fontWeight:500}}>{p.clubName}</span>
+                        {p.clubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U</span>}
                       </div>
                     </td>
                     <td style={{color:'var(--text-2)',fontSize:12}}>{p.league||'—'}</td>
@@ -320,6 +324,9 @@ export default function Requirements() {
             </Field>
             <Field label="Club Name" required>
               <input value={f('clubName')} onChange={e=>s('clubName')(e.target.value)} placeholder="Club name" />
+              <button type="button" className={`chip${form.clubIsYouth?' active':''}`}
+                onClick={()=>s('clubIsYouth')(!form.clubIsYouth)}
+                style={{fontSize:11,padding:'4px 10px',marginTop:6}}>🌱 Youth Team</button>
             </Field>
           </div>
           <Field label="League">

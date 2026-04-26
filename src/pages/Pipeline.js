@@ -18,7 +18,8 @@ const EMPTY = {
   status:'Not Contacted', playerName:'', profileLink:'', videoLink:'',
   agentName:'', agentPhone:'', nationalities:[], dob:'',
   primaryPosition:'', secondaryPositions:[], height:'', foot:'',
-  currentClub:'', leagueCountry:'', leagueTier:'', leagueManual:'', leagueMode:'select',
+  currentClub:'', currentClubIsYouth:false, leagueCountry:'', leagueTier:'',
+  leagueManual:'', leagueMode:'select',
   natTeamStatus:'', transferFee:'', salary:'', notes:'',
 };
 
@@ -227,7 +228,10 @@ export default function Pipeline({ category }) {
                     </td>
                     <td><EUBadge is={isEuropean(p.nationalities)} /></td>
                     <td>
-                      <div style={{fontWeight:500}}>{p.currentClub||'Free'}</div>
+                      <div style={{display:'flex',alignItems:'center',gap:5}}>
+                        <span style={{fontWeight:500}}>{p.currentClub||'Free'}</span>
+                        {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U</span>}
+                      </div>
                       <div style={{fontSize:11,color:'var(--text-3)'}}>{p.league||''}</div>
                     </td>
                     <td>
@@ -321,6 +325,9 @@ export default function Pipeline({ category }) {
           <div className="form-section-title">Club & League</div>
           <Field label="Current Club">
             <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name or Free Agent" />
+            <button type="button" className={`chip${form.currentClubIsYouth?' active':''}`}
+              onClick={()=>s('currentClubIsYouth')(!form.currentClubIsYouth)}
+              style={{fontSize:11,padding:'4px 10px',marginTop:6}}>🌱 Youth Team</button>
           </Field>
           <Field label="League">
             <div style={{display:'flex',gap:8,marginBottom:8}}>

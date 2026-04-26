@@ -93,7 +93,7 @@ function PlayerView({ player, onClose }) {
         <div>
           <div className="form-section-title">Club & Contract</div>
           <Row label="Contract Status" value={player.contractStatus} />
-          <Row label="Club"            value={player.contractStatus==='Free'?'Free Agent':player.currentClub} />
+          <Row label="Club"            value={player.contractStatus==='Free'?'Free Agent':(player.currentClub ? `${player.currentClub}${player.currentClubIsYouth?' 🌱':'' }` : null)} />
           {player.contractStatus==='Loan' && <Row label="Loan From" value={player.loanFrom} />}
           <Row label="League"          value={player.league} />
           <Row label="Contract Start"  value={fmtDate(player.contractStart)} />
@@ -148,9 +148,9 @@ async function clearAllPlayers() {
 
 const EMPTY_PLAYER = {
   gender:'', fullName:'', nationalities:[], contractStatus:'Under Contract',
-  currentClub:'', loanFrom:'', leagueMode:'select', leagueCountry:'', leagueTier:'',
-  leagueManual:'', contractStart:'', contractEnd:'', loanParentEnd:'',
-  primaryPosition:'', secondaryPositions:[], foot:'', natTeamStatus:'',
+  currentClub:'', currentClubIsYouth:false, loanFrom:'', leagueMode:'select',
+  leagueCountry:'', leagueTier:'', leagueManual:'', contractStart:'', contractEnd:'',
+  loanParentEnd:'', primaryPosition:'', secondaryPositions:[], foot:'', natTeamStatus:'',
   dob:'', passportNumber:'', passportExpiry:'', reprStart:'', reprEnd:'',
   notes:'', contractFiles:[], passportFiles:[], reprFiles:[],
   profileLink:'', videoLink:'',
@@ -362,7 +362,10 @@ export default function Players() {
                       <td style={{fontSize:11,color:'var(--text-3)',textAlign:'center'}}>{Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0?p.secondaryPositions.join(', '):'—'}</td>
                       <td style={{fontWeight:500,fontSize:11,textAlign:'center'}}>{footShort}</td>
                       <td>
-                        <div style={{fontWeight:500}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</div>
+                        <div style={{display:'flex',alignItems:'center',gap:5}}>
+                          <span style={{fontWeight:500}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
+                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U</span>}
+                        </div>
                         <div style={{fontSize:10,color:'var(--text-3)'}}>{p.league||''}</div>
                       </td>
                       <td style={{textAlign:'center'}}>
@@ -426,7 +429,12 @@ export default function Players() {
           <Field label="Contract Status"><ChipGroup options={CONTRACT_STATUS} value={f('contractStatus')} onChange={s('contractStatus')} /></Field>
           {!isFree&&(<>
             <div className="form-grid-2">
-              <Field label="Current Club"><input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name" /></Field>
+              <Field label="Current Club">
+                <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name" />
+                <button type="button" className={`chip${form.currentClubIsYouth?' active':''}`}
+                  onClick={()=>s('currentClubIsYouth')(!form.currentClubIsYouth)}
+                  style={{fontSize:11,padding:'4px 10px',marginTop:6}}>🌱 Youth Team</button>
+              </Field>
               {isLoan&&<Field label="Loan From"><input value={f('loanFrom')} onChange={e=>s('loanFrom')(e.target.value)} placeholder="Parent club" /></Field>}
             </div>
             <Field label="League">

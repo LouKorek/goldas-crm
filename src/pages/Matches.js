@@ -1,59 +1,212 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
-import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput , ActionButtons } from 'components/ui/UI';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
+// ── Google Maps loader (loads once) ──────────────────────────────
+let _mapsPromise = null;
+function loadGoogleMaps() {
+  if (window.google?.maps?.places) return Promise.resolve(true);
+  if (_mapsPromise) return _mapsPromise;
+  const key = process.env.REACT_APP_GOOGLE_MAPS_KEY;
+  if (!key || key === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') return Promise.resolve(false);
+  _mapsPromise = new Promise((resolve) => {
+    const cb = '__gmInit' + Date.now();
+    window[cb] = () => { resolve(true); delete window[cb]; };
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=${cb}`;
+    s.onerror = () => { _mapsPromise = null; resolve(false); };
+    document.head.appendChild(s);
+  });
+  return _mapsPromise;
+}
 
+// ── Team logo (TheSportsDB, free, no key) ────────────────────────
+const _logoCache = {};
+async function fetchTeamLogo(name) {
+  const k = name.trim().toLowerCase();
+  if (k in _logoCache) return _logoCache[k];
+  try {
+    const r = await fetch(
+      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name.trim())}`
+    );
+    const d = await r.json();
+    _logoCache[k] = d?.teams?.[0]?.strTeamBadge || null;
+  } catch {
+    _logoCache[k] = null;
+  }
+  return _logoCache[k];
+}
 
-// ── Searchable multi-select for linked players ────────────────────
+function TeamLogo({ name, size = 24 }) {
+  const [url, setUrl] = useState(() => {
+    const k = (name || '').trim().toLowerCase();
+    return k in _logoCache ? _logoCache[k] : undefined;
+  });
+  useEffect(() => {
+    if (!name || name.trim().length < 2) { setUrl(null); return; }
+    const k = name.trim().toLowerCase();
+    if (k in _logoCache) { setUrl(_logoCache[k]); return; }
+    setUrl(undefined);
+    const t = setTimeout(async () => {
+      const logo = await fetchTeamLogo(name);
+      setUrl(logo);
+    }, 900);
+    return () => clearTimeout(t);
+  }, [name]);
+  if (!url) return null;
+  return (
+    <img src={url} alt={name} title={name}
+      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+      onError={e => { e.currentTarget.style.display = 'none'; }} />
+  );
+}
+
+// ── Stadium autocomplete (Google Places or simple fallback) ──────
+function StadiumInput({ value, onSelect }) {
+  const [q, setQ]         = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen]   = useState(false);
+  const [ready, setReady] = useState(false);
+  const ref               = useRef();
+  const serviceRef        = useRef(null);
+  const timerRef          = useRef();
+
+  useEffect(() => {
+    loadGoogleMaps().then(ok => {
+      if (ok) {
+        serviceRef.current = new window.google.maps.places.AutocompleteService();
+        setReady(true);
+      }
+    });
+  }, []);
+
+  useEffect(() => { setQ(value || ''); }, [value]);
+
+  useEffect(() => {
+    const h = e => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const search = text => {
+    setQ(text);
+    clearTimeout(timerRef.current);
+    if (!text.trim()) { setResults([]); setOpen(false); return; }
+
+    timerRef.current = setTimeout(() => {
+      if (serviceRef.current) {
+        serviceRef.current.getPlacePredictions(
+          { input: text, types: ['establishment', 'stadium'] },
+          (predictions, status) => {
+            if (status === 'OK' && predictions?.length) {
+              setResults(predictions.map(p => ({
+                description: p.description,
+                placeId: p.place_id,
+                main: p.structured_formatting?.main_text || p.description,
+                secondary: p.structured_formatting?.secondary_text || '',
+              })));
+              setOpen(true);
+            } else {
+              setResults([{ description: text, placeId: '', main: text, secondary: 'Search on Google Maps', isManual: true }]);
+              setOpen(true);
+            }
+          }
+        );
+      } else {
+        // No API key — just build a search URL
+        const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(text)}`;
+        onSelect({ name: text, mapsUrl, placeId: '' });
+      }
+    }, 350);
+  };
+
+  const select = r => {
+    const mapsUrl = r.placeId
+      ? `https://www.google.com/maps/place/?q=place_id:${r.placeId}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(r.description)}`;
+    onSelect({ name: r.description, mapsUrl, placeId: r.placeId || '' });
+    setQ(r.description);
+    setOpen(false);
+    setResults([]);
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input value={q} onChange={e => search(e.target.value)}
+        onFocus={() => q && results.length && setOpen(true)}
+        placeholder={ready ? 'Type stadium or venue — Google Maps suggestions…' : 'Type stadium name…'} />
+      {open && results.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'var(--surface-2)', border: '1px solid var(--border-2)',
+          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', marginTop: 2,
+        }}>
+          {results.map((r, i) => (
+            <div key={i} onMouseDown={() => select(r)}
+              style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, transition: 'background 0.12s' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--gold-dim)'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}>
+              <span style={{ fontSize: 14, marginTop: 1 }}>📍</span>
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>{r.main}</div>
+                {r.secondary && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{r.secondary}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Youth badge ──────────────────────────────────────────────────
+function YouthBadge({ small }) {
+  return (
+    <span style={{
+      background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
+      borderRadius: 4, color: '#4ADE80', fontSize: small ? 9 : 11,
+      fontWeight: 700, padding: small ? '1px 5px' : '2px 7px',
+      letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
+    }}>U</span>
+  );
+}
+
+// ── Searchable multi-select for linked players ───────────────────
 function LinkedPlayersSelect({ players, value = [], onChange }) {
   const [q, setQ] = React.useState('');
-  const filtered = q
-    ? players.filter(p => p.fullName.toLowerCase().includes(q.toLowerCase()) || (p.primaryPosition||'').toLowerCase().includes(q.toLowerCase()))
+  const filtered  = q
+    ? players.filter(p => p.fullName.toLowerCase().includes(q.toLowerCase()) || (p.primaryPosition || '').toLowerCase().includes(q.toLowerCase()))
     : players;
-  const toggle = (id) => {
-    onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
-  };
+  const toggle   = id => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
   const selected = players.filter(p => value.includes(p.id));
   return (
     <div>
-      <input
-        value={q}
-        onChange={e => setQ(e.target.value)}
-        placeholder="Type to search players..."
-        style={{marginBottom:6}}
-      />
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Type to search players…" style={{ marginBottom: 6 }} />
       {selected.length > 0 && (
-        <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:8}}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
           {selected.map(p => (
-            <span key={p.id} style={{
-              background:'var(--gold-dim)',border:'1px solid var(--gold)',
-              borderRadius:6,padding:'3px 8px',fontSize:12,color:'var(--gold)',
-              display:'flex',alignItems:'center',gap:5
-            }}>
+            <span key={p.id} style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)', borderRadius: 6, padding: '3px 8px', fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 5 }}>
               {p.fullName}
-              <button type="button" onClick={() => toggle(p.id)}
-                style={{background:'none',border:'none',color:'var(--gold)',cursor:'pointer',padding:0,fontSize:14,lineHeight:1}}>×</button>
+              <button type="button" onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
             </span>
           ))}
         </div>
       )}
-      <div style={{border:'1px solid var(--border)',borderRadius:8,maxHeight:160,overflowY:'auto',background:'var(--input-bg)'}}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
         {filtered.length === 0
-          ? <div style={{padding:'10px 12px',color:'var(--text-3)',fontSize:12}}>No players found.</div>
+          ? <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
           : filtered.map(p => {
             const sel = value.includes(p.id);
             return (
               <div key={p.id} onClick={() => toggle(p.id)}
-                style={{padding:'8px 12px',cursor:'pointer',display:'flex',gap:10,alignItems:'center',
-                  background:sel?'var(--gold-dim)':'transparent',transition:'background 0.12s'}}>
-                <input type="checkbox" readOnly checked={sel}
-                  style={{accentColor:'var(--gold)',width:14,height:14,pointerEvents:'none'}} />
-                <span style={{color:sel?'var(--gold)':'var(--text-2)',fontSize:13,flex:1}}>{p.fullName}</span>
-                <span style={{color:'var(--text-3)',fontSize:11}}>{p.primaryPosition||''}</span>
+                style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', background: sel ? 'var(--gold-dim)' : 'transparent', transition: 'background 0.12s' }}>
+                <input type="checkbox" readOnly checked={sel} style={{ accentColor: 'var(--gold)', width: 14, height: 14, pointerEvents: 'none' }} />
+                <span style={{ color: sel ? 'var(--gold)' : 'var(--text-2)', fontSize: 13, flex: 1 }}>{p.fullName}</span>
+                <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{p.primaryPosition || ''}</span>
               </div>
             );
           })
@@ -64,33 +217,9 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
 }
 
 const EMPTY = {
-  date:'', time:'', homeTeam:'', awayTeam:'',
-  stadiumName:'', stadiumPlaceId:'', stadiumMapsUrl:'', notes:'', linkedPlayers:[],
+  date: '', time: '', homeTeam: '', homeTeamIsYouth: false, awayTeam: '', awayTeamIsYouth: false,
+  stadiumName: '', stadiumPlaceId: '', stadiumMapsUrl: '', notes: '', linkedPlayers: [],
 };
-
-// Simple stadium input that generates a Google Maps search link
-function StadiumInput({ value, onSelect }) {
-  const [q, setQ] = useState(value || '');
-
-  useEffect(() => { setQ(value || ''); }, [value]);
-
-  const handleChange = (text) => {
-    setQ(text);
-    const mapsUrl = text.trim()
-      ? `https://www.google.com/maps/search/${encodeURIComponent(text)}`
-      : '';
-    onSelect({ name: text, mapsUrl, placeId: '' });
-  };
-
-  return (
-    <input
-      value={q}
-      onChange={e => handleChange(e.target.value)}
-      placeholder="Type stadium name..."
-    />
-  );
-}
-
 
 async function clearAll_matches() {
   if (!window.confirm('Delete ALL matches? This cannot be undone.')) return;
@@ -98,6 +227,7 @@ async function clearAll_matches() {
   for (const d of snap.docs) await deleteDoc(d.ref);
   window.location.reload();
 }
+
 export default function Matches() {
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
@@ -109,148 +239,150 @@ export default function Matches() {
   const { confirm, dialog }   = useConfirm();
 
   const [allPlayers, setAllPlayers] = useState([]);
+  useEffect(() => { return listenCollection(PATHS.PLAYERS, setAllPlayers); }, []);
   useEffect(() => {
-    return listenCollection(PATHS.PLAYERS, setAllPlayers);
-  }, []);
-  useEffect(() => {
-    return listenCollection(PATHS.MATCHES, (data) => {
-      setItems(data.sort((a,b) => (a.date||'') > (b.date||'') ? 1 : -1));
+    return listenCollection(PATHS.MATCHES, data => {
+      setItems(data.sort((a, b) => (a.date || '') > (b.date || '') ? 1 : -1));
       setLoading(false);
     });
   }, []);
 
-  const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
-  const f = (k) => form[k] ?? '';
+  const s = k => v => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
+  const f = k => form[k] ?? '';
 
-  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
-  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
+  const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); setIsDirty(false); };
+  const openEdit = p  => { setForm({ ...EMPTY, ...p }); setModal({ edit: p }); setIsDirty(false); };
 
   const save = async () => {
     if (!form.homeTeam || !form.awayTeam) { toast.error('Home and away teams are required.'); return; }
     if (!form.date) { toast.error('Date is required.'); return; }
-    if (!form.linkedPlayers || form.linkedPlayers.length === 0) { toast.error('Please link at least one represented player.'); return; }
+    if (!form.linkedPlayers?.length) { toast.error('Please link at least one represented player.'); return; }
     setSaving(true);
     try {
-      if (modal==='add') {
-        await addDoc_(PATHS.MATCHES, form);
-        toast.success('Match added!');
-      } else {
-        await updateDoc_(PATHS.MATCHES, modal.edit.id, form);
-        toast.success('Match updated.');
-      }
+      if (modal === 'add') { await addDoc_(PATHS.MATCHES, form); toast.success('Match added!'); }
+      else { await updateDoc_(PATHS.MATCHES, modal.edit.id, form); toast.success('Match updated.'); }
       setModal(null);
-    } catch(e) {
-      toast.error(e.message || 'Save failed.');
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { toast.error(e.message || 'Save failed.'); }
+    finally { setSaving(false); }
   };
 
-  const del = async (p) => {
+  const del = async p => {
     const ok = await confirm(`Delete match "${p.homeTeam} vs ${p.awayTeam}"?`);
     if (!ok) return;
     await deleteDoc_(PATHS.MATCHES, p.id);
     toast.success('Deleted.');
   };
 
-  const now  = new Date();
-  const data = items.filter(m => {
-    if (!search) return true;
-    return `${m.homeTeam} ${m.awayTeam} ${m.stadiumName}`.toLowerCase().includes(search.toLowerCase());
-  });
-  const upcoming = data.filter(m => !m.date || new Date(m.date) >= now);
-  const past     = data.filter(m => m.date && new Date(m.date) < now);
+  const now      = new Date();
+  const filtered = items.filter(m => !search || `${m.homeTeam} ${m.awayTeam} ${m.stadiumName}`.toLowerCase().includes(search.toLowerCase()));
+  const upcoming = filtered.filter(m => !m.date || new Date(m.date) >= now);
+  const past     = filtered.filter(m => m.date && new Date(m.date) < now);
 
   const MatchCard = ({ m }) => {
-    const linkedNames = allPlayers
-      .filter(p => (m.linkedPlayers || []).includes(p.id))
-      .map(p => p.fullName);
+    const linkedNames = allPlayers.filter(p => (m.linkedPlayers || []).includes(p.id)).map(p => p.fullName);
     return (
-      <div className="card card-body" style={{marginBottom:10,transition:'all 0.18s'}}
-        onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--border-2)';e.currentTarget.style.transform='translateX(2px)';}}
-        onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='';}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,flexWrap:'wrap'}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:600,fontSize:15,marginBottom:5}}>
-              <span style={{color:'var(--text-1)'}}>{m.homeTeam}</span>
-              <span style={{color:'var(--text-3)',fontWeight:400,margin:'0 10px'}}>vs</span>
-              <span style={{color:'var(--text-1)'}}>{m.awayTeam}</span>
+      <div className="card card-body" style={{ marginBottom: 10, transition: 'all 0.18s' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.transform = 'translateX(2px)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = ''; }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+
+            {/* Teams row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+              <TeamLogo name={m.homeTeam} size={22} />
+              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-1)' }}>{m.homeTeam}</span>
+              {m.homeTeamIsYouth && <YouthBadge small />}
+              <span style={{ color: 'var(--text-3)', fontWeight: 400, margin: '0 6px' }}>vs</span>
+              <TeamLogo name={m.awayTeam} size={22} />
+              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-1)' }}>{m.awayTeam}</span>
+              {m.awayTeamIsYouth && <YouthBadge small />}
             </div>
-            <div style={{fontSize:12,color:'var(--text-2)',display:'flex',gap:16,flexWrap:'wrap',alignItems:'center'}}>
+
+            {/* Date / stadium */}
+            <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
               <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
               {m.stadiumName && (
-                <span style={{display:'flex',alignItems:'center',gap:4}}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   🏟
-                  {m.stadiumMapsUrl ? (
-                    <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
-                      style={{color:'var(--gold)',textDecoration:'none'}}
-                      onMouseEnter={e=>e.target.style.textDecoration='underline'}
-                      onMouseLeave={e=>e.target.style.textDecoration='none'}>
-                      {m.stadiumName} ↗
-                    </a>
-                  ) : m.stadiumName}
+                  {m.stadiumMapsUrl
+                    ? <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ color: 'var(--gold)', textDecoration: 'none' }}
+                        onMouseEnter={e => e.target.style.textDecoration = 'underline'}
+                        onMouseLeave={e => e.target.style.textDecoration = 'none'}>
+                        {m.stadiumName} ↗
+                      </a>
+                    : m.stadiumName}
                 </span>
               )}
             </div>
+
+            {/* Linked players */}
             {linkedNames.length > 0 && (
-              <div style={{fontSize:11,color:'var(--text-3)',marginTop:5,display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span>🤝</span>
                 {linkedNames.map((n, i) => (
-                  <span key={i} style={{
-                    background:'var(--gold-dim)',border:'1px solid rgba(201,168,76,0.2)',
-                    borderRadius:4,padding:'1px 7px',color:'var(--gold)',fontSize:11,
-                  }}>{n}</span>
+                  <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
                 ))}
               </div>
             )}
-            {m.notes && <div style={{fontSize:12,color:'var(--text-3)',marginTop:5}}>{m.notes}</div>}
+
+            {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 5 }}>{m.notes}</div>}
           </div>
-          <ActionButtons onEdit={()=>openEdit(m)} onDelete={()=>del(m)} />
+          <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />
         </div>
       </div>
     );
   };
 
+  // ── Youth toggle helper ──────────────────────────────────────────
+  const YouthToggle = ({ field }) => (
+    <button type="button"
+      className={`chip${form[field] ? ' active' : ''}`}
+      onClick={() => s(field)(!form[field])}
+      style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'center', marginTop: 4 }}>
+      🌱 Youth
+    </button>
+  );
+
   return (
     <div>
       <PageHeader
         title="Matches"
-        subtitle={`${items.length} match${items.length!==1?'es':''} total`}
+        subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
         action={
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Match</button>
-            <div style={{height:36,display:'flex',alignItems:'center'}}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>
+            <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
             <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
-              style={{height:36,opacity:0.45,whiteSpace:'nowrap'}} title="Clear all"
-              onMouseEnter={e=>e.currentTarget.style.opacity='1'}
-              onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
+              style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
               🗑 Clear All
             </button>
           </div>
         }
-      >
-      </PageHeader>
+      />
 
       {loading ? (
-        <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
-      ) : items.length===0 ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
+      ) : items.length === 0 ? (
         <Empty icon="🏟" message="No matches scheduled."
-          action={items.length===0&&!search&&<button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
+          action={!search && <button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
       ) : (
         <>
           {upcoming.length > 0 && (
-            <div style={{marginBottom:28}}>
-              <div className="section-label" style={{marginBottom:12}}>Upcoming ({upcoming.length})</div>
+            <div style={{ marginBottom: 28 }}>
+              <div className="section-label" style={{ marginBottom: 12 }}>Upcoming ({upcoming.length})</div>
               {upcoming.map(m => <MatchCard key={m.id} m={m} />)}
             </div>
           )}
           {past.length > 0 && (
             <div>
-              <div className="section-label" style={{marginBottom:12,color:'var(--text-3)'}}>Past ({past.length})</div>
-              <div style={{opacity:0.65}}>
-                {[...past].reverse().slice(0,10).map(m => <MatchCard key={m.id} m={m} />)}
+              <div className="section-label" style={{ marginBottom: 12, color: 'var(--text-3)' }}>Past ({past.length})</div>
+              <div style={{ opacity: 0.65 }}>
+                {[...past].reverse().slice(0, 10).map(m => <MatchCard key={m.id} m={m} />)}
               </div>
             </div>
           )}
@@ -259,35 +391,43 @@ export default function Matches() {
 
       {modal && (
         <Modal
-          title={modal==='add' ? 'Add Match' : 'Edit Match'}
-          onClose={()=>setModal(null)} isDirty={isDirty} onSave={save}
+          title={modal === 'add' ? 'Add Match' : 'Edit Match'}
+          onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? <><span className="spinner" style={{width:14,height:14}}/> Saving...</> : 'Save Match'}
+              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Match'}
             </button>
           </>}
         >
           <div className="form-grid-2">
-            <Field label="Date" required>
-              <DateInput value={f('date')} onChange={s('date')} />
-            </Field>
+            <Field label="Date" required><DateInput value={f('date')} onChange={s('date')} /></Field>
             <Field label="Time">
-              <select value={f('time')} onChange={e=>s('time')(e.target.value)}>
+              <select value={f('time')} onChange={e => s('time')(e.target.value)}>
                 <option value="">Select time...</option>
-                {TIME_SLOTS.map(t=><option key={t}>{t}</option>)}
+                {TIME_SLOTS.map(t => <option key={t}>{t}</option>)}
               </select>
             </Field>
           </div>
+
           <div className="form-grid-2">
             <Field label="Home Team" required>
-              <input value={f('homeTeam')} onChange={e=>s('homeTeam')(e.target.value)} placeholder="Home team name" />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <TeamLogo name={form.homeTeam} size={24} />
+                <input value={f('homeTeam')} onChange={e => s('homeTeam')(e.target.value)} placeholder="Home team name" style={{ flex: 1 }} />
+              </div>
+              <YouthToggle field="homeTeamIsYouth" />
             </Field>
             <Field label="Away Team" required>
-              <input value={f('awayTeam')} onChange={e=>s('awayTeam')(e.target.value)} placeholder="Away team name" />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <TeamLogo name={form.awayTeam} size={24} />
+                <input value={f('awayTeam')} onChange={e => s('awayTeam')(e.target.value)} placeholder="Away team name" style={{ flex: 1 }} />
+              </div>
+              <YouthToggle field="awayTeamIsYouth" />
             </Field>
           </div>
-          <Field label="Stadium" hint="Type to search — clicking the result creates a navigable link">
+
+          <Field label="Stadium / Venue" hint="Type to search — Google Maps suggestions appear automatically">
             <StadiumInput
               value={f('stadiumName')}
               onSelect={({ name, mapsUrl, placeId }) => {
@@ -297,22 +437,20 @@ export default function Matches() {
               }}
             />
             {form.stadiumMapsUrl && (
-              <div style={{marginTop:4,fontSize:11,color:'var(--text-3)'}}>
-                ✓ Will link to Google Maps
+              <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-3)' }}>
+                ✓ Linked to Google Maps —
                 <a href={form.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
-                  style={{color:'var(--gold)',marginLeft:8,textDecoration:'none'}}>Preview ↗</a>
+                  style={{ color: 'var(--gold)', marginLeft: 6, textDecoration: 'none' }}>Preview ↗</a>
               </div>
             )}
           </Field>
+
           <Field label="Linked Players" required hint="Required — type to search">
-            <LinkedPlayersSelect
-              players={allPlayers}
-              value={f('linkedPlayers')||[]}
-              onChange={s('linkedPlayers')}
-            />
+            <LinkedPlayersSelect players={allPlayers} value={f('linkedPlayers') || []} onChange={s('linkedPlayers')} />
           </Field>
+
           <Field label="Notes">
-            <textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
+            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
           </Field>
         </Modal>
       )}
