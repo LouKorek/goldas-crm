@@ -52,25 +52,21 @@ export default function Login({ denied }) {
           from { opacity: 0; transform: translateY(24px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
-        }
         .login-card { animation: fadeUp 0.6s ease forwards; }
         .google-btn:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 30px rgba(201,168,76,0.3) !important; }
         .google-btn:active { transform: translateY(0) !important; }
+        .login-left { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 60px; position: relative; }
+        .login-right { width: 480px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px 32px; background: rgba(255,255,255,0.02); border-left: 1px solid rgba(201,168,76,0.08); position: relative; }
+        .login-mobile-logo { display: none; text-align: center; margin-bottom: 32px; }
+        @media (max-width: 768px) {
+          .login-left { display: none !important; }
+          .login-right { width: 100%; border-left: none; }
+          .login-mobile-logo { display: block; }
+        }
       `}</style>
 
       {/* Left panel - branding */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        padding: '60px',
-        position: 'relative',
-        display: window.innerWidth < 768 ? 'none' : 'flex',
-      }}>
+      <div className="login-left">
         <div style={{ maxWidth: 480 }}>
           {/* Logo */}
           <div style={{
@@ -113,21 +109,11 @@ export default function Login({ denied }) {
       </div>
 
       {/* Right panel - login form */}
-      <div style={{
-        width: window.innerWidth < 768 ? '100%' : 480,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '40px 32px',
-        background: 'rgba(255,255,255,0.02)',
-        borderLeft: window.innerWidth < 768 ? 'none' : '1px solid rgba(201,168,76,0.08)',
-        position: 'relative',
-      }}>
+      <div className="login-right">
         <div className="login-card" style={{ width: '100%', maxWidth: 380 }}>
 
           {/* Mobile logo */}
-          <div style={{ textAlign:'center', marginBottom:32, display: window.innerWidth >= 768 ? 'none' : 'block' }}>
+          <div className="login-mobile-logo">
             <div style={{
               width:64,height:64,borderRadius:18,
               overflow:'hidden',

@@ -294,19 +294,19 @@ export default function Players() {
               <thead>
                 <tr>
                   <th style={{width:70}}>Actions</th>
-                  <SortTh label="🏃‍♂️" field="fullName" sort={sort} setSort={setSort} />
-                  <SortTh label='G' field='gender' sort={sort} setSort={setSort} />
-                  <SortTh label='🗓️' field='dob' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>🌎</th>
-                  <SortTh label='📍' field='primaryPosition' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Sec 📍</th>
-                  <SortTh label='🦵' field='foot' sort={sort} setSort={setSort} />
-                  <th>🔰</th>
-                  <SortTh label='📑' field='contractStatus' sort={sort} setSort={setSort} />
-                  <SortTh label='End 📑' field='contractEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='End 🤝' field='reprEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='End 🪪' field='passportExpiry' sort={sort} setSort={setSort} />
-                  <SortTh label='🏟️' field='natTeamStatus' sort={sort} setSort={setSort} />
+                  <SortTh label="Name" field="fullName" sort={sort} setSort={setSort} />
+                  <SortTh label='Gender' field='gender' sort={sort} setSort={setSort} />
+                  <SortTh label='DOB / Age' field='dob' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>Nationality</th>
+                  <SortTh label='Position' field='primaryPosition' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>Secondary</th>
+                  <SortTh label='Foot' field='foot' sort={sort} setSort={setSort} />
+                  <th>Club</th>
+                  <SortTh label='Contract' field='contractStatus' sort={sort} setSort={setSort} />
+                  <SortTh label='Contract End' field='contractEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='Repr. End' field='reprEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='Passport Exp.' field='passportExpiry' sort={sort} setSort={setSort} />
+                  <SortTh label='Nat. Team' field='natTeamStatus' sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>
@@ -386,7 +386,7 @@ export default function Players() {
       {/* Add/Edit Modal */}
       {modal && (
         <Modal title={modal==='add'?'Add Represented Player':`Edit: ${form.fullName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty}
+          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

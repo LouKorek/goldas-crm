@@ -261,7 +261,7 @@ export default function Pipeline({ category }) {
       {modal && (
         <Modal
           title={modal==='add'?`Add — ${label}`:`Edit: ${form.playerName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty}
+          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}

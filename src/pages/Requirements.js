@@ -188,7 +188,7 @@ export default function Requirements() {
       {modal && (
         <Modal
           title={modal==='add'?'Add Club Requirement':`Edit: ${form.clubName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty}
+          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

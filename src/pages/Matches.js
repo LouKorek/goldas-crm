@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
@@ -68,90 +68,26 @@ const EMPTY = {
   stadiumName:'', stadiumPlaceId:'', stadiumMapsUrl:'', notes:'', linkedPlayers:[],
 };
 
-// Google Maps Places Autocomplete for stadium
+// Simple stadium input that generates a Google Maps search link
 function StadiumInput({ value, onSelect }) {
-  const [q, setQ]         = useState(value || '');
-  const [results, setResults] = useState([]);
-  const [open, setOpen]   = useState(false);
-  const [loading, setLoading] = useState(false);
-  const ref               = useRef();
-  const timerRef          = useRef();
+  const [q, setQ] = useState(value || '');
 
   useEffect(() => { setQ(value || ''); }, [value]);
 
-  useEffect(() => {
-    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
-
-  const search = (text) => {
+  const handleChange = (text) => {
     setQ(text);
-    if (!text.trim()) { setResults([]); setOpen(false); return; }
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
-      setLoading(true);
-      try {
-        // Use Google Maps Places API via fetch
-        const res = await fetch(
-          `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&types=stadium|establishment&key=MAPS_API_KEY`
-        );
-        // Since we can't use server-side API key here, use a workaround:
-        // Open a Google Maps search URL when clicked
-        setResults([{ description: text, isManual: true }]);
-        setOpen(true);
-      } catch(e) {
-        setResults([{ description: text, isManual: true }]);
-        setOpen(true);
-      }
-      setLoading(false);
-    }, 400);
-  };
-
-  const select = (r) => {
-    const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(r.description)}`;
-    onSelect({ name: r.description, mapsUrl, placeId: r.place_id || '' });
-    setQ(r.description);
-    setOpen(false);
+    const mapsUrl = text.trim()
+      ? `https://www.google.com/maps/search/${encodeURIComponent(text)}`
+      : '';
+    onSelect({ name: text, mapsUrl, placeId: '' });
   };
 
   return (
-    <div ref={ref} style={{position:'relative'}}>
-      <input
-        value={q}
-        onChange={e => search(e.target.value)}
-        onFocus={() => q && setOpen(true)}
-        placeholder="Type stadium name..."
-      />
-      {open && results.length > 0 && (
-        <div style={{
-          position:'absolute',top:'100%',left:0,right:0,zIndex:50,
-          background:'var(--surface-2)',border:'1px solid var(--border-2)',
-          borderRadius:'var(--radius-md)',boxShadow:'var(--shadow-md)',marginTop:2,
-        }}>
-          {results.map((r,i) => (
-            <div key={i}
-              onMouseDown={() => select(r)}
-              style={{
-                padding:'10px 12px',cursor:'pointer',fontSize:13,
-                color:'var(--text-2)',display:'flex',alignItems:'center',gap:8,
-                transition:'background 0.12s',
-              }}
-              onMouseEnter={e=>e.currentTarget.style.background='var(--gold-dim)'}
-              onMouseLeave={e=>e.currentTarget.style.background=''}
-            >
-              <span>📍</span>
-              <div>
-                <div style={{color:'var(--text-1)'}}>{r.description}</div>
-                <div style={{fontSize:11,color:'var(--text-3)'}}>
-                  {r.isManual ? 'Search on Google Maps' : r.structured_formatting?.secondary_text || ''}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <input
+      value={q}
+      onChange={e => handleChange(e.target.value)}
+      placeholder="Type stadium name..."
+    />
   );
 }
 
@@ -174,7 +110,7 @@ export default function Matches() {
 
   const [allPlayers, setAllPlayers] = useState([]);
   useEffect(() => {
-    listenCollection(PATHS.PLAYERS, setAllPlayers);
+    return listenCollection(PATHS.PLAYERS, setAllPlayers);
   }, []);
   useEffect(() => {
     return listenCollection(PATHS.MATCHES, (data) => {
@@ -225,39 +161,55 @@ export default function Matches() {
   const upcoming = data.filter(m => !m.date || new Date(m.date) >= now);
   const past     = data.filter(m => m.date && new Date(m.date) < now);
 
-  const MatchCard = ({ m }) => (
-    <div className="card card-body" style={{marginBottom:10,transition:'all 0.18s'}}
-      onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--border-2)';e.currentTarget.style.transform='translateX(2px)';}}
-      onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='';}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,flexWrap:'wrap'}}>
-        <div>
-          <div style={{fontWeight:600,fontSize:15,marginBottom:5}}>
-            <span style={{color:'var(--text-1)'}}>{m.homeTeam}</span>
-            <span style={{color:'var(--text-3)',fontWeight:400,margin:'0 10px'}}>vs</span>
-            <span style={{color:'var(--text-1)'}}>{m.awayTeam}</span>
-          </div>
-          <div style={{fontSize:12,color:'var(--text-2)',display:'flex',gap:16,flexWrap:'wrap',alignItems:'center'}}>
-            <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
-            {m.stadiumName && (
-              <span style={{display:'flex',alignItems:'center',gap:4}}>
-                🏟
-                {m.stadiumMapsUrl ? (
-                  <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
-                    style={{color:'var(--gold)',textDecoration:'none'}}
-                    onMouseEnter={e=>e.target.style.textDecoration='underline'}
-                    onMouseLeave={e=>e.target.style.textDecoration='none'}>
-                    {m.stadiumName} ↗
-                  </a>
-                ) : m.stadiumName}
-              </span>
+  const MatchCard = ({ m }) => {
+    const linkedNames = allPlayers
+      .filter(p => (m.linkedPlayers || []).includes(p.id))
+      .map(p => p.fullName);
+    return (
+      <div className="card card-body" style={{marginBottom:10,transition:'all 0.18s'}}
+        onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--border-2)';e.currentTarget.style.transform='translateX(2px)';}}
+        onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='';}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:600,fontSize:15,marginBottom:5}}>
+              <span style={{color:'var(--text-1)'}}>{m.homeTeam}</span>
+              <span style={{color:'var(--text-3)',fontWeight:400,margin:'0 10px'}}>vs</span>
+              <span style={{color:'var(--text-1)'}}>{m.awayTeam}</span>
+            </div>
+            <div style={{fontSize:12,color:'var(--text-2)',display:'flex',gap:16,flexWrap:'wrap',alignItems:'center'}}>
+              <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
+              {m.stadiumName && (
+                <span style={{display:'flex',alignItems:'center',gap:4}}>
+                  🏟
+                  {m.stadiumMapsUrl ? (
+                    <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
+                      style={{color:'var(--gold)',textDecoration:'none'}}
+                      onMouseEnter={e=>e.target.style.textDecoration='underline'}
+                      onMouseLeave={e=>e.target.style.textDecoration='none'}>
+                      {m.stadiumName} ↗
+                    </a>
+                  ) : m.stadiumName}
+                </span>
+              )}
+            </div>
+            {linkedNames.length > 0 && (
+              <div style={{fontSize:11,color:'var(--text-3)',marginTop:5,display:'flex',gap:4,flexWrap:'wrap',alignItems:'center'}}>
+                <span>🤝</span>
+                {linkedNames.map((n, i) => (
+                  <span key={i} style={{
+                    background:'var(--gold-dim)',border:'1px solid rgba(201,168,76,0.2)',
+                    borderRadius:4,padding:'1px 7px',color:'var(--gold)',fontSize:11,
+                  }}>{n}</span>
+                ))}
+              </div>
             )}
+            {m.notes && <div style={{fontSize:12,color:'var(--text-3)',marginTop:5}}>{m.notes}</div>}
           </div>
-          {m.notes && <div style={{fontSize:12,color:'var(--text-3)',marginTop:5}}>{m.notes}</div>}
+          <ActionButtons onEdit={()=>openEdit(m)} onDelete={()=>del(m)} />
         </div>
-        <ActionButtons onEdit={()=>openEdit(m)} onDelete={()=>del(m)} />
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div>
@@ -279,7 +231,6 @@ export default function Matches() {
           </div>
         }
       >
-        <div style={{marginTop:14,height:38}} />
       </PageHeader>
 
       {loading ? (
@@ -309,7 +260,7 @@ export default function Matches() {
       {modal && (
         <Modal
           title={modal==='add' ? 'Add Match' : 'Edit Match'}
-          onClose={()=>setModal(null)} isDirty={isDirty}
+          onClose={()=>setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>

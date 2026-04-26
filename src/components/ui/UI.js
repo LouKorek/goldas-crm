@@ -33,16 +33,22 @@ export function ToastProvider() {
 }
 
 // ── Modal — only X closes it ──────────────────────────────────────
-export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirty=false }) {
+export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirty=false, onSave }) {
   useEffect(() => {
     const h = (e) => {
-      if (e.key !== 'Escape') return;
-      if (viewOnly || !isDirty) { onClose(); return; }
-      if (window.confirm('Discard unsaved changes?')) onClose();
+      if (e.key === 'Escape') {
+        if (viewOnly || !isDirty) { onClose(); return; }
+        if (window.confirm('Discard unsaved changes?')) onClose();
+        return;
+      }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && onSave && !viewOnly) {
+        e.preventDefault();
+        onSave();
+      }
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose, viewOnly, isDirty]);
+  }, [onClose, viewOnly, isDirty, onSave]);
 
   const handleClose = () => {
     if (viewOnly || !isDirty) { onClose(); return; }
@@ -63,7 +69,14 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
         <div className="modal-scroll-body">
           {children}
           {footer && (
-            <div className="modal-footer-bar">{footer}</div>
+            <div className="modal-footer-bar">
+              {!viewOnly && onSave && (
+                <span style={{fontSize:10,color:'var(--text-3)',marginRight:'auto',alignSelf:'center'}}>
+                  Ctrl+Enter to save
+                </span>
+              )}
+              {footer}
+            </div>
           )}
         </div>
 
@@ -76,18 +89,24 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
 // ── Confirm dialog ────────────────────────────────────────────────
 export function useConfirm() {
   const [state, setState] = useState(null);
-  const confirm = useCallback((msg) => new Promise((resolve) => setState({ msg, resolve })), []);
+  const confirm = useCallback((msg, opts = {}) => new Promise((resolve) => setState({ msg, resolve, ...opts })), []);
   const handleConfirm = useCallback(() => { if (state) { state.resolve(true); setState(null); } }, [state]);
   const handleCancel  = useCallback(() => { if (state) { state.resolve(false); setState(null); } }, [state]);
+  useEffect(() => {
+    if (!state) return;
+    const h = (e) => { if (e.key === 'Escape') handleCancel(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [state, handleCancel]);
   const dialog = state ? (
     <div className="modal-overlay" style={{zIndex:300}}>
-      <div className="modal-box" style={{maxWidth:360}}>
-        <div className="modal-header-frozen"><span className="modal-title" style={{fontSize:16}}>Confirm</span></div>
+      <div className="modal-box" style={{maxWidth:380}}>
+        <div className="modal-header-frozen"><span className="modal-title" style={{fontSize:16}}>{state.title || 'Confirm'}</span></div>
         <div className="modal-scroll-body">
           <p style={{color:'var(--text-1)',marginBottom:20,fontSize:14,lineHeight:1.6}}>{state.msg}</p>
           <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
             <button className="btn btn-ghost" onClick={handleCancel}>Cancel</button>
-            <button className="btn btn-danger" onClick={handleConfirm}>🗑 Delete</button>
+            <button className="btn btn-danger" onClick={handleConfirm}>{state.confirmLabel || '🗑 Delete'}</button>
           </div>
         </div>
       </div>
@@ -137,7 +156,7 @@ export function CountrySelect({ value=[], onChange, single }) {
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
-  const filtered = q ? COUNTRIES.filter(c => c.toLowerCase().startsWith(q.toLowerCase())) : COUNTRIES;
+  const filtered = q ? COUNTRIES.filter(c => c.toLowerCase().includes(q.toLowerCase())) : COUNTRIES;
   const vals     = single ? (value ? [value] : []) : (Array.isArray(value) ? value : []);
   const select = (c) => {
     if (single) { onChange(c); setOpen(false); setQ(''); }

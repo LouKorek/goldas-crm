@@ -90,14 +90,14 @@ export default function Dashboard() {
 
   // Alerts
   const contractAlerts = players.filter(p => {
-    if (!p.contractEndDate) return false;
-    const d = daysUntil(p.contractEndDate);
+    if (!p.contractEnd) return false;
+    const d = daysUntil(p.contractEnd);
     return d !== null && d >= 0 && d <= 60;
   });
 
   const reprAlerts = players.filter(p => {
-    if (!p.reprEndDate) return false;
-    const d = daysUntil(p.reprEndDate);
+    if (!p.reprEnd) return false;
+    const d = daysUntil(p.reprEnd);
     return d !== null && d >= 0 && d <= 60;
   });
 
@@ -134,31 +134,34 @@ export default function Dashboard() {
 
         {/* Alerts panel */}
         <div className="card card-body">
-          <div className="section-label" style={{marginBottom:14}}>🔔 Active Alerts</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+            <div className="section-label" style={{marginBottom:0}}>🔔 Active Alerts</div>
+            {alertCount>0&&<Link to="/notifications" style={{fontSize:11,color:'var(--gold)',textDecoration:'none',opacity:0.8}}>View all →</Link>}
+          </div>
           {alertCount === 0 ? (
-            <p style={{color:'var(--text-3)',fontSize:13}}>No active alerts — all clear!</p>
+            <p style={{color:'var(--text-3)',fontSize:13}}>No active alerts — all clear! ✅</p>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {contractAlerts.map(p => {
-                const d = daysUntil(p.contractEndDate);
+                const d = daysUntil(p.contractEnd);
                 return (
                   <div key={p.id} className={`alert-row ${d<=7?'urgent':'warning'}`}>
                     <span style={{fontSize:16}}>📋</span>
                     <div>
                       <div style={{fontSize:13,fontWeight:500}}>{p.fullName}</div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>Contract expires in {d} day{d!==1?'s':''} ({fmtDate(p.contractEndDate)})</div>
+                      <div style={{fontSize:11,color:'var(--text-3)'}}>Contract expires in {d} day{d!==1?'s':''} ({fmtDate(p.contractEnd)})</div>
                     </div>
                   </div>
                 );
               })}
               {reprAlerts.map(p => {
-                const d = daysUntil(p.reprEndDate);
+                const d = daysUntil(p.reprEnd);
                 return (
                   <div key={p.id+'r'} className={`alert-row ${d<=7?'urgent':'warning'}`}>
                     <span style={{fontSize:16}}>🤝</span>
                     <div>
                       <div style={{fontSize:13,fontWeight:500}}>{p.fullName}</div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>Representation expires in {d} day{d!==1?'s':''}</div>
+                      <div style={{fontSize:11,color:'var(--text-3)'}}>Representation expires in {d} day{d!==1?'s':''} ({fmtDate(p.reprEnd)})</div>
                     </div>
                   </div>
                 );
@@ -166,12 +169,16 @@ export default function Dashboard() {
               {birthdays.map(p => {
                 const age = calcAge(p.dob);
                 const turning18 = age === 17;
+                const birth = new Date(p.dob);
+                const nextBday = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
+                if (nextBday < now) nextBday.setFullYear(now.getFullYear() + 1);
+                const bDays = Math.ceil((nextBday - now) / (1000 * 60 * 60 * 24));
                 return (
                   <div key={p.id+'b'} className="alert-row" style={turning18?{borderLeftColor:'var(--gold)',borderLeftWidth:3}:{}}>
                     <span style={{fontSize:16}}>{turning18?'⭐':'🎂'}</span>
                     <div>
                       <div style={{fontSize:13,fontWeight:500}}>{p.fullName} {turning18?'— Turning 18!':''}</div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>Birthday in {daysUntil(p.dob?.replace(/^\d{4}/,new Date().getFullYear()))} days · Turning {(age||0)+1}</div>
+                      <div style={{fontSize:11,color:'var(--text-3)'}}>{bDays===0?'Birthday is today!':`Birthday in ${bDays} day${bDays!==1?'s':''}`} · Turning {(age||0)+1}</div>
                     </div>
                   </div>
                 );
