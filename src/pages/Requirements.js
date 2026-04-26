@@ -2,12 +2,100 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
-import { POSITIONS, CONTACT_ROLES, fmtDate } from 'lib/constants';
+import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
-         Empty, Spinner, useConfirm, PhoneDisplay, NumberInput , ActionButtons } from 'components/ui/UI';
+         Empty, Spinner, useConfirm, PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
+// ── Club avatar (initials + hashed color) ────────────────────────
+function ClubAvatar({ name, size=28 }) {
+  const words = (name||'?').trim().split(/\s+/);
+  const initials = words.length >= 2
+    ? (words[0][0] + words[words.length-1][0]).toUpperCase()
+    : (name||'?').slice(0,2).toUpperCase();
+  const hue = (name||'').split('').reduce((h,c) => (h*31 + c.charCodeAt(0)) & 0xFFFF, 0) % 360;
+  return (
+    <div style={{
+      width:size, height:size, borderRadius:6, flexShrink:0,
+      background:`hsl(${hue},45%,22%)`,
+      border:`1px solid hsl(${hue},50%,35%)`,
+      display:'flex', alignItems:'center', justifyContent:'center',
+      fontSize:size<=28?9:11, fontWeight:800,
+      color:`hsl(${hue},70%,80%)`,
+      letterSpacing:'0.04em', userSelect:'none',
+    }}>{initials}</div>
+  );
+}
 
+// ── Requirement view card ────────────────────────────────────────
+function RequirementView({ req, onClose }) {
+  const Row = ({label, value}) => value && value !== '—' ? (
+    <div style={{display:'flex',gap:12,padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
+      <div style={{width:160,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>{label}</div>
+      <div style={{color:'var(--text-1)',fontSize:13}}>{value}</div>
+    </div>
+  ) : null;
+
+  const feeDisplay = req.transferFee && req.transferFee!=='Not specified'
+    ? `€${Number(req.transferFee).toLocaleString()}`
+    : (req.transferFee||'—');
+  const salDisplay = req.salary && req.salary!=='Not specified'
+    ? `€${Number(req.salary).toLocaleString()}/mo`
+    : (req.salary||'—');
+  const ageDisplay = req.ageNotSpecified ? 'Not specified'
+    : (req.ageMin&&req.ageMax ? `${req.ageMin}–${req.ageMax}` : req.ageMin||req.ageMax||'—');
+
+  return (
+    <Modal title={req.clubName} onClose={onClose} wide viewOnly>
+      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:20}}>
+        <ClubAvatar name={req.clubName} size={44} />
+        <div>
+          <div style={{fontWeight:600,fontSize:15,color:'var(--text-1)'}}>{req.clubName}</div>
+          <div style={{fontSize:12,color:'var(--text-3)'}}>{req.league||'League not set'}{req.tablePosition ? ` · #${req.tablePosition} in table` : ''}</div>
+        </div>
+        {req.gender && (
+          <span className="badge" style={{marginLeft:'auto',background:'var(--surface-3)',color:'var(--text-2)'}}>{req.gender}</span>
+        )}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
+        <div>
+          <div className="form-section-title">Club</div>
+          <Row label="League"        value={req.league} />
+          <Row label="Table Pos."    value={req.tablePosition ? `#${req.tablePosition}` : null} />
+
+          <div className="form-section-title" style={{marginTop:16}}>Contact</div>
+          <Row label="Name"   value={req.contactName} />
+          <Row label="Role"   value={req.contactRole} />
+          {req.contactPhone && (
+            <div style={{display:'flex',gap:12,padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
+              <div style={{width:160,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>Phone</div>
+              <PhoneDisplay phone={req.contactPhone} />
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="form-section-title">Profile Needed</div>
+          <Row label="Position"     value={req.requiredPosition} />
+          <Row label="Age Range"    value={ageDisplay} />
+          <Row label="Max Transfer" value={feeDisplay} />
+          <Row label="Max Salary"   value={salDisplay} />
+        </div>
+      </div>
+
+      {req.notes && (
+        <div style={{marginTop:16}}>
+          <div className="form-section-title">Notes</div>
+          <p style={{color:'var(--text-2)',fontSize:13,lineHeight:1.7}}>{req.notes}</p>
+        </div>
+      )}
+      {req.lastEditedByName && (
+        <div style={{marginTop:12,fontSize:11,color:'var(--text-3)'}}>Last edited by {req.lastEditedByName}</div>
+      )}
+    </Modal>
+  );
+}
 
 const EMPTY = {
   gender:'', leagueMode:'select', leagueCountry:'', leagueTier:'', leagueManual:'',
@@ -16,24 +104,25 @@ const EMPTY = {
   transferFee:'', salary:'', notes:'',
 };
 
-
 async function clearAll_clubrequirements() {
   if (!window.confirm('Delete ALL requirements? This cannot be undone.')) return;
   const snap = await getDocs(collection(db, 'club_requirements'));
   for (const d of snap.docs) await deleteDoc(d.ref);
   window.location.reload();
 }
+
 export default function Requirements() {
-  const [items, setItems]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modal, setModal]     = useState(null);
-  const [form, setForm]       = useState(EMPTY);
-  const [saving, setSaving]   = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [search, setSearch]   = useState('');
-  const [filters, setFilters] = useState({});
-  const [sort, setSort]       = useState({ field:'clubName', dir:'asc' });
-  const { confirm, dialog }   = useConfirm();
+  const [items, setItems]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [modal, setModal]       = useState(null);
+  const [viewReq, setViewReq]   = useState(null);
+  const [form, setForm]         = useState(EMPTY);
+  const [saving, setSaving]     = useState(false);
+  const [isDirty, setIsDirty]   = useState(false);
+  const [search, setSearch]     = useState('');
+  const [filters, setFilters]   = useState({});
+  const [sort, setSort]         = useState({ field:'clubName', dir:'asc' });
+  const { confirm, dialog }     = useConfirm();
 
   useEffect(() => {
     return listenCollection(PATHS.CLUB_REQUIREMENTS, (data) => {
@@ -138,44 +227,68 @@ export default function Requirements() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Gender</th>
-                  <SortTh label="Club"       field="clubName"          sort={sort} setSort={setSort} />
-                  <th>League</th>
-                  <th>Table Pos</th>
-                  <th>Contact</th>
-                  <th>Position Needed</th>
-                  <th>Age Range</th>
-                  <th>Max TF</th>
-                  <th>Max Salary</th>
-                  <th>Last Edited</th>
+                  <th>G</th>
+                  <SortTh label="🔰 Club" field="clubName" sort={sort} setSort={setSort} />
+                  <th>🌍 League</th>
+                  <th>#</th>
+                  <th>👤 Contact</th>
+                  <th>📍 Pos</th>
+                  <th>🗓️ Age</th>
+                  <th>💰 TF</th>
+                  <th>💵 Salary</th>
+                  <th>✏️</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {data.map(p => (
-                  <tr key={p.id}>
-                    <td><span style={{fontSize:12,color:'var(--text-2)'}}>{p.gender||'—'}</span></td>
-                    <td><span style={{fontWeight:500}}>{p.clubName}</span></td>
+                  <tr key={p.id} onClick={()=>setViewReq(p)} style={{cursor:'pointer'}}>
+                    <td onClick={e=>e.stopPropagation()}>
+                      <span style={{fontSize:11,color:'var(--text-2)',fontWeight:500}}>{p.gender?p.gender.charAt(0):'—'}</span>
+                    </td>
+                    <td onClick={e=>e.stopPropagation()} style={{cursor:'default'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:7}}>
+                        <ClubAvatar name={p.clubName} />
+                        <span style={{fontWeight:500}}>{p.clubName}</span>
+                      </div>
+                    </td>
                     <td style={{color:'var(--text-2)',fontSize:12}}>{p.league||'—'}</td>
-                    <td style={{color:'var(--text-2)'}}>{p.tablePosition||'—'}</td>
+                    <td style={{color:'var(--text-2)',fontSize:12,textAlign:'center'}}>{p.tablePosition||'—'}</td>
                     <td>
-                      {p.contactName && <div style={{fontWeight:500,fontSize:13}}>{p.contactName}</div>}
-                      {p.contactRole && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.contactRole}</div>}
-                      {p.contactPhone && <PhoneDisplay phone={p.contactPhone} />}
+                      {p.contactName ? (
+                        <div>
+                          <div style={{fontSize:12,fontWeight:500,whiteSpace:'nowrap'}}>{p.contactName}</div>
+                          <div style={{fontSize:10,color:'var(--text-3)'}}>{p.contactRole||''}</div>
+                          {p.contactPhone && (
+                            <div style={{display:'flex',gap:4,marginTop:2}}>
+                              <a href={`tel:${p.contactPhone}`} onClick={e=>e.stopPropagation()}
+                                style={{fontSize:12,textDecoration:'none'}} title={p.contactPhone}>📞</a>
+                              <a href={`https://wa.me/${p.contactPhone.replace(/[^0-9]/g,'')}`}
+                                target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                                style={{fontSize:12,textDecoration:'none'}} title="WhatsApp">💬</a>
+                            </div>
+                          )}
+                        </div>
+                      ) : <span style={{color:'var(--text-3)'}}>—</span>}
                     </td>
-                    <td>{p.requiredPosition||'—'}</td>
+                    <td style={{fontWeight:500,textAlign:'center'}}>{p.requiredPosition||'—'}</td>
+                    <td style={{color:'var(--text-2)',fontSize:12,textAlign:'center'}}>
+                      {p.ageNotSpecified ? '—' : (p.ageMin&&p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin||p.ageMax||'—')}
+                    </td>
                     <td style={{color:'var(--text-2)',fontSize:12}}>
-                      {p.ageNotSpecified ? 'Not specified' : (p.ageMin&&p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin||p.ageMax||'—')}
+                      {p.transferFee && p.transferFee!=='Not specified' ? `€${Number(p.transferFee).toLocaleString()}` : (p.transferFee==='Not specified'?'—':p.transferFee||'—')}
                     </td>
                     <td style={{color:'var(--text-2)',fontSize:12}}>
-                      {p.transferFee && p.transferFee!=='Not specified' ? `€${Number(p.transferFee).toLocaleString()}` : (p.transferFee||'—')}
+                      {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary==='Not specified'?'—':p.salary||'—')}
                     </td>
-                    <td style={{color:'var(--text-2)',fontSize:12}}>
-                      {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary||'—')}
-                    </td>
-                    <td style={{fontSize:11,color:'var(--text-3)'}}>{p.lastEditedByName||'—'}</td>
-                    <td>
-                      <ActionButtons onEdit={()=>openEdit(p)} onDuplicate={()=>openDup(p)} onDelete={()=>del(p)} />
+                    <td style={{fontSize:11,color:'var(--text-3)',whiteSpace:'nowrap'}}>{p.lastEditedByName||'—'}</td>
+                    <td onClick={e=>e.stopPropagation()}>
+                      <ActionButtons
+                        onView={()=>setViewReq(p)}
+                        onEdit={()=>openEdit(p)}
+                        onDuplicate={()=>openDup(p)}
+                        onDelete={()=>del(p)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -185,6 +298,10 @@ export default function Requirements() {
         </div>
       )}
 
+      {/* View modal */}
+      {viewReq && <RequirementView req={viewReq} onClose={()=>setViewReq(null)} />}
+
+      {/* Add/Edit modal */}
       {modal && (
         <Modal
           title={modal==='add'?'Add Club Requirement':`Edit: ${form.clubName}`}
@@ -212,158 +329,10 @@ export default function Requirements() {
             </div>
             {form.leagueMode==='select' ? (
               <div className="form-grid-2">
-                                                        <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
-                      <option value="">Country...</option>
-                      <option key="Afghanistan">Afghanistan</option>
-                      <option key="Albania">Albania</option>
-                      <option key="Algeria">Algeria</option>
-                      <option key="Andorra">Andorra</option>
-                      <option key="Angola">Angola</option>
-                      <option key="Argentina">Argentina</option>
-                      <option key="Armenia">Armenia</option>
-                      <option key="Australia">Australia</option>
-                      <option key="Austria">Austria</option>
-                      <option key="Azerbaijan">Azerbaijan</option>
-                      <option key="Bahrain">Bahrain</option>
-                      <option key="Bangladesh">Bangladesh</option>
-                      <option key="Belarus">Belarus</option>
-                      <option key="Belgium">Belgium</option>
-                      <option key="Bolivia">Bolivia</option>
-                      <option key="Bosnia and Herzegovina">Bosnia and Herzegovina</option>
-                      <option key="Brazil">Brazil</option>
-                      <option key="Bulgaria">Bulgaria</option>
-                      <option key="Burkina Faso">Burkina Faso</option>
-                      <option key="Cameroon">Cameroon</option>
-                      <option key="Canada">Canada</option>
-                      <option key="Cape Verde">Cape Verde</option>
-                      <option key="Chad">Chad</option>
-                      <option key="Chile">Chile</option>
-                      <option key="China">China</option>
-                      <option key="Colombia">Colombia</option>
-                      <option key="Congo">Congo</option>
-                      <option key="Costa Rica">Costa Rica</option>
-                      <option key="Croatia">Croatia</option>
-                      <option key="Cuba">Cuba</option>
-                      <option key="Cyprus">Cyprus</option>
-                      <option key="Czech Republic">Czech Republic</option>
-                      <option key="Denmark">Denmark</option>
-                      <option key="DR Congo">DR Congo</option>
-                      <option key="Ecuador">Ecuador</option>
-                      <option key="Egypt">Egypt</option>
-                      <option key="El Salvador">El Salvador</option>
-                      <option key="England">England</option>
-                      <option key="Equatorial Guinea">Equatorial Guinea</option>
-                      <option key="Estonia">Estonia</option>
-                      <option key="Ethiopia">Ethiopia</option>
-                      <option key="Finland">Finland</option>
-                      <option key="France">France</option>
-                      <option key="Gabon">Gabon</option>
-                      <option key="Gambia">Gambia</option>
-                      <option key="Georgia">Georgia</option>
-                      <option key="Germany">Germany</option>
-                      <option key="Ghana">Ghana</option>
-                      <option key="Greece">Greece</option>
-                      <option key="Guatemala">Guatemala</option>
-                      <option key="Guinea">Guinea</option>
-                      <option key="Honduras">Honduras</option>
-                      <option key="Hungary">Hungary</option>
-                      <option key="Iceland">Iceland</option>
-                      <option key="India">India</option>
-                      <option key="Indonesia">Indonesia</option>
-                      <option key="Iran">Iran</option>
-                      <option key="Iraq">Iraq</option>
-                      <option key="Ireland">Ireland</option>
-                      <option key="Israel">Israel</option>
-                      <option key="Italy">Italy</option>
-                      <option key="Jamaica">Jamaica</option>
-                      <option key="Japan">Japan</option>
-                      <option key="Jordan">Jordan</option>
-                      <option key="Kazakhstan">Kazakhstan</option>
-                      <option key="Kenya">Kenya</option>
-                      <option key="Kosovo">Kosovo</option>
-                      <option key="Kuwait">Kuwait</option>
-                      <option key="Latvia">Latvia</option>
-                      <option key="Lebanon">Lebanon</option>
-                      <option key="Libya">Libya</option>
-                      <option key="Lithuania">Lithuania</option>
-                      <option key="Luxembourg">Luxembourg</option>
-                      <option key="Madagascar">Madagascar</option>
-                      <option key="Malawi">Malawi</option>
-                      <option key="Malaysia">Malaysia</option>
-                      <option key="Mali">Mali</option>
-                      <option key="Malta">Malta</option>
-                      <option key="Mauritania">Mauritania</option>
-                      <option key="Mauritius">Mauritius</option>
-                      <option key="Mexico">Mexico</option>
-                      <option key="Moldova">Moldova</option>
-                      <option key="Montenegro">Montenegro</option>
-                      <option key="Morocco">Morocco</option>
-                      <option key="Mozambique">Mozambique</option>
-                      <option key="Myanmar">Myanmar</option>
-                      <option key="Namibia">Namibia</option>
-                      <option key="Nepal">Nepal</option>
-                      <option key="Netherlands">Netherlands</option>
-                      <option key="New Zealand">New Zealand</option>
-                      <option key="Nicaragua">Nicaragua</option>
-                      <option key="Niger">Niger</option>
-                      <option key="Nigeria">Nigeria</option>
-                      <option key="North Korea">North Korea</option>
-                      <option key="North Macedonia">North Macedonia</option>
-                      <option key="Northern Ireland">Northern Ireland</option>
-                      <option key="Norway">Norway</option>
-                      <option key="Oman">Oman</option>
-                      <option key="Pakistan">Pakistan</option>
-                      <option key="Palestine">Palestine</option>
-                      <option key="Panama">Panama</option>
-                      <option key="Paraguay">Paraguay</option>
-                      <option key="Peru">Peru</option>
-                      <option key="Philippines">Philippines</option>
-                      <option key="Poland">Poland</option>
-                      <option key="Portugal">Portugal</option>
-                      <option key="Qatar">Qatar</option>
-                      <option key="Romania">Romania</option>
-                      <option key="Russia">Russia</option>
-                      <option key="Rwanda">Rwanda</option>
-                      <option key="Saudi Arabia">Saudi Arabia</option>
-                      <option key="Scotland">Scotland</option>
-                      <option key="Senegal">Senegal</option>
-                      <option key="Serbia">Serbia</option>
-                      <option key="Sierra Leone">Sierra Leone</option>
-                      <option key="Singapore">Singapore</option>
-                      <option key="Slovakia">Slovakia</option>
-                      <option key="Slovenia">Slovenia</option>
-                      <option key="Somalia">Somalia</option>
-                      <option key="South Africa">South Africa</option>
-                      <option key="South Korea">South Korea</option>
-                      <option key="South Sudan">South Sudan</option>
-                      <option key="Spain">Spain</option>
-                      <option key="Sri Lanka">Sri Lanka</option>
-                      <option key="Sudan">Sudan</option>
-                      <option key="Sweden">Sweden</option>
-                      <option key="Switzerland">Switzerland</option>
-                      <option key="Syria">Syria</option>
-                      <option key="Tajikistan">Tajikistan</option>
-                      <option key="Tanzania">Tanzania</option>
-                      <option key="Thailand">Thailand</option>
-                      <option key="Togo">Togo</option>
-                      <option key="Trinidad and Tobago">Trinidad and Tobago</option>
-                      <option key="Tunisia">Tunisia</option>
-                      <option key="Turkey">Turkey</option>
-                      <option key="Turkmenistan">Turkmenistan</option>
-                      <option key="Uganda">Uganda</option>
-                      <option key="Ukraine">Ukraine</option>
-                      <option key="United Arab Emirates">United Arab Emirates</option>
-                      <option key="United Kingdom">United Kingdom</option>
-                      <option key="United States">United States</option>
-                      <option key="Uruguay">Uruguay</option>
-                      <option key="Uzbekistan">Uzbekistan</option>
-                      <option key="Venezuela">Venezuela</option>
-                      <option key="Vietnam">Vietnam</option>
-                      <option key="Wales">Wales</option>
-                      <option key="Yemen">Yemen</option>
-                      <option key="Zambia">Zambia</option>
-                      <option key="Zimbabwe">Zimbabwe</option>
-                    </select>
+                <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
+                  <option value="">Country...</option>
+                  {COUNTRIES.map(c=><option key={c}>{c}</option>)}
+                </select>
                 <ChipGroup options={['1st','2nd','3rd','4th','5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
               </div>
             ) : (

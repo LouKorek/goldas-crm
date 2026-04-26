@@ -3,7 +3,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
-         calcAge, fmtDate, isEuropean } from 'lib/constants';
+         COUNTRIES, calcAge, fmtDate, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, useConfirm, StatusBadge,
          EUBadge, PhoneDisplay, NumberInput, LinkIcon , ActionButtons } from 'components/ui/UI';
@@ -188,18 +188,18 @@ export default function Pipeline({ category }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <SortTh label="Status"   field="status"          sort={sort} setSort={setSort} />
-                  <SortTh label="Name"     field="playerName"      sort={sort} setSort={setSort} />
-                  <th>Links</th>
-                  <SortTh label="Age"      field="dob"             sort={sort} setSort={setSort} />
-                  <SortTh label="Position" field="primaryPosition" sort={sort} setSort={setSort} />
-                  <th>Nationality</th>
-                  <th>EU</th>
-                  <th>Club / League</th>
-                  <th>Agent</th>
-                  <th>Transfer Fee</th>
-                  <th>Salary</th>
-                  <th>Nat. Team</th>
+                  <SortTh label="🏷 Status"  field="status"          sort={sort} setSort={setSort} />
+                  <SortTh label="🏃 Name"    field="playerName"      sort={sort} setSort={setSort} />
+                  <th>🔗</th>
+                  <SortTh label="🗓️ Age"     field="dob"             sort={sort} setSort={setSort} />
+                  <SortTh label="📍 Pos"     field="primaryPosition" sort={sort} setSort={setSort} />
+                  <th>🌎</th>
+                  <th>🇪🇺</th>
+                  <th>🔰 Club</th>
+                  <th>👤 Agent</th>
+                  <th>💰 TF</th>
+                  <th>💵 Salary</th>
+                  <th>🏟️</th>
                   <th></th>
                 </tr>
               </thead>
@@ -329,158 +329,10 @@ export default function Pipeline({ category }) {
             </div>
             {form.leagueMode==='select' ? (
               <div className="form-grid-2">
-                                                        <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
-                      <option value="">Country...</option>
-                      <option key="Afghanistan">Afghanistan</option>
-                      <option key="Albania">Albania</option>
-                      <option key="Algeria">Algeria</option>
-                      <option key="Andorra">Andorra</option>
-                      <option key="Angola">Angola</option>
-                      <option key="Argentina">Argentina</option>
-                      <option key="Armenia">Armenia</option>
-                      <option key="Australia">Australia</option>
-                      <option key="Austria">Austria</option>
-                      <option key="Azerbaijan">Azerbaijan</option>
-                      <option key="Bahrain">Bahrain</option>
-                      <option key="Bangladesh">Bangladesh</option>
-                      <option key="Belarus">Belarus</option>
-                      <option key="Belgium">Belgium</option>
-                      <option key="Bolivia">Bolivia</option>
-                      <option key="Bosnia and Herzegovina">Bosnia and Herzegovina</option>
-                      <option key="Brazil">Brazil</option>
-                      <option key="Bulgaria">Bulgaria</option>
-                      <option key="Burkina Faso">Burkina Faso</option>
-                      <option key="Cameroon">Cameroon</option>
-                      <option key="Canada">Canada</option>
-                      <option key="Cape Verde">Cape Verde</option>
-                      <option key="Chad">Chad</option>
-                      <option key="Chile">Chile</option>
-                      <option key="China">China</option>
-                      <option key="Colombia">Colombia</option>
-                      <option key="Congo">Congo</option>
-                      <option key="Costa Rica">Costa Rica</option>
-                      <option key="Croatia">Croatia</option>
-                      <option key="Cuba">Cuba</option>
-                      <option key="Cyprus">Cyprus</option>
-                      <option key="Czech Republic">Czech Republic</option>
-                      <option key="Denmark">Denmark</option>
-                      <option key="DR Congo">DR Congo</option>
-                      <option key="Ecuador">Ecuador</option>
-                      <option key="Egypt">Egypt</option>
-                      <option key="El Salvador">El Salvador</option>
-                      <option key="England">England</option>
-                      <option key="Equatorial Guinea">Equatorial Guinea</option>
-                      <option key="Estonia">Estonia</option>
-                      <option key="Ethiopia">Ethiopia</option>
-                      <option key="Finland">Finland</option>
-                      <option key="France">France</option>
-                      <option key="Gabon">Gabon</option>
-                      <option key="Gambia">Gambia</option>
-                      <option key="Georgia">Georgia</option>
-                      <option key="Germany">Germany</option>
-                      <option key="Ghana">Ghana</option>
-                      <option key="Greece">Greece</option>
-                      <option key="Guatemala">Guatemala</option>
-                      <option key="Guinea">Guinea</option>
-                      <option key="Honduras">Honduras</option>
-                      <option key="Hungary">Hungary</option>
-                      <option key="Iceland">Iceland</option>
-                      <option key="India">India</option>
-                      <option key="Indonesia">Indonesia</option>
-                      <option key="Iran">Iran</option>
-                      <option key="Iraq">Iraq</option>
-                      <option key="Ireland">Ireland</option>
-                      <option key="Israel">Israel</option>
-                      <option key="Italy">Italy</option>
-                      <option key="Jamaica">Jamaica</option>
-                      <option key="Japan">Japan</option>
-                      <option key="Jordan">Jordan</option>
-                      <option key="Kazakhstan">Kazakhstan</option>
-                      <option key="Kenya">Kenya</option>
-                      <option key="Kosovo">Kosovo</option>
-                      <option key="Kuwait">Kuwait</option>
-                      <option key="Latvia">Latvia</option>
-                      <option key="Lebanon">Lebanon</option>
-                      <option key="Libya">Libya</option>
-                      <option key="Lithuania">Lithuania</option>
-                      <option key="Luxembourg">Luxembourg</option>
-                      <option key="Madagascar">Madagascar</option>
-                      <option key="Malawi">Malawi</option>
-                      <option key="Malaysia">Malaysia</option>
-                      <option key="Mali">Mali</option>
-                      <option key="Malta">Malta</option>
-                      <option key="Mauritania">Mauritania</option>
-                      <option key="Mauritius">Mauritius</option>
-                      <option key="Mexico">Mexico</option>
-                      <option key="Moldova">Moldova</option>
-                      <option key="Montenegro">Montenegro</option>
-                      <option key="Morocco">Morocco</option>
-                      <option key="Mozambique">Mozambique</option>
-                      <option key="Myanmar">Myanmar</option>
-                      <option key="Namibia">Namibia</option>
-                      <option key="Nepal">Nepal</option>
-                      <option key="Netherlands">Netherlands</option>
-                      <option key="New Zealand">New Zealand</option>
-                      <option key="Nicaragua">Nicaragua</option>
-                      <option key="Niger">Niger</option>
-                      <option key="Nigeria">Nigeria</option>
-                      <option key="North Korea">North Korea</option>
-                      <option key="North Macedonia">North Macedonia</option>
-                      <option key="Northern Ireland">Northern Ireland</option>
-                      <option key="Norway">Norway</option>
-                      <option key="Oman">Oman</option>
-                      <option key="Pakistan">Pakistan</option>
-                      <option key="Palestine">Palestine</option>
-                      <option key="Panama">Panama</option>
-                      <option key="Paraguay">Paraguay</option>
-                      <option key="Peru">Peru</option>
-                      <option key="Philippines">Philippines</option>
-                      <option key="Poland">Poland</option>
-                      <option key="Portugal">Portugal</option>
-                      <option key="Qatar">Qatar</option>
-                      <option key="Romania">Romania</option>
-                      <option key="Russia">Russia</option>
-                      <option key="Rwanda">Rwanda</option>
-                      <option key="Saudi Arabia">Saudi Arabia</option>
-                      <option key="Scotland">Scotland</option>
-                      <option key="Senegal">Senegal</option>
-                      <option key="Serbia">Serbia</option>
-                      <option key="Sierra Leone">Sierra Leone</option>
-                      <option key="Singapore">Singapore</option>
-                      <option key="Slovakia">Slovakia</option>
-                      <option key="Slovenia">Slovenia</option>
-                      <option key="Somalia">Somalia</option>
-                      <option key="South Africa">South Africa</option>
-                      <option key="South Korea">South Korea</option>
-                      <option key="South Sudan">South Sudan</option>
-                      <option key="Spain">Spain</option>
-                      <option key="Sri Lanka">Sri Lanka</option>
-                      <option key="Sudan">Sudan</option>
-                      <option key="Sweden">Sweden</option>
-                      <option key="Switzerland">Switzerland</option>
-                      <option key="Syria">Syria</option>
-                      <option key="Tajikistan">Tajikistan</option>
-                      <option key="Tanzania">Tanzania</option>
-                      <option key="Thailand">Thailand</option>
-                      <option key="Togo">Togo</option>
-                      <option key="Trinidad and Tobago">Trinidad and Tobago</option>
-                      <option key="Tunisia">Tunisia</option>
-                      <option key="Turkey">Turkey</option>
-                      <option key="Turkmenistan">Turkmenistan</option>
-                      <option key="Uganda">Uganda</option>
-                      <option key="Ukraine">Ukraine</option>
-                      <option key="United Arab Emirates">United Arab Emirates</option>
-                      <option key="United Kingdom">United Kingdom</option>
-                      <option key="United States">United States</option>
-                      <option key="Uruguay">Uruguay</option>
-                      <option key="Uzbekistan">Uzbekistan</option>
-                      <option key="Venezuela">Venezuela</option>
-                      <option key="Vietnam">Vietnam</option>
-                      <option key="Wales">Wales</option>
-                      <option key="Yemen">Yemen</option>
-                      <option key="Zambia">Zambia</option>
-                      <option key="Zimbabwe">Zimbabwe</option>
-                    </select>
+                <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
+                  <option value="">Country...</option>
+                  {COUNTRIES.map(c=><option key={c}>{c}</option>)}
+                </select>
                 <ChipGroup options={['1st','2nd','3rd','4th','5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
               </div>
             ) : (

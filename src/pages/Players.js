@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, PATHS } from 'lib/db';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORDER,
-         calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
+         COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
          useConfirm, EUBadge } from 'components/ui/UI';
@@ -294,19 +294,19 @@ export default function Players() {
               <thead>
                 <tr>
                   <th style={{width:70}}>Actions</th>
-                  <SortTh label="Name" field="fullName" sort={sort} setSort={setSort} />
-                  <SortTh label='Gender' field='gender' sort={sort} setSort={setSort} />
-                  <SortTh label='DOB / Age' field='dob' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Nationality</th>
-                  <SortTh label='Position' field='primaryPosition' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Secondary</th>
-                  <SortTh label='Foot' field='foot' sort={sort} setSort={setSort} />
-                  <th>Club</th>
-                  <SortTh label='Contract' field='contractStatus' sort={sort} setSort={setSort} />
-                  <SortTh label='Contract End' field='contractEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='Repr. End' field='reprEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='Passport Exp.' field='passportExpiry' sort={sort} setSort={setSort} />
-                  <SortTh label='Nat. Team' field='natTeamStatus' sort={sort} setSort={setSort} />
+                  <SortTh label="🏃‍♂️" field="fullName" sort={sort} setSort={setSort} />
+                  <SortTh label='G' field='gender' sort={sort} setSort={setSort} />
+                  <SortTh label='🗓️' field='dob' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>🌎</th>
+                  <SortTh label='📍' field='primaryPosition' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>Sec 📍</th>
+                  <SortTh label='🦵' field='foot' sort={sort} setSort={setSort} />
+                  <th>🔰</th>
+                  <SortTh label='📑' field='contractStatus' sort={sort} setSort={setSort} />
+                  <SortTh label='End 📑' field='contractEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='End 🤝' field='reprEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='End 🪪' field='passportExpiry' sort={sort} setSort={setSort} />
+                  <SortTh label='🏟️' field='natTeamStatus' sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>
@@ -438,7 +438,7 @@ export default function Players() {
                 <div className="form-grid-2">
                   <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
                     <option value="">Country...</option>
-                    {['Israel','England','Spain','Germany','Italy','France','Portugal','Netherlands','Belgium','Turkey','Greece','Switzerland','Scotland','Russia','Ukraine','Serbia','Croatia','Czech Republic','Poland','Romania','Bulgaria','Argentina','Brazil','USA','Mexico','Saudi Arabia','Qatar','UAE','Australia'].map(c=><option key={c}>{c}</option>)}
+                    {COUNTRIES.map(c=><option key={c}>{c}</option>)}
                   </select>
                   <ChipGroup options={['1st','2nd','3rd','4th','5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
                 </div>
