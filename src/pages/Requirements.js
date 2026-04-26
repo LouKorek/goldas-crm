@@ -7,10 +7,28 @@ import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
          Empty, Spinner, useConfirm, PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
-// ── Club logo — Wikipedia REST (CORS-safe, free) + TheSportsDB fallback ──
+// ── Club logo — TheSportsDB (soccer-specific) + Wikipedia fallback ──
 const _logoCache = {};
 
-async function tryWikipedia(slug) {
+// TheSportsDB: filters to soccer only, so never returns a city or other-sport logo
+async function trySportsDB(name) {
+  try {
+    const r = await fetch(
+      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const soccer = d?.teams?.filter(t => {
+      const sport = (t.strSport || '').toLowerCase();
+      return sport === 'soccer' || sport === 'football';
+    });
+    return soccer?.[0]?.strTeamBadge || null;
+  } catch {}
+  return null;
+}
+
+// Wikipedia: only accepted when the page is confirmed to be about a football club
+async function tryWikipediaFC(slug) {
   try {
     const r = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
@@ -18,18 +36,13 @@ async function tryWikipedia(slug) {
     );
     if (!r.ok) return null;
     const d = await r.json();
-    if (d?.type !== 'disambiguation' && d?.thumbnail?.source) return d.thumbnail.source;
-  } catch {}
-  return null;
-}
-
-async function trySportsDB(name) {
-  try {
-    const r = await fetch(
-      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`
-    );
-    const d = await r.json();
-    if (d?.teams?.[0]?.strTeamBadge) return d.teams[0].strTeamBadge;
+    if (d?.type === 'disambiguation') return null;
+    const text = ((d.description || '') + ' ' + (d.extract || '')).toLowerCase();
+    const isClub = text.includes('football club') || text.includes('soccer club') ||
+                   text.includes('association football') || text.includes('f.c.') ||
+                   text.includes('sports club');
+    if (!isClub) return null;
+    return d?.thumbnail?.source || null;
   } catch {}
   return null;
 }
@@ -40,30 +53,36 @@ async function fetchClubLogo(name) {
   if (k in _logoCache) return _logoCache[k];
 
   const base = name.trim();
-  // Try Wikipedia with progressively more specific names
-  const wikiVariants = [
-    base + ' F.C.',
+
+  // Primary: TheSportsDB — sport-specific, can't return city images
+  const sdbVariants = [
+    base,
     base + ' FC',
     'FC ' + base,
-    base,
-    'Bnei ' + base + ' F.C.',
     'Bnei ' + base,
-    'Hapoel ' + base + ' F.C.',
     'Hapoel ' + base,
-    'Maccabi ' + base + ' F.C.',
     'Maccabi ' + base,
     'Beitar ' + base,
+    'Ironi ' + base,
+    base.replace(/\b(fc|sc|ac|cf|bv|sv)\b/gi, '').trim(),
   ].filter((v, i, arr) => v.length > 1 && arr.indexOf(v) === i);
 
-  for (const v of wikiVariants) {
-    const url = await tryWikipedia(v);
+  for (const v of sdbVariants) {
+    const url = await trySportsDB(v);
     if (url) { _logoCache[k] = url; return url; }
   }
 
-  // TheSportsDB as secondary
-  const sdbVariants = [base, base + ' FC', 'Bnei ' + base, 'Hapoel ' + base, 'Maccabi ' + base];
-  for (const v of sdbVariants) {
-    const url = await trySportsDB(v);
+  // Fallback: Wikipedia with strict football-club verification
+  const wikiVariants = [
+    base + ' F.C.',
+    base + ' FC',
+    'Bnei ' + base + ' F.C.',
+    'Hapoel ' + base + ' F.C.',
+    'Maccabi ' + base + ' F.C.',
+  ].filter((v, i, arr) => v.length > 1 && arr.indexOf(v) === i);
+
+  for (const v of wikiVariants) {
+    const url = await tryWikipediaFC(v);
     if (url) { _logoCache[k] = url; return url; }
   }
 
@@ -343,7 +362,7 @@ export default function Requirements() {
                   <tr key={p.id} onClick={() => setViewReq(p)} style={{ cursor: 'pointer' }}>
 
                     {/* Actions — first column, stop propagation only here */}
-                    <td onClick={e => e.stopPropagation()}>
+                    <td onClick={e => e.stopPropagation()} style={{padding:'8px 4px 8px 8px'}}>
                       <ActionButtons
                         onWhatsApp={p.contactPhone
                           ? () => window.open(`https://wa.me/${p.contactPhone.replace(/[^0-9]/g, '')}`, '_blank')

@@ -102,7 +102,7 @@ function PlayerView({ player, onClose }) {
           <div className="form-section-title" style={{marginTop:16}}>Representation</div>
           <Row label="Repr. Start"  value={fmtDate(player.reprStart)} />
           <Row label="Repr. End"    value={fmtDate(player.reprEnd)} />
-          <div className="form-section-title" style={{marginTop:16}}>🪪 Passport</div>
+          <div className="form-section-title" style={{marginTop:16}}>Passport</div>
           <Row label="Passport No." value={player.passportNumber} />
           <Row label="Expiry"       value={fmtDate(player.passportExpiry)} />
         </div>
