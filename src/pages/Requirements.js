@@ -7,72 +7,138 @@ import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
          Empty, Spinner, useConfirm, PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
-// ── Club avatar (initials + hashed color) ────────────────────────
-function ClubAvatar({ name, size=28 }) {
-  const words = (name||'?').trim().split(/\s+/);
+// ── Club logo (TheSportsDB, free, no key needed) ─────────────────
+const _logoCache = {};
+
+async function fetchClubLogo(name) {
+  const k = (name || '').trim().toLowerCase();
+  if (!k || k.length < 2) return null;
+  if (k in _logoCache) return _logoCache[k];
+
+  // Try the name as-is, then common football prefixes/suffixes
+  const variants = [
+    name.trim(),
+    name.trim() + ' FC',
+    'FC ' + name.trim(),
+    'Bnei ' + name.trim(),
+    'Hapoel ' + name.trim(),
+    'Maccabi ' + name.trim(),
+    'Beitar ' + name.trim(),
+    name.trim().replace(/\bFC\b|\bSC\b|\bAC\b|\bCF\b|\bBV\b|\bSV\b/gi, '').trim(),
+  ].filter((v, i, arr) => v.length > 1 && arr.indexOf(v) === i);
+
+  for (const variant of variants) {
+    try {
+      const r = await fetch(
+        `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(variant)}`
+      );
+      const d = await r.json();
+      if (d?.teams?.[0]?.strTeamBadge) {
+        _logoCache[k] = d.teams[0].strTeamBadge;
+        return _logoCache[k];
+      }
+    } catch { break; }
+  }
+
+  _logoCache[k] = null;
+  return null;
+}
+
+// Shows logo if found, otherwise shows initials avatar
+function ClubLogoOrAvatar({ name, size = 28 }) {
+  const [url, setUrl] = useState(() => {
+    const k = (name || '').trim().toLowerCase();
+    return k in _logoCache ? _logoCache[k] : undefined;
+  });
+
+  useEffect(() => {
+    if (!name || name.trim().length < 2) { setUrl(null); return; }
+    const k = name.trim().toLowerCase();
+    if (k in _logoCache) { setUrl(_logoCache[k]); return; }
+    fetchClubLogo(name).then(logo => setUrl(logo));
+  }, [name]);
+
+  // While loading or if logo found
+  if (url) {
+    return (
+      <img src={url} alt={name} title={name}
+        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+        onError={() => setUrl(null)} />
+    );
+  }
+
+  // Initials fallback
+  const words  = (name || '?').trim().split(/\s+/);
   const initials = words.length >= 2
-    ? (words[0][0] + words[words.length-1][0]).toUpperCase()
-    : (name||'?').slice(0,2).toUpperCase();
-  const hue = (name||'').split('').reduce((h,c) => (h*31 + c.charCodeAt(0)) & 0xFFFF, 0) % 360;
+    ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
+    : (name || '?').slice(0, 2).toUpperCase();
+  const hue = (name || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xFFFF, 0) % 360;
   return (
     <div style={{
-      width:size, height:size, borderRadius:6, flexShrink:0,
-      background:`hsl(${hue},45%,22%)`,
-      border:`1px solid hsl(${hue},50%,35%)`,
-      display:'flex', alignItems:'center', justifyContent:'center',
-      fontSize:size<=28?9:11, fontWeight:800,
-      color:`hsl(${hue},70%,80%)`,
-      letterSpacing:'0.04em', userSelect:'none',
+      width: size, height: size, borderRadius: 6, flexShrink: 0,
+      background: `hsl(${hue},45%,22%)`, border: `1px solid hsl(${hue},50%,35%)`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size <= 28 ? 9 : 11, fontWeight: 800,
+      color: `hsl(${hue},70%,80%)`, letterSpacing: '0.04em', userSelect: 'none',
     }}>{initials}</div>
+  );
+}
+
+// ── Youth badge ──────────────────────────────────────────────────
+function YouthBadge() {
+  return (
+    <span style={{
+      background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
+      borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700,
+      padding: '1px 5px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
+    }}>U19</span>
   );
 }
 
 // ── Requirement view card ────────────────────────────────────────
 function RequirementView({ req, onClose }) {
-  const Row = ({label, value}) => value && value !== '—' ? (
-    <div style={{display:'flex',gap:12,padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
-      <div style={{width:160,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>{label}</div>
-      <div style={{color:'var(--text-1)',fontSize:13}}>{value}</div>
+  const Row = ({ label, value }) => value && value !== '—' ? (
+    <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ color: 'var(--text-1)', fontSize: 13 }}>{value}</div>
     </div>
   ) : null;
 
-  const feeDisplay = req.transferFee && req.transferFee!=='Not specified'
-    ? `€${Number(req.transferFee).toLocaleString()}`
-    : (req.transferFee||'—');
-  const salDisplay = req.salary && req.salary!=='Not specified'
-    ? `€${Number(req.salary).toLocaleString()}/mo`
-    : (req.salary||'—');
+  const feeDisplay = req.transferFee && req.transferFee !== 'Not specified'
+    ? `€${Number(req.transferFee).toLocaleString()}` : (req.transferFee || '—');
+  const salDisplay = req.salary && req.salary !== 'Not specified'
+    ? `€${Number(req.salary).toLocaleString()}/mo` : (req.salary || '—');
   const ageDisplay = req.ageNotSpecified ? 'Not specified'
-    : (req.ageMin&&req.ageMax ? `${req.ageMin}–${req.ageMax}` : req.ageMin||req.ageMax||'—');
+    : (req.ageMin && req.ageMax ? `${req.ageMin}–${req.ageMax}` : req.ageMin || req.ageMax || '—');
 
   return (
     <Modal title={req.clubName} onClose={onClose} wide viewOnly>
-      <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:20,flexWrap:'wrap'}}>
-        <ClubAvatar name={req.clubName} size={44} />
-        <div style={{flex:1}}>
-          <div style={{display:'flex',alignItems:'center',gap:7}}>
-            <span style={{fontWeight:600,fontSize:15,color:'var(--text-1)'}}>{req.clubName}</span>
-            {req.clubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:10,fontWeight:700,padding:'2px 7px'}}>Youth Team 🌱</span>}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+        <ClubLogoOrAvatar name={req.clubName} size={48} />
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-1)' }}>{req.clubName}</span>
+            {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 4, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>Youth Team 🌱</span>}
           </div>
-          <div style={{fontSize:12,color:'var(--text-3)'}}>{req.league||'League not set'}{req.tablePosition ? ` · #${req.tablePosition} in table` : ''}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            {req.league || 'League not set'}{req.tablePosition ? ` · #${req.tablePosition} in table` : ''}
+          </div>
         </div>
-        {req.gender && (
-          <span className="badge" style={{background:'var(--surface-3)',color:'var(--text-2)'}}>{req.gender}</span>
-        )}
+        {req.gender && <span className="badge" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>{req.gender}</span>}
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
         <div>
           <div className="form-section-title">Club</div>
-          <Row label="League"        value={req.league} />
-          <Row label="Table Pos."    value={req.tablePosition ? `#${req.tablePosition}` : null} />
+          <Row label="League"     value={req.league} />
+          <Row label="Table Pos." value={req.tablePosition ? `#${req.tablePosition}` : null} />
 
-          <div className="form-section-title" style={{marginTop:16}}>Contact</div>
-          <Row label="Name"   value={req.contactName} />
-          <Row label="Role"   value={req.contactRole} />
+          <div className="form-section-title" style={{ marginTop: 16 }}>Contact</div>
+          <Row label="Name" value={req.contactName} />
+          <Row label="Role" value={req.contactRole} />
           {req.contactPhone && (
-            <div style={{display:'flex',gap:12,padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
-              <div style={{width:160,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>Phone</div>
+            <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Phone</div>
               <PhoneDisplay phone={req.contactPhone} />
             </div>
           )}
@@ -88,23 +154,23 @@ function RequirementView({ req, onClose }) {
       </div>
 
       {req.notes && (
-        <div style={{marginTop:16}}>
+        <div style={{ marginTop: 16 }}>
           <div className="form-section-title">Notes</div>
-          <p style={{color:'var(--text-2)',fontSize:13,lineHeight:1.7}}>{req.notes}</p>
+          <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.7 }}>{req.notes}</p>
         </div>
       )}
       {req.lastEditedByName && (
-        <div style={{marginTop:12,fontSize:11,color:'var(--text-3)'}}>Last edited by {req.lastEditedByName}</div>
+        <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-3)' }}>Last edited by {req.lastEditedByName}</div>
       )}
     </Modal>
   );
 }
 
 const EMPTY = {
-  gender:'', leagueMode:'select', leagueCountry:'', leagueTier:'', leagueManual:'',
-  clubName:'', clubIsYouth:false, tablePosition:'', contactName:'', contactRole:'',
-  contactPhone:'', requiredPosition:'', ageMin:'', ageMax:'', ageNotSpecified:false,
-  transferFee:'', salary:'', notes:'',
+  gender: '', leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '',
+  clubName: '', clubIsYouth: false, tablePosition: '', contactName: '', contactRole: '',
+  contactPhone: '', requiredPosition: '', ageMin: '', ageMax: '', ageNotSpecified: false,
+  transferFee: '', salary: '', notes: '',
 };
 
 async function clearAll_clubrequirements() {
@@ -115,40 +181,43 @@ async function clearAll_clubrequirements() {
 }
 
 export default function Requirements() {
-  const [items, setItems]       = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [modal, setModal]       = useState(null);
-  const [viewReq, setViewReq]   = useState(null);
-  const [form, setForm]         = useState(EMPTY);
-  const [saving, setSaving]     = useState(false);
-  const [isDirty, setIsDirty]   = useState(false);
-  const [search, setSearch]     = useState('');
-  const [filters, setFilters]   = useState({});
-  const [sort, setSort]         = useState({ field:'clubName', dir:'asc' });
-  const { confirm, dialog }     = useConfirm();
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal]     = useState(null);
+  const [viewReq, setViewReq] = useState(null);
+  const [form, setForm]       = useState(EMPTY);
+  const [saving, setSaving]   = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [search, setSearch]   = useState('');
+  const [filters, setFilters] = useState({});
+  const [sort, setSort]       = useState({ field: 'clubName', dir: 'asc' });
+  const { confirm, dialog }   = useConfirm();
 
   useEffect(() => {
-    return listenCollection(PATHS.CLUB_REQUIREMENTS, (data) => {
+    return listenCollection(PATHS.CLUB_REQUIREMENTS, data => {
       setItems(data); setLoading(false);
     }, 'clubName');
   }, []);
 
-  const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
-  const f = (k) => form[k] ?? '';
+  const s = k => v => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
+  const f = k => form[k] ?? '';
 
-  const league = form.leagueMode==='manual' ? form.leagueManual
-    : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
+  const league = form.leagueMode === 'manual' ? form.leagueManual
+    : (form.leagueCountry && form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ', '')}` : '');
 
-  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
-  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
-  const openDup  = (p) => { const {id:_, ...rest} = p; setForm({...EMPTY,...rest}); setModal('add'); setIsDirty(false); };
+  const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); setIsDirty(false); };
+  const openEdit = p  => { setForm({ ...EMPTY, ...p }); setModal({ edit: p }); setIsDirty(false); };
+  const openDup  = p  => { const { id: _, ...rest } = p; setForm({ ...EMPTY, ...rest }); setModal('add'); setIsDirty(false); };
 
   const validate = () => {
-    if (!form.clubName.trim())    return 'Club name is required.';
-    if (!form.gender)             return 'Gender is required.';
+    if (!form.clubName.trim()) return 'Club name is required.';
+    if (!form.gender)          return 'Gender is required.';
     const existing = items.filter(p => modal?.edit?.id !== p.id);
-    if (existing.some(p => p.clubName.trim().toLowerCase()===form.clubName.trim().toLowerCase() && p.gender===form.gender && p.requiredPosition===form.requiredPosition && p.leagueCountry===form.leagueCountry))
-      return 'An identical requirement already exists. Please change at least one detail.';
+    if (existing.some(p =>
+      p.clubName.trim().toLowerCase() === form.clubName.trim().toLowerCase() &&
+      p.gender === form.gender && p.requiredPosition === form.requiredPosition &&
+      p.leagueCountry === form.leagueCountry
+    )) return 'An identical requirement already exists. Please change at least one detail.';
     return null;
   };
 
@@ -157,8 +226,8 @@ export default function Requirements() {
     if (err) { toast.error(err); return; }
     setSaving(true);
     try {
-      const data = {...form, league};
-      if (modal==='add') {
+      const data = { ...form, league };
+      if (modal === 'add') {
         await addDoc_(PATHS.CLUB_REQUIREMENTS, data);
         toast.success(`Requirement for "${form.clubName}" added!`);
       } else {
@@ -166,14 +235,14 @@ export default function Requirements() {
         toast.success('Updated.');
       }
       setModal(null);
-    } catch(e) {
-      toast.error(e.message || "Save failed.");
+    } catch (e) {
+      toast.error(e.message || 'Save failed.');
     } finally {
       setSaving(false);
     }
   };
 
-  const del = async (p) => {
+  const del = async p => {
     const ok = await confirm(`Delete requirement for "${p.clubName}"?`);
     if (!ok) return;
     await deleteDoc_(PATHS.CLUB_REQUIREMENTS, p.id);
@@ -182,116 +251,134 @@ export default function Requirements() {
 
   let data = items.filter(p => {
     if (search && !`${p.clubName} ${p.contactName} ${p.league}`.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filters.gender && p.gender !== filters.gender) return false;
+    if (filters.gender   && p.gender           !== filters.gender)   return false;
     if (filters.position && p.requiredPosition !== filters.position) return false;
     return true;
   });
-  data = data.sort((a,b) => {
-    const av = a[sort.field]||'', bv = b[sort.field]||'';
-    return sort.dir==='asc' ? (av>bv?1:-1) : (av<bv?1:-1);
+  data = data.sort((a, b) => {
+    const av = a[sort.field] || '', bv = b[sort.field] || '';
+    return sort.dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
   });
 
   return (
     <div>
       <PageHeader
         title="Club Requirements"
-        subtitle={`${items.length} active requirement${items.length!==1?'s':''}`}
+        subtitle={`${items.length} active requirement${items.length !== 1 ? 's' : ''}`}
         action={
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Requirement</button>
-            <div style={{height:36,display:'flex',alignItems:'center'}}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Requirement</button>
+            <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
             <button className="btn btn-danger btn-sm" onClick={clearAll_clubrequirements}
-              style={{height:36,opacity:0.45,whiteSpace:'nowrap'}} title="Clear all"
-              onMouseEnter={e=>e.currentTarget.style.opacity='1'}
-              onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
+              style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
               🗑 Clear All
             </button>
           </div>
         }
       >
-        <div style={{marginTop:14}}>
+        <div style={{ marginTop: 14 }}>
           <FilterBar filters={filters} setFilters={setFilters} options={[
-            { key:'gender', label:'Gender', values:['Men','Women'] },
-            { key:'position', label:'Position', values:POSITIONS },
+            { key: 'gender',   label: 'Gender',   values: ['Men', 'Women'] },
+            { key: 'position', label: 'Position', values: POSITIONS },
           ]} />
         </div>
       </PageHeader>
 
       {loading ? (
-        <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : data.length === 0 ? (
-        <Empty icon="📋" message={search||Object.values(filters).some(Boolean)?'No club requirements match your search.':'No club requirements added yet.'}
-          action={!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
+        <Empty icon="📋"
+          message={search || Object.values(filters).some(Boolean) ? 'No club requirements match your search.' : 'No club requirements added yet.'}
+          action={!search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
       ) : (
-        <div className="card" style={{padding:0,overflow:'hidden'}}>
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>G</th>
-                  <SortTh label="🔰 Club" field="clubName" sort={sort} setSort={setSort} />
-                  <th>🌍 League</th>
+                  <SortTh label="🔰" field="clubName" sort={sort} setSort={setSort} />
+                  <th>🌍</th>
                   <th>#</th>
-                  <th>👤 Contact</th>
-                  <th>📍 Pos</th>
-                  <th>🗓️ Age</th>
-                  <th>💰 TF</th>
-                  <th>💵 Salary</th>
-                  <th>✏️</th>
+                  <th>👤</th>
+                  <th>📍</th>
+                  <th>🗓️</th>
+                  <th>💰</th>
+                  <th>💵</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {data.map(p => (
-                  <tr key={p.id} onClick={()=>setViewReq(p)} style={{cursor:'pointer'}}>
-                    <td onClick={e=>e.stopPropagation()}>
-                      <span style={{fontSize:11,color:'var(--text-2)',fontWeight:500}}>{p.gender?p.gender.charAt(0):'—'}</span>
+                  <tr key={p.id} onClick={() => setViewReq(p)} style={{ cursor: 'pointer' }}>
+
+                    {/* Gender */}
+                    <td onClick={e => e.stopPropagation()}>
+                      <span style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 500 }}>
+                        {p.gender ? p.gender.charAt(0) : '—'}
+                      </span>
                     </td>
-                    <td onClick={e=>e.stopPropagation()} style={{cursor:'default'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:7}}>
-                        <ClubAvatar name={p.clubName} />
-                        <span style={{fontWeight:500}}>{p.clubName}</span>
-                        {p.clubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U</span>}
+
+                    {/* Club name + logo */}
+                    <td onClick={e => e.stopPropagation()} style={{ cursor: 'default' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <ClubLogoOrAvatar name={p.clubName} size={26} />
+                        <span style={{ fontWeight: 500 }}>{p.clubName}</span>
+                        {p.clubIsYouth && <YouthBadge />}
                       </div>
                     </td>
-                    <td style={{color:'var(--text-2)',fontSize:12}}>{p.league||'—'}</td>
-                    <td style={{color:'var(--text-2)',fontSize:12,textAlign:'center'}}>{p.tablePosition||'—'}</td>
+
+                    {/* League */}
+                    <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{p.league || '—'}</td>
+
+                    {/* Table position */}
+                    <td style={{ color: 'var(--text-2)', fontSize: 12, textAlign: 'center' }}>{p.tablePosition || '—'}</td>
+
+                    {/* Contact — name + role only */}
                     <td>
                       {p.contactName ? (
                         <div>
-                          <div style={{fontSize:12,fontWeight:500,whiteSpace:'nowrap'}}>{p.contactName}</div>
-                          <div style={{fontSize:10,color:'var(--text-3)'}}>{p.contactRole||''}</div>
-                          {p.contactPhone && (
-                            <div style={{display:'flex',gap:4,marginTop:2}}>
-                              <a href={`tel:${p.contactPhone}`} onClick={e=>e.stopPropagation()}
-                                style={{fontSize:12,textDecoration:'none'}} title={p.contactPhone}>📞</a>
-                              <a href={`https://wa.me/${p.contactPhone.replace(/[^0-9]/g,'')}`}
-                                target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                                style={{fontSize:12,textDecoration:'none'}} title="WhatsApp">💬</a>
-                            </div>
-                          )}
+                          <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.contactName}</div>
+                          {p.contactRole && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.contactRole}</div>}
                         </div>
-                      ) : <span style={{color:'var(--text-3)'}}>—</span>}
+                      ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
                     </td>
-                    <td style={{fontWeight:500,textAlign:'center'}}>{p.requiredPosition||'—'}</td>
-                    <td style={{color:'var(--text-2)',fontSize:12,textAlign:'center'}}>
-                      {p.ageNotSpecified ? '—' : (p.ageMin&&p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin||p.ageMax||'—')}
+
+                    {/* Required position */}
+                    <td style={{ fontWeight: 500, textAlign: 'center' }}>{p.requiredPosition || '—'}</td>
+
+                    {/* Age range */}
+                    <td style={{ color: 'var(--text-2)', fontSize: 12, textAlign: 'center' }}>
+                      {p.ageNotSpecified ? '—' : (p.ageMin && p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin || p.ageMax || '—')}
                     </td>
-                    <td style={{color:'var(--text-2)',fontSize:12}}>
-                      {p.transferFee && p.transferFee!=='Not specified' ? `€${Number(p.transferFee).toLocaleString()}` : (p.transferFee==='Not specified'?'—':p.transferFee||'—')}
+
+                    {/* Max transfer fee */}
+                    <td style={{ color: 'var(--text-2)', fontSize: 12 }}>
+                      {p.transferFee && p.transferFee !== 'Not specified'
+                        ? `€${Number(p.transferFee).toLocaleString()}`
+                        : (p.transferFee === 'Not specified' ? '—' : p.transferFee || '—')}
                     </td>
-                    <td style={{color:'var(--text-2)',fontSize:12}}>
-                      {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary==='Not specified'?'—':p.salary||'—')}
+
+                    {/* Max salary */}
+                    <td style={{ color: 'var(--text-2)', fontSize: 12 }}>
+                      {p.salary && p.salary !== 'Not specified'
+                        ? `€${Number(p.salary).toLocaleString()}/mo`
+                        : (p.salary === 'Not specified' ? '—' : p.salary || '—')}
                     </td>
-                    <td style={{fontSize:11,color:'var(--text-3)',whiteSpace:'nowrap'}}>{p.lastEditedByName||'—'}</td>
-                    <td onClick={e=>e.stopPropagation()}>
+
+                    {/* Actions — WhatsApp in view slot, no Last Edited */}
+                    <td onClick={e => e.stopPropagation()}>
                       <ActionButtons
-                        onView={()=>setViewReq(p)}
-                        onEdit={()=>openEdit(p)}
-                        onDuplicate={()=>openDup(p)}
-                        onDelete={()=>del(p)}
+                        onWhatsApp={p.contactPhone
+                          ? () => window.open(`https://wa.me/${p.contactPhone.replace(/[^0-9]/g, '')}`, '_blank')
+                          : undefined}
+                        onEdit={() => openEdit(p)}
+                        onDuplicate={() => openDup(p)}
+                        onDelete={() => del(p)}
                       />
                     </td>
                   </tr>
@@ -302,92 +389,96 @@ export default function Requirements() {
         </div>
       )}
 
-      {/* View modal */}
-      {viewReq && <RequirementView req={viewReq} onClose={()=>setViewReq(null)} />}
+      {/* View modal — opened by row click */}
+      {viewReq && <RequirementView req={viewReq} onClose={() => setViewReq(null)} />}
 
       {/* Add/Edit modal */}
       {modal && (
         <Modal
-          title={modal==='add'?'Add Club Requirement':`Edit: ${form.clubName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
+          title={modal === 'add' ? 'Add Club Requirement' : `Edit: ${form.clubName}`}
+          onClose={() => setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving?<><span className="spinner" style={{width:14,height:14}}/> Saving...</>:'Save Requirement'}
+              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Requirement'}
             </button>
           </>}
         >
           <div className="form-section-title">Club Information</div>
           <div className="form-grid-2">
             <Field label="Gender" required>
-              <ChipGroup options={['Men','Women']} value={f('gender')} onChange={s('gender')} />
+              <ChipGroup options={['Men', 'Women']} value={f('gender')} onChange={s('gender')} />
             </Field>
             <Field label="Club Name" required>
-              <input value={f('clubName')} onChange={e=>s('clubName')(e.target.value)} placeholder="Club name" />
-              <button type="button" className={`chip${form.clubIsYouth?' active':''}`}
-                onClick={()=>s('clubIsYouth')(!form.clubIsYouth)}
-                style={{fontSize:11,padding:'4px 10px',marginTop:6}}>🌱 Youth Team</button>
+              <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder="Club name" />
+              <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
+                onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
+                style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>🌱 Youth Team</button>
             </Field>
           </div>
           <Field label="League">
-            <div style={{display:'flex',gap:8,marginBottom:8}}>
-              <button type="button" className={`chip${form.leagueMode==='select'?' active':''}`} onClick={()=>s('leagueMode')('select')}>By Country + Tier</button>
-              <button type="button" className={`chip${form.leagueMode==='manual'?' active':''}`} onClick={()=>s('leagueMode')('manual')}>Manual</button>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button type="button" className={`chip${form.leagueMode === 'select' ? ' active' : ''}`} onClick={() => s('leagueMode')('select')}>By Country + Tier</button>
+              <button type="button" className={`chip${form.leagueMode === 'manual' ? ' active' : ''}`} onClick={() => s('leagueMode')('manual')}>Manual</button>
             </div>
-            {form.leagueMode==='select' ? (
+            {form.leagueMode === 'select' ? (
               <div className="form-grid-2">
-                <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
+                <select value={f('leagueCountry')} onChange={e => s('leagueCountry')(e.target.value)}>
                   <option value="">Country...</option>
-                  {COUNTRIES.map(c=><option key={c}>{c}</option>)}
+                  {COUNTRIES.map(c => <option key={c}>{c}</option>)}
                 </select>
-                <ChipGroup options={['1st','2nd','3rd','4th','5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
+                <ChipGroup options={['1st', '2nd', '3rd', '4th', '5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
               </div>
             ) : (
-              <input value={f('leagueManual')} onChange={e=>s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
+              <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
             )}
             {league && <div className="form-hint">League: <strong>{league}</strong></div>}
           </Field>
           <Field label="Current Table Position">
-            <input type="number" min={1} max={45} value={f('tablePosition')} onChange={e=>{ const v=parseInt(e.target.value); if(!e.target.value){s('tablePosition')(''); return;} if(v>=1&&v<=45) s('tablePosition')(String(v)); }} placeholder="1–45" style={{maxWidth:120}} />
+            <input type="number" min={1} max={45} value={f('tablePosition')}
+              onChange={e => { const v = parseInt(e.target.value); if (!e.target.value) { s('tablePosition')(''); return; } if (v >= 1 && v <= 45) s('tablePosition')(String(v)); }}
+              placeholder="1–45" style={{ maxWidth: 120 }} />
           </Field>
 
           <hr className="divider" />
           <div className="form-section-title">Contact</div>
           <div className="form-grid-2">
             <Field label="Contact Name">
-              <input value={f('contactName')} onChange={e=>s('contactName')(e.target.value)} placeholder="Full name" />
+              <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder="Full name" />
             </Field>
             <Field label="Contact Role">
-              <select value={f('contactRole')} onChange={e=>s('contactRole')(e.target.value)}>
+              <select value={f('contactRole')} onChange={e => s('contactRole')(e.target.value)}>
                 <option value="">Select role...</option>
-                {CONTACT_ROLES.map(r=><option key={r}>{r}</option>)}
+                {CONTACT_ROLES.map(r => <option key={r}>{r}</option>)}
                 <option value="Other">Other</option>
               </select>
             </Field>
           </div>
           <Field label="Contact Phone">
-            <input value={f('contactPhone')} onChange={e=>s('contactPhone')(e.target.value.replace(/[^0-9+]/g,''))} placeholder="+972..." />
+            <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
 
           <hr className="divider" />
           <div className="form-section-title">Profile Required</div>
           <Field label="Required Position">
-            <select value={f('requiredPosition')} onChange={e=>s('requiredPosition')(e.target.value)}>
+            <select value={f('requiredPosition')} onChange={e => s('requiredPosition')(e.target.value)}>
               <option value="">Select...</option>
-              {POSITIONS.map(p=><option key={p}>{p}</option>)}
+              {POSITIONS.map(p => <option key={p}>{p}</option>)}
             </select>
           </Field>
           <div className="form-grid-2">
             <Field label="Min Age">
-              <input type="number" min={14} max={48} value={form.ageNotSpecified?'':f('ageMin')} onChange={e=>s('ageMin')(e.target.value)} disabled={form.ageNotSpecified} placeholder="Min" />
+              <input type="number" min={14} max={48} value={form.ageNotSpecified ? '' : f('ageMin')}
+                onChange={e => s('ageMin')(e.target.value)} disabled={form.ageNotSpecified} placeholder="Min" />
             </Field>
             <Field label="Max Age">
-              <input type="number" min={14} max={48} value={form.ageNotSpecified?'':f('ageMax')} onChange={e=>s('ageMax')(e.target.value)} disabled={form.ageNotSpecified} placeholder="Max" />
+              <input type="number" min={14} max={48} value={form.ageNotSpecified ? '' : f('ageMax')}
+                onChange={e => s('ageMax')(e.target.value)} disabled={form.ageNotSpecified} placeholder="Max" />
             </Field>
           </div>
-          <div style={{marginBottom:14}}>
-            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13,color:'var(--text-2)'}}>
-              <input type="checkbox" checked={!!form.ageNotSpecified} onChange={e=>s('ageNotSpecified')(e.target.checked)} style={{accentColor:'var(--gold)'}} />
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-2)' }}>
+              <input type="checkbox" checked={!!form.ageNotSpecified} onChange={e => s('ageNotSpecified')(e.target.checked)} style={{ accentColor: 'var(--gold)' }} />
               Age: Not specified
             </label>
           </div>
@@ -400,7 +491,7 @@ export default function Requirements() {
             </Field>
           </div>
           <Field label="Notes">
-            <textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
+            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
           </Field>
         </Modal>
       )}

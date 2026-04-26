@@ -400,10 +400,11 @@ export function PageHeader({ title, subtitle, action, children }) {
 }
 
 // ── Universal ActionButtons — 2×2 grid ───────────────────────────
-export function ActionButtons({ onView, onEdit, onDuplicate, onDelete }) {
+export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelete }) {
   const BTN = {width:26,height:26,padding:0,display:'flex',alignItems:'center',
                justifyContent:'center',fontSize:13,border:'none',borderRadius:6,
                cursor:'pointer',transition:'all 0.15s',flexShrink:0};
+  const hasLeft = !!(onView || onWhatsApp);
   return (
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,width:56}}>
       {onView && (
@@ -412,12 +413,18 @@ export function ActionButtons({ onView, onEdit, onDuplicate, onDelete }) {
           onMouseEnter={e=>e.currentTarget.style.background='rgba(96,165,250,0.3)'}
           onMouseLeave={e=>e.currentTarget.style.background='rgba(96,165,250,0.15)'}>👁</button>
       )}
+      {onWhatsApp && !onView && (
+        <button style={{...BTN,background:'rgba(37,211,102,0.12)',color:'#25D166'}}
+          title="WhatsApp" onClick={onWhatsApp}
+          onMouseEnter={e=>e.currentTarget.style.background='rgba(37,211,102,0.25)'}
+          onMouseLeave={e=>e.currentTarget.style.background='rgba(37,211,102,0.12)'}>💬</button>
+      )}
       <button style={{...BTN,background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
         title="Delete" onClick={onDelete}
         onMouseEnter={e=>e.currentTarget.style.background='rgba(248,113,113,0.3)'}
         onMouseLeave={e=>e.currentTarget.style.background='rgba(248,113,113,0.15)'}>🗑</button>
       <button style={{...BTN,background:'rgba(201,168,76,0.15)',color:'var(--gold)',
-                      gridColumn: onView?'auto':'1 / -1'}}
+                      gridColumn: hasLeft?'auto':'1 / -1'}}
         title="Edit" onClick={onEdit}
         onMouseEnter={e=>e.currentTarget.style.background='rgba(201,168,76,0.3)'}
         onMouseLeave={e=>e.currentTarget.style.background='rgba(201,168,76,0.15)'}>✏️</button>

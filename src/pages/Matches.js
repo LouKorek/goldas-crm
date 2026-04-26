@@ -171,7 +171,7 @@ function YouthBadge({ small }) {
       borderRadius: 4, color: '#4ADE80', fontSize: small ? 9 : 11,
       fontWeight: 700, padding: small ? '1px 5px' : '2px 7px',
       letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
-    }}>U</span>
+    }}>U19</span>
   );
 }
 
