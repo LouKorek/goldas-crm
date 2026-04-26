@@ -366,7 +366,10 @@ export default function Players() {
                           <span style={{fontWeight:500}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
                           {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                         </div>
-                        <div style={{fontSize:10,color:'var(--text-3)'}}>{p.league||''}</div>
+                        <div style={{fontSize:10,color:'var(--text-3)',display:'flex',alignItems:'center',gap:4}}>
+                          {p.league||''}
+                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:3,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
+                        </div>
                       </td>
                       <td style={{textAlign:'center'}}>
                         <span className="badge" style={{background:p.contractStatus==='Free'?'var(--amber-bg)':p.contractStatus==='Under Contract'?'var(--green-bg)':'var(--blue-bg)',color:p.contractStatus==='Free'?'var(--amber)':p.contractStatus==='Under Contract'?'var(--green-ok)':'var(--blue)',fontSize:10}}>

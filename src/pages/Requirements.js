@@ -7,44 +7,70 @@ import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
          Empty, Spinner, useConfirm, PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
-// ── Club logo (TheSportsDB, free, no key needed) ─────────────────
+// ── Club logo — Wikipedia REST (CORS-safe, free) + TheSportsDB fallback ──
 const _logoCache = {};
+
+async function tryWikipedia(slug) {
+  try {
+    const r = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (d?.type !== 'disambiguation' && d?.thumbnail?.source) return d.thumbnail.source;
+  } catch {}
+  return null;
+}
+
+async function trySportsDB(name) {
+  try {
+    const r = await fetch(
+      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`
+    );
+    const d = await r.json();
+    if (d?.teams?.[0]?.strTeamBadge) return d.teams[0].strTeamBadge;
+  } catch {}
+  return null;
+}
 
 async function fetchClubLogo(name) {
   const k = (name || '').trim().toLowerCase();
   if (!k || k.length < 2) return null;
   if (k in _logoCache) return _logoCache[k];
 
-  // Try the name as-is, then common football prefixes/suffixes
-  const variants = [
-    name.trim(),
-    name.trim() + ' FC',
-    'FC ' + name.trim(),
-    'Bnei ' + name.trim(),
-    'Hapoel ' + name.trim(),
-    'Maccabi ' + name.trim(),
-    'Beitar ' + name.trim(),
-    name.trim().replace(/\bFC\b|\bSC\b|\bAC\b|\bCF\b|\bBV\b|\bSV\b/gi, '').trim(),
+  const base = name.trim();
+  // Try Wikipedia with progressively more specific names
+  const wikiVariants = [
+    base + ' F.C.',
+    base + ' FC',
+    'FC ' + base,
+    base,
+    'Bnei ' + base + ' F.C.',
+    'Bnei ' + base,
+    'Hapoel ' + base + ' F.C.',
+    'Hapoel ' + base,
+    'Maccabi ' + base + ' F.C.',
+    'Maccabi ' + base,
+    'Beitar ' + base,
   ].filter((v, i, arr) => v.length > 1 && arr.indexOf(v) === i);
 
-  for (const variant of variants) {
-    try {
-      const r = await fetch(
-        `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(variant)}`
-      );
-      const d = await r.json();
-      if (d?.teams?.[0]?.strTeamBadge) {
-        _logoCache[k] = d.teams[0].strTeamBadge;
-        return _logoCache[k];
-      }
-    } catch { break; }
+  for (const v of wikiVariants) {
+    const url = await tryWikipedia(v);
+    if (url) { _logoCache[k] = url; return url; }
+  }
+
+  // TheSportsDB as secondary
+  const sdbVariants = [base, base + ' FC', 'Bnei ' + base, 'Hapoel ' + base, 'Maccabi ' + base];
+  for (const v of sdbVariants) {
+    const url = await trySportsDB(v);
+    if (url) { _logoCache[k] = url; return url; }
   }
 
   _logoCache[k] = null;
   return null;
 }
 
-// Shows logo if found, otherwise shows initials avatar
 function ClubLogoOrAvatar({ name, size = 28 }) {
   const [url, setUrl] = useState(() => {
     const k = (name || '').trim().toLowerCase();
@@ -58,7 +84,6 @@ function ClubLogoOrAvatar({ name, size = 28 }) {
     fetchClubLogo(name).then(logo => setUrl(logo));
   }, [name]);
 
-  // While loading or if logo found
   if (url) {
     return (
       <img src={url} alt={name} title={name}
@@ -67,8 +92,8 @@ function ClubLogoOrAvatar({ name, size = 28 }) {
     );
   }
 
-  // Initials fallback
-  const words  = (name || '?').trim().split(/\s+/);
+  // Initials avatar fallback
+  const words    = (name || '?').trim().split(/\s+/);
   const initials = words.length >= 2
     ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
     : (name || '?').slice(0, 2).toUpperCase();
@@ -84,16 +109,14 @@ function ClubLogoOrAvatar({ name, size = 28 }) {
   );
 }
 
-// ── Youth badge ──────────────────────────────────────────────────
-function YouthBadge() {
-  return (
-    <span style={{
-      background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
-      borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700,
-      padding: '1px 5px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
-    }}>U19</span>
-  );
-}
+// ── Youth U19 badge ──────────────────────────────────────────────
+const U19 = () => (
+  <span style={{
+    background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
+    borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700,
+    padding: '1px 5px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
+  }}>U19</span>
+);
 
 // ── Requirement view card ────────────────────────────────────────
 function RequirementView({ req, onClose }) {
@@ -116,12 +139,14 @@ function RequirementView({ req, onClose }) {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
         <ClubLogoOrAvatar name={req.clubName} size={48} />
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-1)' }}>{req.clubName}</span>
             {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 4, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>Youth Team 🌱</span>}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-            {req.league || 'League not set'}{req.tablePosition ? ` · #${req.tablePosition} in table` : ''}
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {req.league || 'League not set'}
+            {req.clubIsYouth && <U19 />}
+            {req.tablePosition ? ` · #${req.tablePosition} in table` : ''}
           </div>
         </div>
         {req.gender && <span className="badge" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>{req.gender}</span>}
@@ -143,7 +168,6 @@ function RequirementView({ req, onClose }) {
             </div>
           )}
         </div>
-
         <div>
           <div className="form-section-title">Profile Needed</div>
           <Row label="Position"     value={req.requiredPosition} />
@@ -203,7 +227,9 @@ export default function Requirements() {
   const f = k => form[k] ?? '';
 
   const league = form.leagueMode === 'manual' ? form.leagueManual
-    : (form.leagueCountry && form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ', '')}` : '');
+    : (form.leagueCountry && form.leagueTier
+        ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ', '')}`
+        : '');
 
   const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); setIsDirty(false); };
   const openEdit = p  => { setForm({ ...EMPTY, ...p }); setModal({ edit: p }); setIsDirty(false); };
@@ -300,6 +326,7 @@ export default function Requirements() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th></th>{/* Actions — first */}
                   <th>G</th>
                   <SortTh label="🔰" field="clubName" sort={sort} setSort={setSort} />
                   <th>🌍</th>
@@ -309,31 +336,47 @@ export default function Requirements() {
                   <th>🗓️</th>
                   <th>💰</th>
                   <th>💵</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {data.map(p => (
                   <tr key={p.id} onClick={() => setViewReq(p)} style={{ cursor: 'pointer' }}>
 
-                    {/* Gender */}
+                    {/* Actions — first column, stop propagation only here */}
                     <td onClick={e => e.stopPropagation()}>
+                      <ActionButtons
+                        onWhatsApp={p.contactPhone
+                          ? () => window.open(`https://wa.me/${p.contactPhone.replace(/[^0-9]/g, '')}`, '_blank')
+                          : undefined}
+                        onEdit={() => openEdit(p)}
+                        onDuplicate={() => openDup(p)}
+                        onDelete={() => del(p)}
+                      />
+                    </td>
+
+                    {/* Gender */}
+                    <td>
                       <span style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 500 }}>
                         {p.gender ? p.gender.charAt(0) : '—'}
                       </span>
                     </td>
 
-                    {/* Club name + logo */}
-                    <td onClick={e => e.stopPropagation()} style={{ cursor: 'default' }}>
+                    {/* Club name + logo + youth badge */}
+                    <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                         <ClubLogoOrAvatar name={p.clubName} size={26} />
                         <span style={{ fontWeight: 500 }}>{p.clubName}</span>
-                        {p.clubIsYouth && <YouthBadge />}
+                        {p.clubIsYouth && <U19 />}
                       </div>
                     </td>
 
-                    {/* League */}
-                    <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{p.league || '—'}</td>
+                    {/* League + U19 if youth */}
+                    <td>
+                      <div style={{ color: 'var(--text-2)', fontSize: 12 }}>{p.league || '—'}</div>
+                      {p.clubIsYouth && p.league && (
+                        <div style={{ marginTop: 2 }}><U19 /></div>
+                      )}
+                    </td>
 
                     {/* Table position */}
                     <td style={{ color: 'var(--text-2)', fontSize: 12, textAlign: 'center' }}>{p.tablePosition || '—'}</td>
@@ -368,18 +411,6 @@ export default function Requirements() {
                       {p.salary && p.salary !== 'Not specified'
                         ? `€${Number(p.salary).toLocaleString()}/mo`
                         : (p.salary === 'Not specified' ? '—' : p.salary || '—')}
-                    </td>
-
-                    {/* Actions — WhatsApp in view slot, no Last Edited */}
-                    <td onClick={e => e.stopPropagation()}>
-                      <ActionButtons
-                        onWhatsApp={p.contactPhone
-                          ? () => window.open(`https://wa.me/${p.contactPhone.replace(/[^0-9]/g, '')}`, '_blank')
-                          : undefined}
-                        onEdit={() => openEdit(p)}
-                        onDuplicate={() => openDup(p)}
-                        onDelete={() => del(p)}
-                      />
                     </td>
                   </tr>
                 ))}
@@ -432,7 +463,12 @@ export default function Requirements() {
             ) : (
               <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
             )}
-            {league && <div className="form-hint">League: <strong>{league}</strong></div>}
+            {league && (
+              <div className="form-hint">
+                League: <strong>{league}</strong>
+                {form.clubIsYouth && <span style={{ marginLeft: 8 }}>· <strong>🌱 Youth League</strong></span>}
+              </div>
+            )}
           </Field>
           <Field label="Current Table Position">
             <input type="number" min={1} max={45} value={f('tablePosition')}

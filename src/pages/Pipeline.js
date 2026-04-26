@@ -232,7 +232,10 @@ export default function Pipeline({ category }) {
                         <span style={{fontWeight:500}}>{p.currentClub||'Free'}</span>
                         {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                       </div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>{p.league||''}</div>
+                      <div style={{fontSize:11,color:'var(--text-3)',display:'flex',alignItems:'center',gap:4}}>
+                        {p.league||''}
+                        {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:3,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
+                      </div>
                     </td>
                     <td>
                       <div style={{fontSize:13}}>{p.agentName||'—'}</div>

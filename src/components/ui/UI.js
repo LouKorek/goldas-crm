@@ -405,6 +405,8 @@ export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelet
                justifyContent:'center',fontSize:13,border:'none',borderRadius:6,
                cursor:'pointer',transition:'all 0.15s',flexShrink:0};
   const hasLeft = !!(onView || onWhatsApp);
+  // When onDuplicate exists we always want a 2×2 grid — add a placeholder if top-left is empty
+  const alwaysGrid = !!onDuplicate;
   return (
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,width:56}}>
       {onView && (
@@ -419,19 +421,22 @@ export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelet
           onMouseEnter={e=>e.currentTarget.style.background='rgba(37,211,102,0.25)'}
           onMouseLeave={e=>e.currentTarget.style.background='rgba(37,211,102,0.12)'}>💬</button>
       )}
+      {!hasLeft && alwaysGrid && <div />}
       <button style={{...BTN,background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
         title="Delete" onClick={onDelete}
         onMouseEnter={e=>e.currentTarget.style.background='rgba(248,113,113,0.3)'}
         onMouseLeave={e=>e.currentTarget.style.background='rgba(248,113,113,0.15)'}>🗑</button>
       <button style={{...BTN,background:'rgba(201,168,76,0.15)',color:'var(--gold)',
-                      gridColumn: hasLeft?'auto':'1 / -1'}}
+                      gridColumn: (hasLeft||alwaysGrid)?'auto':'1 / -1'}}
         title="Edit" onClick={onEdit}
         onMouseEnter={e=>e.currentTarget.style.background='rgba(201,168,76,0.3)'}
         onMouseLeave={e=>e.currentTarget.style.background='rgba(201,168,76,0.15)'}>✏️</button>
-      <button style={{...BTN,background:'rgba(167,139,250,0.15)',color:'#A78BFA'}}
-        title="Duplicate" onClick={onDuplicate}
-        onMouseEnter={e=>e.currentTarget.style.background='rgba(167,139,250,0.3)'}
-        onMouseLeave={e=>e.currentTarget.style.background='rgba(167,139,250,0.15)'}>⧉</button>
+      {onDuplicate && (
+        <button style={{...BTN,background:'rgba(167,139,250,0.15)',color:'#A78BFA'}}
+          title="Duplicate" onClick={onDuplicate}
+          onMouseEnter={e=>e.currentTarget.style.background='rgba(167,139,250,0.3)'}
+          onMouseLeave={e=>e.currentTarget.style.background='rgba(167,139,250,0.15)'}>⧉</button>
+      )}
     </div>
   );
 }
