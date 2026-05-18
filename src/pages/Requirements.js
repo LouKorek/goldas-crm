@@ -7,31 +7,223 @@ import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
          Empty, Spinner, useConfirm, PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
-// ── Club logo — TheSportsDB (soccer-specific) + Wikipedia fallback ──
-const _logoCache = {};
+// ====================================================================
+// Club logo fetcher - layered strategy with Hebrew/abbreviation support
+// 1. Hardcoded canonical aliases (covers TLV, B"S, JLM, Hebrew names)
+// 2. Wikidata search (returns logo from P154 property)
+// 3. TheSportsDB (sport-specific, can't return city images)
+// 4. Wikipedia EN / HE with strict football-club verification
+// ====================================================================
 
-// TheSportsDB: filters to soccer only, so never returns a city or other-sport logo
+// localStorage-backed cache (persists across sessions)
+const LOGO_CACHE_KEY = 'goldas_logo_cache_v2';
+let _logoCache = {};
+try { _logoCache = JSON.parse(localStorage.getItem(LOGO_CACHE_KEY) || '{}'); } catch {}
+const NEG = '__none__';
+function saveCache() {
+  try { localStorage.setItem(LOGO_CACHE_KEY, JSON.stringify(_logoCache)); } catch {}
+}
+
+// Israeli football clubs - canonical names with common aliases.
+// Maps any variant to a canonical English name we can search precisely.
+const CLUB_ALIASES = {
+  // Maccabi Tel Aviv
+  'maccabi tlv':         'Maccabi Tel Aviv F.C.',
+  'maccabi t.a':         'Maccabi Tel Aviv F.C.',
+  'maccabi ta':          'Maccabi Tel Aviv F.C.',
+  'maccabi tel-aviv':    'Maccabi Tel Aviv F.C.',
+  'maccabi tel aviv':    'Maccabi Tel Aviv F.C.',
+  'מכבי תל אביב':         'Maccabi Tel Aviv F.C.',
+  'מכבי תא':              'Maccabi Tel Aviv F.C.',
+  // Hapoel Tel Aviv
+  'hapoel tlv':          'Hapoel Tel Aviv F.C.',
+  'hapoel t.a':          'Hapoel Tel Aviv F.C.',
+  'hapoel ta':           'Hapoel Tel Aviv F.C.',
+  'hapoel tel-aviv':     'Hapoel Tel Aviv F.C.',
+  'hapoel tel aviv':     'Hapoel Tel Aviv F.C.',
+  'הפועל תל אביב':         'Hapoel Tel Aviv F.C.',
+  'הפועל תא':              'Hapoel Tel Aviv F.C.',
+  // Maccabi Haifa
+  'maccabi haifa':       'Maccabi Haifa F.C.',
+  'מכבי חיפה':            'Maccabi Haifa F.C.',
+  // Hapoel Haifa
+  'hapoel haifa':        'Hapoel Haifa F.C.',
+  'הפועל חיפה':           'Hapoel Haifa F.C.',
+  // Beitar Jerusalem
+  'beitar jerusalem':    'Beitar Jerusalem F.C.',
+  'beitar jlm':          'Beitar Jerusalem F.C.',
+  'betar jerusalem':     'Beitar Jerusalem F.C.',
+  'betar jlm':           'Beitar Jerusalem F.C.',
+  'beitar yerushalayim': 'Beitar Jerusalem F.C.',
+  'ביתר ירושלים':         'Beitar Jerusalem F.C.',
+  // Hapoel Beer Sheva
+  'hapoel beer sheva':   "Hapoel Be'er Sheva F.C.",
+  "hapoel be'er sheva":  "Hapoel Be'er Sheva F.C.",
+  'hapoel beersheva':    "Hapoel Be'er Sheva F.C.",
+  'hapoel bs':           "Hapoel Be'er Sheva F.C.",
+  'hapoel b"s':          "Hapoel Be'er Sheva F.C.",
+  'הפועל באר שבע':         "Hapoel Be'er Sheva F.C.",
+  'הפועל ב"ש':            "Hapoel Be'er Sheva F.C.",
+  // Maccabi Netanya
+  'maccabi netanya':     'Maccabi Netanya F.C.',
+  'מכבי נתניה':           'Maccabi Netanya F.C.',
+  // Maccabi Petah Tikva
+  'maccabi petah tikva': 'Maccabi Petah Tikva F.C.',
+  'maccabi pt':          'Maccabi Petah Tikva F.C.',
+  'maccabi petah tikvah':'Maccabi Petah Tikva F.C.',
+  'מכבי פתח תקווה':        'Maccabi Petah Tikva F.C.',
+  'מכבי פ"ת':             'Maccabi Petah Tikva F.C.',
+  // Hapoel Petah Tikva
+  'hapoel petah tikva':  'Hapoel Petah Tikva F.C.',
+  'hapoel pt':           'Hapoel Petah Tikva F.C.',
+  'הפועל פתח תקווה':       'Hapoel Petah Tikva F.C.',
+  'הפועל פ"ת':            'Hapoel Petah Tikva F.C.',
+  // Bnei Sakhnin
+  'bnei sakhnin':        'Bnei Sakhnin F.C.',
+  'sakhnin':             'Bnei Sakhnin F.C.',
+  'בני סכנין':            'Bnei Sakhnin F.C.',
+  // Hapoel Hadera
+  'hapoel hadera':       'Hapoel Hadera F.C.',
+  'הפועל חדרה':           'Hapoel Hadera F.C.',
+  // Hapoel Jerusalem
+  'hapoel jerusalem':    'Hapoel Jerusalem F.C.',
+  'hapoel jlm':          'Hapoel Jerusalem F.C.',
+  'הפועל ירושלים':        'Hapoel Jerusalem F.C.',
+  // Bnei Yehuda
+  'bnei yehuda':         'Bnei Yehuda Tel Aviv F.C.',
+  'bnei yehuda tlv':     'Bnei Yehuda Tel Aviv F.C.',
+  'בני יהודה':           'Bnei Yehuda Tel Aviv F.C.',
+  // F.C. Ashdod
+  'ashdod':              'F.C. Ashdod',
+  'fc ashdod':           'F.C. Ashdod',
+  'אשדוד':                'F.C. Ashdod',
+  // Hapoel Kfar Saba
+  'hapoel kfar saba':    'Hapoel Kfar Saba F.C.',
+  'הפועל כפר סבא':         'Hapoel Kfar Saba F.C.',
+  // Hapoel Ramat Gan
+  'hapoel ramat gan':    'Hapoel Ramat Gan F.C.',
+  'הפועל רמת גן':          'Hapoel Ramat Gan F.C.',
+  // Hapoel Nof HaGalil (Nazareth Illit)
+  'hapoel nof hagalil':  'Hapoel Nof HaGalil F.C.',
+  'הפועל נוף הגליל':       'Hapoel Nof HaGalil F.C.',
+  // Maccabi Bnei Reineh
+  'maccabi bnei reineh': 'Maccabi Bnei Reineh F.C.',
+  'מכבי בני ריינה':        'Maccabi Bnei Reineh F.C.',
+  // Hapoel Tel Aviv U-19 & similar — handled by stripping suffixes below
+};
+
+// Expand common abbreviations and Hebrew→English markers
+function expandAbbreviations(s) {
+  let out = ' ' + s + ' ';
+  const map = {
+    '\\bTLV\\b':         'Tel Aviv',
+    '\\bT\\.A\\.?\\b':   'Tel Aviv',
+    '\\bTA\\b':          'Tel Aviv',
+    '\\bJLM\\b':         'Jerusalem',
+    '\\bJ\\.M\\.?\\b':   'Jerusalem',
+    '\\bB"S\\b':         "Be'er Sheva",
+    '\\bBS\\b':          "Be'er Sheva",
+    '\\bB\\.S\\.?\\b':   "Be'er Sheva",
+    '\\bPT\\b':          'Petah Tikva',
+    '\\bP"T\\b':         'Petah Tikva',
+    '\\bP\\.T\\.?\\b':   'Petah Tikva',
+    '\\bKS\\b':          'Kfar Saba',
+    '\\bRG\\b':          'Ramat Gan',
+    '\\bRA\\b':          'Ra\'anana',
+    '\\bH\\b\\.?':       'Hapoel',  // when alone
+    '\\bM\\b\\.?':       'Maccabi', // when alone
+  };
+  for (const [pat, rep] of Object.entries(map)) {
+    out = out.replace(new RegExp(pat, 'gi'), rep);
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+// Strip "U19", "Youth", "Reserves", "B" suffixes for cleaner search
+function stripSuffixes(s) {
+  return s.replace(/\b(u\s*-?\s*\d{1,2}|under\s*\d{1,2}|youth|reserves?|academy|b\s*team)\b/gi, '').trim();
+}
+
+function normalizeKey(s) {
+  return (s || '').trim().toLowerCase()
+    .replace(/[".']/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+// Resolve a user-supplied club name to its canonical form (if known)
+function canonicalName(name) {
+  if (!name) return name;
+  const raw = stripSuffixes(name.trim());
+  const expanded = expandAbbreviations(raw);
+  const variants = [raw, expanded, raw.toLowerCase(), expanded.toLowerCase()];
+  for (const v of variants) {
+    const k = normalizeKey(v);
+    if (CLUB_ALIASES[k]) return CLUB_ALIASES[k];
+    // try partial match (Hebrew or English)
+    for (const aliasKey of Object.keys(CLUB_ALIASES)) {
+      if (k && (k.includes(aliasKey) || aliasKey.includes(k)) && Math.min(k.length, aliasKey.length) >= 4) {
+        return CLUB_ALIASES[aliasKey];
+      }
+    }
+  }
+  return expanded; // returns the abbreviation-expanded form for downstream search
+}
+
+// === Source 1: TheSportsDB ============================================
 async function trySportsDB(name) {
   try {
-    const r = await fetch(
-      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`
-    );
+    const r = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`);
     if (!r.ok) return null;
     const d = await r.json();
-    const soccer = d?.teams?.filter(t => {
-      const sport = (t.strSport || '').toLowerCase();
-      return sport === 'soccer' || sport === 'football';
-    });
+    const soccer = d?.teams?.filter(t => ['soccer', 'football'].includes((t.strSport || '').toLowerCase()));
     return soccer?.[0]?.strTeamBadge || null;
   } catch {}
   return null;
 }
 
-// Wikipedia: only accepted when the page is confirmed to be about a football club
-async function tryWikipediaFC(slug) {
+// === Source 2: Wikidata - structured logo data ========================
+// Wikidata returns logos in P154 property — these are official, high-quality
+async function tryWikidata(name) {
+  try {
+    // Step 1: search for entity
+    const sr = await fetch(
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&origin=*&type=item&limit=5`
+    );
+    if (!sr.ok) return null;
+    const sd = await sr.json();
+    if (!sd?.search?.length) return null;
+
+    // Step 2: prefer entities whose description hints at football
+    const candidates = sd.search.filter(e => {
+      const desc = (e.description || '').toLowerCase();
+      return desc.includes('football') || desc.includes('soccer') ||
+             desc.includes('association') || desc.includes('sports club') ||
+             desc.includes('כדורגל');
+    });
+    const pick = candidates[0] || sd.search[0];
+    if (!pick?.id) return null;
+
+    // Step 3: fetch entity's P154 (logo image) claim
+    const er = await fetch(
+      `https://www.wikidata.org/wiki/Special:EntityData/${pick.id}.json`
+    );
+    if (!er.ok) return null;
+    const ed = await er.json();
+    const claims = ed?.entities?.[pick.id]?.claims;
+    const logoClaim = claims?.P154?.[0]?.mainsnak?.datavalue?.value;
+    if (!logoClaim) return null;
+
+    // Step 4: convert "File:X.svg" to a usable Commons URL
+    return `https://commons.wikimedia.org/w/index.php?title=Special:Redirect/file/${encodeURIComponent(logoClaim)}&width=200`;
+  } catch {}
+  return null;
+}
+
+// === Source 3: Wikipedia REST (EN or HE) - thumbnail with verification ====
+async function tryWikipedia(slug, lang = 'en') {
   try {
     const r = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
+      `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
       { headers: { Accept: 'application/json' } }
     );
     if (!r.ok) return null;
@@ -40,23 +232,28 @@ async function tryWikipediaFC(slug) {
     const text = ((d.description || '') + ' ' + (d.extract || '')).toLowerCase();
     const isClub = text.includes('football club') || text.includes('soccer club') ||
                    text.includes('association football') || text.includes('f.c.') ||
-                   text.includes('sports club');
+                   text.includes('sports club') || text.includes('כדורגל');
     if (!isClub) return null;
-    return d?.thumbnail?.source || null;
+    return d?.originalimage?.source || d?.thumbnail?.source || null;
   } catch {}
   return null;
 }
 
 async function fetchClubLogo(name) {
-  const k = (name || '').trim().toLowerCase();
-  if (!k || k.length < 2) return null;
-  if (k in _logoCache) return _logoCache[k];
+  const cacheKey = normalizeKey(name);
+  if (!cacheKey || cacheKey.length < 2) return null;
+  if (cacheKey in _logoCache) {
+    const v = _logoCache[cacheKey];
+    return v === NEG ? null : v;
+  }
 
-  const base = name.trim();
+  const canonical = canonicalName(name);
+  const base      = canonical;
 
-  // Primary: TheSportsDB — sport-specific, can't return city images
-  const sdbVariants = [
+  // Build query variants — canonical name first, then common Israeli prefixes
+  const variants = Array.from(new Set([
     base,
+    base.replace(/\s*F\.?C\.?$/i, '').trim(),
     base + ' FC',
     'FC ' + base,
     'Bnei ' + base,
@@ -64,30 +261,45 @@ async function fetchClubLogo(name) {
     'Maccabi ' + base,
     'Beitar ' + base,
     'Ironi ' + base,
-    base.replace(/\b(fc|sc|ac|cf|bv|sv)\b/gi, '').trim(),
-  ].filter((v, i, arr) => v.length > 1 && arr.indexOf(v) === i);
+  ].filter(v => v && v.length > 1)));
 
-  for (const v of sdbVariants) {
+  const store = (url) => {
+    _logoCache[cacheKey] = url || NEG;
+    saveCache();
+    return url;
+  };
+
+  // Layer 1: Wikidata (most accurate, returns official logo)
+  for (const v of variants) {
+    const url = await tryWikidata(v + ' football club');
+    if (url) return store(url);
+  }
+  for (const v of variants) {
+    const url = await tryWikidata(v);
+    if (url) return store(url);
+  }
+
+  // Layer 2: TheSportsDB
+  for (const v of variants) {
     const url = await trySportsDB(v);
-    if (url) { _logoCache[k] = url; return url; }
+    if (url) return store(url);
   }
 
-  // Fallback: Wikipedia with strict football-club verification
-  const wikiVariants = [
-    base + ' F.C.',
-    base + ' FC',
-    'Bnei ' + base + ' F.C.',
-    'Hapoel ' + base + ' F.C.',
-    'Maccabi ' + base + ' F.C.',
-  ].filter((v, i, arr) => v.length > 1 && arr.indexOf(v) === i);
-
-  for (const v of wikiVariants) {
-    const url = await tryWikipediaFC(v);
-    if (url) { _logoCache[k] = url; return url; }
+  // Layer 3: Wikipedia EN with FC verification
+  for (const v of variants) {
+    const url = await tryWikipedia(v + ' F.C.', 'en');
+    if (url) return store(url);
+    const url2 = await tryWikipedia(v, 'en');
+    if (url2) return store(url2);
   }
 
-  _logoCache[k] = null;
-  return null;
+  // Layer 4: Wikipedia HE (Israeli teams often have richer Hebrew pages)
+  for (const v of variants) {
+    const url = await tryWikipedia(v, 'he');
+    if (url) return store(url);
+  }
+
+  return store(null);
 }
 
 function ClubLogoOrAvatar({ name, size = 28 }) {
