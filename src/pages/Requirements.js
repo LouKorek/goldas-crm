@@ -16,13 +16,18 @@ import { toast } from 'components/ui/UI';
 // ====================================================================
 
 // localStorage-backed cache (persists across sessions)
-const LOGO_CACHE_KEY = 'goldas_logo_cache_v2';
+// Bump key when fetcher logic changes to invalidate old negative results
+const LOGO_CACHE_KEY = 'goldas_logo_cache_v4';
 let _logoCache = {};
 try { _logoCache = JSON.parse(localStorage.getItem(LOGO_CACHE_KEY) || '{}'); } catch {}
 const NEG = '__none__';
 function saveCache() {
   try { localStorage.setItem(LOGO_CACHE_KEY, JSON.stringify(_logoCache)); } catch {}
 }
+// Clear old cache versions on load
+try {
+  for (let i = 1; i < 4; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
+} catch {}
 
 // Israeli football clubs - canonical names with common aliases.
 // Maps any variant to a canonical English name we can search precisely.
@@ -210,13 +215,28 @@ function canonicalName(name) {
 }
 
 // === Source 1: TheSportsDB ============================================
+// Guard: only accept result if returned team name shares a meaningful token with our query.
+// Prevents "Arsenal" being returned for "Hapoel Rishon LeZion" etc.
 async function trySportsDB(name) {
   try {
     const r = await fetch(`https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name)}`);
     if (!r.ok) return null;
     const d = await r.json();
-    const soccer = d?.teams?.filter(t => ['soccer', 'football'].includes((t.strSport || '').toLowerCase()));
-    return soccer?.[0]?.strTeamBadge || null;
+    const soccer = (d?.teams || []).filter(t => ['soccer', 'football'].includes((t.strSport || '').toLowerCase()));
+    if (!soccer.length) return null;
+    // Token overlap guard
+    const STOP = new Set(['fc','f.c.','sc','ac','cf','club','football','soccer','the','of','la','le','de']);
+    const tokensOf = (s) => (s || '').toLowerCase().replace(/[^a-z0-9֐-׿ ]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !STOP.has(t));
+    const qTokens = new Set(tokensOf(name));
+    if (qTokens.size === 0) return soccer[0]?.strTeamBadge || null;
+    for (const t of soccer) {
+      const teamTokens = new Set(tokensOf(t.strTeam));
+      // require at least one shared meaningful token
+      for (const tk of qTokens) {
+        if (teamTokens.has(tk)) return t.strTeamBadge || null;
+      }
+    }
+    return null;
   } catch {}
   return null;
 }
@@ -259,8 +279,8 @@ async function tryWikidata(name) {
   return null;
 }
 
-// === Source 3: Wikipedia REST (EN or HE) - thumbnail with verification ====
-async function tryWikipedia(slug, lang = 'en') {
+// === Source 3: Wikipedia REST summary - returns thumbnail if present
+async function tryWikipediaSummary(slug, lang = 'en') {
   try {
     const r = await fetch(
       `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
@@ -279,6 +299,41 @@ async function tryWikipedia(slug, lang = 'en') {
   return null;
 }
 
+// === Source 4: Wikipedia pageimages API - infobox image (more reliable for logos)
+async function tryWikipediaPageImage(title, lang = 'en') {
+  try {
+    const r = await fetch(
+      `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|pageprops&piprop=original|thumbnail&pithumbsize=300&format=json&origin=*&redirects=1`,
+      { headers: { Accept: 'application/json' } }
+    );
+    if (!r.ok) return null;
+    const d = await r.json();
+    const pages = d?.query?.pages || {};
+    for (const pid of Object.keys(pages)) {
+      if (pid === '-1') continue;
+      const p = pages[pid];
+      // Verify it's a football page (avoid disambig)
+      const disambig = p?.pageprops?.disambiguation;
+      if (disambig !== undefined) continue;
+      const img = p?.original?.source || p?.thumbnail?.source;
+      if (img) return img;
+    }
+  } catch {}
+  return null;
+}
+
+// Build reverse map: canonical English name -> list of Hebrew aliases
+const HEBREW_FOR_CANONICAL = (() => {
+  const m = {};
+  for (const [k, v] of Object.entries(CLUB_ALIASES)) {
+    if (/[֐-׿]/.test(k)) {
+      if (!m[v]) m[v] = [];
+      m[v].push(k);
+    }
+  }
+  return m;
+})();
+
 async function fetchClubLogo(name) {
   const cacheKey = normalizeKey(name);
   if (!cacheKey || cacheKey.length < 2) return null;
@@ -290,8 +345,8 @@ async function fetchClubLogo(name) {
   const canonical = canonicalName(name);
   const base      = canonical;
 
-  // Build query variants — canonical name first, then common Israeli prefixes
-  const variants = Array.from(new Set([
+  // English query variants
+  const enVariants = Array.from(new Set([
     base,
     base.replace(/\s*F\.?C\.?$/i, '').trim(),
     base + ' FC',
@@ -303,40 +358,61 @@ async function fetchClubLogo(name) {
     'Ironi ' + base,
   ].filter(v => v && v.length > 1)));
 
+  // Hebrew variants — pulled from alias dict using canonical, plus the raw input if Hebrew
+  // Also add "(כדורגל)" disambiguation suffix for clubs that share a name with other entities
+  const baseHe = Array.from(new Set([
+    ...(HEBREW_FOR_CANONICAL[canonical] || []),
+    ...(/[֐-׿]/.test(name) ? [name.trim()] : []),
+  ].filter(Boolean)));
+  const heVariants = Array.from(new Set([
+    ...baseHe,
+    ...baseHe.map(h => `${h} (כדורגל)`),
+  ]));
+
   const store = (url) => {
     _logoCache[cacheKey] = url || NEG;
     saveCache();
     return url;
   };
 
-  // Layer 1: Wikidata (most accurate, returns official logo)
-  for (const v of variants) {
-    const url = await tryWikidata(v + ' football club');
-    if (url) return store(url);
-  }
-  for (const v of variants) {
+  // Layer 1: Wikidata (most accurate, official logo via P154)
+  for (const v of enVariants) {
     const url = await tryWikidata(v);
     if (url) return store(url);
   }
 
-  // Layer 2: TheSportsDB
-  for (const v of variants) {
+  // Layer 2: Wikipedia HE via pageimages — best for Israeli clubs
+  for (const v of heVariants) {
+    const url = await tryWikipediaPageImage(v, 'he');
+    if (url) return store(url);
+  }
+  for (const v of heVariants) {
+    const url = await tryWikipediaSummary(v, 'he');
+    if (url) return store(url);
+  }
+
+  // Layer 3: Wikipedia EN via pageimages — infobox image (more reliable than summary)
+  for (const v of enVariants) {
+    const url = await tryWikipediaPageImage(v, 'en');
+    if (url) return store(url);
+  }
+  for (const v of enVariants) {
+    const url = await tryWikipediaPageImage(v + ' F.C.', 'en');
+    if (url) return store(url);
+  }
+
+  // Layer 4: TheSportsDB (fallback)
+  for (const v of enVariants) {
     const url = await trySportsDB(v);
     if (url) return store(url);
   }
 
-  // Layer 3: Wikipedia EN with FC verification
-  for (const v of variants) {
-    const url = await tryWikipedia(v + ' F.C.', 'en');
+  // Layer 5: Wikipedia summary (last resort, only if it has a thumbnail)
+  for (const v of enVariants) {
+    const url = await tryWikipediaSummary(v + ' F.C.', 'en');
     if (url) return store(url);
-    const url2 = await tryWikipedia(v, 'en');
+    const url2 = await tryWikipediaSummary(v, 'en');
     if (url2) return store(url2);
-  }
-
-  // Layer 4: Wikipedia HE (Israeli teams often have richer Hebrew pages)
-  for (const v of variants) {
-    const url = await tryWikipedia(v, 'he');
-    if (url) return store(url);
   }
 
   return store(null);
