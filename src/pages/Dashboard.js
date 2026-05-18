@@ -20,13 +20,21 @@ function KPI({ label, value, color, bg, to }) {
       justifyContent: 'flex-end',
       aspectRatio: '1 / 1',
       cursor: to ? 'pointer' : 'default',
-      transition: 'all 0.2s',
+      transition: 'transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s, border-color 0.22s',
       position: 'relative',
       overflow: 'hidden',
     }}
-    onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-4px)';e.currentTarget.style.boxShadow=`0 8px 24px ${color||'rgba(201,168,76,0.2)'}44`;}}
-    onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';}}
+    onMouseEnter={e => {
+      e.currentTarget.style.transform = 'translateY(-4px)';
+      e.currentTarget.style.boxShadow = `0 12px 32px ${color || 'rgba(201,168,76,0.25)'}55, 0 0 0 1px ${color || 'rgba(201,168,76,0.35)'} inset`;
+    }}
+    onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
     >
+      {/* Subtle radial glow */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: `radial-gradient(circle at 50% 18%, ${color || 'rgba(201,168,76,0.4)'}22 0%, transparent 55%)`,
+      }} />
       <div style={{
         fontFamily: 'Cormorant Garamond, serif',
         fontSize: 52, fontWeight: 700, lineHeight: 1,
@@ -35,16 +43,18 @@ function KPI({ label, value, color, bg, to }) {
         position: 'absolute',
         top: '30%', left: '50%',
         transform: 'translate(-50%, -50%)',
+        textShadow: `0 0 22px ${color || 'rgba(201,168,76,0.4)'}33`,
       }}>{value ?? 0}</div>
       <div style={{
         color: color || 'var(--text-3)',
         fontSize: 10, fontWeight: 700,
         textTransform: 'uppercase', letterSpacing: '0.08em',
-        textAlign: 'center', opacity: 0.8,
+        textAlign: 'center', opacity: 0.85,
+        position: 'relative', zIndex: 1,
       }}>{label}</div>
     </div>
   );
-  return to ? <Link to={to} style={{textDecoration:'none'}}>{inner}</Link> : inner;
+  return to ? <Link to={to} style={{ textDecoration: 'none' }}>{inner}</Link> : inner;
 }
 
 

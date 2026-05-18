@@ -248,12 +248,19 @@ export default function Pipeline({ category }) {
                       {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary||'—')}
                     </td>
                     <td style={{fontSize:12,color:'var(--text-3)'}}>{p.natTeamStatus||'—'}</td>
-                    <td>
-                      <div style={{display:'flex',gap:4}}>
-                        <button className="btn btn-ghost btn-sm" onClick={()=>setCardFor(p)} title="Generate Card">📋</button>
-                        <button className="btn btn-ghost btn-sm" onClick={()=>openEdit(p)}>Edit</button>
-                        <button className="btn btn-ghost btn-sm" onClick={()=>openDup(p)} title="Duplicate">⊕</button>
-                        <button className="btn btn-danger btn-sm" onClick={()=>del(p)}>✕</button>
+                    <td onClick={e => e.stopPropagation()}>
+                      <div style={{display:'flex',gap:5,alignItems:'center'}}>
+                        <button
+                          className="btn btn-ghost btn-sm btn-icon"
+                          onClick={()=>setCardFor(p)}
+                          title="Generate Card"
+                          style={{width:28,height:28,padding:0}}
+                        >📋</button>
+                        <ActionButtons
+                          onEdit={() => openEdit(p)}
+                          onDuplicate={() => openDup(p)}
+                          onDelete={() => del(p)}
+                        />
                       </div>
                     </td>
                   </tr>

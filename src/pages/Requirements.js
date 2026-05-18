@@ -141,7 +141,7 @@ const U19 = () => (
 function RequirementView({ req, onClose }) {
   const Row = ({ label, value }) => value && value !== '—' ? (
     <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
       <div style={{ color: 'var(--text-1)', fontSize: 13 }}>{value}</div>
     </div>
   ) : null;
@@ -171,7 +171,7 @@ function RequirementView({ req, onClose }) {
         {req.gender && <span className="badge" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>{req.gender}</span>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <div className="view-grid-2">
         <div>
           <div className="form-section-title">Club</div>
           <Row label="League"     value={req.league} />
@@ -182,7 +182,7 @@ function RequirementView({ req, onClose }) {
           <Row label="Role" value={req.contactRole} />
           {req.contactPhone && (
             <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Phone</div>
+              <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Phone</div>
               <PhoneDisplay phone={req.contactPhone} />
             </div>
           )}

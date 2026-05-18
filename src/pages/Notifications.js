@@ -159,7 +159,7 @@ export default function Notifications() {
       const days = Math.ceil((next-now)/(1000*60*60*24));
       return { p, days, age: (age||0)+1 };
     })
-    .filter(({ days }) => settings.birthdayDays.some(t => days <= t + 1))
+    .filter(({ days }) => settings.birthdayDays.some(t => days <= t))
     .sort((a,b) => a.days - b.days)
     .map(({ p, days, age }) => ({
       id: p.id+'b', icon: age===18?'⭐':'🎂',

@@ -4,36 +4,49 @@ import { COUNTRIES } from 'lib/constants';
 // ── Toast ─────────────────────────────────────────────────────────
 let _addToast = null;
 export const toast = {
-  success: (msg) => _addToast?.({ msg, type:'success' }),
-  error:   (msg) => _addToast?.({ msg, type:'error' }),
-  warning: (msg) => _addToast?.({ msg, type:'warning' }),
-  info:    (msg) => _addToast?.({ msg, type:'info' }),
+  success: (msg) => _addToast?.({ msg, type: 'success' }),
+  error:   (msg) => _addToast?.({ msg, type: 'error' }),
+  warning: (msg) => _addToast?.({ msg, type: 'warning' }),
+  info:    (msg) => _addToast?.({ msg, type: 'info' }),
 };
 export function ToastProvider() {
   const [toasts, setToasts] = useState([]);
   _addToast = useCallback((t) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts(p => [...p, { ...t, id }]);
     setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), 3500);
   }, []);
   if (!toasts.length) return null;
-  const icons = { success:'✓', error:'✕', warning:'⚠', info:'ℹ' };
+  const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
   return (
     <div className="toast-container">
       {toasts.map(t => (
-        <div key={t.id} className={`toast ${t.type||''}`}>
-          <span>{icons[t.type]||'ℹ'}</span>
-          <span style={{flex:1}}>{t.msg}</span>
-          <button style={{background:'none',border:'none',color:'inherit',cursor:'pointer',fontSize:16,lineHeight:1}}
-            onClick={() => setToasts(p=>p.filter(x=>x.id!==t.id))}>×</button>
+        <div key={t.id} className={`toast ${t.type || ''}`}>
+          <span style={{ fontSize: 15, opacity: 0.9 }}>{icons[t.type] || 'ℹ'}</span>
+          <span style={{ flex: 1 }}>{t.msg}</span>
+          <button
+            style={{
+              background: 'none', border: 'none', color: 'inherit',
+              cursor: 'pointer', fontSize: 17, lineHeight: 1, opacity: 0.6,
+              transition: 'opacity 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+            onClick={() => setToasts(p => p.filter(x => x.id !== t.id))}
+          >×</button>
         </div>
       ))}
     </div>
   );
 }
 
-// ── Modal — only X closes it ──────────────────────────────────────
-export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirty=false, onSave }) {
+// ── Modal — swipe-to-close on mobile, Esc/Ctrl+Enter on desktop ──
+export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirty = false, onSave }) {
+  const boxRef = useRef(null);
+  const [drag, setDrag] = useState(0);
+  const touchStart = useRef({ y: 0, time: 0, dragging: false });
+
+  // Keyboard handlers
   useEffect(() => {
     const h = (e) => {
       if (e.key === 'Escape') {
@@ -50,28 +63,75 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
     return () => document.removeEventListener('keydown', h);
   }, [onClose, viewOnly, isDirty, onSave]);
 
+  // Lock body scroll while open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const handleClose = () => {
     if (viewOnly || !isDirty) { onClose(); return; }
     if (window.confirm('Discard unsaved changes?')) onClose();
   };
 
-  return (
-    <div className="modal-overlay">
-      <div className={`modal-box${wide ? ' modal-wide' : ''}`}>
+  // Swipe-to-close (mobile sheet)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
-        {/* Header - rendered first in flex-col, never scrolls */}
+  const onTouchStart = (e) => {
+    if (!isMobile) return;
+    // Only initiate drag if touch starts in header area (top 80px)
+    const headerEl = boxRef.current?.querySelector('.modal-header-frozen');
+    const targetIsHeader = headerEl?.contains(e.target);
+    if (!targetIsHeader) return;
+    touchStart.current = { y: e.touches[0].clientY, time: Date.now(), dragging: true };
+  };
+  const onTouchMove = (e) => {
+    if (!isMobile || !touchStart.current.dragging) return;
+    const dy = e.touches[0].clientY - touchStart.current.y;
+    if (dy > 0) setDrag(dy);
+  };
+  const onTouchEnd = () => {
+    if (!isMobile || !touchStart.current.dragging) return;
+    const elapsed = Date.now() - touchStart.current.time;
+    const velocity = drag / Math.max(elapsed, 1); // px per ms
+    touchStart.current.dragging = false;
+    if (drag > 120 || velocity > 0.6) {
+      // close
+      setDrag(window.innerHeight);
+      setTimeout(handleClose, 180);
+    } else {
+      setDrag(0);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+      <div
+        ref={boxRef}
+        className={`modal-box${wide ? ' modal-wide' : ''}`}
+        style={drag ? { transform: `translateY(${drag}px)`, transition: touchStart.current.dragging ? 'none' : 'transform 0.2s ease' } : undefined}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Header */}
         <div className="modal-header-frozen">
+          <span className="modal-grab" />
           <span className="modal-title">{title}</span>
-          <button className="modal-close-btn" onClick={handleClose}>×</button>
+          <button className="modal-close-btn" onClick={handleClose} aria-label="Close">×</button>
         </div>
 
-        {/* Body - this part scrolls */}
+        {/* Body */}
         <div className="modal-scroll-body">
           {children}
           {footer && (
             <div className="modal-footer-bar">
               {!viewOnly && onSave && (
-                <span style={{fontSize:10,color:'var(--text-3)',marginRight:'auto',alignSelf:'center'}}>
+                <span
+                  className="ctrl-enter-hint"
+                  style={{ fontSize: 10, color: 'var(--text-3)', marginRight: 'auto', alignSelf: 'center' }}
+                >
                   Ctrl+Enter to save
                 </span>
               )}
@@ -79,12 +139,10 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
             </div>
           )}
         </div>
-
       </div>
     </div>
   );
 }
-
 
 // ── Confirm dialog ────────────────────────────────────────────────
 export function useConfirm() {
@@ -94,17 +152,23 @@ export function useConfirm() {
   const handleCancel  = useCallback(() => { if (state) { state.resolve(false); setState(null); } }, [state]);
   useEffect(() => {
     if (!state) return;
-    const h = (e) => { if (e.key === 'Escape') handleCancel(); };
+    const h = (e) => {
+      if (e.key === 'Escape') handleCancel();
+      if (e.key === 'Enter')  handleConfirm();
+    };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [state, handleCancel]);
+  }, [state, handleCancel, handleConfirm]);
   const dialog = state ? (
-    <div className="modal-overlay" style={{zIndex:300}}>
-      <div className="modal-box" style={{maxWidth:380}}>
-        <div className="modal-header-frozen"><span className="modal-title" style={{fontSize:16}}>{state.title || 'Confirm'}</span></div>
+    <div className="modal-overlay" style={{ zIndex: 300 }} onClick={(e) => { if (e.target === e.currentTarget) handleCancel(); }}>
+      <div className="modal-box" style={{ maxWidth: 400 }}>
+        <div className="modal-header-frozen">
+          <span className="modal-title" style={{ fontSize: 17 }}>{state.title || 'Confirm'}</span>
+          <button className="modal-close-btn" onClick={handleCancel}>×</button>
+        </div>
         <div className="modal-scroll-body">
-          <p style={{color:'var(--text-1)',marginBottom:20,fontSize:14,lineHeight:1.6}}>{state.msg}</p>
-          <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <p style={{ color: 'var(--text-1)', marginBottom: 20, fontSize: 14, lineHeight: 1.6 }}>{state.msg}</p>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost" onClick={handleCancel}>Cancel</button>
             <button className="btn btn-danger" onClick={handleConfirm}>{state.confirmLabel || '🗑 Delete'}</button>
           </div>
@@ -119,7 +183,11 @@ export function useConfirm() {
 export function Field({ label, children, hint, error, required }) {
   return (
     <div className="form-field">
-      {label && <label className="form-label">{label}{required&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}</label>}
+      {label && (
+        <label className="form-label">
+          {label}{required && <span style={{ color: 'var(--red)', marginLeft: 2 }}>*</span>}
+        </label>
+      )}
       {children}
       {hint  && <div className="form-hint">{hint}</div>}
       {error && <div className="form-error">{error}</div>}
@@ -131,14 +199,19 @@ export function Field({ label, children, hint, error, required }) {
 export function ChipGroup({ options, value, onChange, multi, labels }) {
   const vals = multi ? (Array.isArray(value) ? value : []) : [];
   const isActive = (o) => multi ? vals.includes(o) : value === o;
-  const toggle   = (o) => {
-    if (multi) onChange(vals.includes(o) ? vals.filter(v=>v!==o) : [...vals,o]);
+  const toggle = (o) => {
+    if (multi) onChange(vals.includes(o) ? vals.filter(v => v !== o) : [...vals, o]);
     else       onChange(value === o ? '' : o);
   };
   return (
     <div className="chip-group">
-      {options.map((o,i) => (
-        <button key={o} type="button" className={`chip${isActive(o)?' active':''}`} onClick={()=>toggle(o)}>
+      {options.map((o, i) => (
+        <button
+          key={o}
+          type="button"
+          className={`chip${isActive(o) ? ' active' : ''}`}
+          onClick={() => toggle(o)}
+        >
           {labels?.[i] || o}
         </button>
       ))}
@@ -147,10 +220,10 @@ export function ChipGroup({ options, value, onChange, multi, labels }) {
 }
 
 // ── Country select ────────────────────────────────────────────────
-export function CountrySelect({ value=[], onChange, single }) {
-  const [q, setQ]     = useState('');
+export function CountrySelect({ value = [], onChange, single }) {
+  const [q, setQ]       = useState('');
   const [open, setOpen] = useState(false);
-  const ref           = useRef();
+  const ref             = useRef();
   useEffect(() => {
     const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h);
@@ -160,34 +233,46 @@ export function CountrySelect({ value=[], onChange, single }) {
   const vals     = single ? (value ? [value] : []) : (Array.isArray(value) ? value : []);
   const select = (c) => {
     if (single) { onChange(c); setOpen(false); setQ(''); }
-    else onChange(vals.includes(c) ? vals.filter(v=>v!==c) : [...vals, c]);
+    else onChange(vals.includes(c) ? vals.filter(v => v !== c) : [...vals, c]);
   };
-  const display = open ? q : (single ? (value||'') : vals.slice(0,2).join(', ') + (vals.length>2?` +${vals.length-2}`:''));
+  const display = open ? q : (single ? (value || '') : vals.slice(0, 2).join(', ') + (vals.length > 2 ? ` +${vals.length - 2}` : ''));
   return (
     <div ref={ref} className="dropdown-wrap">
-      <div style={{position:'relative'}}>
-        <input value={display} onChange={e=>{setQ(e.target.value);setOpen(true);}}
-          onFocus={()=>{setOpen(true);if(!open)setQ('');}}
-          placeholder={single?'Type country name...':'Select countries...'} />
-        {!single && vals.length>0 && (
-          <button type="button" onClick={()=>onChange([])}
-            style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+      <div style={{ position: 'relative' }}>
+        <input
+          value={display}
+          onChange={e => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => { setOpen(true); if (!open) setQ(''); }}
+          placeholder={single ? 'Type country name...' : 'Select countries...'}
+        />
+        {!single && vals.length > 0 && (
+          <button type="button" onClick={() => onChange([])}
+            style={{
+              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              background: 'none', border: 'none', color: 'var(--text-3)',
+              cursor: 'pointer', fontSize: 18, lineHeight: 1
+            }}>×</button>
         )}
       </div>
-      <div className={`dropdown-list${open?' open':''}`}>
+      <div className={`dropdown-list${open ? ' open' : ''}`}>
         {!single && (
-          <div style={{padding:'6px 10px',display:'flex',gap:8,borderBottom:'1px solid var(--border)'}}>
-            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={()=>onChange([...COUNTRIES])}>All</button>
-            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={()=>onChange([])}>Clear</button>
+          <div style={{ padding: '6px 10px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={() => onChange([...COUNTRIES])}>All</button>
+            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={() => onChange([])}>Clear</button>
           </div>
         )}
-        {filtered.slice(0,80).map(c => (
-          <div key={c} className={`dropdown-item${vals.includes(c)?' sel':''}`} onMouseDown={()=>select(c)}>
-            {!single && <input type="checkbox" readOnly checked={vals.includes(c)} style={{pointerEvents:'none',width:14,height:14,accentColor:'var(--gold)'}} />}
+        {filtered.slice(0, 80).map(c => (
+          <div key={c} className={`dropdown-item${vals.includes(c) ? ' sel' : ''}`} onMouseDown={() => select(c)}>
+            {!single && (
+              <input
+                type="checkbox" readOnly checked={vals.includes(c)}
+                style={{ pointerEvents: 'none', width: 14, height: 14, accentColor: 'var(--gold)' }}
+              />
+            )}
             {c}
           </div>
         ))}
-        {filtered.length===0 && <div style={{padding:'10px 12px',color:'var(--text-3)',fontSize:12}}>No results</div>}
+        {filtered.length === 0 && <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No results</div>}
       </div>
     </div>
   );
@@ -199,16 +284,28 @@ export function CountryInput({ value, onChange }) {
 
 // ── Number input ──────────────────────────────────────────────────
 export function NumberInput({ value, onChange, placeholder, allowNotSpecified }) {
-  const display = value==='Not specified' ? 'Not specified' : (value ? Number(String(value).replace(/,/g,'')).toLocaleString() : '');
+  const display = value === 'Not specified'
+    ? 'Not specified'
+    : (value ? Number(String(value).replace(/,/g, '')).toLocaleString() : '');
   return (
     <div>
-      <input value={display} placeholder={placeholder}
-        onChange={e => { const raw=e.target.value; if(raw===''){onChange('');return;} onChange(raw.replace(/[^0-9]/g,'')); }} />
+      <input
+        value={display}
+        placeholder={placeholder}
+        onChange={e => {
+          const raw = e.target.value;
+          if (raw === '') { onChange(''); return; }
+          onChange(raw.replace(/[^0-9]/g, ''));
+        }}
+      />
       {allowNotSpecified && (
-        <div style={{marginTop:4}}>
-          <button type="button" className="btn btn-ghost btn-sm"
-            onClick={()=>onChange(value==='Not specified'?'':'Not specified')}>
-            {value==='Not specified'?'Enter value':'Not specified'}
+        <div style={{ marginTop: 4 }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => onChange(value === 'Not specified' ? '' : 'Not specified')}
+          >
+            {value === 'Not specified' ? 'Enter value' : 'Not specified'}
           </button>
         </div>
       )}
@@ -218,36 +315,71 @@ export function NumberInput({ value, onChange, placeholder, allowNotSpecified })
 
 // ── Phone display ─────────────────────────────────────────────────
 export function PhoneDisplay({ phone }) {
-  if (!phone) return <span style={{color:'var(--text-3)'}}>—</span>;
+  if (!phone) return <span style={{ color: 'var(--text-3)' }}>—</span>;
   return (
-    <div style={{display:'flex',gap:5,alignItems:'center'}}>
-      <span style={{color:'var(--text-1)',fontSize:12}}>{phone}</span>
-      <a href={`tel:${phone}`} className="btn btn-ghost btn-sm btn-icon" data-tooltip="Call" style={{textDecoration:'none',fontSize:13}}>📞</a>
-      <a href={`https://wa.me/${phone.replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer"
-        className="btn btn-ghost btn-sm btn-icon" data-tooltip="WhatsApp" style={{textDecoration:'none',fontSize:13}}>💬</a>
+    <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color: 'var(--text-1)', fontSize: 12 }}>{phone}</span>
+      <a href={`tel:${phone}`} className="btn btn-ghost btn-sm btn-icon" data-tooltip="Call"
+        style={{ textDecoration: 'none', fontSize: 13 }}>📞</a>
+      <a
+        href={`https://wa.me/${phone.replace(/[^0-9]/g, '')}`}
+        target="_blank" rel="noopener noreferrer"
+        className="btn btn-ghost btn-sm btn-icon" data-tooltip="WhatsApp"
+        style={{ textDecoration: 'none', fontSize: 13 }}
+      >💬</a>
     </div>
   );
 }
 
-export function LinkIcon({ url, emoji='🔗', label='' }) {
-  if (!url||url==='-'||url==='') return <span style={{color:'var(--text-3)'}}>—</span>;
-  const href = url.startsWith('http://')||url.startsWith('https://') ? url : 'https://'+url;
-  return <a href={href} target="_blank" rel="noopener noreferrer"
-    style={{color:'var(--gold)',textDecoration:'none',fontSize:18}} data-tooltip={label||url}>{emoji}</a>;
+export function LinkIcon({ url, emoji = '🔗', label = '' }) {
+  if (!url || url === '-' || url === '') return <span style={{ color: 'var(--text-3)' }}>—</span>;
+  const href = url.startsWith('http://') || url.startsWith('https://') ? url : 'https://' + url;
+  return (
+    <a
+      href={href} target="_blank" rel="noopener noreferrer"
+      style={{
+        color: 'var(--gold)', textDecoration: 'none', fontSize: 18,
+        transition: 'transform 0.15s, filter 0.15s', display: 'inline-block'
+      }}
+      data-tooltip={label || url}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.15)'; e.currentTarget.style.filter = 'drop-shadow(0 0 6px rgba(201,168,76,0.5))'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.filter = ''; }}
+    >{emoji}</a>
+  );
 }
 
 // ── Date input ────────────────────────────────────────────────────
 export function DateInput({ value, onChange }) {
-  return <input type="date" value={value||''} onChange={e=>onChange(e.target.value)} style={{colorScheme:'dark'}} />;
+  return <input type="date" value={value || ''} onChange={e => onChange(e.target.value)} style={{ colorScheme: 'dark' }} />;
 }
 
 // ── Search input ──────────────────────────────────────────────────
-export function SearchInput({ value, onChange, placeholder='Search...' }) {
+export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
   return (
-    <div style={{position:'relative'}}>
-      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)',pointerEvents:'none',fontSize:14}}>🔍</span>
-      <input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-        style={{paddingLeft:32,height:36,width:180}} />
+    <div style={{ position: 'relative' }}>
+      <span style={{
+        position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+        color: 'var(--text-3)', pointerEvents: 'none', fontSize: 14
+      }}>🔍</span>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="search-input-field"
+        style={{ paddingLeft: 32, paddingRight: value ? 30 : 13, height: 36, width: 200 }}
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          aria-label="Clear search"
+          style={{
+            position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+            background: 'none', border: 'none', color: 'var(--text-3)',
+            cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4,
+          }}
+        >×</button>
+      )}
     </div>
   );
 }
@@ -255,35 +387,35 @@ export function SearchInput({ value, onChange, placeholder='Search...' }) {
 // ── Status badge ──────────────────────────────────────────────────
 export function StatusBadge({ status, colorMap }) {
   if (!status) return null;
-  const c = colorMap?.[status] || { bg:'var(--surface-3)', text:'var(--text-2)' };
-  return <span className="badge" style={{background:c.bg,color:c.text}}>{status}</span>;
+  const c = colorMap?.[status] || { bg: 'var(--surface-3)', text: 'var(--text-2)' };
+  return <span className="badge" style={{ background: c.bg, color: c.text }}>{status}</span>;
 }
 
 export function EUBadge({ is }) {
   return (
     <span className="badge" style={{
-      background: is?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',
-      color: is?'var(--blue)':'var(--red)',
-    }}>{is?'🇪🇺 EU':'Non-EU'}</span>
+      background: is ? 'rgba(96,165,250,0.15)' : 'rgba(248,113,113,0.12)',
+      color: is ? 'var(--blue)' : 'var(--red)',
+    }}>{is ? '🇪🇺 EU' : 'Non-EU'}</span>
   );
 }
 
-export function Spinner({ size=20 }) {
-  return <span className="spinner" style={{width:size,height:size}} />;
+export function Spinner({ size = 20 }) {
+  return <span className="spinner" style={{ width: size, height: size }} />;
 }
 
-export function Empty({ icon='📋', message='No records yet', action }) {
+export function Empty({ icon = '📋', message = 'No records yet', action }) {
   return (
     <div className="empty-state">
       <div className="empty-icon">{icon}</div>
-      <p style={{marginBottom:action?16:0,fontSize:14}}>{message}</p>
+      <p style={{ marginBottom: action ? 16 : 0, fontSize: 14 }}>{message}</p>
       {action}
     </div>
   );
 }
 
 // ── File upload ───────────────────────────────────────────────────
-export function FileUpload({ label, onUpload, history=[], accept='.pdf,.doc,.docx,.jpg,.png' }) {
+export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,.docx,.jpg,.png' }) {
   const [name, setName]     = useState('');
   const [file, setFile]     = useState(null);
   const [mode, setMode]     = useState(null);
@@ -300,54 +432,69 @@ export function FileUpload({ label, onUpload, history=[], accept='.pdf,.doc,.doc
     if (!file || !name.trim()) return;
     setUploading(true);
     try { await onUpload(file, name.trim(), m || mode || 'keep'); setFile(null); setName(''); setMode(null); }
-    catch(e) { console.error(e); }
+    catch (e) { console.error(e); }
     setUploading(false);
   };
   return (
     <div>
       {history.length > 0 && (
-        <div style={{marginBottom:8}}>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setShowH(!showH)}>
-            📎 {history.length} file{history.length>1?'s':''} — {showH?'Hide':'View'} history
+        <div style={{ marginBottom: 8 }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowH(!showH)}>
+            📎 {history.length} file{history.length > 1 ? 's' : ''} — {showH ? 'Hide' : 'View'} history
           </button>
           {showH && (
-            <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:4,padding:'8px',background:'var(--surface-3)',borderRadius:8}}>
-              {history.map((h,i) => (
-                <div key={i} style={{display:'flex',gap:8,alignItems:'center',fontSize:12}}>
-                  <a href={h.url} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>📄 {h.name}</a>
-                  <span style={{color:'var(--text-3)'}}>{new Date(h.uploadedAt).toLocaleDateString('en-GB')}</span>
+            <div style={{
+              marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4,
+              padding: '8px', background: 'var(--surface-3)', borderRadius: 8
+            }}>
+              {history.map((h, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+                  <a href={h.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>📄 {h.name}</a>
+                  <span style={{ color: 'var(--text-3)' }}>{new Date(h.uploadedAt).toLocaleDateString('en-GB')}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
-      {mode==='prompt' ? (
-        <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setMode('replace')}>Replace existing</button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setMode('keep')}>Keep both</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={()=>{setFile(null);setMode(null);}}>Cancel</button>
+      {mode === 'prompt' ? (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('replace')}>Replace existing</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('keep')}>Keep both</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFile(null); setMode(null); }}>Cancel</button>
         </div>
       ) : file ? (
-        <div style={{display:'flex',gap:8,alignItems:'flex-start',flexWrap:'wrap',background:'var(--surface-3)',padding:12,borderRadius:8,border:'1px solid var(--border)'}}>
-          <div style={{flex:1,minWidth:140}}>
-            <div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>File: {file.name}</div>
-            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Enter file name..." />
+        <div style={{
+          display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap',
+          background: 'var(--surface-3)', padding: 12, borderRadius: 8,
+          border: '1px solid var(--border)'
+        }}>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>File: {file.name}</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Enter file name..." />
           </div>
-          <div style={{display:'flex',gap:6,paddingTop:18}}>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!name.trim()||uploading} onClick={()=>doUpload()}>
-              {uploading?<><span className="spinner" style={{width:12,height:12}}/> Uploading...</>:'⬆ Upload'}
+          <div style={{ display: 'flex', gap: 6, paddingTop: 18 }}>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!name.trim() || uploading} onClick={() => doUpload()}>
+              {uploading ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Uploading...</> : '⬆ Upload'}
             </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setFile(null)}>Cancel</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFile(null)}>Cancel</button>
           </div>
         </div>
       ) : (
-        <div className="file-drop" onClick={()=>fileRef.current?.click()}
-          onDragOver={e=>e.preventDefault()}
-          onDrop={e=>{e.preventDefault();handleFile(e.dataTransfer.files[0]);}}>
-          <input ref={fileRef} type="file" accept={accept} style={{display:'none'}}
-            onChange={e=>handleFile(e.target.files[0])} />
-          <span style={{fontSize:13}}>📎 Click or drag to upload {label}</span>
+        <div
+          className="file-drop"
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept={accept}
+            style={{ display: 'none' }}
+            onChange={e => handleFile(e.target.files[0])}
+          />
+          <span style={{ fontSize: 13 }}>📎 Click or drag to upload {label}</span>
         </div>
       )}
     </div>
@@ -358,84 +505,103 @@ export function FileUpload({ label, onUpload, history=[], accept='.pdf,.doc,.doc
 export function SortTh({ label, field, sort, setSort }) {
   const active = sort?.field === field;
   return (
-    <th onClick={()=>setSort(s=>s?.field===field?{...s,dir:s.dir==='asc'?'desc':'asc'}:{field,dir:'asc'})}>
-      {label} {active?(sort.dir==='asc'?'↑':'↓'):<span style={{opacity:.25}}>↕</span>}
+    <th onClick={() => setSort(s => s?.field === field ? { ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { field, dir: 'asc' })}>
+      {label} {active ? (sort.dir === 'asc' ? '↑' : '↓') : <span style={{ opacity: .25 }}>↕</span>}
     </th>
   );
 }
 
-// ── Filter bar ────────────────────────────────────────────────────
+// Filter bar
 export function FilterBar({ filters, setFilters, options }) {
   return (
-    <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
       {options.map(opt => (
-        <div key={opt.key} style={{minWidth:140}}>
-          <select value={filters[opt.key]||''} onChange={e=>setFilters(f=>({...f,[opt.key]:e.target.value}))}>
+        <div key={opt.key} style={{ minWidth: 140 }}>
+          <select value={filters[opt.key] || ''} onChange={e => setFilters(f => ({ ...f, [opt.key]: e.target.value }))}>
             <option value="">{opt.label}: All</option>
-            {opt.values.map(v=><option key={v} value={v}>{v}</option>)}
+            {opt.values.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </div>
       ))}
       {Object.values(filters).some(Boolean) && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={()=>setFilters({})}>✕ Clear</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters({})}>✕ Clear</button>
       )}
     </div>
   );
 }
 
-// ── Page header ───────────────────────────────────────────────────
+// Page header
 export function PageHeader({ title, subtitle, action, children }) {
   return (
     <div className="page-header">
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 className="page-title">{title}</h1>
           {subtitle && <p className="page-subtitle">{subtitle}</p>}
         </div>
-        {action && <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>{action}</div>}
+        {action && <div className="action-bar" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>{action}</div>}
       </div>
       {children}
     </div>
   );
 }
 
-// ── Universal ActionButtons — 2×2 grid ───────────────────────────
+// ActionButtons: 2x2 grid
 export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelete }) {
-  const BTN = {width:26,height:26,padding:0,display:'flex',alignItems:'center',
-               justifyContent:'center',fontSize:13,border:'none',borderRadius:6,
-               cursor:'pointer',transition:'all 0.15s',flexShrink:0};
+  const BTN = {
+    width: 28, height: 28, padding: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 13, border: 'none', borderRadius: 7,
+    cursor: 'pointer', transition: 'background 0.15s, transform 0.12s',
+    flexShrink: 0,
+  };
+  const hover = (bg) => (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = 'scale(1.08)'; };
+  const leave = (bg) => (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; };
+
   const hasLeft = !!(onView || onWhatsApp);
-  // When onDuplicate exists we always want a 2×2 grid — add a placeholder if top-left is empty
   const alwaysGrid = !!onDuplicate;
   return (
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,width:56}}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, width: 60 }} className="action-btns">
       {onView && (
-        <button style={{...BTN,background:'rgba(96,165,250,0.15)',color:'#60A5FA'}}
+        <button
+          style={{ ...BTN, background: 'rgba(96,165,250,0.15)', color: '#60A5FA' }}
           title="View" onClick={onView}
-          onMouseEnter={e=>e.currentTarget.style.background='rgba(96,165,250,0.3)'}
-          onMouseLeave={e=>e.currentTarget.style.background='rgba(96,165,250,0.15)'}>👁</button>
+          onMouseEnter={hover('rgba(96,165,250,0.3)')}
+          onMouseLeave={leave('rgba(96,165,250,0.15)')}
+        >👁</button>
       )}
       {onWhatsApp && !onView && (
-        <button style={{...BTN,background:'rgba(37,211,102,0.12)',color:'#25D166'}}
+        <button
+          style={{ ...BTN, background: 'rgba(37,211,102,0.12)', color: '#25D166' }}
           title="WhatsApp" onClick={onWhatsApp}
-          onMouseEnter={e=>e.currentTarget.style.background='rgba(37,211,102,0.25)'}
-          onMouseLeave={e=>e.currentTarget.style.background='rgba(37,211,102,0.12)'}>💬</button>
+          onMouseEnter={hover('rgba(37,211,102,0.25)')}
+          onMouseLeave={leave('rgba(37,211,102,0.12)')}
+        >💬</button>
       )}
       {!hasLeft && alwaysGrid && <div />}
-      <button style={{...BTN,background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
+      <button
+        style={{ ...BTN, background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
         title="Delete" onClick={onDelete}
-        onMouseEnter={e=>e.currentTarget.style.background='rgba(248,113,113,0.3)'}
-        onMouseLeave={e=>e.currentTarget.style.background='rgba(248,113,113,0.15)'}>🗑</button>
-      <button style={{...BTN,background:'rgba(201,168,76,0.15)',color:'var(--gold)',
-                      gridColumn: (hasLeft||alwaysGrid)?'auto':'1 / -1'}}
+        onMouseEnter={hover('rgba(248,113,113,0.3)')}
+        onMouseLeave={leave('rgba(248,113,113,0.15)')}
+      >🗑</button>
+      <button
+        style={{
+          ...BTN,
+          background: 'rgba(201,168,76,0.15)', color: 'var(--gold)',
+          gridColumn: (hasLeft || alwaysGrid) ? 'auto' : '1 / -1'
+        }}
         title="Edit" onClick={onEdit}
-        onMouseEnter={e=>e.currentTarget.style.background='rgba(201,168,76,0.3)'}
-        onMouseLeave={e=>e.currentTarget.style.background='rgba(201,168,76,0.15)'}>✏️</button>
+        onMouseEnter={hover('rgba(201,168,76,0.3)')}
+        onMouseLeave={leave('rgba(201,168,76,0.15)')}
+      >✏️</button>
       {onDuplicate && (
-        <button style={{...BTN,background:'rgba(167,139,250,0.15)',color:'#A78BFA'}}
+        <button
+          style={{ ...BTN, background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}
           title="Duplicate" onClick={onDuplicate}
-          onMouseEnter={e=>e.currentTarget.style.background='rgba(167,139,250,0.3)'}
-          onMouseLeave={e=>e.currentTarget.style.background='rgba(167,139,250,0.15)'}>⧉</button>
+          onMouseEnter={hover('rgba(167,139,250,0.3)')}
+          onMouseLeave={leave('rgba(167,139,250,0.15)')}
+        >⧉</button>
       )}
     </div>
   );

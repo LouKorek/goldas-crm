@@ -4,7 +4,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORD
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
-         useConfirm, EUBadge } from 'components/ui/UI';
+         useConfirm } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
@@ -69,13 +69,13 @@ function PlayerView({ player, onClose }) {
   const isEU = isEuropean(player.nationalities||[]);
   const Row = ({label,value}) => value && value!=='—' ? (
     <div style={{display:'flex',gap:12,padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
-      <div style={{width:170,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>{label}</div>
+      <div className="view-row-label" style={{width:170,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>{label}</div>
       <div style={{color:'var(--text-1)',fontSize:13}}>{value}</div>
     </div>
   ) : null;
   return (
     <Modal title={player.fullName} onClose={onClose} wide viewOnly>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24}}>
+      <div className="view-grid-2">
         <div>
           <div className="form-section-title">Personal</div>
           <Row label="Full Name"     value={player.fullName} />
