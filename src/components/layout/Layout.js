@@ -235,15 +235,18 @@ export default function Layout({ user }) {
         className="mobile-topbar"
         style={{
           display: 'none',
-          position: 'fixed', top: 0, left: 0, right: 0, height: 54,
+          position: 'fixed', top: 0, left: 0, right: 0,
+          height: 'calc(54px + env(safe-area-inset-top, 0px))',
           background: 'rgba(22,32,25,0.92)',
           WebkitBackdropFilter: 'blur(18px) saturate(140%)',
           backdropFilter: 'blur(18px) saturate(140%)',
           borderBottom: '1px solid var(--border)',
           alignItems: 'center', justifyContent: 'space-between',
-          padding: '0 14px',
+          paddingLeft: 14, paddingRight: 14,
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           zIndex: 50,
           boxShadow: '0 2px 14px rgba(0,0,0,0.35)',
+          boxSizing: 'border-box',
         }}
       >
         <button
