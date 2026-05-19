@@ -106,7 +106,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
   };
 
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
+    <div className="modal-overlay">
       <div
         ref={boxRef}
         className={`modal-box${wide ? ' modal-wide' : ''}`}
@@ -160,7 +160,7 @@ export function useConfirm() {
     return () => document.removeEventListener('keydown', h);
   }, [state, handleCancel, handleConfirm]);
   const dialog = state ? (
-    <div className="modal-overlay" style={{ zIndex: 300 }} onClick={(e) => { if (e.target === e.currentTarget) handleCancel(); }}>
+    <div className="modal-overlay" style={{ zIndex: 300 }}>
       <div className="modal-box" style={{ maxWidth: 400 }}>
         <div className="modal-header-frozen">
           <span className="modal-title" style={{ fontSize: 17 }}>{state.title || 'Confirm'}</span>
