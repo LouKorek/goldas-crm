@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { listenCollection, PATHS } from 'lib/db';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
-import { calcAge, daysUntil, isBirthdaySoon, fmtDate } from 'lib/constants';
+import { calcAge, fmtDate } from 'lib/constants';
+import { loadSettings, computeAlerts } from 'lib/alerts';
 import { PageHeader } from 'components/ui/UI';
 import { Link } from 'react-router-dom';
 import { auth, USERS } from 'lib/firebase';
@@ -78,11 +79,13 @@ export default function Dashboard() {
   const [req, setReq]             = useState([]);
   const [matches, setMatches]     = useState([]);
   const [pipeAll, setPipeAll]     = useState([]);
+  const [settings, setSettings]   = useState(null);
 
   useEffect(() => {
     const u1 = listenCollection(PATHS.PLAYERS,          setPlayers,  'createdAt');
     const u2 = listenCollection(PATHS.CLUB_REQUIREMENTS,setReq,      'createdAt');
     const u3 = listenCollection(PATHS.MATCHES,          setMatches,  'date');
+    loadSettings().then(setSettings);   // same settings the Notifications page + email script use
     let allPipe = {};
     const cats = ['men','women','youth','jewish'];
     const unsubs = cats.map(c =>
@@ -98,30 +101,18 @@ export default function Dashboard() {
   const info   = USERS[user?.email] || {};
   const now    = new Date();
 
-  // Alerts
-  const contractAlerts = players.filter(p => {
-    if (!p.contractEnd) return false;
-    const d = daysUntil(p.contractEnd);
-    return d !== null && d >= 0 && d <= 60;
-  });
-
-  const reprAlerts = players.filter(p => {
-    if (!p.reprEnd) return false;
-    const d = daysUntil(p.reprEnd);
-    return d !== null && d >= 0 && d <= 60;
-  });
-
-  const birthdays = players.filter(p => isBirthdaySoon(p.dob, 14));
-
-  const upcomingMatches = matches
-    .filter(m => new Date(m.date) >= now)
-    .sort((a,b) => new Date(a.date)-new Date(b.date))
-    .slice(0,5);
+  // Alerts — shared engine, identical to the Notifications page and email script.
+  const alerts = computeAlerts(players, matches, settings, now);
+  const contractAlerts = alerts.contract;
+  const reprAlerts     = alerts.repr;
+  const passportAlerts = alerts.passport;
+  const birthdays      = alerts.birthday;
+  const upcomingMatches = alerts.matches.slice(0, 5);
 
   const mandates  = pipeAll.filter(p => p.status === 'Mandate Received').length;
   const contracts = pipeAll.filter(p => p.status === 'Contract Signed').length;
 
-  const alertCount = contractAlerts.length + reprAlerts.length + birthdays.length;
+  const alertCount = alerts.total;
 
   return (
     <div>
@@ -152,47 +143,42 @@ export default function Dashboard() {
             <p style={{color:'var(--text-3)',fontSize:13}}>No active alerts — all clear! ✅</p>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {contractAlerts.map(p => {
-                const d = daysUntil(p.contractEnd);
-                return (
-                  <div key={p.id} className={`alert-row ${d<=7?'urgent':'warning'}`}>
-                    <span style={{fontSize:16}}>📋</span>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:500}}>{p.fullName}</div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>Contract expires in {d} day{d!==1?'s':''} ({fmtDate(p.contractEnd)})</div>
-                    </div>
+              {contractAlerts.map(a => (
+                <div key={a.id+'c'} className={`alert-row ${a.days<=7?'urgent':'warning'}`}>
+                  <span style={{fontSize:16}}>📋</span>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
+                    <div style={{fontSize:11,color:'var(--text-3)'}}>Contract expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.contractEnd)})</div>
                   </div>
-                );
-              })}
-              {reprAlerts.map(p => {
-                const d = daysUntil(p.reprEnd);
-                return (
-                  <div key={p.id+'r'} className={`alert-row ${d<=7?'urgent':'warning'}`}>
-                    <span style={{fontSize:16}}>🤝</span>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:500}}>{p.fullName}</div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>Representation expires in {d} day{d!==1?'s':''} ({fmtDate(p.reprEnd)})</div>
-                    </div>
+                </div>
+              ))}
+              {reprAlerts.map(a => (
+                <div key={a.id+'r'} className={`alert-row ${a.days<=7?'urgent':'warning'}`}>
+                  <span style={{fontSize:16}}>🤝</span>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
+                    <div style={{fontSize:11,color:'var(--text-3)'}}>Representation expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.reprEnd)})</div>
                   </div>
-                );
-              })}
-              {birthdays.map(p => {
-                const age = calcAge(p.dob);
-                const turning18 = age === 17;
-                const birth = new Date(p.dob);
-                const nextBday = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
-                if (nextBday < now) nextBday.setFullYear(now.getFullYear() + 1);
-                const bDays = Math.ceil((nextBday - now) / (1000 * 60 * 60 * 24));
-                return (
-                  <div key={p.id+'b'} className="alert-row" style={turning18?{borderLeftColor:'var(--gold)',borderLeftWidth:3}:{}}>
-                    <span style={{fontSize:16}}>{turning18?'⭐':'🎂'}</span>
-                    <div>
-                      <div style={{fontSize:13,fontWeight:500}}>{p.fullName} {turning18?'— Turning 18!':''}</div>
-                      <div style={{fontSize:11,color:'var(--text-3)'}}>{bDays===0?'Birthday is today!':`Birthday in ${bDays} day${bDays!==1?'s':''}`} · Turning {(age||0)+1}</div>
-                    </div>
+                </div>
+              ))}
+              {passportAlerts.map(a => (
+                <div key={a.id+'p'} className={`alert-row ${a.days<=30?'urgent':'warning'}`}>
+                  <span style={{fontSize:16}}>🛂</span>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
+                    <div style={{fontSize:11,color:'var(--text-3)'}}>Passport expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.passportExpiry)})</div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
+              {birthdays.map(a => (
+                <div key={a.id+'b'} className="alert-row" style={a.turning18?{borderLeftColor:'var(--gold)',borderLeftWidth:3}:{}}>
+                  <span style={{fontSize:16}}>{a.turning18?'⭐':'🎂'}</span>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName} {a.turning18?'— Turning 18!':''}</div>
+                    <div style={{fontSize:11,color:'var(--text-3)'}}>{a.days===0?'Birthday is today!':`Birthday in ${a.days} day${a.days!==1?'s':''}`} · Turning {a.age}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

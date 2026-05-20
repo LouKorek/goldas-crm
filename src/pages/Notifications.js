@@ -1,27 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from 'lib/firebase';
-import { listenCollection, updateDoc_, PATHS } from 'lib/db';
-import { calcAge, daysUntil, isBirthdaySoon, fmtDate } from 'lib/constants';
-import { PageHeader, Modal, Field } from 'components/ui/UI';
+import { listenCollection, PATHS } from 'lib/db';
+import { fmtDate } from 'lib/constants';
+import { DEFAULT_SETTINGS, loadSettings, persistSettings, computeAlerts } from 'lib/alerts';
+import { PageHeader, Modal } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
-const DEFAULT_SETTINGS = {
-  contractDays:   [7, 30, 60],
-  reprDays:       [7, 30, 60],
-  passportDays:   [30, 90, 180],
-  birthdayDays:   [0, 3, 7],
-};
-
 const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
-
-// Firestore doc that the email script (Apps Script) reads, so the alerts
-// you get by email always match exactly what you configure here.
-const SETTINGS_DOC = ['settings', 'notifications'];
-const persistSettings = (s) => {
-  try { setDoc(doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]), s, { merge: true }); }
-  catch (e) { /* offline / permission - non-fatal, UI still works */ }
-};
 
 function AlertCard({ icon, title, sub, urgency, extra }) {
   const colors = {
@@ -102,103 +86,49 @@ export default function Notifications() {
   useEffect(() => {
     const u1 = listenCollection(PATHS.PLAYERS, setPlayers);
     const u2 = listenCollection(PATHS.MATCHES,  setMatches);
-    // Settings: Firestore is the source of truth (so the email script and the
-    // app stay in sync). Fall back to localStorage, then seed Firestore.
-    (async () => {
-      try {
-        const snap = await getDoc(doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]));
-        if (snap.exists()) {
-          const fs = { ...DEFAULT_SETTINGS, ...snap.data() };
-          setSettings(fs);
-          localStorage.setItem('notif_settings', JSON.stringify(fs));
-          return;
-        }
-      } catch(e) {}
-      try {
-        const saved = JSON.parse(localStorage.getItem('notif_settings') || 'null');
-        if (saved) { setSettings(saved); persistSettings(saved); }
-        else persistSettings(DEFAULT_SETTINGS);
-      } catch(e) {}
-    })();
+    loadSettings().then(setSettings);   // Firestore source of truth (shared with email script)
     return () => { u1(); u2(); };
   }, []);
 
   const saveSettings = (s) => {
     setSettings(s);
-    localStorage.setItem('notif_settings', JSON.stringify(s));
-    persistSettings(s);            // sync to Firestore for the email script
+    persistSettings(s);            // localStorage + Firestore (read by the email script)
     setShowSettings(false);
     toast.success('Notification settings saved.');
   };
 
   const now = new Date();
 
-  const makeAlerts = (players, dateField, daysSettings, makeCard) => {
-    const alerts = [];
-    players.forEach(p => {
-      if (!p[dateField]) return;
-      const d = daysUntil(p[dateField]);
-      if (d === null || d < 0) return;
-      // Only trigger if within the SMALLEST matching threshold
-      const sortedThresholds = [...daysSettings].sort((a,b) => a - b);
-      const matchingThreshold = sortedThresholds.find(t => d <= t);
-      if (matchingThreshold !== undefined) {
-        alerts.push({ key: `${p.id}_${dateField}`, d, card: makeCard(p, d) });
-      }
-    });
-    return alerts.sort((a,b) => a.d - b.d).map(a => a.card);
-  };
+  // Single shared engine — identical to the Dashboard and the email script.
+  const alerts = computeAlerts(players, matches, settings, now);
 
-  const contractAlerts = makeAlerts(players, 'contractEnd', settings.contractDays,
-    (p,d) => ({
-      id: p.id+'c'+d, icon:'📋', urgency: d<=7?'critical':d<=30?'warning':'info',
-      title: `${p.fullName} — Contract expires in ${d===0?'today!':d+' days'}`,
-      sub: `Expires: ${fmtDate(p.contractEnd)} · Club: ${p.currentClub||'—'}`,
-    })
-  );
+  const contractAlerts = alerts.contract.map(a => ({
+    id: a.id+'c', icon:'📋', urgency: a.urgency,
+    title: `${a.player.fullName} — Contract expires in ${a.days===0?'today!':a.days+' days'}`,
+    sub: `Expires: ${fmtDate(a.player.contractEnd)} · Club: ${a.player.currentClub||'—'}`,
+  }));
 
-  const reprAlerts = makeAlerts(players, 'reprEnd', settings.reprDays,
-    (p,d) => ({
-      id: p.id+'r'+d, icon:'🤝', urgency: d<=7?'critical':d<=30?'warning':'info',
-      title: `${p.fullName} — Representation expires in ${d===0?'today!':d+' days'}`,
-      sub: `Expires: ${fmtDate(p.reprEnd)}`,
-    })
-  );
+  const reprAlerts = alerts.repr.map(a => ({
+    id: a.id+'r', icon:'🤝', urgency: a.urgency,
+    title: `${a.player.fullName} — Representation expires in ${a.days===0?'today!':a.days+' days'}`,
+    sub: `Expires: ${fmtDate(a.player.reprEnd)}`,
+  }));
 
-  const passportAlerts = makeAlerts(players, 'passportExpiry', settings.passportDays,
-    (p,d) => ({
-      id: p.id+'p'+d, icon:'🛂', urgency: d<=30?'critical':d<=90?'warning':'info',
-      title: `${p.fullName} — Passport expires in ${d===0?'today!':d+' days'}`,
-      sub: `Expires: ${fmtDate(p.passportExpiry)}`,
-    })
-  );
+  const passportAlerts = alerts.passport.map(a => ({
+    id: a.id+'p', icon:'🛂', urgency: a.urgency,
+    title: `${a.player.fullName} — Passport expires in ${a.days===0?'today!':a.days+' days'}`,
+    sub: `Expires: ${fmtDate(a.player.passportExpiry)}`,
+  }));
 
-  const birthdayAlerts = players
-    .filter(p => isBirthdaySoon(p.dob, Math.max(...settings.birthdayDays, 7)))
-    .map(p => {
-      const age   = calcAge(p.dob);
-      const birth = new Date(p.dob);
-      const next  = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
-      if (next < now) next.setFullYear(now.getFullYear()+1);
-      const days = Math.ceil((next-now)/(1000*60*60*24));
-      return { p, days, age: (age||0)+1 };
-    })
-    .filter(({ days }) => settings.birthdayDays.some(t => days <= t))
-    .sort((a,b) => a.days - b.days)
-    .map(({ p, days, age }) => ({
-      id: p.id+'b', icon: age===18?'⭐':'🎂',
-      urgency: age===18?'gold': days===0?'critical':'info',
-      title: `${p.fullName}${age===18?' — Turning 18! 🌟':''}`,
-      sub: `Birthday ${days===0?'is today!':'in '+days+' days'} · Turning ${age}`,
-      extra: `DOB: ${fmtDate(p.dob)}`,
-    }));
+  const birthdayAlerts = alerts.birthday.map(a => ({
+    id: a.id+'b', icon: a.turning18?'⭐':'🎂', urgency: a.urgency,
+    title: `${a.player.fullName}${a.turning18?' — Turning 18! 🌟':''}`,
+    sub: `Birthday ${a.days===0?'is today!':'in '+a.days+' days'} · Turning ${a.age}`,
+    extra: `DOB: ${fmtDate(a.player.dob)}`,
+  }));
 
-  const upcomingMatches = matches
-    .filter(m => new Date(m.date) >= now)
-    .sort((a,b) => new Date(a.date)-new Date(b.date))
-    .slice(0, 10);
-
-  const total = contractAlerts.length + reprAlerts.length + passportAlerts.length + birthdayAlerts.length;
+  const upcomingMatches = alerts.matches.slice(0, 10);
+  const total = alerts.total;
 
   const Section = ({ title, items, icon }) => {
     if (!items.length) return null;
