@@ -1,24 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
-import { CONTACT_ROLES } from 'lib/constants';
+import { CONTACT_ROLES, formatPhone } from 'lib/constants';
 import { Modal, Field, SearchInput, PageHeader, Empty, useConfirm,
-         PhoneActions, toast } from 'components/ui/UI';
+         PhoneActions, RowActions, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 
 const EMPTY = { clubName: '', clubIsYouth: false, contactName: '', contactRole: '', contactPhone: '' };
-
-// A single square action icon (delete / edit / duplicate), shown in a row.
-function IconBtn({ icon, title, color, bg, bgHover, onClick }) {
-  return (
-    <button title={title} onClick={onClick}
-      style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-               fontSize: 13, border: 'none', borderRadius: 7, cursor: 'pointer', background: bg, color,
-               transition: 'background 0.15s, transform 0.12s', flexShrink: 0 }}
-      onMouseEnter={e => { e.currentTarget.style.background = bgHover; e.currentTarget.style.transform = 'scale(1.08)'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; }}
-    >{icon}</button>
-  );
-}
 
 export default function Contacts() {
   const [items, setItems]   = useState([]);
@@ -106,11 +93,7 @@ export default function Contacts() {
                 {filtered.map(c => (
                   <tr key={c.id}>
                     <td style={{ paddingRight: 20 }}>
-                      <div style={{ display: 'flex', gap: 5 }}>
-                        <IconBtn icon="🗑" title="Delete"    color="var(--red)"  bg="rgba(248,113,113,0.15)" bgHover="rgba(248,113,113,0.3)" onClick={() => remove(c)} />
-                        <IconBtn icon="✏️" title="Edit"      color="var(--gold)" bg="rgba(201,168,76,0.15)"  bgHover="rgba(201,168,76,0.3)"  onClick={() => openEdit(c)} />
-                        <IconBtn icon="⧉" title="Duplicate" color="#A78BFA"     bg="rgba(167,139,250,0.15)" bgHover="rgba(167,139,250,0.3)" onClick={() => openDup(c)} />
-                      </div>
+                      <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
@@ -129,9 +112,9 @@ export default function Contacts() {
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {c.contactPhone ? (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-                          <span style={{ fontSize: 12 }}>{c.contactPhone}</span>
-                          <PhoneActions phone={c.contactPhone} vertical />
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
+                          <span style={{ fontSize: 12 }}>{formatPhone(c.contactPhone)}</span>
+                          <PhoneActions phone={c.contactPhone} />
                         </div>
                       ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
                     </td>

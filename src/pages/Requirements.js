@@ -4,7 +4,7 @@ import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
-         Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, NumberInput, ActionButtons } from 'components/ui/UI';
+         Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
 // ====================================================================
@@ -691,10 +691,10 @@ export default function Requirements() {
 
                     {/* Actions — first column, stop propagation only here */}
                     <td onClick={e => e.stopPropagation()} style={{padding:'8px 4px 8px 8px'}}>
-                      <ActionButtons
+                      <RowActions
+                        onDelete={() => del(p)}
                         onEdit={() => openEdit(p)}
                         onDuplicate={() => openDup(p)}
-                        onDelete={() => del(p)}
                       />
                     </td>
 
@@ -728,13 +728,13 @@ export default function Requirements() {
                     {/* Contact — name + role + call/WhatsApp */}
                     <td>
                       {(p.contactName || p.contactPhone) ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div>
                             <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.contactName || '—'}</div>
                             {p.contactRole && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.contactRole}</div>}
                           </div>
                           {p.contactPhone && (
-                            <span onClick={e => e.stopPropagation()}><PhoneActions phone={p.contactPhone} vertical /></span>
+                            <span onClick={e => e.stopPropagation()}><PhoneActions phone={p.contactPhone} /></span>
                           )}
                         </div>
                       ) : <span style={{ color: 'var(--text-3)' }}>—</span>}

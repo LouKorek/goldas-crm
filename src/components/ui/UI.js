@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { COUNTRIES } from 'lib/constants';
+import { COUNTRIES, formatPhone } from 'lib/constants';
 
 // ── Toast ─────────────────────────────────────────────────────────
 let _addToast = null;
@@ -317,16 +317,9 @@ export function NumberInput({ value, onChange, placeholder, allowNotSpecified })
 export function PhoneDisplay({ phone }) {
   if (!phone) return <span style={{ color: 'var(--text-3)' }}>—</span>;
   return (
-    <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
-      <span style={{ color: 'var(--text-1)', fontSize: 12 }}>{phone}</span>
-      <a href={`tel:${phone}`} className="btn btn-ghost btn-sm btn-icon" title="Call"
-        style={{ textDecoration: 'none', fontSize: 13 }}>📞</a>
-      <a
-        href={`https://wa.me/${phone.replace(/[^0-9]/g, '')}`}
-        target="_blank" rel="noopener noreferrer"
-        className="btn btn-ghost btn-sm btn-icon" title="WhatsApp"
-        style={{ textDecoration: 'none', fontSize: 13 }}
-      >💬</a>
+    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ color: 'var(--text-1)', fontSize: 13 }}>{formatPhone(phone)}</span>
+      <PhoneActions phone={phone} />
     </div>
   );
 }
@@ -626,6 +619,32 @@ export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelet
           onMouseLeave={leave('rgba(167,139,250,0.15)')}
         >⧉</button>
       )}
+    </div>
+  );
+}
+
+// RowActions: delete / edit / duplicate side by side (in that order).
+export function RowActions({ onEdit, onDuplicate, onDelete }) {
+  const BTN = {
+    width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 13, border: 'none', borderRadius: 7, cursor: 'pointer', flexShrink: 0,
+    transition: 'background 0.15s, transform 0.12s',
+  };
+  const hov = (bg, bgH) => ({
+    onMouseEnter: (e) => { e.currentTarget.style.background = bgH; e.currentTarget.style.transform = 'scale(1.08)'; },
+    onMouseLeave: (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; },
+  });
+  return (
+    <div style={{ display: 'flex', gap: 5 }}>
+      {onDelete && <button title="Delete" onClick={onDelete}
+        style={{ ...BTN, background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
+        {...hov('rgba(248,113,113,0.15)', 'rgba(248,113,113,0.3)')}>🗑</button>}
+      {onEdit && <button title="Edit" onClick={onEdit}
+        style={{ ...BTN, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}
+        {...hov('rgba(201,168,76,0.15)', 'rgba(201,168,76,0.3)')}>✏️</button>}
+      {onDuplicate && <button title="Duplicate" onClick={onDuplicate}
+        style={{ ...BTN, background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}
+        {...hov('rgba(167,139,250,0.15)', 'rgba(167,139,250,0.3)')}>⧉</button>}
     </div>
   );
 }

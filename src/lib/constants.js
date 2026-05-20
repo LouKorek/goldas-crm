@@ -331,6 +331,27 @@ export const fmtDate = (d) => {
   } catch { return String(d); }
 };
 
+// ── Phone formatting (by country prefix) ─────────────────────────
+// Israel example: "0506665574" / "+972506665574" -> "+972 50 666 5574".
+export const formatPhone = (raw) => {
+  if (!raw) return '';
+  let digits = String(raw).replace(/[^\d+]/g, '');
+  // Israeli local number (0XXXXXXXXX) -> international +972
+  if (/^0\d{8,9}$/.test(digits)) digits = '+972' + digits.slice(1);
+  // Israel
+  if (/^\+?972/.test(digits)) {
+    const rest = digits.replace(/^\+?972/, '');
+    if (rest.length >= 8) return `+972 ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5)}`.trim();
+    return `+972 ${rest}`.trim();
+  }
+  // Generic international: keep "+CC" then group the remainder in threes.
+  if (digits.startsWith('+')) {
+    const m = digits.match(/^\+(\d{1,3})(\d+)$/);
+    if (m) return `+${m[1]} ${m[2].replace(/(\d{3})(?=\d)/g, '$1 ')}`.trim();
+  }
+  return raw;
+};
+
 // ── Days until ────────────────────────────────────────────────────
 export const daysUntil = (d) => {
   if (!d) return null;
