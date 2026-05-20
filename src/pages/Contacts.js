@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
-import { CONTACT_ROLES, formatPhone } from 'lib/constants';
-import { Modal, Field, SearchInput, PageHeader, Empty, useConfirm,
+import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
+import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
          PhoneActions, RowActions, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 
-const EMPTY = { clubName: '', clubIsYouth: false, contactName: '', contactRole: '', contactPhone: '' };
+const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
 
 export default function Contacts() {
   const [items, setItems]   = useState([]);
@@ -19,6 +19,10 @@ export default function Contacts() {
   const f = (k) => form[k];
   const s = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
 
+  const league = form.leagueMode === 'manual'
+    ? form.leagueManual
+    : (form.leagueCountry && form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ', '')}` : '');
+
   const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); };
   const openEdit = (c) => { setForm({ ...EMPTY, ...c }); setModal({ edit: c }); };
   const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest }); setModal('add'); };
@@ -28,7 +32,7 @@ export default function Contacts() {
       toast.error('Add at least a club or a contact name.');
       return;
     }
-    const data = { ...form };
+    const data = { ...form, league };
     try {
       if (modal === 'add') {
         await addDoc_(PATHS.CONTACTS, data);
@@ -98,8 +102,13 @@ export default function Contacts() {
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
-                        <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{c.clubName || '—'}</span>
-                        {c.clubIsYouth && <U19 />}
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{c.clubName || '—'}</span>
+                            {c.clubIsYouth && <U19 />}
+                          </div>
+                          {c.league && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>{c.league}</div>}
+                        </div>
                       </div>
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -140,6 +149,26 @@ export default function Contacts() {
             <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
               onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
               style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>🌱 Youth Team</button>
+          </Field>
+          <Field label="League">
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button type="button" className={`chip${form.leagueMode === 'select' ? ' active' : ''}`} onClick={() => s('leagueMode')('select')}>By Country + Tier</button>
+              <button type="button" className={`chip${form.leagueMode === 'manual' ? ' active' : ''}`} onClick={() => s('leagueMode')('manual')}>Manual</button>
+            </div>
+            {form.leagueMode === 'select' ? (
+              <div className="form-grid-2">
+                <select value={f('leagueCountry')} onChange={e => s('leagueCountry')(e.target.value)}>
+                  <option value="">Country...</option>
+                  {COUNTRIES.map(co => <option key={co}>{co}</option>)}
+                </select>
+                <ChipGroup options={['1st', '2nd', '3rd', '4th', '5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
+              </div>
+            ) : (
+              <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
+            )}
+            {league && (
+              <div className="form-hint">League: <strong>{league}</strong></div>
+            )}
           </Field>
           <Field label="Contact Name">
             <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder="Full name" />

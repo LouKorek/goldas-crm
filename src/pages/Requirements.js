@@ -676,7 +676,6 @@ export default function Requirements() {
                   <th></th>{/* Actions — first */}
                   <th>G</th>
                   <SortTh label="🔰" field="clubName" sort={sort} setSort={setSort} />
-                  <th>🌍</th>
                   <th>#</th>
                   <th>👤</th>
                   <th>📍</th>
@@ -705,21 +704,18 @@ export default function Requirements() {
                       </span>
                     </td>
 
-                    {/* Club name + logo + youth badge */}
+                    {/* Club name + logo + league + youth badge */}
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                         <ClubLogoOrAvatar name={p.clubName} size={26} />
-                        <span style={{ fontWeight: 500 }}>{p.clubName}</span>
-                        {p.clubIsYouth && <U19 />}
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 500 }}>{p.clubName}</span>
+                            {p.clubIsYouth && <U19 />}
+                          </div>
+                          {p.league && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>{p.league}</div>}
+                        </div>
                       </div>
-                    </td>
-
-                    {/* League + U19 if youth */}
-                    <td>
-                      <div style={{ color: 'var(--text-2)', fontSize: 12 }}>{p.league || '—'}</div>
-                      {p.clubIsYouth && p.league && (
-                        <div style={{ marginTop: 2 }}><U19 /></div>
-                      )}
                     </td>
 
                     {/* Table position */}
