@@ -11,6 +11,7 @@ import Players       from 'pages/Players';
 import Pipeline      from 'pages/Pipeline';
 import Requirements  from 'pages/Requirements';
 import Matches       from 'pages/Matches';
+import Contacts      from 'pages/Contacts';
 import Notifications from 'pages/Notifications';
 import { ToastProvider } from 'components/ui/UI';
 
@@ -161,6 +162,7 @@ export default function App() {
               <Route path="players"        element={<Players />} />
               <Route path="matches"        element={<Matches />} />
               <Route path="requirements"   element={<Requirements />} />
+              <Route path="contacts"       element={<Contacts />} />
               <Route path="pipeline/men"   element={<Pipeline category="men" />} />
               <Route path="pipeline/women" element={<Pipeline category="women" />} />
               <Route path="pipeline/youth" element={<Pipeline category="youth" />} />

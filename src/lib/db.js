@@ -79,4 +79,5 @@ export const PATHS = {
   PIPELINE_JEWISH:   'pipeline_jewish',
   CLUB_REQUIREMENTS: 'club_requirements',
   MATCHES:           'matches',
+  CONTACTS:          'contacts',
 };

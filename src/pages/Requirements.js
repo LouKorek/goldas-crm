@@ -418,7 +418,7 @@ async function fetchClubLogo(name) {
   return store(null);
 }
 
-function ClubLogoOrAvatar({ name, size = 28 }) {
+export function ClubLogoOrAvatar({ name, size = 28 }) {
   const [url, setUrl] = useState(() => {
     const k = (name || '').trim().toLowerCase();
     return k in _logoCache ? _logoCache[k] : undefined;
@@ -881,5 +881,7 @@ export default function Requirements() {
 
       {dialog}
     </div>
+  );
+}
   );
 }

@@ -9,6 +9,7 @@ const NAV = [
   { section: 'Players' },
   { label: 'Represented',       path: '/players',         emoji: '🤝' },
   { label: 'Matches',           path: '/matches',         emoji: '🏟' },
+  { label: 'Contacts',          path: '/contacts',        emoji: '📇' },
   { section: 'Transfer Window' },
   { label: 'Club Requirements', path: '/requirements',    emoji: '📋' },
   { label: 'Men',               path: '/pipeline/men',    emoji: '🏃', color: '#4ADE80' },
