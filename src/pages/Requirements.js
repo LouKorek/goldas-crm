@@ -883,5 +883,3 @@ export default function Requirements() {
     </div>
   );
 }
-  );
-}
