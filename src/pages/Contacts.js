@@ -2,10 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES } from 'lib/constants';
 import { Modal, Field, SearchInput, PageHeader, Empty, useConfirm,
-         PhoneDisplay, ActionButtons, toast } from 'components/ui/UI';
+         PhoneDisplay, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar } from './Requirements';
 
-const EMPTY = { clubName: '', contactName: '', contactRole: '', contactPhone: '' };
+const EMPTY = { clubName: '', clubIsYouth: false, contactName: '', contactRole: '', contactPhone: '' };
+
+// A single square action icon (delete / edit / duplicate), shown in a row.
+function IconBtn({ icon, title, color, bg, bgHover, onClick }) {
+  return (
+    <button title={title} onClick={onClick}
+      style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+               fontSize: 13, border: 'none', borderRadius: 7, cursor: 'pointer', background: bg, color,
+               transition: 'background 0.15s, transform 0.12s', flexShrink: 0 }}
+      onMouseEnter={e => { e.currentTarget.style.background = bgHover; e.currentTarget.style.transform = 'scale(1.08)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; }}
+    >{icon}</button>
+  );
+}
+
+const YouthBadge = () => (
+  <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
+                 borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700, padding: '1px 6px', whiteSpace: 'nowrap' }}>🌱 Youth</span>
+);
 
 export default function Contacts() {
   const [items, setItems]   = useState([]);
@@ -83,7 +101,7 @@ export default function Contacts() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 60 }}></th>
+                  <th style={{ width: 104 }}>Actions</th>
                   <th>Club</th>
                   <th>Contact</th>
                   <th>Role</th>
@@ -94,19 +112,17 @@ export default function Contacts() {
                 {filtered.map(c => (
                   <tr key={c.id}>
                     <td>
-                      <ActionButtons
-                        onWhatsApp={c.contactPhone
-                          ? () => window.open(`https://wa.me/${c.contactPhone.replace(/[^0-9]/g, '')}`, '_blank')
-                          : undefined}
-                        onEdit={() => openEdit(c)}
-                        onDuplicate={() => openDup(c)}
-                        onDelete={() => remove(c)}
-                      />
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        <IconBtn icon="🗑" title="Delete"    color="var(--red)"  bg="rgba(248,113,113,0.15)" bgHover="rgba(248,113,113,0.3)" onClick={() => remove(c)} />
+                        <IconBtn icon="✏️" title="Edit"      color="var(--gold)" bg="rgba(201,168,76,0.15)"  bgHover="rgba(201,168,76,0.3)"  onClick={() => openEdit(c)} />
+                        <IconBtn icon="⧉" title="Duplicate" color="#A78BFA"     bg="rgba(167,139,250,0.15)" bgHover="rgba(167,139,250,0.3)" onClick={() => openDup(c)} />
+                      </div>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
                         <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{c.clubName || '—'}</span>
+                        {c.clubIsYouth && <YouthBadge />}
                       </div>
                     </td>
                     <td><span style={{ whiteSpace: 'nowrap' }}>{c.contactName || '—'}</span></td>
@@ -131,6 +147,9 @@ export default function Contacts() {
         >
           <Field label="Club Name">
             <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder="Club name" />
+            <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
+              onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
+              style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>🌱 Youth Team</button>
           </Field>
           <Field label="Contact Name">
             <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder="Full name" />

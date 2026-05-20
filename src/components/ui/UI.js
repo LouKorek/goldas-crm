@@ -319,12 +319,12 @@ export function PhoneDisplay({ phone }) {
   return (
     <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ color: 'var(--text-1)', fontSize: 12 }}>{phone}</span>
-      <a href={`tel:${phone}`} className="btn btn-ghost btn-sm btn-icon" data-tooltip="Call"
+      <a href={`tel:${phone}`} className="btn btn-ghost btn-sm btn-icon" title="Call"
         style={{ textDecoration: 'none', fontSize: 13 }}>📞</a>
       <a
         href={`https://wa.me/${phone.replace(/[^0-9]/g, '')}`}
         target="_blank" rel="noopener noreferrer"
-        className="btn btn-ghost btn-sm btn-icon" data-tooltip="WhatsApp"
+        className="btn btn-ghost btn-sm btn-icon" title="WhatsApp"
         style={{ textDecoration: 'none', fontSize: 13 }}
       >💬</a>
     </div>
