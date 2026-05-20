@@ -331,6 +331,29 @@ export function PhoneDisplay({ phone }) {
   );
 }
 
+// Compact call + WhatsApp icons (icon-only) for table cells. Stacks
+// vertically when `vertical` is set. Sized like the action icons.
+export function PhoneActions({ phone, vertical }) {
+  if (!phone) return <span style={{ color: 'var(--text-3)' }}>—</span>;
+  const wa = phone.replace(/[^0-9]/g, '');
+  const btn = {
+    width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 6, textDecoration: 'none', fontSize: 12, flexShrink: 0,
+    transition: 'transform 0.12s',
+  };
+  const onEnter = (e) => { e.currentTarget.style.transform = 'scale(1.1)'; };
+  const onLeave = (e) => { e.currentTarget.style.transform = ''; };
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: vertical ? 'column' : 'row', gap: 4, alignItems: 'center' }}>
+      <a href={`tel:${phone}`} title="Call" onMouseEnter={onEnter} onMouseLeave={onLeave}
+        style={{ ...btn, background: 'rgba(96,165,250,0.15)', color: '#60A5FA' }}>📞</a>
+      <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" title="WhatsApp"
+        onMouseEnter={onEnter} onMouseLeave={onLeave}
+        style={{ ...btn, background: 'rgba(37,211,102,0.15)', color: '#25D166' }}>💬</a>
+    </span>
+  );
+}
+
 export function LinkIcon({ url, emoji = '🔗', label = '' }) {
   if (!url || url === '-' || url === '') return <span style={{ color: 'var(--text-3)' }}>—</span>;
   const href = url.startsWith('http://') || url.startsWith('https://') ? url : 'https://' + url;

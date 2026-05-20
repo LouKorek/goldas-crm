@@ -4,7 +4,7 @@ import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
-         Empty, Spinner, useConfirm, PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
+         Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
 // ====================================================================
@@ -457,7 +457,7 @@ export function ClubLogoOrAvatar({ name, size = 28 }) {
 }
 
 // ── Youth U19 badge ──────────────────────────────────────────────
-const U19 = () => (
+export const U19 = () => (
   <span style={{
     background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
     borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700,
@@ -692,9 +692,6 @@ export default function Requirements() {
                     {/* Actions — first column, stop propagation only here */}
                     <td onClick={e => e.stopPropagation()} style={{padding:'8px 4px 8px 8px'}}>
                       <ActionButtons
-                        onWhatsApp={p.contactPhone
-                          ? () => window.open(`https://wa.me/${p.contactPhone.replace(/[^0-9]/g, '')}`, '_blank')
-                          : undefined}
                         onEdit={() => openEdit(p)}
                         onDuplicate={() => openDup(p)}
                         onDelete={() => del(p)}
@@ -728,12 +725,17 @@ export default function Requirements() {
                     {/* Table position */}
                     <td style={{ color: 'var(--text-2)', fontSize: 12, textAlign: 'center' }}>{p.tablePosition || '—'}</td>
 
-                    {/* Contact — name + role only */}
+                    {/* Contact — name + role + call/WhatsApp */}
                     <td>
-                      {p.contactName ? (
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.contactName}</div>
-                          {p.contactRole && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.contactRole}</div>}
+                      {(p.contactName || p.contactPhone) ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.contactName || '—'}</div>
+                            {p.contactRole && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.contactRole}</div>}
+                          </div>
+                          {p.contactPhone && (
+                            <span onClick={e => e.stopPropagation()}><PhoneActions phone={p.contactPhone} vertical /></span>
+                          )}
                         </div>
                       ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
                     </td>

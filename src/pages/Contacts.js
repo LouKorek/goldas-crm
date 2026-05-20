@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES } from 'lib/constants';
 import { Modal, Field, SearchInput, PageHeader, Empty, useConfirm,
-         PhoneDisplay, toast } from 'components/ui/UI';
-import { ClubLogoOrAvatar } from './Requirements';
+         PhoneActions, toast } from 'components/ui/UI';
+import { ClubLogoOrAvatar, U19 } from './Requirements';
 
 const EMPTY = { clubName: '', clubIsYouth: false, contactName: '', contactRole: '', contactPhone: '' };
 
@@ -19,11 +19,6 @@ function IconBtn({ icon, title, color, bg, bgHover, onClick }) {
     >{icon}</button>
   );
 }
-
-const YouthBadge = () => (
-  <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
-                 borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700, padding: '1px 6px', whiteSpace: 'nowrap' }}>🌱 Youth</span>
-);
 
 export default function Contacts() {
   const [items, setItems]   = useState([]);
@@ -101,33 +96,45 @@ export default function Contacts() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 104 }}>Actions</th>
-                  <th>Club</th>
-                  <th>Contact</th>
-                  <th>Role</th>
-                  <th>Phone</th>
+                  <th style={{ width: 110, paddingRight: 20 }}></th>
+                  <th style={{ width: '30%', textAlign: 'center' }}>🔰</th>
+                  <th style={{ width: '30%', textAlign: 'center' }}>👤</th>
+                  <th style={{ width: '30%', textAlign: 'center' }}>📞</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(c => (
                   <tr key={c.id}>
-                    <td>
+                    <td style={{ paddingRight: 20 }}>
                       <div style={{ display: 'flex', gap: 5 }}>
                         <IconBtn icon="🗑" title="Delete"    color="var(--red)"  bg="rgba(248,113,113,0.15)" bgHover="rgba(248,113,113,0.3)" onClick={() => remove(c)} />
                         <IconBtn icon="✏️" title="Edit"      color="var(--gold)" bg="rgba(201,168,76,0.15)"  bgHover="rgba(201,168,76,0.3)"  onClick={() => openEdit(c)} />
                         <IconBtn icon="⧉" title="Duplicate" color="#A78BFA"     bg="rgba(167,139,250,0.15)" bgHover="rgba(167,139,250,0.3)" onClick={() => openDup(c)} />
                       </div>
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
                         <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{c.clubName || '—'}</span>
-                        {c.clubIsYouth && <YouthBadge />}
+                        {c.clubIsYouth && <U19 />}
                       </div>
                     </td>
-                    <td><span style={{ whiteSpace: 'nowrap' }}>{c.contactName || '—'}</span></td>
-                    <td><span style={{ color: 'var(--text-2)', fontSize: 12 }}>{c.contactRole || '—'}</span></td>
-                    <td><PhoneDisplay phone={c.contactPhone} /></td>
+                    <td style={{ textAlign: 'center' }}>
+                      {(c.contactName || c.contactRole) ? (
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{c.contactName || '—'}</div>
+                          {c.contactRole && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{c.contactRole}</div>}
+                        </div>
+                      ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {c.contactPhone ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+                          <span style={{ fontSize: 12 }}>{c.contactPhone}</span>
+                          <PhoneActions phone={c.contactPhone} vertical />
+                        </div>
+                      ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
