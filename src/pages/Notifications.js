@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from 'lib/firebase';
 import { listenCollection, updateDoc_, PATHS } from 'lib/db';
 import { calcAge, daysUntil, isBirthdaySoon, fmtDate } from 'lib/constants';
 import { PageHeader, Modal, Field } from 'components/ui/UI';
@@ -12,6 +14,14 @@ const DEFAULT_SETTINGS = {
 };
 
 const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
+
+// Firestore doc that the email script (Apps Script) reads, so the alerts
+// you get by email always match exactly what you configure here.
+const SETTINGS_DOC = ['settings', 'notifications'];
+const persistSettings = (s) => {
+  try { setDoc(doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]), s, { merge: true }); }
+  catch (e) { /* offline / permission - non-fatal, UI still works */ }
+};
 
 function AlertCard({ icon, title, sub, urgency, extra }) {
   const colors = {
@@ -92,17 +102,31 @@ export default function Notifications() {
   useEffect(() => {
     const u1 = listenCollection(PATHS.PLAYERS, setPlayers);
     const u2 = listenCollection(PATHS.MATCHES,  setMatches);
-    // Load settings from localStorage
-    try {
-      const saved = JSON.parse(localStorage.getItem('notif_settings') || 'null');
-      if (saved) setSettings(saved);
-    } catch(e) {}
+    // Settings: Firestore is the source of truth (so the email script and the
+    // app stay in sync). Fall back to localStorage, then seed Firestore.
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, SETTINGS_DOC[0], SETTINGS_DOC[1]));
+        if (snap.exists()) {
+          const fs = { ...DEFAULT_SETTINGS, ...snap.data() };
+          setSettings(fs);
+          localStorage.setItem('notif_settings', JSON.stringify(fs));
+          return;
+        }
+      } catch(e) {}
+      try {
+        const saved = JSON.parse(localStorage.getItem('notif_settings') || 'null');
+        if (saved) { setSettings(saved); persistSettings(saved); }
+        else persistSettings(DEFAULT_SETTINGS);
+      } catch(e) {}
+    })();
     return () => { u1(); u2(); };
   }, []);
 
   const saveSettings = (s) => {
     setSettings(s);
     localStorage.setItem('notif_settings', JSON.stringify(s));
+    persistSettings(s);            // sync to Firestore for the email script
     setShowSettings(false);
     toast.success('Notification settings saved.');
   };
