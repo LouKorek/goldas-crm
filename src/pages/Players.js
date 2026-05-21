@@ -354,7 +354,7 @@ export default function Players() {
                   const pIsEU        = isEuropean(p.nationalities||[]);
                   const footShort    = p.foot==='Right'?'R':p.foot==='Left'?'L':p.foot==='Both'?'RL':'—';
                   const genderShort  = p.gender==='Men'?'M':p.gender==='Women'?'W':'—';
-                  const dobDisplay   = p.dob?`${p.dob.split('-').reverse().join('/')} (${pAge})`:'—';
+                  const dobDisplay   = p.dob?`${fmtDate(p.dob)} (${pAge})`:'—';
                   return (
                     <tr key={p.id}
                       onClick={()=>setViewPlayer(p)}

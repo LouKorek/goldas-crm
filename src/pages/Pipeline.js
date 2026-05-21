@@ -5,7 +5,7 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
          COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
-         FilterBar, PageHeader, Empty, Spinner, useConfirm, StatusBadge,
+         FilterBar, PageHeader, Empty, Spinner, useConfirm,
          PhoneActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
@@ -16,7 +16,7 @@ const cc = (n) => CC[n] || (n||'').slice(0,3).toUpperCase();
 function NatFlags({ nats=[] }) {
   if (!nats.length) return <span style={{color:'var(--text-3)'}}>—</span>;
   return (
-    <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+    <div style={{display:'flex',gap:4,flexWrap:'wrap',maxWidth:72}}>
       {nats.filter(Boolean).map(n=>(
         <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius:4,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
       ))}
@@ -211,7 +211,7 @@ export default function Pipeline({ category }) {
                   <th style={{textAlign:'center'}}>📌</th>
                   <SortTh label="🦵"  field="foot"            sort={sort} setSort={setSort} />
                   <th>🔰</th>
-                  <SortTh label="🏷"  field="status"          sort={sort} setSort={setSort} />
+                  <SortTh label="🚦"  field="status"          sort={sort} setSort={setSort} />
                   <th style={{textAlign:'center'}}>👤</th>
                   <th style={{textAlign:'center'}}>💰</th>
                   <th style={{textAlign:'center'}}>💵</th>
@@ -222,7 +222,7 @@ export default function Pipeline({ category }) {
                 {data.map(p => {
                   const pIsEU       = isEuropean(p.nationalities||[]);
                   const footShort   = p.foot==='Right'?'R':p.foot==='Left'?'L':p.foot==='Both'?'RL':'—';
-                  const dobDisplay  = p.dob?`${p.dob.split('-').reverse().join('/')} (${calcAge(p.dob)})`:'—';
+                  const dobDisplay  = p.dob?`${fmtDate(p.dob)} (${calcAge(p.dob)})`:'—';
                   return (
                   <tr key={p.id}
                     onClick={()=>setCardFor(p)}
@@ -284,8 +284,17 @@ export default function Pipeline({ category }) {
                         {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:3,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
                       </div>
                     </td>
-                    {/* Status */}
-                    <td><StatusBadge status={p.status} colorMap={PIPELINE_STATUS_COLORS} /></td>
+                    {/* Status — wraps to two lines to keep the column narrow */}
+                    <td>
+                      {p.status && (() => {
+                        const c = PIPELINE_STATUS_COLORS[p.status] || { bg:'var(--surface-3)', text:'var(--text-2)' };
+                        return (
+                          <span style={{display:'inline-block',background:c.bg,color:c.text,borderRadius:6,fontSize:10,fontWeight:600,lineHeight:1.2,padding:'3px 7px',whiteSpace:'normal',textAlign:'center',maxWidth:72}}>
+                            {p.status}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     {/* Agent — compact: name, small number, small action icons (matches the name column size) */}
                     <td>
                       <div style={{fontWeight:500,fontSize:13,whiteSpace:'nowrap'}}>{p.agentName||'—'}</div>

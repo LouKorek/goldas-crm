@@ -317,16 +317,16 @@ export const fmtNum = (n) => {
 export const fmtDate = (d) => {
   if (!d) return '—';
   try {
-    // Handle YYYY-MM-DD format from date inputs
+    // Handle YYYY-MM-DD format from date inputs — show a 2-digit year (e.g. 26).
     if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
       const [y, m, day] = d.split('-');
-      return `${day}/${m}/${y}`;
+      return `${day}/${m}/${y.slice(2)}`;
     }
     const dt = new Date(d);
     if (isNaN(dt)) return d;
     const day = String(dt.getDate()).padStart(2,'0');
     const mon = String(dt.getMonth()+1).padStart(2,'0');
-    const yr  = dt.getFullYear();
+    const yr  = String(dt.getFullYear()).slice(2);
     return `${day}/${mon}/${yr}`;
   } catch { return String(d); }
 };
