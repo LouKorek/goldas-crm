@@ -118,6 +118,10 @@ export default function Pipeline({ category }) {
 
   const validate = () => {
     if (!form.playerName.trim()) return 'Player name is required.';
+    if (form.height) {
+      const h = parseInt(form.height, 10);
+      if (isNaN(h) || h < 130 || h > 225) return 'Height must be between 130 and 225 cm.';
+    }
     const existing = items.filter(p => modal?.edit?.id !== p.id);
     if (existing.some(p => p.playerName.trim().toLowerCase() === form.playerName.trim().toLowerCase() && p.dob === form.dob && p.primaryPosition === form.primaryPosition))
       return 'An identical player already exists. Please change at least one detail.';
