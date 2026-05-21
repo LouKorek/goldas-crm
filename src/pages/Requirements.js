@@ -17,7 +17,7 @@ import { toast } from 'components/ui/UI';
 
 // localStorage-backed cache (persists across sessions)
 // Bump key when fetcher logic changes to invalidate old negative results
-const LOGO_CACHE_KEY = 'goldas_logo_cache_v7';
+const LOGO_CACHE_KEY = 'goldas_logo_cache_v8';
 let _logoCache = {};
 try { _logoCache = JSON.parse(localStorage.getItem(LOGO_CACHE_KEY) || '{}'); } catch {}
 const NEG = '__none__';
@@ -26,7 +26,7 @@ function saveCache() {
 }
 // Clear old cache versions on load
 try {
-  for (let i = 1; i < 7; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
+  for (let i = 1; i < 8; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
 } catch {}
 
 // Israeli football clubs - canonical names with common aliases.
@@ -99,10 +99,9 @@ const CLUB_ALIASES = {
   'bnei yehuda tlv':     'Bnei Yehuda Tel Aviv F.C.',
   'בני יהודה':           'Bnei Yehuda Tel Aviv F.C.',
   'בני יהודה תל אביב':    'Bnei Yehuda Tel Aviv F.C.',  // plain "בני יהודה" is a disambig page; logo is here
-  // F.C. Ashdod
+  // F.C. Ashdod  (do NOT alias the bare city name "אשדוד" — it pulls a city image)
   'ashdod':              'F.C. Ashdod',
   'fc ashdod':           'F.C. Ashdod',
-  'אשדוד':                'F.C. Ashdod',
   // Hapoel Kfar Saba
   'hapoel kfar saba':    'Hapoel Kfar Saba F.C.',
   'הפועל כפר סבא':         'Hapoel Kfar Saba F.C.',
@@ -166,9 +165,13 @@ const CLUB_ALIASES = {
   'ness ziona':          'Sektzia Ness Ziona F.C.',
   'sektzia ness ziona':  'Sektzia Ness Ziona F.C.',
   'סקציה נס ציונה':        'Sektzia Ness Ziona F.C.',
-  'kiryat gat':          'Hapoel Kiryat Gat F.C.',
-  'hapoel kiryat gat':   'Hapoel Kiryat Gat F.C.',
-  'קריית גת':             'Hapoel Kiryat Gat F.C.',
+  // Kiryat Gat — the active men's club is Maccabi Ironi Kiryat Gat. (Do NOT map
+  // to the city "קריית גת", whose page yields the municipality logo.)
+  'kiryat gat':              'Maccabi Ironi Kiryat Gat F.C.',
+  'hapoel kiryat gat':       'Maccabi Ironi Kiryat Gat F.C.',
+  'maccabi ironi kiryat gat':'Maccabi Ironi Kiryat Gat F.C.',
+  'מכבי עירוני קריית גת':      'Maccabi Ironi Kiryat Gat F.C.',
+  'מכבי עירוני קריית גת (כדורגל)': 'Maccabi Ironi Kiryat Gat F.C.',
   // ── Clubs verified against he.wikipedia (exact infobox-logo page titles) ──
   // Maccabi Be'er Sheva  → מכבי באר שבע (MaccabiBeerShevaCrest2018.png)
   'maccabi beer sheva':  'Maccabi Be\'er Sheva F.C.',
@@ -204,6 +207,21 @@ const CLUB_ALIASES = {
   'rishon le zion':      'Hapoel Rishon LeZion F.C.',
   // SC Ashdod exact HE title (period): מ.ס. אשדוד (Ashdod.png)
   'מ.ס. אשדוד':           'F.C. Ashdod',
+  // Shimshon Tel Aviv → שמשון תל אביב (Shimsho_Tel_Aviv.png — transparent crest)
+  'shimshon tel aviv':   'Shimshon Tel Aviv F.C.',
+  'shimshon tlv':        'Shimshon Tel Aviv F.C.',
+  'שמשון תל אביב':        'Shimshon Tel Aviv F.C.',
+  // Gadna Tel Aviv Yehuda — official crest exists ONLY on the Hebrew article
+  'gadna tel aviv yehuda':'Gadna Tel Aviv Yehuda F.C.',
+  'gadna tlv yehuda':    'Gadna Tel Aviv Yehuda F.C.',
+  'גדנ"ע תל אביב יהודה':   'Gadna Tel Aviv Yehuda F.C.',
+  // Beitar Nordia (Jerusalem) → בית"ר נורדיה ירושלים (Betar_Nordia_Jerusalem.png)
+  'beitar nordia':       'Beitar Nordia Jerusalem F.C.',
+  'betar nordia':        'Beitar Nordia Jerusalem F.C.',
+  'בית"ר נורדיה ירושלים':  'Beitar Nordia Jerusalem F.C.',
+  // Kiryat Yam → מועדון ספורט קריית ים (SC_Kiryat_Yam_Crest.png)
+  'kiryat yam':          'F.C. Kiryat Yam',
+  'מועדון ספורט קריית ים': 'F.C. Kiryat Yam',
 };
 
 // Expand common abbreviations and Hebrew→English markers
@@ -290,39 +308,62 @@ async function trySportsDB(name) {
   return null;
 }
 
-// === Source 2: Wikidata - structured logo data ========================
-// Wikidata returns logos in P154 property — these are official, high-quality
-async function tryWikidata(name) {
-    // Step 1: search for entity
-    const sr = await fetch(
-      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&origin=*&type=item&limit=5`
-    );
-    if (!sr.ok) throw new Error('wikidata http ' + sr.status);
-    const sd = await sr.json();
-    if (!sd?.search?.length) return null;
+// === Source 2: Country-language Wikipedia article (via Wikidata sitelinks) ===
+// Resolve the club's Wikidata entity, then pull the crest from the article in
+// the club's OWN country language (Israeli club → Hebrew article, Spanish club →
+// Spanish, …), falling back to the English article, and finally to Wikidata's
+// own logo (P154). This is the general rule; the explicit aliases above take
+// precedence and run first.
+const COUNTRY_LANG = {
+  Q801:'he', Q29:'es', Q21:'en', Q145:'en', Q142:'fr', Q183:'de', Q38:'it',
+  Q45:'pt', Q55:'nl', Q31:'nl', Q414:'es', Q155:'pt', Q96:'es', Q40:'de',
+  Q39:'de', Q41:'el', Q43:'tr', Q213:'cs', Q36:'pl', Q34:'sv', Q20:'no',
+};
 
-    // Step 2: prefer entities whose description hints at football
-    const candidates = sd.search.filter(e => {
+// Find the Wikidata entity ID of the football CLUB named `name` (not a stadium,
+// league or season). Searches Hebrew first, then English.
+async function findFootballEntity(name) {
+  for (const lang of ['he', 'en']) {
+    const r = await fetch(
+      `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=${lang}&uselang=${lang}&format=json&origin=*&type=item&limit=8`
+    );
+    if (!r.ok) throw new Error('wikidata search http ' + r.status);
+    const d = await r.json();
+    const cand = (d.search || []).find(e => {
       const desc = (e.description || '').toLowerCase();
-      return desc.includes('football') || desc.includes('soccer') ||
-             desc.includes('association') || desc.includes('sports club') ||
-             desc.includes('כדורגל');
+      return /football|soccer|כדורגל|fútbol|calcio|futebol/.test(desc) &&
+             !/stadium|אצטדיון|arena|league|ליגה|season|עונת/.test(desc);
     });
-    const pick = candidates[0] || sd.search[0];
-    if (!pick?.id) return null;
+    if (cand) return cand.id;
+  }
+  return null;
+}
 
-    // Step 3: fetch entity's P154 (logo image) claim
-    const er = await fetch(
-      `https://www.wikidata.org/wiki/Special:EntityData/${pick.id}.json`
-    );
-    if (!er.ok) throw new Error('wikidata entity http ' + er.status);
-    const ed = await er.json();
-    const claims = ed?.entities?.[pick.id]?.claims;
-    const logoClaim = claims?.P154?.[0]?.mainsnak?.datavalue?.value;
-    if (!logoClaim) return null;
-
-    // Step 4: convert "File:X.svg" to a usable Commons URL
+async function tryCountryLangArticle(name) {
+  const id = await findFootballEntity(name);
+  if (!id) return null;
+  const er = await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${id}.json`);
+  if (!er.ok) throw new Error('wikidata entity http ' + er.status);
+  const ed = await er.json();
+  const ent = ed?.entities?.[id];
+  if (!ent) return null;
+  const sl = ent.sitelinks || {};
+  const country = ent.claims?.P17?.[0]?.mainsnak?.datavalue?.value?.id;
+  const lang = COUNTRY_LANG[country] || 'he';
+  // Prefer the country-language article, then English.
+  for (const l of Array.from(new Set([lang, 'en']))) {
+    const title = sl[l + 'wiki']?.title;
+    if (title) {
+      const img = await tryWikipediaPageImage(title, l);
+      if (img) return img;
+    }
+  }
+  // Last resort: Wikidata's own logo property (P154).
+  const logoClaim = ent.claims?.P154?.[0]?.mainsnak?.datavalue?.value;
+  if (logoClaim) {
     return `https://commons.wikimedia.org/w/index.php?title=Special:Redirect/file/${encodeURIComponent(logoClaim)}&width=200`;
+  }
+  return null;
 }
 
 // === Source 3: Wikipedia REST summary - returns thumbnail if present
@@ -364,7 +405,7 @@ async function tryWikipediaPageImage(title, lang = 'en') {
     // while still rejecting cities (whose pageimage is a .jpg photo and whose
     // intro never mentions football).
     const fname = decodeURIComponent(img).toLowerCase();
-    const looksLikeLogo = /logo|crest|badge|emblem|לוגו|סמל|\.svg(\?|$)/.test(fname);
+    const looksLikeLogo = /logo|crest|badge|emblem|\.svg(\?|$)/.test(fname);
     const text = ((p.title || '') + ' ' + (p.extract || '')).toLowerCase();
     const isFootball = /football|soccer|association football|f\.c\.|sports club|כדורגל|מועדון ספורט/.test(text);
     if (looksLikeLogo || isFootball) return img;
@@ -466,9 +507,10 @@ async function _doFetchClubLogo(name, cacheKey) {
     if (url) return store(url);
   }
 
-  // Layer 2: Wikidata (official logo via P154)
-  for (const v of enVariants) {
-    const url = await layer(() => tryWikidata(v));
+  // Layer 2: Country-language Wikipedia article (general language-aware rule —
+  // Israeli club → Hebrew article, foreign club → its own language, else EN).
+  for (const v of Array.from(new Set([name.trim(), base].filter(Boolean)))) {
+    const url = await layer(() => tryCountryLangArticle(v));
     if (url) return store(url);
   }
 
