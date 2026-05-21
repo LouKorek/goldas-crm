@@ -88,8 +88,8 @@ export default function Contacts() {
               <thead>
                 <tr>
                   <th style={{ width: 110, paddingRight: 20 }}></th>
-                  <th style={{ width: '30%', textAlign: 'center' }}>🔰</th>
-                  <th style={{ width: '30%', textAlign: 'center' }}>👤</th>
+                  <th style={{ width: '30%', textAlign: 'left' }}>🔰</th>
+                  <th style={{ width: '30%', textAlign: 'left' }}>👤</th>
                   <th style={{ width: '30%', textAlign: 'center' }}>📞</th>
                 </tr>
               </thead>
@@ -99,8 +99,8 @@ export default function Contacts() {
                     <td style={{ paddingRight: 20 }}>
                       <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                    <td style={{ textAlign: 'left' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
                         <div style={{ textAlign: 'left' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -111,7 +111,7 @@ export default function Contacts() {
                         </div>
                       </div>
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td style={{ textAlign: 'left' }}>
                       {(c.contactName || c.contactRole) ? (
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>{c.contactName || '—'}</div>

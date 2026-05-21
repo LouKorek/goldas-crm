@@ -17,7 +17,7 @@ import { toast } from 'components/ui/UI';
 
 // localStorage-backed cache (persists across sessions)
 // Bump key when fetcher logic changes to invalidate old negative results
-const LOGO_CACHE_KEY = 'goldas_logo_cache_v4';
+const LOGO_CACHE_KEY = 'goldas_logo_cache_v5';
 let _logoCache = {};
 try { _logoCache = JSON.parse(localStorage.getItem(LOGO_CACHE_KEY) || '{}'); } catch {}
 const NEG = '__none__';
@@ -26,7 +26,7 @@ function saveCache() {
 }
 // Clear old cache versions on load
 try {
-  for (let i = 1; i < 4; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
+  for (let i = 1; i < 5; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
 } catch {}
 
 // Israeli football clubs - canonical names with common aliases.
@@ -334,6 +334,22 @@ const HEBREW_FOR_CANONICAL = (() => {
   return m;
 })();
 
+// Concurrency limiter + in-flight dedup, so rendering many logos at once
+// doesn't blast the Wikipedia/Wikidata APIs (which previously rate-limited
+// and poisoned the cache with false "not found" results).
+let _active = 0;
+const _queue = [];
+function _runNext() {
+  if (_active >= 5 || !_queue.length) return;
+  _active++;
+  const { fn, resolve, reject } = _queue.shift();
+  Promise.resolve().then(fn).then(resolve, reject).finally(() => { _active--; _runNext(); });
+}
+function _limit(fn) {
+  return new Promise((resolve, reject) => { _queue.push({ fn, resolve, reject }); _runNext(); });
+}
+const _inflight = {};
+
 async function fetchClubLogo(name) {
   const cacheKey = normalizeKey(name);
   if (!cacheKey || cacheKey.length < 2) return null;
@@ -341,7 +357,13 @@ async function fetchClubLogo(name) {
     const v = _logoCache[cacheKey];
     return v === NEG ? null : v;
   }
+  if (_inflight[cacheKey]) return _inflight[cacheKey];
+  const p = _limit(() => _doFetchClubLogo(name, cacheKey)).finally(() => { delete _inflight[cacheKey]; });
+  _inflight[cacheKey] = p;
+  return p;
+}
 
+async function _doFetchClubLogo(name, cacheKey) {
   const canonical = canonicalName(name);
   const base      = canonical;
 
