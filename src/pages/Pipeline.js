@@ -6,7 +6,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STA
          COUNTRIES, calcAge, fmtDate, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, useConfirm, StatusBadge,
-         PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
+         PhoneDisplay, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
 // ── Nationality flags (matches the Represented screen) ────────────
@@ -115,7 +115,6 @@ export default function Pipeline({ category }) {
 
   const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
   const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
-  const openDup  = (p) => { const {id:_, ...rest} = p; setForm({...EMPTY,...rest}); setModal('add'); setIsDirty(false); };
 
   const validate = () => {
     if (!form.playerName.trim()) return 'Player name is required.';
@@ -204,19 +203,19 @@ export default function Pipeline({ category }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{width:96}}>Actions</th>
-                  <SortTh label="🏃 Name"   field="playerName"      sort={sort} setSort={setSort} />
-                  <SortTh label="🗓️"        field="dob"             sort={sort} setSort={setSort} />
+                  <th style={{width:66}}></th>
+                  <SortTh label="🏃‍♂️" field="playerName"      sort={sort} setSort={setSort} />
+                  <SortTh label="🗓️"  field="dob"             sort={sort} setSort={setSort} />
                   <th style={{textAlign:'center'}}>🌎</th>
-                  <SortTh label="📍"        field="primaryPosition" sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Sec 📍</th>
-                  <SortTh label="🦵"        field="foot"            sort={sort} setSort={setSort} />
+                  <SortTh label="📍"  field="primaryPosition" sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>📌</th>
+                  <SortTh label="🦵"  field="foot"            sort={sort} setSort={setSort} />
                   <th>🔰</th>
-                  <SortTh label="🏷 Status" field="status"          sort={sort} setSort={setSort} />
-                  <th>👤 Agent</th>
-                  <th>💰 TF</th>
-                  <th>💵 Salary</th>
-                  <SortTh label="🏟️"        field="natTeamStatus"   sort={sort} setSort={setSort} />
+                  <SortTh label="🏷"  field="status"          sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>👤</th>
+                  <th style={{textAlign:'center'}}>💰</th>
+                  <th style={{textAlign:'center'}}>💵</th>
+                  <SortTh label="🏟️"  field="natTeamStatus"   sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>
@@ -225,12 +224,19 @@ export default function Pipeline({ category }) {
                   const footShort   = p.foot==='Right'?'R':p.foot==='Left'?'L':p.foot==='Both'?'RL':'—';
                   const dobDisplay  = p.dob?`${p.dob.split('-').reverse().join('/')} (${calcAge(p.dob)})`:'—';
                   return (
-                  <tr key={p.id}>
-                    {/* Actions (left, with profile/video links folded in) */}
+                  <tr key={p.id}
+                    onClick={()=>setCardFor(p)}
+                    style={{cursor:'pointer'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(201,168,76,0.05)'}
+                    onMouseLeave={e=>e.currentTarget.style.background=''}
+                  >
+                    {/* Actions — icons arranged 2-over-2; row click opens the player card */}
                     <td onClick={e => e.stopPropagation()}>
-                      <div style={{display:'flex',gap:3,flexWrap:'wrap',width:90,alignItems:'center'}}>
-                        <button className="btn btn-ghost btn-sm btn-icon" onClick={()=>setCardFor(p)} title="Generate Card" style={{width:26,height:26,padding:0,fontSize:13}}>📋</button>
-                        <ActionButtons onEdit={()=>openEdit(p)} onDuplicate={()=>openDup(p)} onDelete={()=>del(p)} />
+                      <div style={{display:'flex',gap:3,flexWrap:'wrap',width:55}}>
+                        <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
+                          title="Delete" onClick={()=>del(p)}>🗑</button>
+                        <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}}
+                          title="Edit" onClick={()=>openEdit(p)}>✏️</button>
                         {p.profileLink&&(
                           <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
                             target="_blank" rel="noopener noreferrer"
