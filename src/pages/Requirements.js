@@ -155,6 +155,19 @@ const CLUB_ALIASES = {
   'hapoel ironi kiryat shmona': 'Hapoel Ironi Kiryat Shmona F.C.',
   'kiryat shmona':       'Hapoel Ironi Kiryat Shmona F.C.',
   'עירוני קרית שמונה':      'Hapoel Ironi Kiryat Shmona F.C.',
+  // Clubs sharing a name with their city — map to the club + its Hebrew page (which holds the logo)
+  'sc ashdod':           'F.C. Ashdod',
+  'מ.ס. אשדוד':           'F.C. Ashdod',
+  'מועדון ספורט אשדוד':    'F.C. Ashdod',
+  'hod hasharon':        'Hapoel Hod HaSharon F.C.',
+  'hapoel hod hasharon': 'Hapoel Hod HaSharon F.C.',
+  'הפועל הוד השרון':       'Hapoel Hod HaSharon F.C.',
+  'ness ziona':          'Sektzia Ness Ziona F.C.',
+  'sektzia ness ziona':  'Sektzia Ness Ziona F.C.',
+  'סקציה נס ציונה':        'Sektzia Ness Ziona F.C.',
+  'kiryat gat':          'Hapoel Kiryat Gat F.C.',
+  'hapoel kiryat gat':   'Hapoel Kiryat Gat F.C.',
+  'קריית גת':             'Hapoel Kiryat Gat F.C.',
 };
 
 // Expand common abbreviations and Hebrew→English markers
@@ -303,7 +316,7 @@ async function tryWikipediaSummary(slug, lang = 'en') {
 async function tryWikipediaPageImage(title, lang = 'en') {
   try {
     const r = await fetch(
-      `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|pageprops&piprop=original|thumbnail&pithumbsize=300&format=json&origin=*&redirects=1`,
+      `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|pageprops|extracts&piprop=original|thumbnail&pithumbsize=300&exintro=1&explaintext=1&exchars=300&format=json&origin=*&redirects=1`,
       { headers: { Accept: 'application/json' } }
     );
     if (!r.ok) return null;
@@ -312,11 +325,13 @@ async function tryWikipediaPageImage(title, lang = 'en') {
     for (const pid of Object.keys(pages)) {
       if (pid === '-1') continue;
       const p = pages[pid];
-      // Verify it's a football page (avoid disambig)
-      const disambig = p?.pageprops?.disambiguation;
-      if (disambig !== undefined) continue;
+      if (p?.pageprops?.disambiguation !== undefined) continue;
       const img = p?.original?.source || p?.thumbnail?.source;
-      if (img) return img;
+      if (!img) continue;
+      // Verify the page is actually a football club — NOT the city it's named after.
+      // (Cities like Hod HaSharon / Ness Ziona return a city photo as their pageimage.)
+      const text = ((p.title || '') + ' ' + (p.extract || '')).toLowerCase();
+      if (/football|soccer|association football|f\.c\.|sports club|כדורגל|מועדון ספורט/.test(text)) return img;
     }
   } catch {}
   return null;

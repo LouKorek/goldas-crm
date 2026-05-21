@@ -87,10 +87,10 @@ export default function Contacts() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 110, paddingRight: 20 }}></th>
-                  <th style={{ width: '30%', textAlign: 'left' }}>🔰</th>
-                  <th style={{ width: '30%', textAlign: 'left' }}>👤</th>
-                  <th style={{ width: '30%', textAlign: 'center' }}>📞</th>
+                  <th style={{ width: 100, paddingRight: 20 }}></th>
+                  <th style={{ width: '40%', textAlign: 'center' }}>🔰</th>
+                  <th style={{ width: '40%', textAlign: 'center' }}>👤</th>
+                  <th style={{ width: 150, textAlign: 'center' }}>📞</th>
                 </tr>
               </thead>
               <tbody>
