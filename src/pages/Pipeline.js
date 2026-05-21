@@ -6,8 +6,23 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STA
          COUNTRIES, calcAge, fmtDate, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, useConfirm, StatusBadge,
-         EUBadge, PhoneDisplay, NumberInput, LinkIcon , ActionButtons } from 'components/ui/UI';
+         PhoneDisplay, NumberInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
+
+// ── Nationality flags (matches the Represented screen) ────────────
+const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
+const cc = (n) => CC[n] || (n||'').slice(0,3).toUpperCase();
+
+function NatFlags({ nats=[] }) {
+  if (!nats.length) return <span style={{color:'var(--text-3)'}}>—</span>;
+  return (
+    <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+      {nats.filter(Boolean).map(n=>(
+        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius:4,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
+      ))}
+    </div>
+  );
+}
 
 const CAT = { men:'Men', women:'Women', youth:'Youth', jewish:'Jewish' };
 const CAT_EMOJI = { men:'🏃', women:'🏃‍♀️', youth:'🌱', jewish:'✡️' };
@@ -189,44 +204,70 @@ export default function Pipeline({ category }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <SortTh label="🏷 Status"  field="status"          sort={sort} setSort={setSort} />
-                  <SortTh label="🏃 Name"    field="playerName"      sort={sort} setSort={setSort} />
-                  <th>🔗</th>
-                  <SortTh label="🗓️ Age"     field="dob"             sort={sort} setSort={setSort} />
-                  <SortTh label="📍 Pos"     field="primaryPosition" sort={sort} setSort={setSort} />
-                  <th>🌎</th>
-                  <th>🇪🇺</th>
-                  <th>🔰 Club</th>
+                  <th style={{width:96}}>Actions</th>
+                  <SortTh label="🏃 Name"   field="playerName"      sort={sort} setSort={setSort} />
+                  <SortTh label="🗓️"        field="dob"             sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>🌎</th>
+                  <SortTh label="📍"        field="primaryPosition" sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>Sec 📍</th>
+                  <SortTh label="🦵"        field="foot"            sort={sort} setSort={setSort} />
+                  <th>🔰</th>
+                  <SortTh label="🏷 Status" field="status"          sort={sort} setSort={setSort} />
                   <th>👤 Agent</th>
                   <th>💰 TF</th>
                   <th>💵 Salary</th>
-                  <th>🏟️</th>
-                  <th></th>
+                  <SortTh label="🏟️"        field="natTeamStatus"   sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>
-                {data.map(p => (
+                {data.map(p => {
+                  const pIsEU       = isEuropean(p.nationalities||[]);
+                  const footShort   = p.foot==='Right'?'R':p.foot==='Left'?'L':p.foot==='Both'?'RL':'—';
+                  const dobDisplay  = p.dob?`${p.dob.split('-').reverse().join('/')} (${calcAge(p.dob)})`:'—';
+                  return (
                   <tr key={p.id}>
-                    <td><StatusBadge status={p.status} colorMap={PIPELINE_STATUS_COLORS} /></td>
-                    <td>
-                      <span style={{fontWeight:500}}>{p.playerName}</span>
-                      {p.height && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.height}cm · {p.foot||'—'}</div>}
-                    </td>
-                    <td>
-                      <div style={{display:'flex',gap:8}}>
-                        <LinkIcon url={p.profileLink} emoji="🔗" label="Profile" />
-                        <LinkIcon url={p.videoLink}   emoji="🎬" label="Video" />
+                    {/* Actions (left, with profile/video links folded in) */}
+                    <td onClick={e => e.stopPropagation()}>
+                      <div style={{display:'flex',gap:3,flexWrap:'wrap',width:90,alignItems:'center'}}>
+                        <button className="btn btn-ghost btn-sm btn-icon" onClick={()=>setCardFor(p)} title="Generate Card" style={{width:26,height:26,padding:0,fontSize:13}}>📋</button>
+                        <ActionButtons onEdit={()=>openEdit(p)} onDuplicate={()=>openDup(p)} onDelete={()=>del(p)} />
+                        {p.profileLink&&(
+                          <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius:6,fontSize:13,textDecoration:'none'}}
+                            title="Profile">🧑‍💼</a>
+                        )}
+                        {p.videoLink&&(
+                          <a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius:6,fontSize:13,textDecoration:'none'}}
+                            title="Video">📹</a>
+                        )}
                       </div>
                     </td>
-                    <td style={{color:'var(--text-2)'}}>{calcAge(p.dob)??'—'}</td>
+                    {/* Name */}
                     <td>
-                      <span style={{fontWeight:500}}>{p.primaryPosition||'—'}</span>
-                      {p.secondaryPositions?.length>0 && <div style={{fontSize:11,color:'var(--text-3)'}}>{Array.isArray(p.secondaryPositions)?p.secondaryPositions.join(', '):p.secondaryPositions}</div>}
+                      <span style={{fontWeight:600}}>{p.playerName}</span>
+                      {p.height && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.height}cm</div>}
                     </td>
-                    <td style={{maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',color:'var(--text-2)'}}>
-                      {(p.nationalities||[]).join(', ')||'—'}
+                    {/* DOB + age */}
+                    <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}</td>
+                    {/* Nationalities + EU */}
+                    <td>
+                      <NatFlags nats={p.nationalities} />
+                      <div style={{marginTop:3}}>
+                        <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:10}}>
+                          {pIsEU?'EU':'Non-EU'}
+                        </span>
+                      </div>
                     </td>
-                    <td><EUBadge is={isEuropean(p.nationalities)} /></td>
+                    {/* Primary position */}
+                    <td style={{fontWeight:500,textAlign:'center'}}>{p.primaryPosition||'—'}</td>
+                    {/* Secondary positions */}
+                    <td style={{fontSize:11,color:'var(--text-3)',textAlign:'center'}}>{Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0?p.secondaryPositions.join(', '):'—'}</td>
+                    {/* Foot */}
+                    <td style={{fontWeight:500,fontSize:11,textAlign:'center'}}>{footShort}</td>
+                    {/* Club */}
                     <td>
                       <div style={{display:'flex',alignItems:'center',gap:5}}>
                         <span style={{fontWeight:500}}>{p.currentClub||'Free'}</span>
@@ -237,34 +278,26 @@ export default function Pipeline({ category }) {
                         {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:3,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
                       </div>
                     </td>
+                    {/* Status */}
+                    <td><StatusBadge status={p.status} colorMap={PIPELINE_STATUS_COLORS} /></td>
+                    {/* Agent */}
                     <td>
                       <div style={{fontSize:13}}>{p.agentName||'—'}</div>
                       {p.agentPhone && <PhoneDisplay phone={p.agentPhone} />}
                     </td>
+                    {/* Transfer fee */}
                     <td style={{color:'var(--text-2)',fontSize:12}}>
                       {p.transferFee && p.transferFee!=='Not specified' ? `€${Number(p.transferFee).toLocaleString()}` : (p.transferFee||'—')}
                     </td>
+                    {/* Salary */}
                     <td style={{color:'var(--text-2)',fontSize:12}}>
                       {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary||'—')}
                     </td>
+                    {/* National team */}
                     <td style={{fontSize:12,color:'var(--text-3)'}}>{p.natTeamStatus||'—'}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <div style={{display:'flex',gap:5,alignItems:'center'}}>
-                        <button
-                          className="btn btn-ghost btn-sm btn-icon"
-                          onClick={()=>setCardFor(p)}
-                          title="Generate Card"
-                          style={{width:28,height:28,padding:0}}
-                        >📋</button>
-                        <ActionButtons
-                          onEdit={() => openEdit(p)}
-                          onDuplicate={() => openDup(p)}
-                          onDelete={() => del(p)}
-                        />
-                      </div>
-                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
