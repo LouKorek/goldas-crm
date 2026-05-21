@@ -17,7 +17,7 @@ import { toast } from 'components/ui/UI';
 
 // localStorage-backed cache (persists across sessions)
 // Bump key when fetcher logic changes to invalidate old negative results
-const LOGO_CACHE_KEY = 'goldas_logo_cache_v5';
+const LOGO_CACHE_KEY = 'goldas_logo_cache_v6';
 let _logoCache = {};
 try { _logoCache = JSON.parse(localStorage.getItem(LOGO_CACHE_KEY) || '{}'); } catch {}
 const NEG = '__none__';
@@ -26,7 +26,7 @@ function saveCache() {
 }
 // Clear old cache versions on load
 try {
-  for (let i = 1; i < 5; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
+  for (let i = 1; i < 6; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
 } catch {}
 
 // Israeli football clubs - canonical names with common aliases.
@@ -401,9 +401,12 @@ async function _doFetchClubLogo(name, cacheKey) {
     ...(HEBREW_FOR_CANONICAL[canonical] || []),
     ...(/[֐-׿]/.test(name) ? [name.trim()] : []),
   ].filter(Boolean)));
+  // Try the "(כדורגל)" (football) disambiguated page FIRST — multi-sport clubs
+  // like Maccabi Tel Aviv/Haifa have an umbrella page (generic symbol) at the
+  // plain name, but the current football crest lives on the "(כדורגל)" page.
   const heVariants = Array.from(new Set([
-    ...baseHe,
     ...baseHe.map(h => `${h} (כדורגל)`),
+    ...baseHe,
   ]));
 
   const store = (url) => {

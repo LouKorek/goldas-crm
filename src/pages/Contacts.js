@@ -88,9 +88,9 @@ export default function Contacts() {
               <thead>
                 <tr>
                   <th style={{ width: 100, paddingRight: 20 }}></th>
-                  <th style={{ width: '40%', textAlign: 'center' }}>🔰</th>
-                  <th style={{ width: '40%', textAlign: 'center' }}>👤</th>
-                  <th style={{ width: 150, textAlign: 'center' }}>📞</th>
+                  <th style={{ width: '36%', textAlign: 'center' }}>🔰</th>
+                  <th style={{ width: '36%', textAlign: 'center' }}>👤</th>
+                  <th style={{ width: 210, textAlign: 'center' }}>📞</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,7 +99,7 @@ export default function Contacts() {
                     <td style={{ paddingRight: 20 }}>
                       <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />
                     </td>
-                    <td style={{ textAlign: 'left' }}>
+                    <td style={{ textAlign: 'left', paddingLeft: 24 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
                         <div style={{ textAlign: 'left' }}>
@@ -111,7 +111,7 @@ export default function Contacts() {
                         </div>
                       </div>
                     </td>
-                    <td style={{ textAlign: 'left' }}>
+                    <td style={{ textAlign: 'left', paddingLeft: 24 }}>
                       {(c.contactName || c.contactRole) ? (
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>{c.contactName || '—'}</div>
