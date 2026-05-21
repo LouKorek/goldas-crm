@@ -3,10 +3,10 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
-         COUNTRIES, calcAge, fmtDate, isEuropean } from 'lib/constants';
+         COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, useConfirm, StatusBadge,
-         PhoneDisplay, NumberInput } from 'components/ui/UI';
+         PhoneActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 
 // ── Nationality flags (matches the Represented screen) ────────────
@@ -286,10 +286,13 @@ export default function Pipeline({ category }) {
                     </td>
                     {/* Status */}
                     <td><StatusBadge status={p.status} colorMap={PIPELINE_STATUS_COLORS} /></td>
-                    {/* Agent */}
+                    {/* Agent — compact: name, small number, small action icons (matches the name column size) */}
                     <td>
-                      <div style={{fontSize:13}}>{p.agentName||'—'}</div>
-                      {p.agentPhone && <PhoneDisplay phone={p.agentPhone} />}
+                      <div style={{fontWeight:500,fontSize:13,whiteSpace:'nowrap'}}>{p.agentName||'—'}</div>
+                      {p.agentPhone && (<>
+                        <div style={{fontSize:11,color:'var(--text-3)',whiteSpace:'nowrap',marginTop:2}}>{formatPhone(p.agentPhone)}</div>
+                        <div style={{marginTop:3}}><PhoneActions phone={p.agentPhone} /></div>
+                      </>)}
                     </td>
                     {/* Transfer fee */}
                     <td style={{color:'var(--text-2)',fontSize:12}}>
