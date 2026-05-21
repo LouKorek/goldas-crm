@@ -858,14 +858,14 @@ export default function Requirements() {
                     {/* Contact — name + role + call/WhatsApp */}
                     <td>
                       {(p.contactName || p.contactPhone) ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+                          <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>{p.contactName || '—'}</div>
                             {p.contactRole && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{p.contactRole}</div>}
                           </div>
-                          {p.contactPhone && (
-                            <span onClick={e => e.stopPropagation()}><PhoneActions phone={p.contactPhone} /></span>
-                          )}
+                          <span onClick={e => e.stopPropagation()} style={{ flexShrink: 0 }}>
+                            {p.contactPhone && <PhoneActions phone={p.contactPhone} />}
+                          </span>
                         </div>
                       ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
                     </td>
@@ -965,7 +965,6 @@ export default function Requirements() {
               <select value={f('contactRole')} onChange={e => s('contactRole')(e.target.value)}>
                 <option value="">Select role...</option>
                 {CONTACT_ROLES.map(r => <option key={r}>{r}</option>)}
-                <option value="Other">Other</option>
               </select>
             </Field>
           </div>
