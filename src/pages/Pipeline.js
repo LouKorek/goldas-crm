@@ -16,7 +16,7 @@ const cc = (n) => CC[n] || (n||'').slice(0,3).toUpperCase();
 function NatFlags({ nats=[] }) {
   if (!nats.length) return <span style={{color:'var(--text-3)'}}>—</span>;
   return (
-    <div style={{display:'flex',gap:4,flexWrap:'wrap',maxWidth:72}}>
+    <div style={{display:'flex',gap:4,flexWrap:'wrap',width:76}}>
       {nats.filter(Boolean).map(n=>(
         <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius:4,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
       ))}
@@ -344,7 +344,7 @@ export default function Pipeline({ category }) {
               <input value={f('playerName')} onChange={e=>s('playerName')(e.target.value)} placeholder="Full name" />
             </Field>
             <Field label="Height (cm)">
-              <input type="number" min={130} max={225} value={f('height')} onChange={e=>{ const v=parseInt(e.target.value); if(!e.target.value){s('height')(''); return;} if(v>=130&&v<=225) s('height')(String(v)); }} placeholder="130–225 cm" />
+              <input type="number" min={130} max={225} value={f('height')} onChange={e=>s('height')(e.target.value.replace(/[^0-9]/g,'').slice(0,3))} placeholder="130–225 cm" />
             </Field>
           </div>
           <div className="form-grid-2">
