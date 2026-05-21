@@ -17,7 +17,7 @@ import { toast } from 'components/ui/UI';
 
 // localStorage-backed cache (persists across sessions)
 // Bump key when fetcher logic changes to invalidate old negative results
-const LOGO_CACHE_KEY = 'goldas_logo_cache_v6';
+const LOGO_CACHE_KEY = 'goldas_logo_cache_v7';
 let _logoCache = {};
 try { _logoCache = JSON.parse(localStorage.getItem(LOGO_CACHE_KEY) || '{}'); } catch {}
 const NEG = '__none__';
@@ -26,7 +26,7 @@ function saveCache() {
 }
 // Clear old cache versions on load
 try {
-  for (let i = 1; i < 6; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
+  for (let i = 1; i < 7; i++) localStorage.removeItem(`goldas_logo_cache_v${i}`);
 } catch {}
 
 // Israeli football clubs - canonical names with common aliases.
@@ -98,6 +98,7 @@ const CLUB_ALIASES = {
   'bnei yehuda':         'Bnei Yehuda Tel Aviv F.C.',
   'bnei yehuda tlv':     'Bnei Yehuda Tel Aviv F.C.',
   'בני יהודה':           'Bnei Yehuda Tel Aviv F.C.',
+  'בני יהודה תל אביב':    'Bnei Yehuda Tel Aviv F.C.',  // plain "בני יהודה" is a disambig page; logo is here
   // F.C. Ashdod
   'ashdod':              'F.C. Ashdod',
   'fc ashdod':           'F.C. Ashdod',
@@ -168,6 +169,41 @@ const CLUB_ALIASES = {
   'kiryat gat':          'Hapoel Kiryat Gat F.C.',
   'hapoel kiryat gat':   'Hapoel Kiryat Gat F.C.',
   'קריית גת':             'Hapoel Kiryat Gat F.C.',
+  // ── Clubs verified against he.wikipedia (exact infobox-logo page titles) ──
+  // Maccabi Be'er Sheva  → מכבי באר שבע (MaccabiBeerShevaCrest2018.png)
+  'maccabi beer sheva':  'Maccabi Be\'er Sheva F.C.',
+  "maccabi be'er sheva": 'Maccabi Be\'er Sheva F.C.',
+  'מכבי באר שבע':         'Maccabi Be\'er Sheva F.C.',
+  // Ironi / Maccabi Kiryat Ata Bialik → עירוני קרית אתא (Maccabi_Kiryat_Ata_logo.png)
+  'ironi kiryat ata':         'Ironi Kiryat Ata Bialik F.C.',
+  'ironi kiryat ata bialik':  'Ironi Kiryat Ata Bialik F.C.',
+  'maccabi kiryat ata':       'Ironi Kiryat Ata Bialik F.C.',
+  'עירוני קרית אתא':           'Ironi Kiryat Ata Bialik F.C.',
+  'מכבי קרית אתא':             'Ironi Kiryat Ata Bialik F.C.',
+  // Hapoel Herzliya → הפועל הרצליה (Hapoel_herzlya.gif)
+  'hapoel herzliya':     'Hapoel Herzliya F.C.',
+  'הפועל הרצליה':         'Hapoel Herzliya F.C.',
+  // Ironi Modi'in → עירוני מודיעין (IroniModiinFC.png)
+  'ironi modiin':        'Ironi Modi\'in F.C.',
+  "ironi modi'in":       'Ironi Modi\'in F.C.',
+  'עירוני מודיעין':        'Ironi Modi\'in F.C.',
+  // Ironi Nesher → עירוני נשר (Iron_Nesher_FC_New_Logo.png)
+  'ironi nesher':        'Ironi Nesher F.C.',
+  'עירוני נשר':           'Ironi Nesher F.C.',
+  // Hakoah Amidar Ramat Gan → הכוח רמת גן (Hakoach_Ramat_Gan.png)
+  'hakoach ramat gan':   'Hakoah Amidar Ramat Gan F.C.',
+  'hakoah ramat gan':    'Hakoah Amidar Ramat Gan F.C.',
+  'הכוח רמת גן':          'Hakoah Amidar Ramat Gan F.C.',
+  'הכוח עמידר רמת גן':     'Hakoah Amidar Ramat Gan F.C.',
+  // Kafr Qasim — exact HE title needs the period: מ.ס. כפר קאסם (FC_Kafr_Qasim_Logo.png)
+  'kfar qasim':          'Maccabi Sektzia Kafr Qasim F.C.',
+  'kafr qasim':          'Maccabi Sektzia Kafr Qasim F.C.',
+  'מ.ס. כפר קאסם':         'Maccabi Sektzia Kafr Qasim F.C.',
+  // Rishon Lezion (when stored without "Hapoel") → הפועל ראשון לציון (כדורגל) (Hap-rish.png)
+  'rishon lezion':       'Hapoel Rishon LeZion F.C.',
+  'rishon le zion':      'Hapoel Rishon LeZion F.C.',
+  // SC Ashdod exact HE title (period): מ.ס. אשדוד (Ashdod.png)
+  'מ.ס. אשדוד':           'F.C. Ashdod',
 };
 
 // Expand common abbreviations and Hebrew→English markers
@@ -257,12 +293,11 @@ async function trySportsDB(name) {
 // === Source 2: Wikidata - structured logo data ========================
 // Wikidata returns logos in P154 property — these are official, high-quality
 async function tryWikidata(name) {
-  try {
     // Step 1: search for entity
     const sr = await fetch(
       `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(name)}&language=en&format=json&origin=*&type=item&limit=5`
     );
-    if (!sr.ok) return null;
+    if (!sr.ok) throw new Error('wikidata http ' + sr.status);
     const sd = await sr.json();
     if (!sd?.search?.length) return null;
 
@@ -280,7 +315,7 @@ async function tryWikidata(name) {
     const er = await fetch(
       `https://www.wikidata.org/wiki/Special:EntityData/${pick.id}.json`
     );
-    if (!er.ok) return null;
+    if (!er.ok) throw new Error('wikidata entity http ' + er.status);
     const ed = await er.json();
     const claims = ed?.entities?.[pick.id]?.claims;
     const logoClaim = claims?.P154?.[0]?.mainsnak?.datavalue?.value;
@@ -288,52 +323,52 @@ async function tryWikidata(name) {
 
     // Step 4: convert "File:X.svg" to a usable Commons URL
     return `https://commons.wikimedia.org/w/index.php?title=Special:Redirect/file/${encodeURIComponent(logoClaim)}&width=200`;
-  } catch {}
-  return null;
 }
 
 // === Source 3: Wikipedia REST summary - returns thumbnail if present
 async function tryWikipediaSummary(slug, lang = 'en') {
-  try {
-    const r = await fetch(
-      `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
-      { headers: { Accept: 'application/json' } }
-    );
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (d?.type === 'disambiguation') return null;
-    const text = ((d.description || '') + ' ' + (d.extract || '')).toLowerCase();
-    const isClub = text.includes('football club') || text.includes('soccer club') ||
-                   text.includes('association football') || text.includes('f.c.') ||
-                   text.includes('sports club') || text.includes('כדורגל');
-    if (!isClub) return null;
-    return d?.originalimage?.source || d?.thumbnail?.source || null;
-  } catch {}
-  return null;
+  const r = await fetch(
+    `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug.replace(/ /g, '_'))}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (r.status === 404) return null;          // page genuinely missing
+  if (!r.ok) throw new Error('wiki summary http ' + r.status);
+  const d = await r.json();
+  if (d?.type === 'disambiguation') return null;
+  const text = ((d.description || '') + ' ' + (d.extract || '')).toLowerCase();
+  const isClub = text.includes('football club') || text.includes('soccer club') ||
+                 text.includes('association football') || text.includes('f.c.') ||
+                 text.includes('sports club') || text.includes('כדורגל');
+  if (!isClub) return null;
+  return d?.originalimage?.source || d?.thumbnail?.source || null;
 }
 
 // === Source 4: Wikipedia pageimages API - infobox image (more reliable for logos)
 async function tryWikipediaPageImage(title, lang = 'en') {
-  try {
-    const r = await fetch(
-      `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|pageprops|extracts&piprop=original|thumbnail&pithumbsize=300&exintro=1&explaintext=1&exchars=300&format=json&origin=*&redirects=1`,
-      { headers: { Accept: 'application/json' } }
-    );
-    if (!r.ok) return null;
-    const d = await r.json();
-    const pages = d?.query?.pages || {};
-    for (const pid of Object.keys(pages)) {
-      if (pid === '-1') continue;
-      const p = pages[pid];
-      if (p?.pageprops?.disambiguation !== undefined) continue;
-      const img = p?.original?.source || p?.thumbnail?.source;
-      if (!img) continue;
-      // Verify the page is actually a football club — NOT the city it's named after.
-      // (Cities like Hod HaSharon / Ness Ziona return a city photo as their pageimage.)
-      const text = ((p.title || '') + ' ' + (p.extract || '')).toLowerCase();
-      if (/football|soccer|association football|f\.c\.|sports club|כדורגל|מועדון ספורט/.test(text)) return img;
-    }
-  } catch {}
+  const r = await fetch(
+    `https://${lang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages|pageprops|extracts&piprop=original|thumbnail&pithumbsize=300&exintro=1&explaintext=1&exchars=600&format=json&origin=*&redirects=1`,
+    { headers: { Accept: 'application/json' } }
+  );
+  if (!r.ok) throw new Error('wiki pageimage http ' + r.status);
+  const d = await r.json();
+  const pages = d?.query?.pages || {};
+  for (const pid of Object.keys(pages)) {
+    if (pid === '-1') continue;
+    const p = pages[pid];
+    if (p?.pageprops?.disambiguation !== undefined) continue;
+    const img = p?.original?.source || p?.thumbnail?.source;
+    if (!img) continue;
+    // Accept when EITHER (a) the image itself looks like a crest/logo, OR
+    // (b) the page intro verifies it's a football club. This avoids rejecting
+    // valid crests when "football" appears later than the short intro extract,
+    // while still rejecting cities (whose pageimage is a .jpg photo and whose
+    // intro never mentions football).
+    const fname = decodeURIComponent(img).toLowerCase();
+    const looksLikeLogo = /logo|crest|badge|emblem|לוגו|סמל|\.svg(\?|$)/.test(fname);
+    const text = ((p.title || '') + ' ' + (p.extract || '')).toLowerCase();
+    const isFootball = /football|soccer|association football|f\.c\.|sports club|כדורגל|מועדון ספורט/.test(text);
+    if (looksLikeLogo || isFootball) return img;
+  }
   return null;
 }
 
@@ -355,7 +390,7 @@ const HEBREW_FOR_CANONICAL = (() => {
 let _active = 0;
 const _queue = [];
 function _runNext() {
-  if (_active >= 5 || !_queue.length) return;
+  if (_active >= 3 || !_queue.length) return;
   _active++;
   const { fn, resolve, reject } = _queue.shift();
   Promise.resolve().then(fn).then(resolve, reject).finally(() => { _active--; _runNext(); });
@@ -415,46 +450,63 @@ async function _doFetchClubLogo(name, cacheKey) {
     return url;
   };
 
-  // Layer 1: Wikidata (most accurate, official logo via P154)
-  for (const v of enVariants) {
-    const url = await tryWikidata(v);
-    if (url) return store(url);
-  }
+  // Run a lookup layer safely: a thrown error means a transient network/HTTP
+  // failure (e.g. rate-limit), NOT a definitive "no logo". We record that so
+  // we can avoid caching a false negative below.
+  let hadError = false;
+  const layer = async (fn) => {
+    try { return await fn(); }
+    catch { hadError = true; return null; }
+  };
 
-  // Layer 2: Wikipedia HE via pageimages — best for Israeli clubs
+  // Layer 1: Wikipedia HE pageimages — verified most accurate for Israeli
+  // clubs; tries the "(כדורגל)" disambiguated page first for the current crest.
   for (const v of heVariants) {
-    const url = await tryWikipediaPageImage(v, 'he');
+    const url = await layer(() => tryWikipediaPageImage(v, 'he'));
     if (url) return store(url);
   }
+
+  // Layer 2: Wikidata (official logo via P154)
+  for (const v of enVariants) {
+    const url = await layer(() => tryWikidata(v));
+    if (url) return store(url);
+  }
+
+  // Layer 3: Wikipedia HE summary
   for (const v of heVariants) {
-    const url = await tryWikipediaSummary(v, 'he');
+    const url = await layer(() => tryWikipediaSummary(v, 'he'));
     if (url) return store(url);
   }
 
-  // Layer 3: Wikipedia EN via pageimages — infobox image (more reliable than summary)
+  // Layer 4: Wikipedia EN via pageimages — infobox image
   for (const v of enVariants) {
-    const url = await tryWikipediaPageImage(v, 'en');
+    const url = await layer(() => tryWikipediaPageImage(v, 'en'));
     if (url) return store(url);
   }
   for (const v of enVariants) {
-    const url = await tryWikipediaPageImage(v + ' F.C.', 'en');
+    const url = await layer(() => tryWikipediaPageImage(v + ' F.C.', 'en'));
     if (url) return store(url);
   }
 
-  // Layer 4: TheSportsDB (fallback)
+  // Layer 5: TheSportsDB (fallback — swallows its own network errors)
   for (const v of enVariants) {
     const url = await trySportsDB(v);
     if (url) return store(url);
   }
 
-  // Layer 5: Wikipedia summary (last resort, only if it has a thumbnail)
+  // Layer 6: Wikipedia summary (last resort, only if it has a thumbnail)
   for (const v of enVariants) {
-    const url = await tryWikipediaSummary(v + ' F.C.', 'en');
+    const url = await layer(() => tryWikipediaSummary(v + ' F.C.', 'en'));
     if (url) return store(url);
-    const url2 = await tryWikipediaSummary(v, 'en');
+    const url2 = await layer(() => tryWikipediaSummary(v, 'en'));
     if (url2) return store(url2);
   }
 
+  // Nothing found. Only cache the negative when the lookup completed cleanly.
+  // If a transient error occurred, leave it uncached so it retries on the next
+  // render — this is what prevents a render-time request storm from poisoning
+  // the cache with permanent false "no logo" results.
+  if (hadError) return null;
   return store(null);
 }
 
