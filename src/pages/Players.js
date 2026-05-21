@@ -223,6 +223,20 @@ export default function Players() {
     setSaving(true);
     try {
       const data = {...form, league};
+      // A free agent has no club contract — clear stale club/contract fields so
+      // old data (e.g. an expiring contract date) can't linger and trigger alerts.
+      if (isFree) {
+        data.currentClub = '';
+        data.currentClubIsYouth = false;
+        data.loanFrom = '';
+        data.contractStart = '';
+        data.contractEnd = '';
+        data.loanParentEnd = '';
+        data.league = '';
+        data.leagueCountry = '';
+        data.leagueTier = '';
+        data.leagueManual = '';
+      }
       if (modal==='add') { await addDoc_(PATHS.PLAYERS,data); toast.success(`"${form.fullName}" added!`); }
       else { await updateDoc_(PATHS.PLAYERS,modal.edit.id,data); toast.success('Player updated.'); }
       setModal(null);

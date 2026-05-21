@@ -64,7 +64,7 @@ export function computeAlerts(players = [], matches = [], settings = DEFAULT_SET
   const birthday = [];
 
   players.forEach(p => {
-    if (p.contractEnd) {
+    if (p.contractEnd && p.contractStatus !== 'Free') {
       const d = daysUntil(p.contractEnd);
       if (within(d, s.contractDays))
         contract.push({ id: p.id, player: p, days: d, urgency: d <= 7 ? 'critical' : d <= 30 ? 'warning' : 'info' });
