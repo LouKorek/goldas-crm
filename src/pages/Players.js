@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, resolveFileUrl, PATHS } from 'lib/db';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORDER,
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
@@ -28,6 +28,26 @@ function NatFlags({ nats=[] }) {
 function DocViewer({ files, title, onClose }) {
   const [idx, setIdx] = useState(0);
   const file = files?.[idx];
+  const [url, setUrl] = useState(null);
+  const [loadingFile, setLoadingFile] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = null;
+    setUrl(null);
+    if (!file) return;
+    setLoadingFile(true);
+    resolveFileUrl(file)
+      .then(async (dataUrl) => {
+        if (!dataUrl) throw new Error('unavailable');
+        // Convert to a Blob URL — Chrome blocks navigating/embedding raw data: URLs.
+        const blob = await (await fetch(dataUrl)).blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) setUrl(objectUrl); else URL.revokeObjectURL(objectUrl);
+      })
+      .catch(() => { if (!cancelled) toast.error('Could not load this file.'); })
+      .finally(() => { if (!cancelled) setLoadingFile(false); });
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [file]);
   return (
     <Modal title={title} onClose={onClose} wide viewOnly>
       {!files?.length ? (
@@ -47,12 +67,14 @@ function DocViewer({ files, title, onClose }) {
             <div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                 <div style={{fontSize:12,color:'var(--text-3)'}}>{file.name} · {new Date(file.uploadedAt).toLocaleDateString('en-GB')} · {file.uploadedBy}</div>
-                <a href={file.url} download={file.name} className="btn btn-primary btn-sm">⬇ Download</a>
+                {url && <a href={url} download={file.name} className="btn btn-primary btn-sm">⬇ Download</a>}
               </div>
-              {file.type?.startsWith('image/') ? (
-                <img src={file.url} alt={file.name} style={{width:'100%',borderRadius:8,border:'1px solid var(--border)'}} />
+              {loadingFile || !url ? (
+                <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>{loadingFile ? 'Loading file…' : 'File unavailable.'}</div>
+              ) : file.type?.startsWith('image/') ? (
+                <img src={url} alt={file.name} style={{width:'100%',borderRadius:8,border:'1px solid var(--border)'}} />
               ) : (
-                <iframe src={file.url} style={{width:'100%',height:480,borderRadius:8,border:'1px solid var(--border)'}} title={file.name} />
+                <iframe src={url} style={{width:'100%',height:480,borderRadius:8,border:'1px solid var(--border)'}} title={file.name} />
               )}
             </div>
           )}

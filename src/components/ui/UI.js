@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { COUNTRIES, formatPhone } from 'lib/constants';
+import { resolveFileUrl } from 'lib/db';
 
 // ── Toast ─────────────────────────────────────────────────────────
 let _addToast = null;
@@ -451,6 +452,17 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
     catch (e) { console.error(e); }
     setUploading(false);
   };
+  const openHistoryFile = async (h) => {
+    let w = null;
+    try {
+      w = window.open('', '_blank');               // open synchronously to avoid popup block
+      const dataUrl = await resolveFileUrl(h);
+      if (!dataUrl) { if (w) w.close(); toast.error('File unavailable.'); return; }
+      const blob = await (await fetch(dataUrl)).blob();   // Chrome blocks raw data: URL navigation
+      const burl = URL.createObjectURL(blob);
+      if (w) w.location = burl; else window.open(burl, '_blank');
+    } catch { if (w) w.close(); toast.error('Could not open file.'); }
+  };
   return (
     <div>
       {history.length > 0 && (
@@ -465,7 +477,10 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
             }}>
               {history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
-                  <a href={h.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>📄 {h.name}</a>
+                  <button type="button" onClick={() => openHistoryFile(h)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--gold)', font: 'inherit' }}>
+                    📄 {h.name}
+                  </button>
                   <span style={{ color: 'var(--text-3)' }}>{new Date(h.uploadedAt).toLocaleDateString('en-GB')}</span>
                 </div>
               ))}
