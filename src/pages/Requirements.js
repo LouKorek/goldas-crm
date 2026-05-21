@@ -720,11 +720,17 @@ export default function Requirements() {
     if (!form.clubName.trim()) return 'Club name is required.';
     if (!form.gender)          return 'Gender is required.';
     const existing = items.filter(p => modal?.edit?.id !== p.id);
-    if (existing.some(p =>
-      p.clubName.trim().toLowerCase() === form.clubName.trim().toLowerCase() &&
-      p.gender === form.gender && p.requiredPosition === form.requiredPosition &&
-      p.leagueCountry === form.leagueCountry
-    )) return 'An identical requirement already exists. Please change at least one detail.';
+    // Only block when EVERY detail is identical to an existing requirement.
+    // Similar requirements (same club/position but any other difference) are allowed.
+    const norm = v => {
+      if (v === undefined || v === null) return '';
+      if (typeof v === 'boolean') return v ? 'true' : 'false';
+      return String(v).trim().toLowerCase();
+    };
+    const FIELDS = Object.keys(EMPTY);
+    const allIdentical = p => FIELDS.every(k => norm(p[k]) === norm(form[k]));
+    if (existing.some(allIdentical))
+      return 'An identical requirement already exists (every detail matches). Change at least one detail.';
     return null;
   };
 
