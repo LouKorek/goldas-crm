@@ -310,7 +310,10 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   max-height: calc(100vh - 210px);
   border-radius: var(--radius-lg);
   -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity;
+  /* Keep the table scroll self-contained: don't chain into the page scroll
+     behind it (that chaining is what made it feel like a free-floating pane).
+     Headers stay pinned via the sticky <th> below. */
+  overscroll-behavior: contain;
   position: relative;
 }
 .data-table { border-collapse: collapse; width: 100%; min-width: 700px; }
