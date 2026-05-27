@@ -664,14 +664,15 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* Mobile: no inner vertical scroll box (that "frame" let the table drift
-     around inside it). The card hugs the table, the PAGE scrolls vertically,
-     and the table only slides sideways for the off-screen columns. */
+  /* Mobile: the table is its own scroll pane — the top header row stays frozen
+     (sticky <th>) and all scrolling (up/down + sideways) happens inside it.
+     overscroll-behavior:none locks out the iOS rubber-band bounce that used to
+     make it feel like a table drifting inside a frame. */
   .table-wrap {
     border-radius: 10px;
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
+    max-height: calc(100dvh - 230px);
+    overflow: auto;
+    overscroll-behavior: none;
   }
   .data-table { min-width: 600px; }
 
