@@ -18,9 +18,16 @@ export const auth    = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
+// The permanent owner/admin. Always allowed, always admin, and can never be
+// removed or demoted from the Team screen.
+export const OWNER_EMAIL = 'lou.korek@gmail.com';
+
+// Legacy seed data — used ONLY to populate the Firestore `app_users` collection
+// the first time the owner signs in. After that, the Team screen (Firestore) is
+// the single source of truth for who can log in and with what role.
 export const USERS = {
-  'lou.korek@gmail.com':       { name: 'Lou Korek',    role: 'Agent' },
-  'yuval.benor2003@gmail.com': { name: 'Yuval Ben Or', role: 'Scout' },
+  'lou.korek@gmail.com':       { name: 'Lou Korek',    role: 'admin'   },
+  'yuval.benor2003@gmail.com': { name: 'Yuval Ben Or', role: 'manager' },
 };
 
 export const ALLOWED_EMAILS = Object.keys(USERS);

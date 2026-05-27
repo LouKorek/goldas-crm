@@ -5,6 +5,7 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, ActionButtons } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
+import { useRole } from 'lib/roleContext';
 
 // ── Google Maps loader (loads once) ──────────────────────────────
 let _mapsPromise = null;
@@ -237,6 +238,7 @@ export default function Matches() {
   const [isDirty, setIsDirty] = useState(false);
   const [search, setSearch]   = useState('');
   const { confirm, dialog }   = useConfirm();
+  const { canEdit }           = useRole();
 
   const [allPlayers, setAllPlayers] = useState([]);
   useEffect(() => { return listenCollection(PATHS.PLAYERS, setAllPlayers); }, []);
@@ -328,7 +330,7 @@ export default function Matches() {
 
             {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 5 }}>{m.notes}</div>}
           </div>
-          <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />
+          {canEdit && <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />}
         </div>
       </div>
     );
@@ -351,16 +353,16 @@ export default function Matches() {
         subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
+            {canEdit && <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
               style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
               onMouseEnter={e => e.currentTarget.style.opacity = '1'}
               onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
               🗑 Clear All
-            </button>
+            </button>}
           </div>
         }
       />
@@ -369,7 +371,7 @@ export default function Matches() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
         <Empty icon="🏟" message="No matches scheduled."
-          action={!search && <button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
+          action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
       ) : (
         <>
           {upcoming.length > 0 && (

@@ -4,6 +4,7 @@ import { fmtDate } from 'lib/constants';
 import { DEFAULT_SETTINGS, loadSettings, persistSettings, computeAlerts } from 'lib/alerts';
 import { PageHeader, Modal } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
+import { useRole } from 'lib/roleContext';
 
 const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
 
@@ -82,6 +83,7 @@ export default function Notifications() {
   const [matches, setMatches] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
+  const { canEdit } = useRole();
 
   useEffect(() => {
     const u1 = listenCollection(PATHS.PLAYERS, setPlayers);
@@ -148,9 +150,11 @@ export default function Notifications() {
         title="Notifications"
         subtitle={`${total} active alert${total!==1?'s':''}`}
         action={
-          <button className="btn btn-ghost" onClick={()=>setShowSettings(true)}>
-            ⚙️ Alert Settings
-          </button>
+          canEdit ? (
+            <button className="btn btn-ghost" onClick={()=>setShowSettings(true)}>
+              ⚙️ Alert Settings
+            </button>
+          ) : null
         }
       />
 
@@ -158,9 +162,11 @@ export default function Notifications() {
         <div style={{textAlign:'center',padding:'64px 20px',color:'var(--text-3)'}}>
           <div style={{fontSize:48,marginBottom:16}}>✅</div>
           <p style={{fontSize:16}}>All clear — no active alerts!</p>
-          <button className="btn btn-ghost" style={{marginTop:16}} onClick={()=>setShowSettings(true)}>
-            Configure alert timing →
-          </button>
+          {canEdit && (
+            <button className="btn btn-ghost" style={{marginTop:16}} onClick={()=>setShowSettings(true)}>
+              Configure alert timing →
+            </button>
+          )}
         </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:28}}>

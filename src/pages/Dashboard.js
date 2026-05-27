@@ -6,7 +6,7 @@ import { calcAge, fmtDate } from 'lib/constants';
 import { loadSettings, computeAlerts } from 'lib/alerts';
 import { PageHeader } from 'components/ui/UI';
 import { Link } from 'react-router-dom';
-import { auth, USERS } from 'lib/firebase';
+import { useRole } from 'lib/roleContext';
 
 function KPI({ label, value, color, bg, to }) {
   const inner = (
@@ -97,8 +97,7 @@ export default function Dashboard() {
     return () => { u1(); u2(); u3(); unsubs.forEach(u=>u()); };
   }, []);
 
-  const user   = auth.currentUser;
-  const info   = USERS[user?.email] || {};
+  const { name } = useRole();
   const now    = new Date();
 
   // Alerts — shared engine, identical to the Notifications page and email script.
@@ -117,7 +116,7 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`Good day, ${info.name?.split(' ')[0] || 'Agent'}`}
+        title={`Good day, ${name?.split(' ')[0] || 'Agent'}`}
         subtitle="Gold A&S Football Agency — Management Dashboard"
       />
 

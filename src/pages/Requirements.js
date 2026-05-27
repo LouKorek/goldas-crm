@@ -6,6 +6,7 @@ import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
          Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
+import { useRole } from 'lib/roleContext';
 
 // ====================================================================
 // Club logo fetcher - layered strategy with Hebrew/abbreviation support
@@ -697,6 +698,7 @@ export default function Requirements() {
   const [filters, setFilters] = useState({});
   const [sort, setSort]       = useState({ field: 'clubName', dir: 'asc' });
   const { confirm, dialog }   = useConfirm();
+  const { canEdit }           = useRole();
 
   useEffect(() => {
     return listenCollection(PATHS.CLUB_REQUIREMENTS, data => {
@@ -780,16 +782,16 @@ export default function Requirements() {
         subtitle={`${items.length} active requirement${items.length !== 1 ? 's' : ''}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Requirement</button>
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Requirement</button>}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            <button className="btn btn-danger btn-sm" onClick={clearAll_clubrequirements}
+            {canEdit && <button className="btn btn-danger btn-sm" onClick={clearAll_clubrequirements}
               style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
               onMouseEnter={e => e.currentTarget.style.opacity = '1'}
               onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
               🗑 Clear All
-            </button>
+            </button>}
           </div>
         }
       >
@@ -806,7 +808,7 @@ export default function Requirements() {
       ) : data.length === 0 ? (
         <Empty icon="📋"
           message={search || Object.values(filters).some(Boolean) ? 'No club requirements match your search.' : 'No club requirements added yet.'}
-          action={!search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
+          action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-wrap">
@@ -830,11 +832,13 @@ export default function Requirements() {
 
                     {/* Actions — first column, stop propagation only here */}
                     <td onClick={e => e.stopPropagation()} style={{padding:'8px 4px 8px 8px'}}>
-                      <RowActions
-                        onDelete={() => del(p)}
-                        onEdit={() => openEdit(p)}
-                        onDuplicate={() => openDup(p)}
-                      />
+                      {canEdit && (
+                        <RowActions
+                          onDelete={() => del(p)}
+                          onEdit={() => openEdit(p)}
+                          onDuplicate={() => openDup(p)}
+                        />
+                      )}
                     </td>
 
                     {/* Gender */}

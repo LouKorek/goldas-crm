@@ -8,6 +8,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
 import { toast } from 'components/ui/UI';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
+import { useRole } from 'lib/roleContext';
 
 // ── Country code map ──────────────────────────────────────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -190,6 +191,7 @@ export default function Players() {
   const [filters, setFilters]       = useState({});
   const [sort, setSort]             = useState({field:'fullName',dir:'asc'});
   const { confirm, dialog }         = useConfirm();
+  const { canEdit }                 = useRole();
 
   useEffect(() => {
     return listenCollection(PATHS.PLAYERS, (data) => { setPlayers(data); setLoading(false); });
@@ -295,16 +297,16 @@ export default function Players() {
         subtitle={`${players.length} player${players.length!==1?'s':''} under representation`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Player</button>
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Player</button>}
             <div style={{height:36,display:'flex',alignItems:'center'}}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            <button className="btn btn-danger btn-sm" onClick={clearAllPlayers}
+            {canEdit && <button className="btn btn-danger btn-sm" onClick={clearAllPlayers}
               style={{height:36,opacity:0.45,whiteSpace:'nowrap'}}
               onMouseEnter={e=>e.currentTarget.style.opacity='1'}
               onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
               🗑 Clear All
-            </button>
+            </button>}
           </div>
         }
       >
@@ -322,7 +324,7 @@ export default function Players() {
       ) : data.length===0 ? (
         <Empty icon="🤝"
           message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
-          action={!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
       ) : (
         <div className="card" style={{padding:0,overflow:'hidden'}}>
           <div className="table-wrap">
@@ -365,10 +367,10 @@ export default function Players() {
                       {/* Actions cell - click stops propagation */}
                       <td onClick={e=>e.stopPropagation()}>
                         <div style={{display:'flex',gap:3,flexWrap:'wrap',width:66}}>
-                          <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)',transition:'all 0.15s'}}
-                            title="Delete" onClick={(e)=>del(p,e)}>🗑</button>
-                          <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
-                            title="Edit" onClick={(e)=>{e.stopPropagation();openEdit(p);}}>✏️</button>
+                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)',transition:'all 0.15s'}}
+                            title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
+                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
+                            title="Edit" onClick={(e)=>{e.stopPropagation();openEdit(p);}}>✏️</button>)}
                           {p.profileLink&&(
                             <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
                               target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}

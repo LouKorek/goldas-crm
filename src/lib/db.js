@@ -3,12 +3,29 @@ import {
   onSnapshot, query, serverTimestamp
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { USERS } from './firebase';
+import { USERS, OWNER_EMAIL } from './firebase';
+
+// ── Session access (set by App.js after login) ───────────────────
+// Single in-memory record of who is signed in and their role, so the write
+// helpers below can enforce view-only access and stamp edits with a name.
+let SESSION = { email: null, name: null, role: 'viewer' };
+export const setSessionAccess = (a) => { SESSION = { ...SESSION, ...a }; };
+export const clearSessionAccess = () => { SESSION = { email: null, name: null, role: 'viewer' }; };
+export const canEditNow = () => SESSION.role === 'admin' || SESSION.role === 'manager';
 
 export const currentUserMeta = () => {
-  const email = auth.currentUser?.email || 'unknown';
-  const user  = USERS[email] || { name: email, role: 'User' };
-  return { email, name: user.name, role: user.role };
+  const email = auth.currentUser?.email || SESSION.email || 'unknown';
+  const name  = SESSION.name || USERS[email]?.name || email;
+  const role  = SESSION.role || USERS[email]?.role || 'viewer';
+  return { email, name, role };
+};
+
+// Centralised in-app write guard. Throws for viewers so a read-only user can
+// never create, edit, or delete records through the app's own code paths.
+const assertCanEdit = () => {
+  if (!canEditNow()) {
+    throw new Error('View-only access: you do not have permission to make changes.');
+  }
 };
 
 export const listenCollection = (path, callback) => {
@@ -20,6 +37,7 @@ export const listenCollection = (path, callback) => {
 };
 
 export const addDoc_ = async (path, data) => {
+  assertCanEdit();
   const { email, name } = currentUserMeta();
   const { id: _id, ...cleanData } = data; // strip any stray id field
   return addDoc(collection(db, path), {
@@ -34,6 +52,7 @@ export const addDoc_ = async (path, data) => {
 };
 
 export const updateDoc_ = async (path, id, data) => {
+  assertCanEdit();
   const { email, name } = currentUserMeta();
   return updateDoc(doc(db, path, id), {
     ...data,
@@ -44,7 +63,7 @@ export const updateDoc_ = async (path, id, data) => {
   });
 };
 
-export const deleteDoc_ = (path, id) => deleteDoc(doc(db, path, id));
+export const deleteDoc_ = (path, id) => { assertCanEdit(); return deleteDoc(doc(db, path, id)); };
 
 // ── File storage (free, Firestore-only) ───────────────────────────
 // Files are stored as base64 in their OWN documents, split into chunks, so we
@@ -56,6 +75,10 @@ const FILE_MAX   = 15 * 1024 * 1024;    // 15 MB max original file size
 
 export const uploadFile = (file, path, customName) => {
   return new Promise((resolve, reject) => {
+    if (!canEditNow()) {
+      reject(new Error('View-only access: you do not have permission to upload files.'));
+      return;
+    }
     if (file.size > FILE_MAX) {
       reject(new Error('File too large. Please use files under 15 MB.'));
       return;
@@ -134,4 +157,86 @@ export const PATHS = {
   CLUB_REQUIREMENTS: 'club_requirements',
   MATCHES:           'matches',
   CONTACTS:          'contacts',
+  APP_USERS:         'app_users',
+};
+
+// ── User management (app_users collection) ────────────────────────
+// Each doc is keyed by the user's email and holds { email, name, role,
+// active }. The owner is always an admin and is ensured/seeded on login.
+const USERS_COL = PATHS.APP_USERS;
+const normEmail = (e) => String(e || '').trim().toLowerCase();
+
+// Resolve a signed-in email to their access record. The owner is always an
+// active admin; everyone else must have an active app_users doc.
+export const fetchUserAccess = async (email) => {
+  const e = normEmail(email);
+  if (e === normEmail(OWNER_EMAIL)) {
+    return { allowed: true, role: 'admin', name: USERS[OWNER_EMAIL]?.name || 'Owner', email: e };
+  }
+  try {
+    const snap = await getDoc(doc(db, USERS_COL, e));
+    if (snap.exists()) {
+      const d = snap.data();
+      if (d.active === false) return { allowed: false };
+      return { allowed: true, role: d.role || 'viewer', name: d.name || e, email: e };
+    }
+  } catch (err) {
+    console.error('fetchUserAccess error:', err);
+  }
+  return { allowed: false };
+};
+
+// Seed the collection the first time the owner signs in: ensure the owner's
+// admin doc and the legacy users exist. Safe to call repeatedly — it only
+// creates docs that are missing and never overwrites an existing one.
+export const ensureSeedUsers = async () => {
+  for (const [email, info] of Object.entries(USERS)) {
+    const e = normEmail(email);
+    try {
+      const ref = doc(db, USERS_COL, e);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, {
+          email: e, name: info.name, role: info.role, active: true,
+          addedBy: normEmail(OWNER_EMAIL), addedAt: serverTimestamp(),
+        });
+      }
+    } catch (err) { console.error('ensureSeedUsers error:', err); }
+  }
+};
+
+export const listenAppUsers = (callback) =>
+  onSnapshot(query(collection(db, USERS_COL)),
+    snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    err  => { console.error('app_users listen error:', err); callback([]); });
+
+// Admin-only writes. Guarded so only an admin session can manage users.
+const assertAdmin = () => {
+  if (SESSION.role !== 'admin') throw new Error('Only an admin can manage users.');
+};
+
+export const addAppUser = async ({ email, name, role }) => {
+  assertAdmin();
+  const e = normEmail(email);
+  if (!e) throw new Error('Email is required.');
+  if (e === normEmail(OWNER_EMAIL)) throw new Error('The owner already has full access.');
+  const r = role === 'manager' ? 'manager' : 'viewer';
+  await setDoc(doc(db, USERS_COL, e), {
+    email: e, name: (name || '').trim() || e, role: r, active: true,
+    addedBy: SESSION.email, addedAt: serverTimestamp(),
+  }, { merge: true });
+};
+
+export const updateAppUser = async (email, data) => {
+  assertAdmin();
+  const e = normEmail(email);
+  if (e === normEmail(OWNER_EMAIL)) throw new Error('The owner cannot be modified.');
+  await updateDoc(doc(db, USERS_COL, e), { ...data, updatedAt: serverTimestamp() });
+};
+
+export const removeAppUser = async (email) => {
+  assertAdmin();
+  const e = normEmail(email);
+  if (e === normEmail(OWNER_EMAIL)) throw new Error('The owner cannot be removed.');
+  await deleteDoc(doc(db, USERS_COL, e));
 };

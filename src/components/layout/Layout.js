@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { auth, USERS } from 'lib/firebase';
+import { auth } from 'lib/firebase';
+import { useRole, roleLabel } from 'lib/roleContext';
 
 const NAV = [
   { section: 'Overview' },
@@ -18,6 +19,7 @@ const NAV = [
   { label: 'Jewish',            path: '/pipeline/jewish', emoji: '✡️', color: '#A78BFA' },
   { section: 'System' },
   { label: 'Notifications',     path: '/notifications',   emoji: '🔔' },
+  { label: 'Team',              path: '/team',            emoji: '👥', adminOnly: true },
 ];
 
 // Bottom nav for mobile - 5 most important destinations
@@ -34,7 +36,8 @@ export default function Layout({ user }) {
   const [open, setOpen]       = useState(false);
   const [theme, setTheme]     = useState(() => localStorage.getItem('theme') || 'dark');
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
-  const info = USERS[user?.email] || { name: user?.email, role: 'User' };
+  const { name, role, isAdmin } = useRole();
+  const info = { name: name || user?.email, role: roleLabel(role) };
 
   useEffect(() => {
     document.body.classList.toggle('light-mode', theme === 'light');
@@ -96,6 +99,7 @@ export default function Layout({ user }) {
       {/* Nav */}
       <nav style={{ flex: 1, padding: '6px 6px', overflowY: 'auto', overflowX: 'hidden' }}>
         {NAV.map((item, i) => {
+          if (item.adminOnly && !isAdmin) return null;
           if (item.section) {
             if (collapsed && !isMobile) return <div key={i} style={{ height: 6 }} />;
             return (

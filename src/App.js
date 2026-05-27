@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth, ALLOWED_EMAILS } from 'lib/firebase';
+import { auth } from 'lib/firebase';
+import { fetchUserAccess, ensureSeedUsers, setSessionAccess, clearSessionAccess } from 'lib/db';
+import { RoleContext } from 'lib/roleContext';
 import './index.css';
 
 import Layout        from 'components/layout/Layout';
@@ -13,6 +15,7 @@ import Requirements  from 'pages/Requirements';
 import Matches       from 'pages/Matches';
 import Contacts      from 'pages/Contacts';
 import Notifications from 'pages/Notifications';
+import Team          from 'pages/Team';
 import { ToastProvider } from 'components/ui/UI';
 
 // Animated splash screen shown on app open
@@ -119,21 +122,26 @@ function Splash({ fading }) {
 
 export default function App() {
   const [user, setUser]     = useState(undefined);
+  const [access, setAccess] = useState(null);
   const [denied, setDenied] = useState(false);
   const [splash, setSplash] = useState({ show: true, fading: false });
   const [mountedAt] = useState(() => performance.now());
 
   useEffect(() => {
-    return onAuthStateChanged(auth, u => {
-      if (!u) { setUser(null); return; }
-      if (ALLOWED_EMAILS.includes(u.email)) {
-        setUser(u);
-        setDenied(false);
-      } else {
-        signOut(auth);
-        setUser(null);
-        setDenied(true);
+    return onAuthStateChanged(auth, async (u) => {
+      if (!u) { clearSessionAccess(); setAccess(null); setUser(null); return; }
+      const acc = await fetchUserAccess(u.email);
+      if (!acc.allowed) {
+        await signOut(auth);
+        clearSessionAccess(); setAccess(null); setUser(null); setDenied(true);
+        return;
       }
+      // Owner: make sure the user collection is seeded so the Team screen works.
+      if (acc.role === 'admin') { try { await ensureSeedUsers(); } catch (e) {} }
+      setSessionAccess({ email: acc.email, name: acc.name, role: acc.role });
+      setAccess(acc);
+      setUser(u);
+      setDenied(false);
     });
   }, []);
 
@@ -152,25 +160,34 @@ export default function App() {
     <>
       {splash.show && <Splash fading={splash.fading} />}
       {user === null && <Login denied={denied} />}
-      {user && (
-        <BrowserRouter>
-          <ToastProvider />
-          <Routes>
-            <Route path="/" element={<Layout user={user} />}>
-              <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard"      element={<Dashboard />} />
-              <Route path="players"        element={<Players />} />
-              <Route path="matches"        element={<Matches />} />
-              <Route path="requirements"   element={<Requirements />} />
-              <Route path="contacts"       element={<Contacts />} />
-              <Route path="pipeline/men"   element={<Pipeline category="men" />} />
-              <Route path="pipeline/women" element={<Pipeline category="women" />} />
-              <Route path="pipeline/youth" element={<Pipeline category="youth" />} />
-              <Route path="pipeline/jewish"element={<Pipeline category="jewish" />} />
-              <Route path="notifications"  element={<Notifications />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+      {user && access && (
+        <RoleContext.Provider value={{
+          email: access.email, name: access.name, role: access.role,
+          canEdit: access.role === 'admin' || access.role === 'manager',
+          isAdmin: access.role === 'admin',
+        }}>
+          <BrowserRouter>
+            <ToastProvider />
+            <Routes>
+              <Route path="/" element={<Layout user={user} />}>
+                <Route index element={<Navigate to="/dashboard" replace />} />
+                <Route path="dashboard"      element={<Dashboard />} />
+                <Route path="players"        element={<Players />} />
+                <Route path="matches"        element={<Matches />} />
+                <Route path="requirements"   element={<Requirements />} />
+                <Route path="contacts"       element={<Contacts />} />
+                <Route path="pipeline/men"   element={<Pipeline category="men" />} />
+                <Route path="pipeline/women" element={<Pipeline category="women" />} />
+                <Route path="pipeline/youth" element={<Pipeline category="youth" />} />
+                <Route path="pipeline/jewish"element={<Pipeline category="jewish" />} />
+                <Route path="notifications"  element={<Notifications />} />
+                <Route path="team" element={
+                  access.role === 'admin' ? <Team /> : <Navigate to="/dashboard" replace />
+                } />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </RoleContext.Provider>
       )}
     </>
   );

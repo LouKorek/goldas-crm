@@ -8,6 +8,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, useConfirm,
          PhoneActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
+import { useRole } from 'lib/roleContext';
 
 // ── Nationality flags (matches the Represented screen) ────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -99,6 +100,7 @@ export default function Pipeline({ category }) {
   const [filters, setFilters] = useState({});
   const [sort, setSort]     = useState({ field:'primaryPosition', dir:'asc' });
   const { confirm, dialog } = useConfirm();
+  const { canEdit } = useRole();
 
   useEffect(() => {
     setLoading(true);
@@ -175,16 +177,16 @@ export default function Pipeline({ category }) {
         subtitle={`${items.length} player${items.length!==1?'s':''} in this category`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}>+ Add Player</button>
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}>+ Add Player</button>}
             <div style={{height:36,display:'flex',alignItems:'center'}}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            <button className="btn btn-danger btn-sm" onClick={()=>clearAllCategory(path)}
+            {canEdit && <button className="btn btn-danger btn-sm" onClick={()=>clearAllCategory(path)}
               style={{height:36,opacity:0.45,whiteSpace:'nowrap'}} title="Clear all"
               onMouseEnter={e=>e.currentTarget.style.opacity='1'}
               onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
               🗑 Clear All
-            </button>
+            </button>}
           </div>
         }
       >
@@ -200,7 +202,7 @@ export default function Pipeline({ category }) {
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length === 0 ? (
         <Empty icon={CAT_EMOJI[category]} message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
-          action={!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}>+ Add Player</button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}>+ Add Player</button>} />
       ) : (
         <div className="card" style={{padding:0,overflow:'hidden'}}>
           <div className="table-wrap">
@@ -237,10 +239,10 @@ export default function Pipeline({ category }) {
                     {/* Actions — icons arranged 2-over-2; row click opens the player card */}
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{display:'flex',gap:3,flexWrap:'wrap',width:55}}>
-                        <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
-                          title="Delete" onClick={()=>del(p)}>🗑</button>
-                        <button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}}
-                          title="Edit" onClick={()=>openEdit(p)}>✏️</button>
+                        {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
+                          title="Delete" onClick={()=>del(p)}>🗑</button>)}
+                        {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}}
+                          title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
                         {p.profileLink&&(
                           <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
                             target="_blank" rel="noopener noreferrer"

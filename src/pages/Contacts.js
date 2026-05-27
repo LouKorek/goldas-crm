@@ -4,6 +4,7 @@ import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
          PhoneActions, RowActions, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
+import { useRole } from 'lib/roleContext';
 
 const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
 
@@ -13,6 +14,7 @@ export default function Contacts() {
   const [modal, setModal]   = useState(null);   // 'add' | { edit }
   const [form, setForm]     = useState(EMPTY);
   const { confirm, dialog } = useConfirm();
+  const { canEdit } = useRole();
 
   useEffect(() => listenCollection(PATHS.CONTACTS, setItems, 'clubName'), []);
 
@@ -68,7 +70,7 @@ export default function Contacts() {
       <PageHeader
         title="Contacts"
         subtitle={`${items.length} contact${items.length !== 1 ? 's' : ''}`}
-        action={<button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button>}
+        action={canEdit ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
       />
 
       <div style={{ marginBottom: 14, maxWidth: 360 }}>
@@ -79,7 +81,7 @@ export default function Contacts() {
         <Empty
           icon="📇"
           message={items.length === 0 ? 'No contacts yet — add your first one.' : 'No matching contacts.'}
-          action={items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
+          action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
         />
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -97,7 +99,7 @@ export default function Contacts() {
                 {filtered.map(c => (
                   <tr key={c.id}>
                     <td style={{ paddingRight: 20 }}>
-                      <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />
+                      {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
                     </td>
                     <td style={{ textAlign: 'left', paddingLeft: 24 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
