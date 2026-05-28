@@ -215,7 +215,7 @@ const assertAdmin = () => {
   if (SESSION.role !== 'admin') throw new Error('Only an admin can manage users.');
 };
 
-export const addAppUser = async ({ email, name, role }) => {
+export const addAppUser = async ({ email, name, role, emailAlerts }) => {
   assertAdmin();
   const e = normEmail(email);
   if (!e) throw new Error('Email is required.');
@@ -223,8 +223,21 @@ export const addAppUser = async ({ email, name, role }) => {
   const r = role === 'manager' ? 'manager' : 'viewer';
   await setDoc(doc(db, USERS_COL, e), {
     email: e, name: (name || '').trim() || e, role: r, active: true,
+    emailAlerts: emailAlerts !== false,   // default true
     addedBy: SESSION.email, addedAt: serverTimestamp(),
   }, { merge: true });
+};
+
+// Toggle the "receive email alerts" flag for any user — including the owner —
+// without going through the general updateAppUser (which forbids editing the
+// owner's role/name).
+export const setUserEmailAlerts = async (email, enabled) => {
+  assertAdmin();
+  const e = normEmail(email);
+  if (!e) throw new Error('Email is required.');
+  await updateDoc(doc(db, USERS_COL, e), {
+    emailAlerts: !!enabled, updatedAt: serverTimestamp(),
+  });
 };
 
 export const updateAppUser = async (email, data) => {

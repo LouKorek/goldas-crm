@@ -21,8 +21,8 @@
 // ====================== CONFIG ======================
 var PROJECT_ID = 'gold-as-crm';
 
-// Where to send the email (comma-separate for multiple)
-var EMAIL_TO = 'lou.korek@gmail.com';
+// Permanent owner — always receives if no other recipients are configured.
+var OWNER_EMAIL = 'lou.korek@gmail.com';
 
 // WhatsApp via Green API (free tier) - leave GREENAPI_ID empty to disable.
 var WHATSAPP_PHONE  = '';      // your number, e.g. '972501234567'
@@ -57,14 +57,20 @@ function sendDigest() {
     return;
   }
 
-  // Email
+  // Email — recipients come from the Team screen (app_users in Firestore).
+  // Each user has an emailAlerts flag; missing means enabled.
+  var recipients = fetchEmailRecipients();
+  if (!recipients) {
+    Logger.log('No users have emailAlerts enabled — skipping send.');
+    return;
+  }
   var subject = 'Gold A&S - ' + (r.total === 1 ? 'New alert' : r.total + ' new alerts');
   MailApp.sendEmail({
-    to: EMAIL_TO,
+    to: recipients,
     subject: subject,
     htmlBody: buildEmailHtml(r.alerts, r.total),
   });
-  Logger.log('Email sent to ' + EMAIL_TO + ' (' + r.total + ' alerts)');
+  Logger.log('Email sent to ' + recipients + ' (' + r.total + ' alerts)');
 
   // WhatsApp (optional)
   if (GREENAPI_ID && GREENAPI_TOKEN && WHATSAPP_PHONE) {
@@ -73,6 +79,34 @@ function sendDigest() {
 
   // Only mark as sent AFTER a successful send, so nothing is lost on error.
   markSent(r.newKeys);
+}
+
+
+// ---------------- Recipients (from the Team screen) ----------------
+// Reads the app_users collection (managed in-app from the Team screen) and
+// returns a comma-separated list of every user whose `emailAlerts` is not
+// explicitly false and who is not deactivated. If the read fails or no one is
+// configured, falls back to the owner so the system never silently goes dark.
+function fetchEmailRecipients() {
+  try {
+    var token = getAccessToken();
+    var url = 'https://firestore.googleapis.com/v1/projects/' + PROJECT_ID +
+              '/databases/(default)/documents/app_users?pageSize=300';
+    var res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log('fetchEmailRecipients HTTP ' + res.getResponseCode() + ' — falling back to owner.');
+      return OWNER_EMAIL;
+    }
+    var docs = (JSON.parse(res.getContentText()).documents || []).map(parseDoc);
+    var emails = docs
+      .filter(function (d) { return d.active !== false && d.emailAlerts !== false && d.email; })
+      .map(function (d) { return d.email; });
+    if (!emails.length) return OWNER_EMAIL;
+    return emails.join(',');
+  } catch (e) {
+    Logger.log('fetchEmailRecipients error, falling back to owner: ' + e);
+    return OWNER_EMAIL;
+  }
 }
 
 

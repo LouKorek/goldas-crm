@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listenAppUsers, addAppUser, updateAppUser, removeAppUser } from 'lib/db';
+import { listenAppUsers, addAppUser, updateAppUser, removeAppUser, setUserEmailAlerts } from 'lib/db';
 import { OWNER_EMAIL } from 'lib/firebase';
 import { useRole, roleLabel } from 'lib/roleContext';
 import {
@@ -18,7 +18,7 @@ const ROLE_COLOR = {
   viewer:  { bg: 'rgba(96,165,250,0.15)', text: '#60A5FA' },
 };
 
-const EMPTY = { email: '', name: '', role: 'Viewer' };
+const EMPTY = { email: '', name: '', role: 'Viewer', emailAlerts: true };
 const isOwner = (e) => (e || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
 
 export default function Team() {
@@ -40,7 +40,16 @@ export default function Team() {
   }), []);
 
   const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); };
-  const openEdit = (u) => { setForm({ email: u.email, name: u.name || '', role: roleLabel(u.role) }); setModal({ edit: u }); };
+  const openEdit = (u) => { setForm({ email: u.email, name: u.name || '', role: roleLabel(u.role), emailAlerts: u.emailAlerts !== false }); setModal({ edit: u }); };
+
+  const toggleEmailAlerts = async (u) => {
+    try {
+      await setUserEmailAlerts(u.email, u.emailAlerts === false);   // flip
+      toast.success(u.emailAlerts === false ? 'Email alerts enabled.' : 'Email alerts disabled.');
+    } catch (e) {
+      toast.error(e.message || 'Could not update.');
+    }
+  };
 
   const save = async () => {
     const email = form.email.trim().toLowerCase();
@@ -54,10 +63,10 @@ export default function Team() {
         if (users.some(u => (u.email || '').toLowerCase() === email)) {
           toast.error('That email is already on the list.'); setSaving(false); return;
         }
-        await addAppUser({ email, name: form.name, role });
+        await addAppUser({ email, name: form.name, role, emailAlerts: form.emailAlerts });
         toast.success(`"${form.name.trim() || email}" can now sign in.`);
       } else {
-        await updateAppUser(email, { name: form.name.trim() || email, role });
+        await updateAppUser(email, { name: form.name.trim() || email, role, emailAlerts: form.emailAlerts });
         toast.success('User updated.');
       }
       setModal(null);
@@ -103,6 +112,7 @@ export default function Team() {
                   <th>Email</th>
                   <th>Role</th>
                   <th>Access</th>
+                  <th style={{ width: 80, textAlign: 'center' }} title="Receive email alerts">✉️ Alerts</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,6 +145,12 @@ export default function Team() {
                         <span style={{ fontSize: 12, color: u.active === false ? 'var(--red)' : '#4ADE80' }}>
                           {u.active === false ? 'Disabled' : 'Active'}
                         </span>
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={u.emailAlerts !== false}
+                          onChange={() => toggleEmailAlerts(u)}
+                          title={u.emailAlerts !== false ? 'Receiving email alerts' : 'Not receiving email alerts'}
+                          style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--gold)' }} />
                       </td>
                     </tr>
                   );
@@ -169,6 +185,16 @@ export default function Team() {
             <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
               {form.role === 'Manager' ? ROLE_DESC.manager : ROLE_DESC.viewer}
             </div>
+          </Field>
+          <Field label="Email Alerts">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
+              <input type="checkbox" checked={form.emailAlerts}
+                onChange={e => setForm(f => ({ ...f, emailAlerts: e.target.checked }))}
+                style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--gold)' }} />
+              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                Receive email notifications when an alert is due
+              </span>
+            </label>
           </Field>
         </Modal>
       )}
