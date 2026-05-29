@@ -52,39 +52,86 @@ export default function Layout({ user }) {
     localStorage.setItem('sidebar-collapsed', String(collapsed));
   }, [collapsed]);
 
-  // Mobile only — axis-lock scrolling inside .table-wrap so a swipe is always
-  // pure horizontal OR pure vertical, never diagonal. The first ~6 pixels of
-  // finger movement decide the axis for the rest of the gesture; the other
-  // axis stays pinned to its starting scroll offset.
+  // Mobile only — strictly axis-lock the scroll inside .table-wrap so a single
+  // swipe goes EITHER horizontal OR vertical, never both. We block the browser's
+  // native scrolling on the wrap (preventDefault) once we've decided the axis,
+  // and drive the chosen axis manually from touchmove deltas. A short momentum
+  // tail after release keeps the gesture feeling natural.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!window.matchMedia('(max-width: 768px)').matches) return;
-    let state = null;
+    let state  = null;
+    let raf    = null;
+    const stopMomentum = () => { if (raf) { cancelAnimationFrame(raf); raf = null; } };
+
     const onStart = (e) => {
+      stopMomentum();
       const wrap = e.target.closest && e.target.closest('.table-wrap');
       if (!wrap) { state = null; return; }
       const t = e.touches[0];
-      state = { wrap, x0: t.clientX, y0: t.clientY, sx: wrap.scrollLeft, sy: wrap.scrollTop, axis: null };
+      state = {
+        wrap,
+        x0: t.clientX, y0: t.clientY,
+        sx: wrap.scrollLeft, sy: wrap.scrollTop,
+        axis: null,
+        lastX: t.clientX, lastY: t.clientY,
+        lastT: performance.now(),
+        vx: 0, vy: 0,
+      };
     };
+
     const onMove = (e) => {
       if (!state) return;
-      const t = e.touches[0];
+      const t  = e.touches[0];
       const dx = t.clientX - state.x0;
       const dy = t.clientY - state.y0;
       if (!state.axis) {
         if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
         state.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
       }
-      // Pin the perpendicular axis to its starting offset every move.
-      if (state.axis === 'x') state.wrap.scrollTop  = state.sy;
-      else                    state.wrap.scrollLeft = state.sx;
+      // Hard-lock to the chosen axis: cancel the browser's bi-directional
+      // scroll, then drive only the locked axis ourselves.
+      if (e.cancelable) e.preventDefault();
+      if (state.axis === 'x') {
+        state.wrap.scrollLeft = state.sx - dx;
+      } else {
+        state.wrap.scrollTop  = state.sy - dy;
+      }
+      // Velocity sample for momentum (px / sec on the locked axis).
+      const now = performance.now();
+      const dt  = Math.max(1, now - state.lastT);
+      if (state.axis === 'x') state.vx = ((t.clientX - state.lastX) / dt) * 1000;
+      else                    state.vy = ((t.clientY - state.lastY) / dt) * 1000;
+      state.lastX = t.clientX; state.lastY = t.clientY; state.lastT = now;
     };
-    const onEnd = () => { state = null; };
-    document.addEventListener('touchstart',  onStart, { passive: true });
-    document.addEventListener('touchmove',   onMove,  { passive: true });
-    document.addEventListener('touchend',    onEnd,   { passive: true });
-    document.addEventListener('touchcancel', onEnd,   { passive: true });
+
+    const onEnd = () => {
+      if (!state || !state.axis) { state = null; return; }
+      const wrap = state.wrap;
+      const axis = state.axis;
+      let v = axis === 'x' ? -state.vx : -state.vy; // scroll moves opposite to finger
+      state = null;
+      if (Math.abs(v) < 120) return;             // tiny flick — skip momentum
+      const friction = 0.93;
+      let last = performance.now();
+      const tick = (now) => {
+        const dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        if (axis === 'x') wrap.scrollLeft += v * dt;
+        else              wrap.scrollTop  += v * dt;
+        v *= Math.pow(friction, dt * 60);
+        if (Math.abs(v) > 30) raf = requestAnimationFrame(tick);
+        else                  raf = null;
+      };
+      raf = requestAnimationFrame(tick);
+    };
+
+    document.addEventListener('touchstart',  onStart, { passive: true  });
+    document.addEventListener('touchmove',   onMove,  { passive: false });
+    document.addEventListener('touchend',    onEnd,   { passive: true  });
+    document.addEventListener('touchcancel', onEnd,   { passive: true  });
     return () => {
+      stopMomentum();
       document.removeEventListener('touchstart',  onStart);
       document.removeEventListener('touchmove',   onMove);
       document.removeEventListener('touchend',    onEnd);
