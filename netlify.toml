@@ -5,6 +5,13 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Netlify Functions — host the daily alert sender that replaces the old
+# Apps Script. Schedule is declared in the function via the @netlify/functions
+# `schedule()` wrapper.
+[functions]
+  directory    = "netlify/functions"
+  node_bundler = "esbuild"
+
 [[redirects]]
   from = "/*"
   to   = "/index.html"
