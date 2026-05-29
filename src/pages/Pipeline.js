@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
@@ -101,6 +102,15 @@ export default function Pipeline({ category }) {
   const [sort, setSort]     = useState({ field:'primaryPosition', dir:'asc' });
   const { confirm, dialog } = useConfirm();
   const { canEdit } = useRole();
+  const [searchParams] = useSearchParams();
+
+  // Apply a status filter coming from the URL (e.g. from a Dashboard drill-down
+  // click — /pipeline/men?status=Mandate%20Received). Runs whenever the
+  // category or query string changes.
+  useEffect(() => {
+    const s = searchParams.get('status');
+    if (s) setFilters(f => ({ ...f, status: s }));
+  }, [path, searchParams]);
 
   useEffect(() => {
     setLoading(true);
