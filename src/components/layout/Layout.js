@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from 'lib/firebase';
 import { useRole, roleLabel } from 'lib/roleContext';
 import RouteTransition from 'components/ui/RouteTransition';
+import RadialMenu from 'components/ui/RadialMenu';
 
 const NAV = [
   { section: 'Overview' },
@@ -224,20 +225,8 @@ export default function Layout({ user }) {
       {/* Brand image overlay shown briefly on each top-level route change */}
       <RouteTransition />
 
-      {/* Mobile overlay */}
-      {open && (
-        <div
-          onClick={() => setOpen(false)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            zIndex: 99,
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            animation: 'fadeIn 0.2s ease',
-          }}
-        />
-      )}
+      {/* Mobile radial menu — replaces the old slide-out drawer */}
+      <RadialMenu open={open} onClose={() => setOpen(false)} />
 
       {/* Mobile top bar */}
       <div
@@ -314,30 +303,7 @@ export default function Layout({ user }) {
         <SidebarContent isMobile={false} />
       </aside>
 
-      {/* Mobile drawer */}
-      <aside
-        className="mobile-sidebar"
-        style={{
-          position: 'fixed', top: 0,
-          left: open ? 0 : -280,
-          width: 260,
-          height: '100vh',
-          background: 'var(--surface-1)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column',
-          zIndex: 100,
-          transition: 'left 0.28s cubic-bezier(0.4,0,0.2,1)',
-          overflow: 'hidden',
-          boxShadow: open ? '8px 0 32px rgba(0,0,0,0.5)' : 'none',
-          // Respect iOS safe areas so the logo doesn't sit under the status
-          // bar and Sign out isn't glued to the home-indicator edge.
-          paddingTop: 'env(safe-area-inset-top, 0px)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
-          boxSizing: 'border-box',
-        }}
-      >
-        <SidebarContent isMobile={true} />
-      </aside>
+      {/* Mobile drawer removed — replaced by RadialMenu above */}
 
       {/* Main content */}
       <main
