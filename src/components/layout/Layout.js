@@ -329,6 +329,11 @@ export default function Layout({ user }) {
           transition: 'left 0.28s cubic-bezier(0.4,0,0.2,1)',
           overflow: 'hidden',
           boxShadow: open ? '8px 0 32px rgba(0,0,0,0.5)' : 'none',
+          // Respect iOS safe areas so the logo doesn't sit under the status
+          // bar and Sign out isn't glued to the home-indicator edge.
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)',
+          boxSizing: 'border-box',
         }}
       >
         <SidebarContent isMobile={true} />
