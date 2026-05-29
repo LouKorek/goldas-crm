@@ -165,7 +165,7 @@ export default function RadialMenu({ open, onClose }) {
     rotationRef.current = target;
     lastActiveRef.current = computeActive(target);
     rerender();
-  }, [open, pathname, items, step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, pathname, items, step]);
 
   // Lock page scroll while open; stop any running spin on close.
   useEffect(() => {
