@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useReducer, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useRole } from 'lib/roleContext';
 
@@ -25,9 +25,9 @@ const SECTION_TINT = {
   'System':          { bg: 'rgba(167,139,250,0.18)', edge: 'rgba(167,139,250,0.45)' },
 };
 
-const SIZE      = 320;   // wheel diameter, px
-const R_ITEM    = 112;   // distance from centre to item ring
-const ITEM_SIZE = 52;    // item button diameter
+const SIZE         = 320;
+const R_ITEM       = 112;
+const ITEM_SIZE    = 52;
 const ACTIVE_SCALE = 1.18;
 
 const norm = (a) => ((a % 360) + 360) % 360;
@@ -41,24 +41,139 @@ export default function RadialMenu({ open, onClose }) {
   const N     = items.length;
   const step  = 360 / N;
 
-  // On open, spin so the current screen is at 12 o'clock.
-  const [rotation, setRotation] = useState(0);
+  // Rotation lives in a ref so animation loops always see the latest value;
+  // a forced rerender keeps the view in sync with the ref.
+  const rotationRef = useRef(0);
+  const [, rerender] = useReducer((x) => x + 1, 0);
+
+  const wheelRef       = useRef(null);
+  const dragRef        = useRef(null);
+  const rafRef         = useRef(null);
+  const audioRef       = useRef(null);
+  const lastActiveRef  = useRef(0);
+
+  // Ensure an AudioContext (created lazily on the user's first gesture so the
+  // browser doesn't auto-suspend it).
+  const ensureAudio = () => {
+    if (!audioRef.current) {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) audioRef.current = new Ctx();
+      } catch (e) { /* ignore */ }
+    }
+    if (audioRef.current && audioRef.current.state === 'suspended') {
+      audioRef.current.resume().catch(() => {});
+    }
+    return audioRef.current;
+  };
+
+  // A short, sharp click — like a raffle drum stopping at each slot.
+  const playTick = () => {
+    const ctx = audioRef.current;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 1300;
+    gain.gain.setValueAtTime(0.08, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.05);
+  };
+
+  // Index of the item currently nearest the 12-o'clock marker for rotation r.
+  const computeActive = (r) => {
+    let bestI = 0, bestD = 999;
+    for (let i = 0; i < N; i++) {
+      const a = norm(i * step + step / 2 + r);
+      const d = Math.min(a, 360 - a);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return bestI;
+  };
+
+  const stopAnim = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+  };
+
+  // Apply a new rotation and emit a tick if we crossed into a new slot.
+  const applyRotation = (newR) => {
+    rotationRef.current = newR;
+    rerender();
+    const newActive = computeActive(newR);
+    if (newActive !== lastActiveRef.current) {
+      lastActiveRef.current = newActive;
+      playTick();
+    }
+  };
+
+  // Animate rotation to a target value with an ease-out curve.
+  const animateTo = (target, duration) => {
+    stopAnim();
+    const startR = rotationRef.current;
+    const startT = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - startT) / duration);
+      const e = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      applyRotation(startR + (target - startR) * e);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else rafRef.current = null;
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  };
+
+  // Snap to the slot we're closest to (so the arrow always lands on a circle).
+  const snapToNearest = () => {
+    const cur = rotationRef.current;
+    const idx = computeActive(cur);
+    let target = -(idx * step + step / 2);
+    while (target < cur - 180) target += 360;
+    while (target > cur + 180) target -= 360;
+    animateTo(target, 360);
+  };
+
+  // Inertial spin: integrates velocity with friction, then snaps to a slot.
+  const startMomentum = (initialV) => {
+    stopAnim();
+    let v = initialV; // deg / sec
+    let last = performance.now();
+    // After 1 second of free spin, ~18% of velocity remains.
+    const frictionPerSec = 0.18;
+    const minV = 35; // below this we hand off to the snap animation
+    const step2 = (now) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      applyRotation(rotationRef.current + v * dt);
+      v *= Math.pow(frictionPerSec, dt);
+      if (Math.abs(v) > minV) {
+        rafRef.current = requestAnimationFrame(step2);
+      } else {
+        snapToNearest();
+      }
+    };
+    rafRef.current = requestAnimationFrame(step2);
+  };
+
+  // When the menu opens, snap the current screen to the top (no animation).
   useEffect(() => {
     if (!open) return;
     const i = items.findIndex(it => pathname === it.path || pathname.startsWith(it.path + '/'));
-    setRotation(i >= 0 ? -(i * step + step / 2) : 0);
-  }, [open, pathname, items, step]);
+    const target = i >= 0 ? -(i * step + step / 2) : 0;
+    stopAnim();
+    rotationRef.current = target;
+    lastActiveRef.current = computeActive(target);
+    rerender();
+  }, [open, pathname, items, step]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Lock body scroll while open.
+  // Lock page scroll while open; stop any running spin on close.
   useEffect(() => {
-    if (!open) return;
+    if (!open) { stopAnim(); return; }
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, [open]);
-
-  const wheelRef = useRef(null);
-  const dragRef  = useRef(null);
 
   if (!open) return null;
 
@@ -68,26 +183,54 @@ export default function RadialMenu({ open, onClose }) {
     const dy = cy - (rect.top  + rect.height / 2);
     return Math.atan2(dy, dx) * 180 / Math.PI;
   };
-  const startDrag = (cx, cy) => { dragRef.current = { last: angleOf(cx, cy), moved: 0 }; };
-  const moveDrag  = (cx, cy) => {
+
+  const startDrag = (cx, cy) => {
+    stopAnim();
+    ensureAudio();
+    dragRef.current = {
+      last: angleOf(cx, cy),
+      moved: 0,
+      cumDelta: 0,
+      history: [{ a: 0, t: performance.now() }],
+    };
+  };
+
+  const moveDrag = (cx, cy) => {
     if (!dragRef.current) return;
     const a = angleOf(cx, cy);
     let d = a - dragRef.current.last;
     if (d >  180) d -= 360;
     if (d < -180) d += 360;
-    dragRef.current.last   = a;
-    dragRef.current.moved += Math.abs(d);
-    setRotation(r => r + d);
+    dragRef.current.last      = a;
+    dragRef.current.moved    += Math.abs(d);
+    dragRef.current.cumDelta += d;
+    const now = performance.now();
+    dragRef.current.history.push({ a: dragRef.current.cumDelta, t: now });
+    // Keep ~120ms of recent history for the velocity estimate.
+    const cutoff = now - 120;
+    while (dragRef.current.history.length > 2 && dragRef.current.history[0].t < cutoff) {
+      dragRef.current.history.shift();
+    }
+    applyRotation(rotationRef.current + d);
   };
-  const endDrag = () => { const m = dragRef.current; dragRef.current = null; return m; };
 
-  // Item closest to top (angle 0° after our -90° rotation).
-  let activeIdx = 0, minDist = 999;
-  items.forEach((it, i) => {
-    const a = norm(i * step + step / 2 + rotation);
-    const dist = Math.min(a, 360 - a);
-    if (dist < minDist) { minDist = dist; activeIdx = i; }
-  });
+  const endDrag = () => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag) return;
+    const h = drag.history;
+    if (h.length >= 2) {
+      const t0 = h[0].t, t1 = h[h.length - 1].t;
+      const dT = (t1 - t0) / 1000;
+      const dA = h[h.length - 1].a - h[0].a;
+      const v  = dT > 0.001 ? dA / dT : 0;
+      if (Math.abs(v) > 80) { startMomentum(v); return; }
+    }
+    snapToNearest();
+  };
+
+  const rotation   = rotationRef.current;
+  const activeIdx  = computeActive(rotation);
   const activeItem = items[activeIdx];
 
   return (
@@ -107,7 +250,6 @@ export default function RadialMenu({ open, onClose }) {
         @keyframes rm-pop  { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
       `}</style>
 
-      {/* Close X */}
       <button
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         style={{
@@ -123,7 +265,6 @@ export default function RadialMenu({ open, onClose }) {
         aria-label="Close menu"
       >×</button>
 
-      {/* The wheel */}
       <div
         ref={wheelRef}
         onClick={(e) => e.stopPropagation()}
@@ -134,6 +275,7 @@ export default function RadialMenu({ open, onClose }) {
         onTouchStart={(e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchMove ={(e) => { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); }}
         onTouchEnd  ={endDrag}
+        onTouchCancel={endDrag}
         style={{
           position: 'relative',
           width: SIZE, height: SIZE,
@@ -146,16 +288,15 @@ export default function RadialMenu({ open, onClose }) {
           animation: 'rm-pop 0.32s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
-        {/* Selector marker at 12 o'clock */}
         <div style={{
           position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
           width: 0, height: 0,
           borderLeft: '9px solid transparent', borderRight: '9px solid transparent',
           borderTop: '14px solid var(--gold)',
           filter: 'drop-shadow(0 0 8px rgba(201,168,76,0.7))',
+          zIndex: 2,
         }} />
 
-        {/* Outer ring guide */}
         <div style={{
           position: 'absolute', inset: 18,
           borderRadius: '50%',
@@ -163,9 +304,8 @@ export default function RadialMenu({ open, onClose }) {
           pointerEvents: 'none',
         }} />
 
-        {/* Items */}
         {items.map((it, i) => {
-          const angDeg = i * step + step / 2 + rotation - 90;  // 0° = top
+          const angDeg = i * step + step / 2 + rotation - 90;
           const angRad = angDeg * Math.PI / 180;
           const cx = SIZE / 2 + R_ITEM * Math.cos(angRad);
           const cy = SIZE / 2 + R_ITEM * Math.sin(angRad);
@@ -200,7 +340,6 @@ export default function RadialMenu({ open, onClose }) {
           );
         })}
 
-        {/* Centre hub */}
         <div style={{
           position: 'absolute', left: '50%', top: '50%',
           transform: 'translate(-50%, -50%)',
@@ -223,7 +362,6 @@ export default function RadialMenu({ open, onClose }) {
         </div>
       </div>
 
-      {/* Hint */}
       <div style={{
         position: 'absolute',
         bottom: 'calc(env(safe-area-inset-bottom, 0px) + 22px)',
@@ -232,7 +370,7 @@ export default function RadialMenu({ open, onClose }) {
         letterSpacing: '0.08em',
         whiteSpace: 'nowrap',
       }}>
-        Spin the dial or tap an icon to navigate
+        Spin or tap to navigate
       </div>
     </div>
   );
