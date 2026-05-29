@@ -52,6 +52,46 @@ export default function Layout({ user }) {
     localStorage.setItem('sidebar-collapsed', String(collapsed));
   }, [collapsed]);
 
+  // Mobile only — axis-lock scrolling inside .table-wrap so a swipe is always
+  // pure horizontal OR pure vertical, never diagonal. The first ~6 pixels of
+  // finger movement decide the axis for the rest of the gesture; the other
+  // axis stays pinned to its starting scroll offset.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    let state = null;
+    const onStart = (e) => {
+      const wrap = e.target.closest && e.target.closest('.table-wrap');
+      if (!wrap) { state = null; return; }
+      const t = e.touches[0];
+      state = { wrap, x0: t.clientX, y0: t.clientY, sx: wrap.scrollLeft, sy: wrap.scrollTop, axis: null };
+    };
+    const onMove = (e) => {
+      if (!state) return;
+      const t = e.touches[0];
+      const dx = t.clientX - state.x0;
+      const dy = t.clientY - state.y0;
+      if (!state.axis) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        state.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      }
+      // Pin the perpendicular axis to its starting offset every move.
+      if (state.axis === 'x') state.wrap.scrollTop  = state.sy;
+      else                    state.wrap.scrollLeft = state.sx;
+    };
+    const onEnd = () => { state = null; };
+    document.addEventListener('touchstart',  onStart, { passive: true });
+    document.addEventListener('touchmove',   onMove,  { passive: true });
+    document.addEventListener('touchend',    onEnd,   { passive: true });
+    document.addEventListener('touchcancel', onEnd,   { passive: true });
+    return () => {
+      document.removeEventListener('touchstart',  onStart);
+      document.removeEventListener('touchmove',   onMove);
+      document.removeEventListener('touchend',    onEnd);
+      document.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+
   // Close drawer when navigating
   useEffect(() => { setOpen(false); }, [location.pathname]);
 

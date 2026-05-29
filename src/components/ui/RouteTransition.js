@@ -43,14 +43,20 @@ export default function RouteTransition() {
 
   if (!overlay) return null;
   const showing = overlay.phase === 'in';
+  // Tap anywhere on the overlay to skip the rest of the animation. The route
+  // has already changed under it, so dismissing reveals the new screen.
+  const skip = () => setOverlay(null);
   return (
-    <div style={{
+    <div onClick={skip} style={{
       position: 'fixed', inset: 0, zIndex: 9000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       backgroundColor: '#0E1B11',
       opacity: showing ? 1 : 0,
       transition: `opacity ${FADE_MS}ms ease`,
-      pointerEvents: 'none',
+      // pointerEvents: 'auto' captures taps so nothing on the page behind
+      // can be triggered through the overlay.
+      pointerEvents: 'auto',
+      cursor: 'pointer',
       overflow: 'hidden',
     }}>
       {/* Local keyframes for the Ken-Burns zoom + title rise. */}
