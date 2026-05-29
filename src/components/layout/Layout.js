@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from 'lib/firebase';
 import { useRole, roleLabel } from 'lib/roleContext';
+import RouteTransition from 'components/ui/RouteTransition';
 
 const NAV = [
   { section: 'Overview' },
@@ -219,6 +220,9 @@ export default function Layout({ user }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
+
+      {/* Brand image overlay shown briefly on each top-level route change */}
+      <RouteTransition />
 
       {/* Mobile overlay */}
       {open && (

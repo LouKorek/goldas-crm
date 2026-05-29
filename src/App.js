@@ -24,7 +24,10 @@ function Splash({ fading }) {
     <div style={{
       position: 'fixed', inset: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at center, #1A2820 0%, #0E1B11 70%)',
+      backgroundImage: 'linear-gradient(rgba(10,21,12,0.78), rgba(10,21,12,0.92)), url("/photos/Hero.png")',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundColor: '#0E1B11',
       zIndex: 9999,
       opacity: fading ? 0 : 1,
       transition: 'opacity 0.5s ease',
