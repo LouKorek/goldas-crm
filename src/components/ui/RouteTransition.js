@@ -26,13 +26,15 @@ const HOLD_MS = 900;
 export default function RouteTransition() {
   const { pathname } = useLocation();
   const [overlay, setOverlay] = useState(null);
-  const firstRender = useRef(true);
+  // Skip the FIRST matched route the app lands on — the launch splash already
+  // covered that arrival. This also handles the "/" → "/dashboard" redirect
+  // so the dashboard overlay doesn't fire immediately after the splash.
+  const landed = useRef(false);
 
   useEffect(() => {
-    // Skip the very first render — the launch splash already covers that.
-    if (firstRender.current) { firstRender.current = false; return; }
     const entry = ROUTE_IMAGE[pathname];
     if (!entry) return;
+    if (!landed.current) { landed.current = true; return; }
     setOverlay({ ...entry, phase: 'in' });
     const t1 = setTimeout(() => setOverlay(o => o && { ...o, phase: 'out' }), FADE_MS + HOLD_MS);
     const t2 = setTimeout(() => setOverlay(null), FADE_MS + HOLD_MS + FADE_MS);
