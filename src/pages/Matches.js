@@ -422,7 +422,6 @@ export default function Matches() {
     if (view === 'Month') setAnchorDate(d => new Date(d.getFullYear(), d.getMonth() + dir, 1));
     else if (stepDays[view]) setAnchorDate(d => addDays(d, stepDays[view] * dir));
   };
-  const goToday = () => setAnchorDate(new Date());
 
   const MatchCard = ({ m }) => {
     const linkedNames = allPlayers.filter(p => (m.linkedPlayers || []).includes(p.id)).map(p => p.fullName);
@@ -532,17 +531,22 @@ export default function Matches() {
         <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
 
         {view !== 'Schedule' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4 }}>
             <button type="button" onClick={() => stepAnchor(-1)} title="Previous"
               style={navBtnStyle()}>‹</button>
-            <button type="button" onClick={goToday}
-              style={{ ...navBtnStyle(), padding: '0 12px', fontSize: 12 }}>Today</button>
+            <span style={{
+              // Fixed width so the layout stays identical across Day / 3 Day /
+              // Week / Month — only the text inside changes.
+              width: 220,
+              textAlign: 'center',
+              fontSize: 13, color: 'var(--text-2)', fontWeight: 500,
+              letterSpacing: '0.01em',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>{getRangeLabel(view, anchorDate)}</span>
             <button type="button" onClick={() => stepAnchor(1)} title="Next"
               style={navBtnStyle()}>›</button>
-            <span style={{
-              fontSize: 13, color: 'var(--text-2)', marginLeft: 8, fontWeight: 500,
-              letterSpacing: '0.01em',
-            }}>{getRangeLabel(view, anchorDate)}</span>
           </div>
         )}
 
