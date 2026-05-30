@@ -172,11 +172,20 @@ async function sofascoreFetchFixtures(teamId, fromDateMs) {
 // IFA doesn't expose a JSON API. We require a per-player team URL (the page
 // /team-details/?season_id=X&team_id=Y) and parse the "רשימת המשחקים" tables
 // from it. Lou pastes the URL once per Israeli player from the IFA website.
-async function ifaFetchFixtures(teamUrl) {
-  if (!teamUrl || !/football\.org\.il\/team-details\/.+team_id=/i.test(teamUrl)) return [];
+async function ifaFetchFixtures(rawUrl) {
+  if (!rawUrl) return [];
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch { return []; }
+  if (!parsed.hostname.endsWith('football.org.il')) return [];
+  const teamId   = parsed.searchParams.get('team_id');
+  const seasonId = parsed.searchParams.get('season_id') || '';
+  if (!teamId) return [];
+  // The bare /team-details/ page only shows a short last/upcoming slice; the
+  // FULL fixtures live on /team-details/team-games/. Always fetch that one.
+  const fetchUrl = `https://www.football.org.il/team-details/team-games/?team_id=${encodeURIComponent(teamId)}${seasonId ? `&season_id=${encodeURIComponent(seasonId)}` : ''}`;
   let res;
   try {
-    res = await fetch(teamUrl, {
+    res = await fetch(fetchUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml',
@@ -189,6 +198,59 @@ async function ifaFetchFixtures(teamUrl) {
   const $ = cheerio.load(html);
   const out = [];
 
+  // Each match row is rendered as:
+  //   <a class="table_row link_url" href="...game_id=NNN">
+  //     <div class="table_col"><span class="sr-only">תאריך</span>16/08/2025</div>
+  //     <div class="table_col"><span class="sr-only">משחק</span>Home - Away</div>
+  //     <div class="table_col"><span class="sr-only">אצטדיון</span>Stadium</div>
+  //     <div class="table_col"><span class="sr-only">שעה</span>17:30</div>
+  //     <div class="table_col"><span class="sr-only">תוצאה</span>3-1</div>
+  //   </a>
+  $('a.table_row.link_url').each((_, a) => {
+    const $a = $(a);
+    const href = $a.attr('href') || '';
+    let sourceMatchId = '';
+    const gm = /game_id=(\d+)/.exec(href);
+    if (gm) sourceMatchId = gm[1];
+
+    const cells = {};
+    $a.find('div.table_col').each((__, col) => {
+      const $col = $(col);
+      const labelText = $col.find('span.sr-only').first().text();
+      const label = labelText.trim();
+      const value = $col.text().slice(labelText.length).replace(/\s+/g, ' ').trim();
+      if (label) cells[label] = value;
+    });
+
+    const dateStr  = cells['תאריך']  || '';
+    const matchStr = cells['משחק']   || '';
+    const stadium  = cells['אצטדיון'] || '';
+    const timeStr  = cells['שעה']    || '';
+    const dm = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateStr);
+    if (!dm) return;
+    const date = `${dm[3]}-${dm[2]}-${dm[1]}`;
+
+    const sep = matchStr.lastIndexOf(' - ');
+    if (sep < 1) return;
+    const homeTeam = matchStr.slice(0, sep).trim();
+    const awayTeam = matchStr.slice(sep + 3).trim();
+    if (!homeTeam || !awayTeam) return;
+    if (!sourceMatchId) sourceMatchId = `${date}|${homeTeam}|${awayTeam}`;
+
+    out.push({
+      source: 'ifa',
+      sourceMatchId,
+      sourceTeamId: rawUrl,
+      date,
+      time: timeStr,
+      homeTeam,
+      awayTeam,
+      stadiumName: stadium,
+      season: deriveSeason(date),
+    });
+  });
+
+  // Older table-based fallback (in case some pages still render as <table>).
   $('table').each((_, table) => {
     const $table = $(table);
     const headerText = $table.find('th').map((__, th) => $(th).text().replace(/\s+/g, ' ').trim()).get().join(' ');
