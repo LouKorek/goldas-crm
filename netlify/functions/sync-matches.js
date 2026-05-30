@@ -214,9 +214,27 @@ async function ifaFetchFixtures(rawUrl) {
   const teamId   = parsed.searchParams.get('team_id');
   const seasonId = parsed.searchParams.get('season_id') || '';
   if (!teamId) return [];
-  // The bare /team-details/ page only shows a short last/upcoming slice; the
-  // FULL fixtures live on /team-details/team-games/. Always fetch that one.
-  const fetchUrl = `https://www.football.org.il/team-details/team-games/?team_id=${encodeURIComponent(teamId)}${seasonId ? `&season_id=${encodeURIComponent(seasonId)}` : ''}`;
+  // Preserve the language path/host the user pasted (so an English URL —
+  // /en/... or en.football.org.il — stays English and we get English labels
+  // back). If the URL already points at the /team-games/ list, use it as-is;
+  // otherwise rewrite the path to /team-details/team-games/ while keeping
+  // the same origin and any /en/ prefix in the path.
+  const isGamesUrl = parsed.pathname.includes('/team-games/');
+  let gamesPath;
+  if (isGamesUrl) {
+    gamesPath = parsed.pathname;
+  } else {
+    // Insert /team-games/ after /team-details/, or append a fresh path if
+    // /team-details/ isn't present.
+    if (parsed.pathname.includes('/team-details/')) {
+      gamesPath = parsed.pathname.replace('/team-details/', '/team-details/team-games/');
+    } else {
+      // Keep any leading language prefix like /en/.
+      const prefix = parsed.pathname.match(/^\/[a-z]{2}\//)?.[0] || '/';
+      gamesPath = `${prefix}team-details/team-games/`;
+    }
+  }
+  const fetchUrl = `${parsed.origin}${gamesPath}?team_id=${encodeURIComponent(teamId)}${seasonId ? `&season_id=${encodeURIComponent(seasonId)}` : ''}`;
   const { ok, status, html, via } = await ifaFetchHtml(fetchUrl);
   if (!ok) {
     console.log(`IFA fetch ${fetchUrl} (via ${via}) → status=${status}`);
@@ -256,10 +274,17 @@ async function ifaFetchFixtures(rawUrl) {
       if (label) cells[label] = value;
     });
 
-    const dateStr  = cells['תאריך']  || '';
-    const matchStr = cells['משחק']   || '';
-    const stadium  = cells['אצטדיון'] || '';
-    const timeStr  = cells['שעה']    || '';
+    // Cell labels are language-dependent — accept both the Hebrew and the
+    // English IFA labels so the parser works whether Lou pasted a Hebrew
+    // or English team URL.
+    const cell = (...keys) => {
+      for (const k of keys) if (cells[k]) return cells[k];
+      return '';
+    };
+    const dateStr  = cell('תאריך', 'Date');
+    const matchStr = cell('משחק', 'Match');
+    const stadium  = cell('אצטדיון', 'Stadium');
+    const timeStr  = cell('שעה', 'Time');
     const dm = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateStr);
     if (!dm) return;
     const date = `${dm[3]}-${dm[2]}-${dm[1]}`;
@@ -270,8 +295,9 @@ async function ifaFetchFixtures(rawUrl) {
     const awayTeam = matchStr.slice(sep + 3).trim();
     if (!homeTeam || !awayTeam) return;
     // IFA marks a "bye" round (no opponent that week) as a match against
-    // "חופשית" — these aren't real matches, skip them entirely.
-    if (homeTeam === 'חופשית' || awayTeam === 'חופשית') return;
+    // "חופשית" in Hebrew or "Bye" / "Free" in English — skip either form.
+    const isPlaceholder = (t) => t === 'חופשית' || /^(bye|free)$/i.test(t);
+    if (isPlaceholder(homeTeam) || isPlaceholder(awayTeam)) return;
     if (!sourceMatchId) sourceMatchId = `${date}|${homeTeam}|${awayTeam}`;
 
     out.push({

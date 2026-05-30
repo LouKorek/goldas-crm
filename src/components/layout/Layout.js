@@ -206,14 +206,19 @@ export default function Layout({ user }) {
               style={{
                 display: 'flex', alignItems: 'center',
                 gap: collapsed && !isMobile ? 0 : 10,
-                padding: collapsed && !isMobile ? '10px 0' : '9px 10px',
+                /* Keep vertical padding identical in collapsed & expanded
+                   states so the icons never shift vertically when the
+                   sidebar toggles — only the horizontal padding changes. */
+                padding: collapsed && !isMobile ? '9px 0' : '9px 10px',
                 justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
                 borderRadius: 8, marginBottom: 2,
                 textDecoration: 'none',
                 fontWeight: isActive ? 600 : 400,
                 color: isActive ? 'var(--text-1)' : 'var(--text-2)',
                 background: isActive ? 'rgba(201,168,76,0.10)' : 'transparent',
-                transition: 'background 0.18s ease, color 0.18s ease, transform 0.12s ease',
+                /* Smoother choreography: padding/gap animate in lockstep
+                   with the sidebar width so nothing pops. */
+                transition: 'background 0.18s ease, color 0.18s ease, transform 0.12s ease, padding 0.32s cubic-bezier(0.16,1,0.3,1), gap 0.32s cubic-bezier(0.16,1,0.3,1)',
                 position: 'relative',
               }}
               onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'var(--text-1)'; } }}
@@ -238,8 +243,13 @@ export default function Layout({ user }) {
         })}
       </nav>
 
-      {/* User + collapse */}
-      <div style={{ borderTop: '1px solid var(--border)', padding: '10px' }}>
+      {/* User + collapse — wider horizontal padding when collapsed so the
+          theme & toggle buttons get breathing room from the rail edge. */}
+      <div style={{
+        borderTop: '1px solid var(--border)',
+        padding: (collapsed && !isMobile) ? '12px 13px' : '10px',
+        transition: 'padding 0.32s cubic-bezier(0.16,1,0.3,1)',
+      }}>
         {(!collapsed || isMobile) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 2px' }}>
             <div style={{
@@ -378,13 +388,17 @@ export default function Layout({ user }) {
       <aside
         className="desktop-sidebar"
         style={{
-          width: collapsed ? 54 : 210,
+          /* Slightly wider collapsed rail (62px instead of 54) so the
+             theme + toggle buttons sit comfortably away from the edge. */
+          width: collapsed ? 62 : 210,
           background: 'var(--surface-1)',
           borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column',
           position: 'sticky', top: 0, height: '100vh',
           flexShrink: 0, overflow: 'hidden',
-          transition: 'width 0.25s cubic-bezier(0.4,0,0.2,1)',
+          /* Smoother choreography — longer + the ease-out curve we use
+             elsewhere in the theme. */
+          transition: 'width 0.32s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
         <SidebarContent isMobile={false} />
