@@ -516,8 +516,21 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
 // ───────────────────── Main routine ─────────────────────
 async function runSync() {
   const db = getDb();
+
+  // Status sentinel: write a "running" doc to Firestore so the UI / Lou
+  // can confirm the function actually started. Updated again at the end.
+  const statusRef = db.collection('app_meta').doc('syncStatus');
+  await statusRef.set({
+    state: 'running',
+    startedAt: admin.firestore.FieldValue.serverTimestamp(),
+    finishedAt: null,
+    error: null,
+  }, { merge: true });
+  console.log('[sync] STARTED');
+
   const playersSnap = await db.collection('players').get();
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  console.log(`[sync] loaded ${players.length} players`);
 
   // Retain window: from start of last season (~Aug last year) onwards.
   const now = new Date();
@@ -551,14 +564,19 @@ async function runSync() {
             localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
             continue;
           }
+          console.log(`[sync] ${p.fullName} → IFA fetch start (${p.ifaTeamUrl})`);
           fixtures = await ifaFetchFixtures(p.ifaTeamUrl);
+          console.log(`[sync] ${p.fullName} → IFA fetch done, ${fixtures.length} fixtures`);
         } else {
           const teamId = await resolveTeamId(db, p, source);
-          if (!teamId) continue;
+          if (!teamId) { console.log(`[sync] ${p.fullName} → ${source} team-id not resolved`); continue; }
+          console.log(`[sync] ${p.fullName} → ${source} fetch start (teamId=${teamId})`);
           fixtures = await SOURCE_CLIENTS[source].fetchFixtures(teamId, fromDateMs);
+          console.log(`[sync] ${p.fullName} → ${source} fetch done, ${fixtures.length} fixtures`);
         }
         if (!fixtures.length) continue;
         const { upserts, removed } = await syncMatchesForPlayer(db, p, source, fixtures);
+        console.log(`[sync] ${p.fullName} → ${source} upsert ${upserts} / remove ${removed}`);
         return { ok: true, source, upserts, removed, warnings: [] };
       }
       // No source produced fixtures.
@@ -581,6 +599,13 @@ async function runSync() {
       stats.perSource[r.source] = (stats.perSource[r.source] || 0) + 1;
     }
   }
+  console.log(`[sync] FINISHED ${stats.processed}/${stats.totalPlayers} processed, ${stats.upserts} upserts, ${warnings.length} warnings`);
+  await statusRef.set({
+    state: 'idle',
+    finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastResult: stats,
+    lastWarningCount: warnings.length,
+  }, { merge: true });
 
   await db.collection('app_meta').doc('syncWarnings').set({
     list: warnings,

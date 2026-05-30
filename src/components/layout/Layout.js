@@ -209,39 +209,34 @@ export default function Layout({ user }) {
           }
           const isActive = location.pathname === item.path ||
             (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+          const isCollapsedDesktop = collapsed && !isMobile;
           return (
             <NavLink key={i} to={item.path} onClick={() => isMobile && setOpen(false)}
               style={{
-                display: 'flex', alignItems: 'center',
-                gap: collapsed && !isMobile ? 0 : 10,
-                /* Keep vertical padding identical in collapsed & expanded
-                   states so the icons never shift vertically when the
-                   sidebar toggles — only the horizontal padding changes. */
-                padding: collapsed && !isMobile ? '9px 0' : '9px 10px',
-                /* Explicit row height lock: when the right-hand text label
-                   disappears in collapsed mode, the row height is derived
-                   only from the icon's line-box. Forcing a fixed height
-                   (and the icon's own line-height) removes any browser-side
-                   variance between an icon-only row and an icon-plus-text
-                   row. */
-                height: 34,
-                lineHeight: '34px',
-                justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
-                borderRadius: 8, marginBottom: 2,
+                /* Every NavLink is the SAME physical box in both states:
+                   identical padding, identical height. Only the
+                   right-hand text label fades — the icon never moves
+                   vertically OR horizontally. */
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '0 12px',
+                height: 36,
+                borderRadius: 8,
+                marginBottom: 2,
                 textDecoration: 'none',
                 fontWeight: isActive ? 600 : 400,
                 color: isActive ? 'var(--text-1)' : 'var(--text-2)',
                 background: isActive ? 'rgba(201,168,76,0.10)' : 'transparent',
-                /* Smoother choreography: padding/gap animate in lockstep
-                   with the sidebar width so nothing pops. */
-                transition: 'background 0.18s ease, color 0.18s ease, transform 0.12s ease, padding 0.45s cubic-bezier(0.16,1,0.3,1), gap 0.45s cubic-bezier(0.16,1,0.3,1)',
+                transition: 'background 0.18s ease, color 0.18s ease',
                 position: 'relative',
+                overflow: 'hidden',
                 boxSizing: 'border-box',
               }}
               onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'var(--text-1)'; } }}
               onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-2)'; } }}
             >
-              {isActive && !collapsed && (
+              {isActive && !isCollapsedDesktop && (
                 <span style={{
                   position: 'absolute', left: 0, top: '22%', bottom: '22%',
                   width: 3, background: 'var(--gold)',
@@ -249,12 +244,24 @@ export default function Layout({ user }) {
                   boxShadow: '0 0 8px rgba(201,168,76,0.5)',
                 }} />
               )}
-              <span style={{ fontSize: 16, flexShrink: 0 }} title={collapsed && !isMobile ? item.label : ''}>{item.emoji}</span>
-              {(!collapsed || isMobile) && (
-                <span style={{ color: isActive ? (item.color || 'var(--gold)') : 'inherit', fontSize: 11.5, whiteSpace: 'nowrap' }}>
-                  {item.label}
-                </span>
-              )}
+              {/* Icon — fixed-width, never moves */}
+              <span style={{
+                fontSize: 16,
+                flexShrink: 0,
+                width: 18,
+                textAlign: 'center',
+                lineHeight: 1,
+              }} title={isCollapsedDesktop ? item.label : ''}>{item.emoji}</span>
+              {/* Label — fades + collapses horizontally when the rail
+                  shrinks, but the icon to its left does NOT shift. */}
+              <span style={{
+                color: isActive ? (item.color || 'var(--gold)') : 'inherit',
+                fontSize: 11.5,
+                whiteSpace: 'nowrap',
+                opacity: isCollapsedDesktop ? 0 : 1,
+                transition: 'opacity 0.18s ease',
+                pointerEvents: isCollapsedDesktop ? 'none' : 'auto',
+              }}>{item.label}</span>
             </NavLink>
           );
         })}
