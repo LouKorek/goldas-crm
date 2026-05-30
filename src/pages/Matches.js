@@ -551,24 +551,6 @@ export default function Matches() {
 
   return (
     <div>
-      {/* Sticky top section. Negative horizontal margins cancel <main>'s
-          padding so the sticky bar fills the full scroll-port width — and
-          paddingLeft/Right restore the inset for the content inside. The
-          marginTop/paddingTop pair pulls the sticky edge to the very top of
-          the scroll-port so the bar covers what scrolls beneath it. */}
-      <div style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        background: 'var(--bg)',
-        marginTop: -22,
-        marginLeft: -22,
-        marginRight: -22,
-        paddingTop: 22,
-        paddingLeft: 22,
-        paddingRight: 22,
-        paddingBottom: 6,
-      }}>
         <PageHeader
           title="Matches"
           subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
@@ -633,7 +615,22 @@ export default function Matches() {
             <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
           </div>
         </div>
-      </div>
+
+      {/* Scrollable match-list area. The header + controls bar above stay
+          static; only this container scrolls. max-height uses dvh so the
+          mobile address bar collapse doesn't change the layout, and the
+          calc keeps roughly the right offset for both desktop and mobile
+          (mobile main padding-top adds the top-bar height, so this is a
+          slight over-cut on mobile that the user simply scrolls through). */}
+      <div className="matches-scroll" style={{
+        maxHeight: 'calc(100dvh - 240px)',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain',
+        paddingRight: 4,
+        marginRight: -4,
+      }}>
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
@@ -681,6 +678,7 @@ export default function Matches() {
           )}
         </>
       )}
+      </div>
 
       {modal && (
         <Modal
