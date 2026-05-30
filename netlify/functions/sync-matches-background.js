@@ -178,6 +178,24 @@ async function sofascoreFetchFixtures(teamId, fromDateMs) {
 // IP block we route the fetch through ScraperAPI when SCRAPER_API_KEY is set.
 // Without the key we fall back to a direct fetch — useful for local dev from
 // an Israeli IP, but will return 403 on Netlify.
+// Normalises an IFA time string to "HH:MM" (24h). Handles:
+//   "17:30"      → "17:30"   (already 24h, Hebrew page)
+//   "5:00 PM"    → "17:00"   (US 12h with PM, English page)
+//   "11:00 AM"   → "11:00"
+//   "12:00 AM"   → "00:00"   (midnight edge case)
+//   "12:30 PM"   → "12:30"   (noon edge case)
+function normalizeIfaTime(s) {
+  if (!s) return '';
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)?\s*$/i.exec(s.trim());
+  if (!m) return s;
+  let h = parseInt(m[1], 10);
+  const mn = m[2];
+  const ampm = (m[3] || '').toUpperCase();
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return `${String(h).padStart(2, '0')}:${mn}`;
+}
+
 async function ifaFetchHtml(targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
   // render=true tells ScraperAPI to spin up a headless browser and execute
@@ -301,20 +319,29 @@ async function ifaFetchFixtures(rawUrl) {
       if (label) cells[label] = value;
     });
 
-    // Cell labels are language-dependent — accept both the Hebrew and the
-    // English IFA labels so the parser works whether Lou pasted a Hebrew
-    // or English team URL.
+    // Cell labels differ by language: Hebrew uses תאריך/משחק/אצטדיון/שעה,
+    // English uses Date/Game/Stadium/Time (note: "Game" — NOT "Match").
     const cell = (...keys) => {
       for (const k of keys) if (cells[k]) return cells[k];
       return '';
     };
     const dateStr  = cell('תאריך', 'Date');
-    const matchStr = cell('משחק', 'Match');
+    const matchStr = cell('משחק', 'Game', 'Match');
     const stadium  = cell('אצטדיון', 'Stadium');
     const timeStr  = cell('שעה', 'Time');
-    const dm = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dateStr);
+
+    // Date format ALSO differs:
+    //   Hebrew page:   16/08/2025  → DD/MM/YYYY
+    //   English page:  5/23/2026   → M/D/YYYY  (US order)
+    // We accept 1 or 2 digits for each part, and pick the order based on
+    // the page language detected from the URL.
+    const dm = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateStr);
     if (!dm) return;
-    const date = `${dm[3]}-${dm[2]}-${dm[1]}`;
+    const isEnglishPage = parsed.pathname.startsWith('/en/');
+    const day   = isEnglishPage ? dm[2] : dm[1];
+    const month = isEnglishPage ? dm[1] : dm[2];
+    const year  = dm[3];
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     const sep = matchStr.lastIndexOf(' - ');
     if (sep < 1) return;
@@ -332,7 +359,9 @@ async function ifaFetchFixtures(rawUrl) {
       sourceMatchId,
       sourceTeamId: rawUrl,
       date,
-      time: timeStr,
+      // Hebrew page returns "17:30", English page returns "5:00 PM" — both
+      // get normalised to 24h HH:MM so the rest of the app sees one format.
+      time: normalizeIfaTime(timeStr),
       homeTeam,
       awayTeam,
       stadiumName: stadium,
