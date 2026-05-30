@@ -177,6 +177,10 @@ const EMPTY_PLAYER = {
   dob:'', passportNumber:'', passportExpiry:'', reprStart:'', reprEnd:'',
   notes:'', contractFiles:[], passportFiles:[], reprFiles:[],
   profileLink:'', videoLink:'',
+  // For IFA-routed players (Israeli women / youth / lower leagues): paste the
+  // football.org.il team page URL (e.g. team-details/?season_id=27&team_id=4032).
+  // The sync function fetches that page and pulls the team's fixtures.
+  ifaTeamUrl:'',
 };
 
 export default function Players() {
@@ -495,6 +499,10 @@ export default function Players() {
                 <input value={f('leagueManual')} onChange={e=>s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
               )}
               {league&&<div className="form-hint">League: <strong>{league}</strong></div>}
+            </Field>
+            <Field label="IFA Team URL" hint="Optional — paste the football.org.il team page URL for this player's current team (used to auto-sync matches for Israeli youth / women / lower leagues).">
+              <input value={f('ifaTeamUrl')} onChange={e=>s('ifaTeamUrl')(e.target.value)}
+                placeholder="https://www.football.org.il/team-details/?season_id=...&team_id=..." />
             </Field>
             <div className="form-grid-2">
               <Field label="Contract Start"><DateInput value={f('contractStart')} onChange={s('contractStart')} /></Field>

@@ -12,6 +12,7 @@
 
 const { schedule } = require('@netlify/functions');
 const admin        = require('firebase-admin');
+const cheerio      = require('cheerio');
 
 const OWNER_EMAIL = 'lou.korek@gmail.com';
 const TZ          = 'Asia/Jerusalem';
@@ -167,14 +168,93 @@ async function sofascoreFetchFixtures(teamId, fromDateMs) {
     });
 }
 
-// ───────────────────── 365 + IFA stubs ─────────────────────
+// ───────────────────── IFA (football.org.il) client ─────────────────────
+// IFA doesn't expose a JSON API. We require a per-player team URL (the page
+// /team-details/?season_id=X&team_id=Y) and parse the "רשימת המשחקים" tables
+// from it. Lou pastes the URL once per Israeli player from the IFA website.
+async function ifaFetchFixtures(teamUrl) {
+  if (!teamUrl || !/football\.org\.il\/team-details\/.+team_id=/i.test(teamUrl)) return [];
+  let res;
+  try {
+    res = await fetch(teamUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
+      },
+    });
+  } catch (e) { console.error('IFA fetch error:', e.message); return []; }
+  if (!res.ok) return [];
+  const html = await res.text();
+  const $ = cheerio.load(html);
+  const out = [];
+
+  $('table').each((_, table) => {
+    const $table = $(table);
+    const headerText = $table.find('th').map((__, th) => $(th).text().replace(/\s+/g, ' ').trim()).get().join(' ');
+    // Only look at the fixture-list tables. Standings (place / wins / etc.)
+    // are skipped. The fixture table has columns including a date column.
+    if (!/תאריך/.test(headerText)) return;
+    if (!/אצטדיון|משחק/.test(headerText)) return;
+    if (/נצ'|הפ'|נק'/.test(headerText)) return; // standings table
+
+    $table.find('tbody tr').each((__, tr) => {
+      const cells = $(tr).find('td').map((___, td) => $(td).text().replace(/\s+/g, ' ').trim()).get();
+      if (cells.length < 4) return;
+      // Find date cell (dd/mm/yyyy) and home/away in the row.
+      const dateIdx = cells.findIndex((c) => /^\d{2}\/\d{2}\/\d{4}$/.test(c));
+      if (dateIdx < 0) return;
+      const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(cells[dateIdx]);
+      const date = `${m[3]}-${m[2]}-${m[1]}`;
+      // Match cell — pick the cell containing " - " (Home - Away).
+      const matchIdx = cells.findIndex((c) => c.includes(' - ') && c.length > cells[dateIdx].length);
+      let homeTeam = '', awayTeam = '';
+      if (matchIdx >= 0) {
+        const txt = cells[matchIdx];
+        const sep = txt.lastIndexOf(' - ');
+        homeTeam = txt.slice(0, sep).trim();
+        awayTeam = txt.slice(sep + 3).trim();
+      }
+      if (!homeTeam || !awayTeam) return;
+      // Stadium = next cell after match; time = next cell that looks like HH:MM.
+      const stadium = (matchIdx >= 0 && cells[matchIdx + 1]) ? cells[matchIdx + 1] : '';
+      const timeCell = cells.find((c) => /^\d{1,2}:\d{2}$/.test(c)) || '';
+
+      // game_id from a link in the row (best unique id we can get from IFA).
+      let sourceMatchId = '';
+      $(tr).find('a[href*="game_id="]').each((___, a) => {
+        const href = $(a).attr('href') || '';
+        const gm = /game_id=(\d+)/.exec(href);
+        if (gm && !sourceMatchId) sourceMatchId = gm[1];
+      });
+      if (!sourceMatchId) sourceMatchId = `${date}|${homeTeam}|${awayTeam}`;
+
+      out.push({
+        source: 'ifa',
+        sourceMatchId,
+        sourceTeamId: teamUrl, // the URL itself identifies the (club × season × age)
+        date,
+        time: timeCell,
+        homeTeam,
+        awayTeam,
+        stadiumName: stadium,
+        season: deriveSeason(date),
+      });
+    });
+  });
+  // Dedup by sourceMatchId.
+  const seen = new Set();
+  return out.filter((m) => { if (seen.has(m.sourceMatchId)) return false; seen.add(m.sourceMatchId); return true; });
+}
+
+// 365 still a stub for the next phase.
 async function stubSearchTeam() { return []; }
 async function stubFetchFixtures() { return []; }
 
 const SOURCE_CLIENTS = {
   sofascore: { searchTeam: sofascoreSearchTeam, fetchFixtures: sofascoreFetchFixtures },
   '365':     { searchTeam: stubSearchTeam,      fetchFixtures: stubFetchFixtures },
-  ifa:       { searchTeam: stubSearchTeam,      fetchFixtures: stubFetchFixtures },
+  // IFA is handled outside this table because it takes a URL, not a team-id.
 };
 
 // ───────────────────── Resolve team ID with caching ─────────────────────
@@ -317,9 +397,19 @@ async function runSync() {
 
       let success = null;
       for (const source of sources) {
-        const teamId = await resolveTeamId(db, p, source);
-        if (!teamId) continue;
-        const fixtures = await SOURCE_CLIENTS[source].fetchFixtures(teamId, fromDateMs);
+        let fixtures = [];
+        if (source === 'ifa') {
+          // IFA path: requires a per-player team URL pasted by the admin.
+          if (!p.ifaTeamUrl) {
+            warnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
+            continue;
+          }
+          fixtures = await ifaFetchFixtures(p.ifaTeamUrl);
+        } else {
+          const teamId = await resolveTeamId(db, p, source);
+          if (!teamId) continue;
+          fixtures = await SOURCE_CLIENTS[source].fetchFixtures(teamId, fromDateMs);
+        }
         if (!fixtures.length) continue;
         const { upserts, removed } = await syncMatchesForPlayer(db, p, source, fixtures);
         stats.upserts += upserts; stats.removed += removed;
@@ -328,7 +418,9 @@ async function runSync() {
         break;
       }
       if (success) stats.processed++;
-      else warnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'no-fixtures-or-team-not-found', triedSources: sources });
+      else if (!warnings.find((w) => w.playerId === p.id)) {
+        warnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'no-fixtures-or-team-not-found', triedSources: sources });
+      }
     } catch (e) {
       console.error(`Sync error for ${p.fullName}:`, e);
       warnings.push({ playerId: p.id, name: p.fullName, reason: 'error', message: String(e?.message || e) });
