@@ -153,16 +153,14 @@ export default function Layout({ user }) {
 
   const SidebarContent = ({ isMobile = false }) => (
     <>
-      {/* Logo */}
+      {/* Logo — IDENTICAL geometry in both states. The icon never moves;
+          the text on its right only fades. */}
       <div style={{
-        padding: collapsed && !isMobile ? '14px 8px' : '16px 14px 12px',
+        padding: '14px 12px',
         borderBottom: '1px solid var(--border)',
-        transition: 'padding 0.2s'
       }}>
         <div style={{
-          display: 'flex', alignItems: 'center',
-          gap: collapsed && !isMobile ? 0 : 10,
-          justifyContent: collapsed && !isMobile ? 'center' : 'flex-start'
+          display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <div style={{
             width: 32, height: 32, borderRadius: 9, flexShrink: 0, overflow: 'hidden',
@@ -171,17 +169,21 @@ export default function Layout({ user }) {
           }}>
             <img src="/logo.png" alt="Gold A&S" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
-          {(!collapsed || isMobile) && (
-            <div>
-              <div style={{
-                fontFamily: 'Cormorant Garamond,serif',
-                fontSize: 16, fontWeight: 700, lineHeight: 1,
-                background: 'linear-gradient(135deg, var(--gold-lt), var(--gold))',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              }}>Gold A&S</div>
-              <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 1, letterSpacing: '0.05em' }}>gold-as.com</div>
-            </div>
-          )}
+          <div style={{
+            overflow: 'hidden',
+            opacity: (collapsed && !isMobile) ? 0 : 1,
+            transition: 'opacity 0.2s ease',
+            pointerEvents: (collapsed && !isMobile) ? 'none' : 'auto',
+          }}>
+            <div style={{
+              fontFamily: 'Cormorant Garamond,serif',
+              fontSize: 16, fontWeight: 700, lineHeight: 1,
+              background: 'linear-gradient(135deg, var(--gold-lt), var(--gold))',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              whiteSpace: 'nowrap',
+            }}>Gold A&S</div>
+            <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 1, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>gold-as.com</div>
+          </div>
         </div>
       </div>
 
@@ -190,20 +192,22 @@ export default function Layout({ user }) {
         {NAV.map((item, i) => {
           if (item.adminOnly && !isAdmin) return null;
           if (item.section) {
-            /* Keep the section header rendered (just visually hidden) when
-               the sidebar is collapsed, so the total stack height of every
-               NavLink stays IDENTICAL between the two states — the icons
-               can't shift vertically because nothing above them changes
-               size. */
+            /* Section header keeps an EXPLICIT fixed height in both states
+               so the stack of NavLinks below it cannot shift vertically.
+               Only the text fades out. */
             const isCollapsedOnDesktop = collapsed && !isMobile;
             return (
               <div key={i} style={{
                 color: 'var(--text-3)', fontSize: 8.5, fontWeight: 700,
                 letterSpacing: '0.1em', textTransform: 'uppercase',
-                padding: '12px 8px 5px',
+                height: 30,
+                lineHeight: '30px',
+                paddingLeft: 8,
                 opacity: isCollapsedOnDesktop ? 0 : 1,
-                visibility: isCollapsedOnDesktop ? 'hidden' : 'visible',
-                transition: 'opacity 0.22s ease',
+                transition: 'opacity 0.2s ease',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
               }}>{item.section}</div>
             );
           }
@@ -431,11 +435,18 @@ export default function Layout({ user }) {
 
       {/* Mobile drawer removed — replaced by RadialMenu above */}
 
-      {/* Main content */}
+      {/* Main content. We deliberately do NOT set overflow:auto on <main>
+          — that turns <main> into a scroll container that on mobile silently
+          eats touch events even when nothing actually overflows it, breaking
+          page scroll on the Dashboard etc. Document-level scrolling is what
+          we want: the body scrolls naturally when content exceeds the
+          viewport, the mobile top-bar (position:fixed) stays pinned, and
+          our internal scroll wrappers (e.g. .matches-scroll, .table-wrap)
+          still create their own scroll regions where they need to. */}
       <main
         className="main-content"
         key={location.pathname}
-        style={{ flex: 1, overflow: 'auto', padding: '22px 22px', minHeight: '100vh' }}
+        style={{ flex: 1, padding: '22px 22px', minHeight: '100vh' }}
       >
         <Outlet />
       </main>
