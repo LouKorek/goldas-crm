@@ -380,18 +380,32 @@ export default function Matches() {
       const user = getAuth().currentUser;
       if (!user) { toast.error('Not signed in.'); return; }
       const token = await user.getIdToken();
-      const res = await fetch('/.netlify/functions/sync-matches', {
+      // Background function: Netlify returns 202 immediately, the actual work
+      // continues for up to 15 minutes. We don't get the final stats inline —
+      // we tell the user we kicked it off and the matches will refresh on
+      // their own via the Firestore listener as the function writes them.
+      const res = await fetch('/.netlify/functions/sync-matches-background', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       });
+      if (res.status === 202 || res.ok) {
+        toast.success('Sync started — matches will appear here as they\'re fetched (≈1–2 min).');
+        // Soft "still working" indicator for ~90 s, then drop it. The real
+        // result is whatever shows up in the matches list via the live
+        // Firestore listener.
+        setTimeout(() => setSyncing(false), 90000);
+        return;
+      }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Sync failed (${res.status})`);
-      toast.success(data.message || 'Sync started.');
+      throw new Error(data.error || `Sync failed (${res.status})`);
     } catch (e) {
       toast.error(e.message || 'Sync failed.');
-    } finally {
       setSyncing(false);
+      return;
     }
+    // Note: in the happy path we DO NOT reach here — the 90s timeout above
+    // owns clearing the syncing flag. This avoids a flicker where the button
+    // re-enables before the user sees fresh data appear.
   };
 
   const [allPlayers, setAllPlayers] = useState([]);

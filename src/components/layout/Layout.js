@@ -190,12 +190,20 @@ export default function Layout({ user }) {
         {NAV.map((item, i) => {
           if (item.adminOnly && !isAdmin) return null;
           if (item.section) {
-            if (collapsed && !isMobile) return <div key={i} style={{ height: 6 }} />;
+            /* Keep the section header rendered (just visually hidden) when
+               the sidebar is collapsed, so the total stack height of every
+               NavLink stays IDENTICAL between the two states — the icons
+               can't shift vertically because nothing above them changes
+               size. */
+            const isCollapsedOnDesktop = collapsed && !isMobile;
             return (
               <div key={i} style={{
                 color: 'var(--text-3)', fontSize: 8.5, fontWeight: 700,
                 letterSpacing: '0.1em', textTransform: 'uppercase',
-                padding: '12px 8px 5px'
+                padding: '12px 8px 5px',
+                opacity: isCollapsedOnDesktop ? 0 : 1,
+                visibility: isCollapsedOnDesktop ? 'hidden' : 'visible',
+                transition: 'opacity 0.22s ease',
               }}>{item.section}</div>
             );
           }
@@ -218,7 +226,7 @@ export default function Layout({ user }) {
                 background: isActive ? 'rgba(201,168,76,0.10)' : 'transparent',
                 /* Smoother choreography: padding/gap animate in lockstep
                    with the sidebar width so nothing pops. */
-                transition: 'background 0.18s ease, color 0.18s ease, transform 0.12s ease, padding 0.32s cubic-bezier(0.16,1,0.3,1), gap 0.32s cubic-bezier(0.16,1,0.3,1)',
+                transition: 'background 0.18s ease, color 0.18s ease, transform 0.12s ease, padding 0.45s cubic-bezier(0.16,1,0.3,1), gap 0.45s cubic-bezier(0.16,1,0.3,1)',
                 position: 'relative',
               }}
               onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'var(--text-1)'; } }}
@@ -248,7 +256,7 @@ export default function Layout({ user }) {
       <div style={{
         borderTop: '1px solid var(--border)',
         padding: (collapsed && !isMobile) ? '12px 13px' : '10px',
-        transition: 'padding 0.32s cubic-bezier(0.16,1,0.3,1)',
+        transition: 'padding 0.45s cubic-bezier(0.16,1,0.3,1)',
       }}>
         {(!collapsed || isMobile) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 2px' }}>
@@ -396,9 +404,10 @@ export default function Layout({ user }) {
           display: 'flex', flexDirection: 'column',
           position: 'sticky', top: 0, height: '100vh',
           flexShrink: 0, overflow: 'hidden',
-          /* Smoother choreography — longer + the ease-out curve we use
-             elsewhere in the theme. */
-          transition: 'width 0.32s cubic-bezier(0.16,1,0.3,1)',
+          /* Longer + softer easing so the rail glides like a drawer
+             rather than snapping. Matches the .45s feel of premium
+             SaaS sidebars. */
+          transition: 'width 0.45s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
         <SidebarContent isMobile={false} />
