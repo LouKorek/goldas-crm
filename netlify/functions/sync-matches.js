@@ -180,8 +180,13 @@ async function sofascoreFetchFixtures(teamId, fromDateMs) {
 // an Israeli IP, but will return 403 on Netlify.
 async function ifaFetchHtml(targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
+  // render=true tells ScraperAPI to spin up a headless browser and execute
+  // JS. Required to clear Cloudflare's anti-bot challenge on football.org.il
+  // (without it the API returns 500 because the proxy itself gets blocked).
+  // Costs 10 ScraperAPI credits per call instead of 1 — at 5 IFA players × 1
+  // call/day that's 1,500 credits/month, comfortably under the 5K free quota.
   const fetchUrl = apiKey
-    ? `https://api.scraperapi.com/?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(targetUrl)}&country_code=il&keep_headers=true`
+    ? `https://api.scraperapi.com/?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=il`
     : targetUrl;
   const via = apiKey ? 'ScraperAPI' : 'direct';
   let res;
@@ -474,25 +479,28 @@ async function runSync() {
   const stats = { totalPlayers: players.length, processed: 0, upserts: 0, removed: 0, perSource: {} };
   const warnings = [];
 
-  for (const p of players) {
+  // Run all players in parallel — each call is bounded by its own external
+  // API (ScraperAPI for IFA can take 10–25s with render=true). Sequentially
+  // this would blow past Netlify's 30s synchronous-function budget; in
+  // parallel the wall-clock time is governed by the slowest single player.
+  // Each player only touches its own player doc + own match docs so there
+  // are no Firestore write conflicts.
+  const perPlayer = await Promise.all(players.map(async (p) => {
+    const localWarnings = [];
     try {
       const sources = decideSources(p);
       if (!sources.length) {
-        warnings.push({ playerId: p.id, name: p.fullName, reason: 'no-source' });
-        continue;
+        return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'no-source' }] };
       }
       if (!p.currentClub) {
-        warnings.push({ playerId: p.id, name: p.fullName, reason: 'no-club' });
-        continue;
+        return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'no-club' }] };
       }
 
-      let success = null;
       for (const source of sources) {
         let fixtures = [];
         if (source === 'ifa') {
-          // IFA path: requires a per-player team URL pasted by the admin.
           if (!p.ifaTeamUrl) {
-            warnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
+            localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
             continue;
           }
           fixtures = await ifaFetchFixtures(p.ifaTeamUrl);
@@ -503,18 +511,26 @@ async function runSync() {
         }
         if (!fixtures.length) continue;
         const { upserts, removed } = await syncMatchesForPlayer(db, p, source, fixtures);
-        stats.upserts += upserts; stats.removed += removed;
-        stats.perSource[source] = (stats.perSource[source] || 0) + 1;
-        success = source;
-        break;
+        return { ok: true, source, upserts, removed, warnings: [] };
       }
-      if (success) stats.processed++;
-      else if (!warnings.find((w) => w.playerId === p.id)) {
-        warnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'no-fixtures-or-team-not-found', triedSources: sources });
+      // No source produced fixtures.
+      if (!localWarnings.length) {
+        localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'no-fixtures-or-team-not-found', triedSources: sources });
       }
+      return { ok: false, warnings: localWarnings };
     } catch (e) {
       console.error(`Sync error for ${p.fullName}:`, e);
-      warnings.push({ playerId: p.id, name: p.fullName, reason: 'error', message: String(e?.message || e) });
+      return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'error', message: String(e?.message || e) }] };
+    }
+  }));
+
+  for (const r of perPlayer) {
+    if (r.warnings.length) warnings.push(...r.warnings);
+    if (r.ok) {
+      stats.processed++;
+      stats.upserts += r.upserts;
+      stats.removed += r.removed;
+      stats.perSource[r.source] = (stats.perSource[r.source] || 0) + 1;
     }
   }
 
