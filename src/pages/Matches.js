@@ -593,8 +593,9 @@ export default function Matches() {
                 style={navBtnStyle()}>‹</button>
               <span style={{
                 // Fixed width so the layout stays identical across Day / 3 Day /
-                // Week / Month — only the text inside changes.
-                width: 170,
+                // Week / Month — only the text inside changes. Kept compact so
+                // the player filter can sit on the same row on mobile.
+                width: 115,
                 textAlign: 'center',
                 fontSize: 13, color: 'var(--text-2)', fontWeight: 500,
                 letterSpacing: '0.01em',
@@ -611,9 +612,10 @@ export default function Matches() {
             </div>
           )}
 
-          <div style={{ marginLeft: 'auto' }}>
-            <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
-          </div>
+          {/* Players filter sits right next to the range navigator (or right
+              next to the view chips in Schedule mode) so on mobile both
+              controls fit on the same row instead of wrapping. */}
+          <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
         </div>
 
       {/* Scrollable match-list area. The header + controls bar above stay
