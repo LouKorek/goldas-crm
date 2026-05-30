@@ -243,10 +243,37 @@ async function ifaFetchFixtures(rawUrl) {
   const $ = cheerio.load(html);
   const rowCount = $('a.table_row.link_url').length;
   console.log(`IFA fetch ${fetchUrl} (via ${via}) → status=${status} html_len=${html.length} rows=${rowCount}`);
-  if (rowCount === 0) {
-    // Surface a small HTML excerpt to diagnose blocking / CSR-only pages.
-    const snippet = html.replace(/\s+/g, ' ').slice(0, 600);
-    console.log('IFA HTML snippet:', snippet);
+  // Diagnostic dump when there aren't enough match rows to be a real fixture
+  // list (only the header showed up, or the page uses a different DOM in
+  // English). We log:
+  //   1) A long HTML snippet anchored on the first occurrence of "date"
+  //      or "match" or "team-games" so we see the actual structure.
+  //   2) A summary of all class names that look like they could be a match
+  //      row (table/row/fixture/match/game).
+  // This lets me design the right selector without guessing.
+  if (rowCount < 5) {
+    const $tables = $('table');
+    const $allRows = $('tr, .table_row, .fixture-row, .game-row, .match-row, [class*="fixture"], [class*="game-row"]');
+    const summary = {
+      tableCount: $tables.length,
+      anchorWithGameId: $('a[href*="game_id="]').length,
+      candidateRowSelectors: $allRows.length,
+      classesSeen: [],
+    };
+    const classes = new Set();
+    $('div, a, tr').each((_, el) => {
+      const cls = $(el).attr('class') || '';
+      cls.split(/\s+/).forEach(c => {
+        if (/table|row|fixture|game|match|sched/i.test(c) && c.length < 40) classes.add(c);
+      });
+    });
+    summary.classesSeen = Array.from(classes).slice(0, 30);
+    console.log('IFA diag:', JSON.stringify(summary));
+    // First 2.5K of stripped HTML, starting wherever interesting content begins.
+    const stripped = html.replace(/\s+/g, ' ');
+    const anchor = stripped.search(/game_id=|fixture|game-row|table_row|<table/i);
+    const start = anchor > 0 ? Math.max(0, anchor - 200) : 0;
+    console.log('IFA HTML snippet:', stripped.slice(start, start + 2500));
   }
   const out = [];
 
