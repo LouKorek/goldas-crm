@@ -193,9 +193,17 @@ async function ifaFetchFixtures(rawUrl) {
       },
     });
   } catch (e) { console.error('IFA fetch error:', e.message); return []; }
-  if (!res.ok) return [];
+  const status = res.status;
+  if (!res.ok) { console.log(`IFA fetch ${fetchUrl} → status=${status}`); return []; }
   const html = await res.text();
   const $ = cheerio.load(html);
+  const rowCount = $('a.table_row.link_url').length;
+  console.log(`IFA fetch ${fetchUrl} → status=${status} html_len=${html.length} rows=${rowCount}`);
+  if (rowCount === 0) {
+    // Surface a small HTML excerpt to diagnose blocking / CSR-only pages.
+    const snippet = html.replace(/\s+/g, ' ').slice(0, 600);
+    console.log('IFA HTML snippet:', snippet);
+  }
   const out = [];
 
   // Each match row is rendered as:
