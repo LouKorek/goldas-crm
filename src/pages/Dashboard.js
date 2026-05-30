@@ -298,7 +298,7 @@ export default function Dashboard() {
 
         {/* Upcoming matches */}
         <div className="card card-body">
-          <div className="section-label" style={{marginBottom:14}}>🗓 Upcoming Matches</div>
+          <div className="section-label" style={{marginBottom:14}}>🏟 Upcoming Matches</div>
           {upcomingMatches.length === 0 ? (
             <p style={{color:'var(--text-3)',fontSize:13}}>No upcoming matches scheduled.</p>
           ) : (
@@ -336,7 +336,7 @@ export default function Dashboard() {
 
         {/* Recently added */}
         <div className="card card-body">
-          <div className="section-label" style={{marginBottom:14}}>👤 Recently Added Players</div>
+          <div className="section-label" style={{marginBottom:14}}>🤝 Recently Added Players</div>
           {players.slice(0,6).map(p => (
             <div key={p.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
               <div>

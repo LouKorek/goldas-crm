@@ -166,7 +166,7 @@ export default function Login({ denied }) {
               justifyContent: 'center',
               gap: 12,
               transition: 'all 0.2s ease',
-              fontFamily: 'Outfit, sans-serif',
+              fontFamily: 'var(--font-body)',
               letterSpacing: '0.01em',
               boxShadow: '0 4px 20px rgba(201,168,76,0.2)',
             }}
