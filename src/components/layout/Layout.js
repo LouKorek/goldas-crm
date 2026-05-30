@@ -218,6 +218,14 @@ export default function Layout({ user }) {
                    states so the icons never shift vertically when the
                    sidebar toggles — only the horizontal padding changes. */
                 padding: collapsed && !isMobile ? '9px 0' : '9px 10px',
+                /* Explicit row height lock: when the right-hand text label
+                   disappears in collapsed mode, the row height is derived
+                   only from the icon's line-box. Forcing a fixed height
+                   (and the icon's own line-height) removes any browser-side
+                   variance between an icon-only row and an icon-plus-text
+                   row. */
+                height: 34,
+                lineHeight: '34px',
                 justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
                 borderRadius: 8, marginBottom: 2,
                 textDecoration: 'none',
@@ -228,6 +236,7 @@ export default function Layout({ user }) {
                    with the sidebar width so nothing pops. */
                 transition: 'background 0.18s ease, color 0.18s ease, transform 0.12s ease, padding 0.45s cubic-bezier(0.16,1,0.3,1), gap 0.45s cubic-bezier(0.16,1,0.3,1)',
                 position: 'relative',
+                boxSizing: 'border-box',
               }}
               onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'var(--text-1)'; } }}
               onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-2)'; } }}

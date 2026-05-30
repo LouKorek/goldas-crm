@@ -1,18 +1,18 @@
-// Daily auto-sync of match fixtures for represented players.
+// Auto-sync of match fixtures for represented players.
 //
-// Runs on Netlify's scheduler (06:00 UTC) and is also invokable from the
-// Matches screen via the Sync Now button (admin only — verified with a
-// Firebase ID token).
+// This is a Netlify BACKGROUND function (filename ends in `-background.js`)
+// which gives us a 15-minute timeout instead of the synchronous 30-second
+// limit. Netlify returns 202 to the caller immediately, then the work
+// continues in the background. The Sync Now button on the Matches screen
+// invokes this directly; the daily 06:00 UTC cron is handled separately
+// (we used to mix schedule() + this file but background + schedule together
+// produced flaky behavior, so the cron now lives in its own tiny function).
 //
-// PHASE 2: SofaScore client is fully wired. 365 and IFA clients are stubs
-// that return [] for now — they'll be added in the next phases. The pipeline
-// already handles routing, fallbacks, caching team IDs, upserts by
-// (source, sourceMatchId), and unlinking a player from future auto matches
-// when their team no longer matches the latest fetch (e.g., after a transfer).
+// SofaScore client is wired; 365 is a stub; IFA goes through ScraperAPI
+// to bypass football.org.il's IP block.
 
-const { schedule } = require('@netlify/functions');
-const admin        = require('firebase-admin');
-const cheerio      = require('cheerio');
+const admin   = require('firebase-admin');
+const cheerio = require('cheerio');
 
 const OWNER_EMAIL = 'lou.korek@gmail.com';
 const TZ          = 'Asia/Jerusalem';
@@ -597,38 +597,41 @@ async function runSync() {
   };
 }
 
-// ───────────────────── Handler (scheduled + HTTP) ─────────────────────
-exports.handler = schedule('0 6 * * *', async (event) => {
+// ───────────────────── Handler (HTTP-only background) ─────────────────────
+// Background functions accept POST and return 202 immediately; the body
+// returned here is only seen in the function logs (the client already has
+// its 202 by the time we finish writing it).
+exports.handler = async (event) => {
   getDb();
 
-  const isHttp = event && event.httpMethod;
-  if (isHttp) {
-    const auth = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
-    const token = auth.replace(/^Bearer /i, '').trim();
-    if (!token) return { statusCode: 401, body: JSON.stringify({ error: 'No auth token' }) };
-    try {
-      const decoded = await admin.auth().verifyIdToken(token);
-      if ((decoded.email || '').toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Forbidden' }) };
-      }
-    } catch (e) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token' }) };
+  // Auth is REQUIRED — owner-only. Even though the caller doesn't wait for
+  // our response, we still validate the token before doing any work.
+  const auth = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
+  const token = auth.replace(/^Bearer /i, '').trim();
+  if (!token) return { statusCode: 401, body: JSON.stringify({ error: 'No auth token' }) };
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    if ((decoded.email || '').toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
+      return { statusCode: 403, body: JSON.stringify({ error: 'Forbidden' }) };
     }
+  } catch (e) {
+    return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token' }) };
   }
 
   try {
     const result = await runSync();
+    console.log('Sync complete via HTTP:', JSON.stringify(result.stats));
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(result),
     };
   } catch (e) {
-    console.error('sync-matches failed:', e);
+    console.error('sync-matches-background failed:', e);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: String(e?.message || e) }),
     };
   }
-});
+};
