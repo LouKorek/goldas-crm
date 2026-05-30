@@ -54,8 +54,20 @@ function deriveSeason(dateStr) {
 }
 
 // ───────────────────── Routing ─────────────────────
+// Effective country for a player. Rule: if only a league is written (manual
+// league text) and no country, treat the player as based in the US — that's
+// how the agency tags US college / academy leagues that don't fit the
+// country+tier picker.
+function effectiveCountry(p) {
+  const raw = (p.leagueCountry || '').trim();
+  if (raw) return raw;
+  const hasManualLeague = !!((p.leagueManual || '').trim());
+  if (hasManualLeague) return 'United States';
+  return '';
+}
+
 function decideSources(p) {
-  const country  = (p.leagueCountry || '').trim().toLowerCase();
+  const country  = effectiveCountry(p).toLowerCase();
   const isIsrael = country === 'israel';
   const isWomen  = p.gender === 'Women';
   const isYouth  = !!p.currentClubIsYouth;
@@ -173,7 +185,7 @@ async function resolveTeamId(db, player, source) {
 
   const client = SOURCE_CLIENTS[source];
   const teams = await client.searchTeam(player.currentClub, {
-    country: player.leagueCountry,
+    country: effectiveCountry(player),
     gender:  player.gender,
   });
   if (!teams.length) return null;
