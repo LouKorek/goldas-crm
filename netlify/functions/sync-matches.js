@@ -269,6 +269,9 @@ async function ifaFetchFixtures(rawUrl) {
     const homeTeam = matchStr.slice(0, sep).trim();
     const awayTeam = matchStr.slice(sep + 3).trim();
     if (!homeTeam || !awayTeam) return;
+    // IFA marks a "bye" round (no opponent that week) as a match against
+    // "חופשית" — these aren't real matches, skip them entirely.
+    if (homeTeam === 'חופשית' || awayTeam === 'חופשית') return;
     if (!sourceMatchId) sourceMatchId = `${date}|${homeTeam}|${awayTeam}`;
 
     out.push({
@@ -406,33 +409,52 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
 
   // Upsert each fetched match.
   for (const fm of fetched) {
+    // Stadiums on auto-synced matches get a Google Maps search URL so the
+    // Match card's location chip is clickable, matching manual matches.
+    const stadiumMapsUrl = fm.stadiumName
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fm.stadiumName)}`
+      : '';
+
     const ex = existing.get(fm.sourceMatchId);
     if (ex) {
+      // Past matches are FROZEN — once a match has happened it's part of the
+      // player's history and we never let a later sync rewrite it. This is
+      // critical when a player moves to a new club: the past matches at the
+      // old club must stay untouched.
+      if (ex.data.date && ex.data.date < todayStr) continue;
       const linked = new Set(ex.data.linkedPlayers || []);
       linked.add(player.id);
       await ex.ref.update({
         date: fm.date, time: fm.time,
         homeTeam: fm.homeTeam, awayTeam: fm.awayTeam,
         stadiumName: fm.stadiumName,
+        stadiumMapsUrl,
         sourceTeamId: fm.sourceTeamId,
         season: fm.season,
         linkedPlayers: Array.from(linked),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         lastFetchedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      upserts++;
     } else {
       // Maybe another player already created this same match — link instead.
       const otherSnap = await col.where('source', '==', source)
         .where('sourceMatchId', '==', fm.sourceMatchId).limit(1).get();
       if (!otherSnap.empty) {
+        const otherData = otherSnap.docs[0].data();
+        // Same frozen rule for the link-to-existing path: a past match
+        // belongs to whoever played in it at the time. Don't add this
+        // player to it just because their new team has it in its archive.
+        if (otherData.date && otherData.date < todayStr) continue;
         const ref = otherSnap.docs[0].ref;
-        const linked = new Set(otherSnap.docs[0].data().linkedPlayers || []);
+        const linked = new Set(otherData.linkedPlayers || []);
         linked.add(player.id);
         await ref.update({
           linkedPlayers: Array.from(linked),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           lastFetchedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        upserts++;
       } else {
         await col.add({
           source,
@@ -446,7 +468,7 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
           awayTeamIsYouth: false,
           stadiumName:    fm.stadiumName,
           stadiumPlaceId: '',
-          stadiumMapsUrl: '',
+          stadiumMapsUrl,
           notes:          '',
           season:         fm.season,
           linkedPlayers:  [player.id],
@@ -457,9 +479,9 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
           lastEditedBy:   'sync',
           lastEditedByName: 'Auto-sync',
         });
+        upserts++;
       }
     }
-    upserts++;
   }
 
   return { upserts, removed };

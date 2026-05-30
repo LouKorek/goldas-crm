@@ -208,6 +208,29 @@ export default function Players() {
   const isEU   = isEuropean(form.nationalities);
   const isFree = form.contractStatus === 'Free';
   const isLoan = form.contractStatus === 'Loan';
+
+  // Custom setter for contractStatus: when the status actually changes, wipe
+  // all the dependent club/contract/league fields. Without this, toggling
+  // Free → Under Contract re-shows the previous club's data that was still
+  // sitting in form state (just hidden behind the {!isFree} guard).
+  const setContractStatus = (newStatus) => {
+    if (newStatus === form.contractStatus) return;
+    setForm(prev => ({
+      ...prev,
+      contractStatus: newStatus,
+      currentClub: '',
+      currentClubIsYouth: false,
+      loanFrom: '',
+      contractStart: '',
+      contractEnd: '',
+      loanParentEnd: '',
+      leagueMode: 'select',
+      leagueCountry: '',
+      leagueTier: '',
+      leagueManual: '',
+      ifaTeamUrl: '',
+    }));
+  };
   const league = form.leagueMode==='manual' ? form.leagueManual
     : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
@@ -471,7 +494,7 @@ export default function Players() {
 
           <hr className="divider" />
           <div className="form-section-title">Club & Contract</div>
-          <Field label="Contract Status"><ChipGroup options={CONTRACT_STATUS} value={f('contractStatus')} onChange={s('contractStatus')} /></Field>
+          <Field label="Contract Status"><ChipGroup options={CONTRACT_STATUS} value={f('contractStatus')} onChange={setContractStatus} /></Field>
           {!isFree&&(<>
             <div className="form-grid-2">
               <Field label="Current Club">
