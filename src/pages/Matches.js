@@ -3,7 +3,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
-import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, ActionButtons } from 'components/ui/UI';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, ActionButtons, ChipGroup } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -222,6 +222,109 @@ const EMPTY = {
   stadiumName: '', stadiumPlaceId: '', stadiumMapsUrl: '', notes: '', linkedPlayers: [],
 };
 
+// ── View modes + range helpers ───────────────────────────────────
+const VIEW_OPTIONS = ['Schedule', 'Day', '3 Day', 'Week', 'Month'];
+const startOfDay  = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const addDays     = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const startOfWeek = (d) => { const x = startOfDay(d); x.setDate(x.getDate() - x.getDay()); return x; }; // Sunday-start
+const startOfMonth = (d) => { const x = startOfDay(d); x.setDate(1); return x; };
+
+// Returns [start, endExclusive] for the active view, or null for "Schedule".
+function getRange(view, anchor) {
+  const a = startOfDay(anchor);
+  if (view === 'Day')   return [a, addDays(a, 1)];
+  if (view === '3 Day') return [a, addDays(a, 3)];
+  if (view === 'Week')  { const s = startOfWeek(a); return [s, addDays(s, 7)]; }
+  if (view === 'Month') { const s = startOfMonth(a); return [s, new Date(s.getFullYear(), s.getMonth() + 1, 1)]; }
+  return null;
+}
+function getRangeLabel(view, anchor) {
+  const r = getRange(view, anchor);
+  if (!r) return '';
+  const [s, e] = r;
+  const end = addDays(e, -1);
+  if (view === 'Day')   return s.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  if (view === 'Month') return s.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const sameYr = s.getFullYear() === end.getFullYear();
+  return `${s.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: sameYr ? undefined : 'numeric' })}`;
+}
+
+// ── Players multi-select filter (search + checkbox list inside a popover) ──
+function PlayersFilter({ allPlayers, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ]       = useState('');
+  const ref             = useRef();
+
+  useEffect(() => {
+    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const filtered = q
+    ? allPlayers.filter(p => (p.fullName || '').toLowerCase().includes(q.toLowerCase()))
+    : allPlayers;
+  const toggle = (id) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
+  const clear  = () => onChange([]);
+  const selectedCount = value.length;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{
+          height: 36, padding: '0 12px', borderRadius: 8,
+          background: selectedCount ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${selectedCount ? 'var(--gold)' : 'var(--border)'}`,
+          color: selectedCount ? 'var(--gold)' : 'var(--text-2)',
+          fontSize: 13, fontWeight: 500, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+        }}>
+        👤 {selectedCount ? `Players (${selectedCount})` : 'All Players'} <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          width: 280, zIndex: 60,
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-2)',
+          borderRadius: 10,
+          boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+          padding: 10,
+        }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players…" autoFocus
+            style={{ width: '100%', marginBottom: 8 }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {selectedCount ? `${selectedCount} selected` : 'None selected'}
+            </div>
+            {selectedCount > 0 && (
+              <button type="button" onClick={clear}
+                style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>
+                Clear all
+              </button>
+            )}
+          </div>
+          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--input-bg)' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
+            ) : filtered.map(p => {
+              const sel = value.includes(p.id);
+              return (
+                <div key={p.id} onClick={() => toggle(p.id)}
+                  style={{ padding: '7px 10px', cursor: 'pointer', display: 'flex', gap: 9, alignItems: 'center', background: sel ? 'var(--gold-dim)' : 'transparent' }}>
+                  <input type="checkbox" readOnly checked={sel} style={{ accentColor: 'var(--gold)', width: 14, height: 14, pointerEvents: 'none' }} />
+                  <span style={{ color: sel ? 'var(--gold)' : 'var(--text-2)', fontSize: 13, flex: 1 }}>{p.fullName}</span>
+                  {p.primaryPosition && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{p.primaryPosition}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 async function clearAll_matches() {
   if (!window.confirm('Delete ALL matches? This cannot be undone.')) return;
   const snap = await getDocs(collection(db, 'matches'));
@@ -237,6 +340,9 @@ export default function Matches() {
   const [saving, setSaving]   = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [search, setSearch]   = useState('');
+  const [view, setView]       = useState('Schedule');         // Schedule | Day | 3 Day | Week | Month
+  const [anchorDate, setAnchorDate] = useState(new Date());   // pivot date for range views
+  const [playerFilter, setPlayerFilter] = useState([]);       // selected represented player IDs
   const { confirm, dialog }   = useConfirm();
   const { canEdit }           = useRole();
 
@@ -275,10 +381,48 @@ export default function Matches() {
     toast.success('Deleted.');
   };
 
-  const now      = new Date();
-  const filtered = items.filter(m => !search || `${m.homeTeam} ${m.awayTeam} ${m.stadiumName}`.toLowerCase().includes(search.toLowerCase()));
-  const upcoming = filtered.filter(m => !m.date || new Date(m.date) >= now);
-  const past     = filtered.filter(m => m.date && new Date(m.date) < now);
+  const now = new Date();
+
+  // Apply search + player filter to all matches first.
+  const baseFiltered = items.filter(m => {
+    if (search && !`${m.homeTeam} ${m.awayTeam} ${m.stadiumName}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (playerFilter.length) {
+      const linked = m.linkedPlayers || [];
+      if (!linked.some(id => playerFilter.includes(id))) return false;
+    }
+    return true;
+  });
+
+  // Schedule view splits into upcoming / past; range views filter by date window.
+  const range = getRange(view, anchorDate);
+  const upcoming = range ? [] : baseFiltered.filter(m => !m.date || new Date(m.date) >= now);
+  const past     = range ? [] : baseFiltered.filter(m => m.date && new Date(m.date) < now);
+  const inRange  = range
+    ? baseFiltered.filter(m => {
+        if (!m.date) return false;
+        const d = new Date(m.date);
+        return d >= range[0] && d < range[1];
+      }).sort((a, b) => {
+        const dc = (a.date || '').localeCompare(b.date || '');
+        if (dc !== 0) return dc;
+        return (a.time || '').localeCompare(b.time || '');
+      })
+    : [];
+
+  // Group range matches by day for display.
+  const groupedByDay = (() => {
+    if (!range) return [];
+    const map = {};
+    inRange.forEach(m => { (map[m.date] = map[m.date] || []).push(m); });
+    return Object.keys(map).sort().map(date => ({ date, items: map[date] }));
+  })();
+
+  const stepDays = { Day: 1, '3 Day': 3, Week: 7 };
+  const stepAnchor = (dir) => {
+    if (view === 'Month') setAnchorDate(d => new Date(d.getFullYear(), d.getMonth() + dir, 1));
+    else if (stepDays[view]) setAnchorDate(d => addDays(d, stepDays[view] * dir));
+  };
+  const goToday = () => setAnchorDate(new Date());
 
   const MatchCard = ({ m }) => {
     const linkedNames = allPlayers.filter(p => (m.linkedPlayers || []).includes(p.id)).map(p => p.fullName);
@@ -336,6 +480,16 @@ export default function Matches() {
     );
   };
 
+  // Style for the prev / today / next buttons in the date navigator.
+  const navBtnStyle = () => ({
+    width: 30, height: 30, borderRadius: 8,
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-1)', fontSize: 16,
+    cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  });
+
   // ── Youth toggle helper ──────────────────────────────────────────
   const YouthToggle = ({ field }) => (
     <button type="button"
@@ -367,12 +521,60 @@ export default function Matches() {
         }
       />
 
+      {/* Controls bar: view toggle, date navigator (range views only), player filter */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        marginBottom: 18, padding: '10px 12px',
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+      }}>
+        <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+
+        {view !== 'Schedule' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+            <button type="button" onClick={() => stepAnchor(-1)} title="Previous"
+              style={navBtnStyle()}>‹</button>
+            <button type="button" onClick={goToday}
+              style={{ ...navBtnStyle(), padding: '0 12px', fontSize: 12 }}>Today</button>
+            <button type="button" onClick={() => stepAnchor(1)} title="Next"
+              style={navBtnStyle()}>›</button>
+            <span style={{
+              fontSize: 13, color: 'var(--text-2)', marginLeft: 8, fontWeight: 500,
+              letterSpacing: '0.01em',
+            }}>{getRangeLabel(view, anchorDate)}</span>
+          </div>
+        )}
+
+        <div style={{ marginLeft: 'auto' }}>
+          <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
+        </div>
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
         <Empty icon="🏟" message="No matches scheduled."
           action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
+      ) : range ? (
+        // ── Range view (Day / 3 Day / Week / Month) ──
+        groupedByDay.length === 0 ? (
+          <Empty icon="📅" message={`No matches in this ${view.toLowerCase()}.`} />
+        ) : (
+          groupedByDay.map(g => (
+            <div key={g.date} style={{ marginBottom: 22 }}>
+              <div className="section-label" style={{ marginBottom: 10 }}>
+                {new Date(g.date).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
+                <span style={{ color: 'var(--text-3)', marginLeft: 8, fontWeight: 400 }}>
+                  ({g.items.length} match{g.items.length !== 1 ? 'es' : ''})
+                </span>
+              </div>
+              {g.items.map(m => <MatchCard key={m.id} m={m} />)}
+            </div>
+          ))
+        )
       ) : (
+        // ── Schedule view: upcoming + past ──
         <>
           {upcoming.length > 0 && (
             <div style={{ marginBottom: 28 }}>
@@ -387,6 +589,9 @@ export default function Matches() {
                 {[...past].reverse().slice(0, 10).map(m => <MatchCard key={m.id} m={m} />)}
               </div>
             </div>
+          )}
+          {upcoming.length === 0 && past.length === 0 && (
+            <Empty icon="🔍" message="No matches match your filters." />
           )}
         </>
       )}
