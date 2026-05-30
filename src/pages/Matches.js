@@ -551,68 +551,80 @@ export default function Matches() {
 
   return (
     <div>
-      <PageHeader
-        title="Matches"
-        subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
-        action={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>}
-            {isAdmin && (
-              <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
-                style={{ height: 36, whiteSpace: 'nowrap' }}
-                title="Pull match fixtures from IFA / 365 / SofaScore for every represented player">
-                {syncing ? '🔄 Syncing…' : '🔄 Sync Now'}
-              </button>
-            )}
-            <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
-            </div>
-            {canEdit && <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
-              style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
-              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-              🗑 Clear All
-            </button>}
-          </div>
-        }
-      />
-
-      {/* Controls bar: view toggle, date navigator (range views only), player filter */}
+      {/* Sticky top section: header + controls bar stay pinned while scrolling
+          the match list. background:var(--bg) prevents scrolled content from
+          showing through; z-index keeps it above match cards. */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        marginBottom: 18, padding: '10px 12px',
-        background: 'rgba(255,255,255,0.02)',
-        border: '1px solid var(--border)',
-        borderRadius: 10,
+        position: 'sticky',
+        top: 0,
+        zIndex: 20,
+        background: 'var(--bg)',
+        paddingTop: 1,
+        marginTop: -1,
       }}>
-        <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+        <PageHeader
+          title="Matches"
+          subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
+          action={
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>}
+              {isAdmin && (
+                <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
+                  style={{ height: 36, whiteSpace: 'nowrap' }}
+                  title="Pull match fixtures from IFA / 365 / SofaScore for every represented player">
+                  {syncing ? '🔄 Syncing…' : '🔄 Sync Now'}
+                </button>
+              )}
+              <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
+                <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              </div>
+              {canEdit && <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
+                style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
+                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
+                🗑 Clear All
+              </button>}
+            </div>
+          }
+        />
 
-        {view !== 'Schedule' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
-            <button type="button" onClick={() => stepAnchor(-1)} title="Previous"
-              style={navBtnStyle()}>‹</button>
-            <span style={{
-              // Fixed width so the layout stays identical across Day / 3 Day /
-              // Week / Month — only the text inside changes.
-              width: 170,
-              textAlign: 'center',
-              fontSize: 13, color: 'var(--text-2)', fontWeight: 500,
-              letterSpacing: '0.01em',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>{getRangeLabel(view, anchorDate)}</span>
-            <button type="button" onClick={() => stepAnchor(1)} title="Next"
-              style={navBtnStyle()}>›</button>
-            <button type="button" onClick={goToday} title="Jump to the current period"
-              style={{ ...navBtnStyle(), width: 'auto', padding: '0 12px', fontSize: 12, marginLeft: 4 }}>
-              Today
-            </button>
+        {/* Controls bar: view toggle, date navigator (range views only), player filter */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          marginBottom: 18, padding: '10px 12px',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+        }}>
+          <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+
+          {view !== 'Schedule' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+              <button type="button" onClick={() => stepAnchor(-1)} title="Previous"
+                style={navBtnStyle()}>‹</button>
+              <span style={{
+                // Fixed width so the layout stays identical across Day / 3 Day /
+                // Week / Month — only the text inside changes.
+                width: 170,
+                textAlign: 'center',
+                fontSize: 13, color: 'var(--text-2)', fontWeight: 500,
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>{getRangeLabel(view, anchorDate)}</span>
+              <button type="button" onClick={() => stepAnchor(1)} title="Next"
+                style={navBtnStyle()}>›</button>
+              <button type="button" onClick={goToday} title="Jump to the current period"
+                style={{ ...navBtnStyle(), width: 'auto', padding: '0 12px', fontSize: 12, marginLeft: 4 }}>
+                Today
+              </button>
+            </div>
+          )}
+
+          <div style={{ marginLeft: 'auto' }}>
+            <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
           </div>
-        )}
-
-        <div style={{ marginLeft: 'auto' }}>
-          <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
         </div>
       </div>
 
