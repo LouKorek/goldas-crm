@@ -220,7 +220,31 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
 const EMPTY = {
   date: '', time: '', homeTeam: '', homeTeamIsYouth: false, awayTeam: '', awayTeamIsYouth: false,
   stadiumName: '', stadiumPlaceId: '', stadiumMapsUrl: '', notes: '', linkedPlayers: [],
+  source: 'manual', sourceMatchId: '', sourceTeamId: '', season: '',
 };
+
+// ── Source badge for the match card ──────────────────────────────
+const SOURCE_BADGE = {
+  manual:    { label: 'Manual',           icon: '✋', color: 'rgba(255,255,255,0.55)', bg: 'rgba(255,255,255,0.04)' },
+  ifa:       { label: 'Auto · IFA',       icon: '🤖', color: '#60A5FA', bg: 'rgba(96,165,250,0.10)' },
+  '365':     { label: 'Auto · 365',       icon: '🤖', color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
+  sofascore: { label: 'Auto · SofaScore', icon: '🤖', color: '#A78BFA', bg: 'rgba(167,139,250,0.10)' },
+};
+function SourceBadge({ source }) {
+  const c = SOURCE_BADGE[source || 'manual'] || SOURCE_BADGE.manual;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      background: c.bg, color: c.color,
+      border: `1px solid ${c.color}55`,
+      borderRadius: 4, padding: '2px 7px',
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+      textTransform: 'uppercase', whiteSpace: 'nowrap',
+    }}>
+      <span style={{ fontSize: 11 }}>{c.icon}</span> {c.label}
+    </span>
+  );
+}
 
 // ── View modes + range helpers ───────────────────────────────────
 const VIEW_OPTIONS = ['Schedule', 'Day', '3 Day', 'Week', 'Month'];
@@ -344,7 +368,31 @@ export default function Matches() {
   const [anchorDate, setAnchorDate] = useState(new Date());   // pivot date for range views
   const [playerFilter, setPlayerFilter] = useState([]);       // selected represented player IDs
   const { confirm, dialog }   = useConfirm();
-  const { canEdit }           = useRole();
+  const { canEdit, isAdmin }  = useRole();
+  const [syncing, setSyncing] = useState(false);
+
+  // Admin-only: trigger the Netlify sync function for all represented players.
+  const syncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const { getAuth } = await import('firebase/auth');
+      const user = getAuth().currentUser;
+      if (!user) { toast.error('Not signed in.'); return; }
+      const token = await user.getIdToken();
+      const res = await fetch('/.netlify/functions/sync-matches', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Sync failed (${res.status})`);
+      toast.success(data.message || 'Sync started.');
+    } catch (e) {
+      toast.error(e.message || 'Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const [allPlayers, setAllPlayers] = useState([]);
   useEffect(() => { return listenCollection(PATHS.PLAYERS, setAllPlayers); }, []);
@@ -446,6 +494,7 @@ export default function Matches() {
 
             {/* Date / stadium */}
             <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              <SourceBadge source={m.source} />
               <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
               {m.stadiumName && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -508,6 +557,13 @@ export default function Matches() {
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>}
+            {isAdmin && (
+              <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
+                style={{ height: 36, whiteSpace: 'nowrap' }}
+                title="Pull match fixtures from IFA / 365 / SofaScore for every represented player">
+                {syncing ? '🔄 Syncing…' : '🔄 Sync Now'}
+              </button>
+            )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
