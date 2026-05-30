@@ -392,11 +392,19 @@ export default function Layout({ user }) {
 
       {/* Mobile drawer removed — replaced by RadialMenu above */}
 
-      {/* Main content */}
+      {/* Main content.
+          NOTE: we intentionally do NOT set `overflow: auto` here. With a
+          flex parent whose height grows with content, `overflow: auto` would
+          register <main> as a scroll container that NEVER actually scrolls
+          (height always == content height), which silently breaks any
+          position:sticky descendant — sticky binds to its nearest scrolling
+          ancestor, and that ancestor must really scroll for the effect to
+          fire. Leaving overflow as visible delegates scrolling to the
+          document, which works correctly for sticky. */}
       <main
         className="main-content"
         key={location.pathname}
-        style={{ flex: 1, overflow: 'auto', padding: '22px 22px', minHeight: '100vh' }}
+        style={{ flex: 1, padding: '22px 22px', minHeight: '100vh' }}
       >
         <Outlet />
       </main>

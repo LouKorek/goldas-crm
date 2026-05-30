@@ -197,12 +197,16 @@ export function Field({ label, children, hint, error, required }) {
 }
 
 // ── Chip group ────────────────────────────────────────────────────
-export function ChipGroup({ options, value, onChange, multi, labels }) {
+// `required` (single-select only) suppresses the toggle-off behavior so
+// clicking the currently selected chip is a no-op — useful where one of the
+// options must always be chosen (e.g., view mode on the Matches screen).
+export function ChipGroup({ options, value, onChange, multi, labels, required }) {
   const vals = multi ? (Array.isArray(value) ? value : []) : [];
   const isActive = (o) => multi ? vals.includes(o) : value === o;
   const toggle = (o) => {
     if (multi) onChange(vals.includes(o) ? vals.filter(v => v !== o) : [...vals, o]);
-    else       onChange(value === o ? '' : o);
+    else if (value === o) { if (!required) onChange(''); }
+    else                    onChange(o);
   };
   return (
     <div className="chip-group">

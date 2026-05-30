@@ -603,7 +603,7 @@ export default function Matches() {
           border: '1px solid var(--border)',
           borderRadius: 10,
         }}>
-          <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} />
+          <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} required />
 
           {view !== 'Schedule' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
