@@ -551,16 +551,23 @@ export default function Matches() {
 
   return (
     <div>
-      {/* Sticky top section: header + controls bar stay pinned while scrolling
-          the match list. background:var(--bg) prevents scrolled content from
-          showing through; z-index keeps it above match cards. */}
+      {/* Sticky top section. Negative horizontal margins cancel <main>'s
+          padding so the sticky bar fills the full scroll-port width — and
+          paddingLeft/Right restore the inset for the content inside. The
+          marginTop/paddingTop pair pulls the sticky edge to the very top of
+          the scroll-port so the bar covers what scrolls beneath it. */}
       <div style={{
         position: 'sticky',
         top: 0,
-        zIndex: 20,
+        zIndex: 50,
         background: 'var(--bg)',
-        paddingTop: 1,
-        marginTop: -1,
+        marginTop: -22,
+        marginLeft: -22,
+        marginRight: -22,
+        paddingTop: 22,
+        paddingLeft: 22,
+        paddingRight: 22,
+        paddingBottom: 6,
       }}>
         <PageHeader
           title="Matches"
@@ -663,7 +670,9 @@ export default function Matches() {
             <div>
               <div className="section-label" style={{ marginBottom: 12, color: 'var(--text-3)' }}>Past ({past.length})</div>
               <div style={{ opacity: 0.65 }}>
-                {[...past].reverse().slice(0, 10).map(m => <MatchCard key={m.id} m={m} />)}
+                {/* Show ALL past matches (newest first). Previous version capped at
+                    10 which made the total count seem wrong vs the visible list. */}
+                {[...past].reverse().map(m => <MatchCard key={m.id} m={m} />)}
               </div>
             </div>
           )}
