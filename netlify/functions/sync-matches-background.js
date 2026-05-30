@@ -198,13 +198,29 @@ function normalizeIfaTime(s) {
 
 async function ifaFetchHtml(targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  // render=true tells ScraperAPI to spin up a headless browser and execute
-  // JS. Required to clear Cloudflare's anti-bot challenge on football.org.il
-  // (without it the API returns 500 because the proxy itself gets blocked).
-  // Costs 10 ScraperAPI credits per call instead of 1 — at 5 IFA players × 1
-  // call/day that's 1,500 credits/month, comfortably under the 5K free quota.
+  // render=true   — headless Chromium so Cloudflare's anti-bot challenge
+  //                 is cleared and the page's React/Vue chunks execute.
+  // country_code  — Israeli IP so the page is served the same content
+  //                 it shows to a real Israeli visitor.
+  // device_type   — force the desktop layout: the IFA page has rows
+  //                 marked `new-desktop-only`, and on mobile those are
+  //                 hidden, so without this flag we lose rows.
+  // wait          — additional seconds to wait after the initial render
+  //                 finishes, giving the fixtures table time to lazy-load
+  //                 the rest of the season. 6s = comfortable headroom.
+  // The cost is 10 credits per call (instead of 1) — at ~5 IFA players
+  // per Sync × 1 sync/day that's ~1.5K credits/month, well under the
+  // 5K free quota.
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: targetUrl,
+    render: 'true',
+    country_code: 'il',
+    device_type: 'desktop',
+    wait: '6',
+  });
   const fetchUrl = apiKey
-    ? `https://api.scraperapi.com/?api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(targetUrl)}&render=true&country_code=il`
+    ? `https://api.scraperapi.com/?${params.toString()}`
     : targetUrl;
   const via = apiKey ? 'ScraperAPI' : 'direct';
   let res;
