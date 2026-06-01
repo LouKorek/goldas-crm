@@ -86,16 +86,22 @@ export async function exportToExcel({ filename, title, subtitle, columns, rows }
     pageSetup: { paperSize: 9, orientation: 'landscape' },
   });
 
-  // Typography palette for Excel:
-  //   • SERIF_DISPLAY = Cambria  — bundled with every Office install since
-  //     2007. ClearType-tuned serif designed for on-screen reading. We use
-  //     it for the big title + italic subtitle to match the app's
-  //     Playfair Display tone.
-  //   • SANS_BODY     = Calibri  — Microsoft's default body font since
-  //     2007, with the most rigorously tested readability for tabular data.
-  //     Used for brand line, headers, data, and hyperlinks.
-  const SERIF_DISPLAY = 'Cambria';
-  const SANS_BODY     = 'Calibri';
+  // Typography palette for Excel — chosen to be ELEGANT yet UNIVERSALLY
+  // installed (so the file looks the same on Lou's Mac, his colleague's
+  // Windows PC, and the recipient club's iPad):
+  //
+  //   • SERIF_DISPLAY = Garamond — the classic French luxury serif
+  //     (16th-century roots, used by Apple's marketing typography for
+  //     decades). Ships with every Office install since 2007 on both
+  //     Windows and Mac. Far more refined than Cambria's ClearType look.
+  //
+  //   • SANS_BODY = Corbel — a humanist sans bundled with every Office
+  //     install since 2007. Designed by Jeremy Tankard with subtle
+  //     contrast and softer terminals than Calibri, which makes long
+  //     data rows feel tailored rather than utilitarian. Maintains
+  //     Calibri-class readability.
+  const SERIF_DISPLAY = 'Garamond';
+  const SANS_BODY     = 'Corbel';
 
   // ── Title strip (rows 1–3) ────────────────────────────────────
   const colCount = columns.length;
