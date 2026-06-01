@@ -887,10 +887,23 @@ textarea:focus::placeholder {
      (Add, Sync, Export, Search, Clear) wrap & fit a 360–390px viewport
      without spilling sideways. */
   .page-header .action-bar .btn { padding: 8px 12px; font-size: 11.5px; flex-shrink: 1; min-width: 0; }
+  /* Pages often wrap their action buttons in their own inline-style
+     <div style="display:flex"> WITHOUT flex-wrap, so the 5-button row in
+     Matches/Players/etc. overflows the viewport. Force every nested flex
+     container inside .action-bar to wrap. */
+  .page-header .action-bar > div { flex-wrap: wrap !important; max-width: 100%; }
   /* Any direct child of <main> on mobile is clamped to the viewport width
      so a rogue inline width or long inline text can never push the page
      wider than the screen. */
   .main-content > * { max-width: 100%; }
+  /* Mobile Matches: the secondary controls bar (view chips + range nav
+     + player filter) is a flex row directly under the page header.
+     Force it (and any sibling flex row) to keep its children within
+     the viewport. */
+  .main-content > div > div[style*="flex-wrap"] { max-width: 100%; }
+  /* Card content (match cards, dashboard cards, etc.) wraps long
+     stadium/player/team names instead of being clipped at the edge. */
+  .card { overflow-wrap: anywhere; word-break: normal; }
 
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
 
