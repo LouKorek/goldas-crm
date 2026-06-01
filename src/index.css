@@ -848,12 +848,20 @@ textarea:focus::placeholder {
   .table-wrap {
     border-radius: 10px;
     max-height: calc(100dvh - 230px);
-    overflow: auto;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
   }
-  .data-table { min-width: 700px; }
+  .data-table { min-width: 700px; width: 700px; }
+  /* iOS Safari: if a parent has overflow:hidden (the .card wrapping the
+     table-wrap does, via the page's inline style), inner overflow:auto
+     can hijack touch. We force the card to use overflow:clip instead so
+     touches reach the inner table-wrap's scroll. */
+  .card:has(> .table-wrap) {
+    overflow: clip !important;
+  }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
@@ -863,6 +871,17 @@ textarea:focus::placeholder {
   .page-subtitle { font-size: 12px; }
   .page-header > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 10px; }
   .page-header .action-bar { flex-wrap: wrap; gap: 6px; width: 100%; max-width: 100%; }
+  /* Pages wrap their action buttons in their own inline-style <div style=
+     "display:flex"> WITHOUT flex-wrap, so when 3+ buttons + search don't
+     fit one row, content gets clipped instead of wrapping. Force every
+     nested flex container inside .action-bar to wrap, on every screen. */
+  .page-header .action-bar > div {
+    flex-wrap: wrap !important;
+    max-width: 100%;
+    width: 100%;
+    gap: 6px;
+    align-items: center;
+  }
   .page-header .action-bar input { width: 140px !important; max-width: 100%; }
 
   /* ──────────────── PAGE-MATCHES (mobile-only polish) ──────────────
@@ -921,6 +940,15 @@ textarea:focus::placeholder {
      cascade overflow-wrap into table cells (which used to shrink the
      table below its min-width and kill horizontal scroll). */
   .card.card-body { overflow-wrap: anywhere; word-break: normal; }
+
+  /* Match cards (mobile) — tighter padding so more matches are visible
+     per screen, and clear visual hierarchy: teams are the loudest line,
+     metadata is a softer second line, linked-player chips wrap. */
+  .page-matches .card.card-body {
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    border-radius: 14px;
+  }
 
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
 
