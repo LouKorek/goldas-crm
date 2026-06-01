@@ -564,7 +564,7 @@ export default function Matches() {
   );
 
   return (
-    <div>
+    <div className="page-matches">
         <PageHeader
           title="Matches"
           subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}

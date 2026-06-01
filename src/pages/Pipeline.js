@@ -181,7 +181,7 @@ export default function Pipeline({ category }) {
   });
 
   return (
-    <div className="page-table">
+    <div>
       <PageHeader
         title={label}
         subtitle={`${items.length} player${items.length!==1?'s':''} in this category`}

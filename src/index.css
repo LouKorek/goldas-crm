@@ -840,48 +840,20 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* PAGE-TABLE LAYOUT — for screens that have a data table (Players,
-     Pipeline, Requirements). The page becomes a fixed-height flex
-     column: the top (page-header + filter bar) stays STATIC, and the
-     table fills the remaining viewport with its own internal scroll
-     (both vertical AND horizontal — sideways scroll inside the table
-     is REQUIRED because data-table has min-width: 600 and that won't
-     ever fit in a phone). */
-  .page-table {
-    display: flex !important;
-    flex-direction: column;
-    height: calc(100dvh
-      - 64px - env(safe-area-inset-top, 0px)
-      - var(--bottom-nav-h, 64px) - env(safe-area-inset-bottom, 0px));
-    min-height: 0;
-  }
-  .page-table > *           { flex-shrink: 0; }
-  .page-table > .card,
-  .page-table > .table-wrap {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .page-table .table-wrap {
+  /* Mobile: the table is its own scroll pane — the top header row stays
+     frozen (sticky <th>) and all scrolling (vertical AND horizontal)
+     happens inside the table-wrap. data-table has min-width so on a
+     phone you slide the table sideways to see all columns; the outer
+     page header doesn't move. */
+  .table-wrap {
     border-radius: 10px;
-    height: 100% !important;
-    max-height: none !important;
-    overflow: auto !important;
+    max-height: calc(100dvh - 230px);
+    overflow: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    /* Explicit touch handling — iOS Safari needs this when a body-level
-       overflow-x:hidden is in effect, otherwise touch-drags on the table
-       get captured by the outer page instead of the inner scroll. */
     touch-action: pan-x pan-y;
   }
   .data-table { min-width: 700px; }
-  /* FilterBar inside a page-table header MUST wrap — three selects at
-     min-width:140 don't fit a 332px content area on phones. */
-  .page-table .form-grid-2,
-  .page-table [class*="filter"],
-  .page-header > div { max-width: 100%; }
-  .page-header > div > div[style*="flex-wrap"],
-  .page-header > div[style*="flex-wrap"] { max-width: 100%; }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
@@ -891,48 +863,49 @@ textarea:focus::placeholder {
   .page-subtitle { font-size: 12px; }
   .page-header > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 10px; }
   .page-header .action-bar { flex-wrap: wrap; gap: 6px; width: 100%; max-width: 100%; }
-  /* Make search the SOLE flex-grow item in the action bar so it spans
-     the full remaining width on whatever row it lands on — search inputs
-     read more elegantly at full bar width than stuck at 140px. */
-  .page-header .action-bar input { width: 100% !important; min-width: 0; flex: 1 1 100%; }
-  /* Shrink-fit buttons on mobile so a Matches header's five+ controls
-     (Add, Sync, Export, Search, Clear) wrap & fit a 360–390px viewport
-     without spilling sideways. */
-  .page-header .action-bar .btn { padding: 8px 14px; font-size: 11.5px; flex-shrink: 1; min-width: 0; }
-  /* Pages often wrap their action buttons in their own inline-style
-     <div style="display:flex"> WITHOUT flex-wrap, so the 5-button row in
-     Matches/Players/etc. overflows the viewport. Force every nested flex
-     container inside .action-bar to wrap + stretch to full bar width.
-     Buttons distribute evenly across the available space so no
-     "dead zone" forms on the right. */
-  .page-header .action-bar > div {
+  .page-header .action-bar input { width: 140px !important; max-width: 100%; }
+
+  /* ──────────────── PAGE-MATCHES (mobile-only polish) ──────────────
+     The Matches screen carries the heaviest header (Add / Sync / Export
+     / Search / Clear) and on mobile it ends up looking ragged unless we
+     organise it deliberately. The rules below are scoped to .page-matches
+     ONLY — other screens keep their original mobile layout untouched. */
+  .page-matches .page-header .action-bar > div {
     flex-wrap: wrap !important;
-    max-width: 100%;
     width: 100%;
-    gap: 6px;
-    justify-content: space-between;
+    max-width: 100%;
+    gap: 8px;
   }
-  /* Primary action ("+ Add ...") gets its own full-width row at the top —
-     unmistakable as the main action, gold-on-dark, immediately visible. */
-  .page-header .action-bar > div > .btn-primary {
+  /* Row 1 — "+ Add Match" alone, gold, full width. Unmistakable CTA. */
+  .page-matches .page-header .action-bar > div > .btn-primary {
     flex: 1 1 100%;
     width: 100%;
+    height: 40px;
   }
-  /* Secondary buttons stretch evenly to fill the row beneath the primary
-     button so we don't leak whitespace on the right edge. */
-  .page-header .action-bar > div > .btn:not(.btn-primary) {
+  /* Row 2 — Sync / Export / Clear share the row in equal thirds. No
+     dead space on the right. */
+  .page-matches .page-header .action-bar > div > .btn:not(.btn-primary),
+  .page-matches .page-header .action-bar > div > div:not(:has(> input)) {
     flex: 1 1 0;
     min-width: 0;
+    height: 38px;
   }
-  /* Export menu wrapper isn't a .btn — it's a <div> containing one.
-     Same flex rule so it sits beside the other secondary buttons. */
-  .page-header .action-bar > div > div:not(:has(> input)) {
-    flex: 1 1 0;
+  .page-matches .page-header .action-bar > div > div:not(:has(> input)) > .btn-ghost {
+    width: 100%;
+    height: 38px;
+  }
+  .page-matches .page-header .action-bar > div > .btn { font-size: 12px; padding: 0 12px; }
+  /* Row 3 — Search input, full row width, generous touch target. */
+  .page-matches .page-header .action-bar > div > div:has(> input) {
+    flex: 1 1 100%;
     min-width: 0;
+    width: 100%;
   }
-  .page-header .action-bar > div > div:not(:has(> input)) > .btn-ghost { width: 100%; }
-  /* SearchInput wrapper takes its own full-width row, clear and generous. */
-  .page-header .action-bar > div > div:has(> input) { flex: 1 1 100%; min-width: 0; width: 100%; }
+  .page-matches .page-header .action-bar input {
+    width: 100% !important;
+    height: 40px !important;
+    flex: 1 1 100%;
+  }
   /* Any direct child of <main> on mobile is clamped to the viewport width
      so a rogue inline width or long inline text can never push the page
      wider than the screen. */
