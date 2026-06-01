@@ -840,15 +840,37 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* Mobile: the table is its own scroll pane — the top header row stays frozen
-     (sticky <th>) and all scrolling (up/down + sideways) happens inside it.
-     overscroll-behavior:none locks out the iOS rubber-band bounce that used to
-     make it feel like a table drifting inside a frame. */
-  .table-wrap {
+  /* Mobile: every page that contains a .table-wrap turns into a fixed-
+     height flex column. The PageHeader + filters at the top stay STATIC
+     (don't scroll). The table fills the remaining viewport and scrolls
+     internally — so you can drag through the whole table without the
+     header sliding away. :has() targets only pages that actually contain
+     a table, so the Dashboard / Matches / Login layouts are untouched. */
+  .main-content > div:has(.table-wrap) {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh
+      - 64px - env(safe-area-inset-top, 0px)
+      - var(--bottom-nav-h, 64px) - env(safe-area-inset-bottom, 0px));
+    min-height: 0;
+  }
+  .main-content > div:has(.table-wrap) > *:not(.card):not(.table-wrap) {
+    flex-shrink: 0;
+  }
+  /* The card that wraps .table-wrap (and the bare .table-wrap when used
+     without a card) becomes the flex-1 region that scrolls. */
+  .main-content > div:has(.table-wrap) > .card:has(> .table-wrap),
+  .main-content > div:has(.table-wrap) > .table-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .main-content > div:has(.table-wrap) .table-wrap {
     border-radius: 10px;
-    max-height: calc(100dvh - 230px);
+    height: 100%;
+    max-height: none;
     overflow: auto;
-    overscroll-behavior: none;
+    overscroll-behavior: contain;
   }
   .data-table { min-width: 600px; }
 
