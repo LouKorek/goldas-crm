@@ -853,15 +853,15 @@ textarea:focus::placeholder {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
+    /* iOS Safari: forcing the scrolling box onto its own GPU compositing
+       layer makes it handle its own touch events independently of the
+       parent .card's overflow:hidden, which otherwise hijacks horizontal
+       drags. translateZ(0) is the most compatible trigger across
+       Safari versions. */
+    transform: translateZ(0);
+    isolation: isolate;
   }
   .data-table { min-width: 700px; width: 700px; }
-  /* iOS Safari: if a parent has overflow:hidden (the .card wrapping the
-     table-wrap does, via the page's inline style), inner overflow:auto
-     can hijack touch. We force the card to use overflow:clip instead so
-     touches reach the inner table-wrap's scroll. */
-  .card:has(> .table-wrap) {
-    overflow: clip !important;
-  }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
@@ -904,18 +904,18 @@ textarea:focus::placeholder {
   /* Row 2 — Sync / Export / Clear share the row in equal thirds. No
      dead space on the right. */
   .page-matches .page-header .action-bar > div > .btn:not(.btn-primary),
-  .page-matches .page-header .action-bar > div > div:not(:has(> input)) {
+  .page-matches .page-header .action-bar > div > div:not(:has(input)) {
     flex: 1 1 0;
     min-width: 0;
     height: 38px;
   }
-  .page-matches .page-header .action-bar > div > div:not(:has(> input)) > .btn-ghost {
+  .page-matches .page-header .action-bar > div > div:not(:has(input)) > .btn-ghost {
     width: 100%;
     height: 38px;
   }
   .page-matches .page-header .action-bar > div > .btn { font-size: 12px; padding: 0 12px; }
   /* Row 3 — Search input, full row width, generous touch target. */
-  .page-matches .page-header .action-bar > div > div:has(> input) {
+  .page-matches .page-header .action-bar > div > div:has(input) {
     flex: 1 1 100%;
     min-width: 0;
     width: 100%;
