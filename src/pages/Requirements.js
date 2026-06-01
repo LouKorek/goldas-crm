@@ -792,15 +792,17 @@ export default function Requirements() {
                 filters.position && `position: ${filters.position}`,
               ].filter(Boolean).join('  ·  ')}
               columns={[
-                { key: 'clubName',         label: 'Club Name' },
-                { key: 'league',           label: 'League' },
-                { key: 'leagueCountry',    label: 'Country' },
-                { key: 'leagueTier',       label: 'Tier' },
-                { key: 'gender',           label: 'Gender' },
-                { key: 'requiredPosition', label: 'Position Needed' },
-                { key: 'contactName',      label: 'Contact Name' },
-                { key: 'contactRole',      label: 'Contact Role' },
-                { key: 'contactPhone',     label: 'Contact Phone' },
+                { key: 'gender',           label: 'G' },
+                { key: 'clubName',         label: '🔰',
+                  format: (v, r) => v ? `${v}${r.league ? `  ·  ${r.league}` : ''}` : '' },
+                { key: 'jersey',           label: '#' },
+                { key: 'contactName',      label: '👤' },
+                { key: 'requiredPosition', label: '📍' },
+                { key: 'deadline',         label: '🗓️' },
+                { key: 'transferFee',      label: '💰' },
+                { key: 'salary',           label: '💵' },
+                { key: 'contactRole',      label: 'Role' },
+                { key: 'contactPhone',     label: '📞' },
                 { key: 'notes',            label: 'Notes' },
               ]}
               rows={data}

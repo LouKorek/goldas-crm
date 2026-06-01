@@ -587,14 +587,15 @@ export default function Matches() {
                   view !== 'Schedule' && `view: ${view}`,
                 ].filter(Boolean).join('  ·  ')}
                 columns={[
-                  { key: 'date',        label: 'Date' },
-                  { key: 'time',        label: 'Time' },
-                  { key: 'homeTeam',    label: 'Home Team' },
-                  { key: 'awayTeam',    label: 'Away Team' },
-                  { key: 'stadiumName', label: 'Stadium' },
+                  { key: 'date',        label: '🗓' },
+                  { key: 'time',        label: '⏰' },
+                  { key: 'homeTeam',    label: 'Home' },
+                  { key: 'awayTeam',    label: 'Away' },
+                  { key: 'stadiumName', label: '🏟',
+                    format: (v, r) => v ? (r.stadiumMapsUrl ? { text: v, url: r.stadiumMapsUrl } : v) : '' },
                   { key: 'season',      label: 'Season' },
                   { key: 'source',      label: 'Source' },
-                  { key: 'linkedPlayers', label: 'Represented Players',
+                  { key: 'linkedPlayers', label: '🤝',
                     format: (ids) => {
                       if (!Array.isArray(ids) || !ids.length) return '';
                       return ids.map(id => allPlayers.find(p => p.id === id)?.fullName || id).join(', ');
@@ -657,21 +658,9 @@ export default function Matches() {
           <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
         </div>
 
-      {/* Scrollable match-list area. The header + controls bar above stay
-          static; only this container scrolls. max-height uses dvh so the
-          mobile address bar collapse doesn't change the layout, and the
-          calc keeps roughly the right offset for both desktop and mobile
-          (mobile main padding-top adds the top-bar height, so this is a
-          slight over-cut on mobile that the user simply scrolls through). */}
-      <div className="matches-scroll" style={{
-        maxHeight: 'calc(100dvh - 240px)',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        paddingRight: 4,
-        marginRight: -4,
-      }}>
+      {/* List section — scrolls with the document so mobile users get
+          a single vertical motion instead of fighting an inner scroll
+          area against the page scroll. */}
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
@@ -719,7 +708,6 @@ export default function Matches() {
           )}
         </>
       )}
-      </div>
 
       {modal && (
         <Modal

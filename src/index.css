@@ -115,6 +115,10 @@ body {
   text-rendering: optimizeLegibility;
   min-height: 100vh;
   overscroll-behavior-y: none;
+  /* Prevent any rogue element (long match card, wide table inside a card,
+     etc.) from leaking horizontal scroll to the whole page on mobile.
+     .table-wrap / .matches-scroll keep their own internal overflow. */
+  overflow-x: hidden;
 }
 
 /* Selection */

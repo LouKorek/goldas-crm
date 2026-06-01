@@ -30,13 +30,26 @@ function todayStamp() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// Returns either a plain string OR a { text, url } object for hyperlink
+// cells. The two exporters know how to render both shapes.
 function cellValue(row, col) {
-  if (col.format) return col.format(row[col.key], row);
+  if (col.format) {
+    const out = col.format(row[col.key], row);
+    return out ?? '';
+  }
   const v = row[col.key];
   if (v == null) return '';
   if (Array.isArray(v)) return v.join(', ');
+  if (typeof v === 'object' && (v.text != null || v.url)) return v;   // hyperlink-shaped
   if (typeof v === 'object') return JSON.stringify(v);
   return v;
+}
+function isHyperlink(v) {
+  return v && typeof v === 'object' && typeof v.url === 'string' && v.url;
+}
+function cellText(v) {
+  if (isHyperlink(v)) return v.text ?? 'Open';
+  return v == null ? '' : String(v);
 }
 
 function downloadBlob(blob, filename) {
@@ -112,9 +125,18 @@ export async function exportToExcel({ filename, title, subtitle, columns, rows }
     const tint = ri % 2 === 0 ? ROW_ODD : ROW_EVEN;
     columns.forEach((c, ci) => {
       const cell = xlRow.getCell(ci + 1);
-      cell.value = cellValue(row, c);
-      cell.font = { name: 'Calibri', size: 11, color: { argb: '2A2A2A' } };
-      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      const v = cellValue(row, c);
+      if (isHyperlink(v)) {
+        // Native Excel hyperlink — Ctrl+click in Excel, or just click in the
+        // web/mobile viewers. Rendered as gold underlined "View" text.
+        cell.value = { text: v.text || 'Open', hyperlink: v.url };
+        cell.font = { name: 'Calibri', size: 11, bold: true, underline: true, color: { argb: GOLD_DARK } };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      } else {
+        cell.value = v;
+        cell.font = { name: 'Calibri', size: 11, color: { argb: '2A2A2A' } };
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      }
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: tint } };
       cell.border = {
         bottom: { style: 'hair', color: { argb: 'D9C68A' } },
@@ -131,27 +153,24 @@ export async function exportToExcel({ filename, title, subtitle, columns, rows }
     // Auto-size: max(label length, longest value length) capped at 60.
     let max = String(c.label || '').length;
     for (const r of rows) {
-      const v = String(cellValue(r, c) ?? '');
-      if (v.length > max) max = v.length;
+      const t = cellText(cellValue(r, c));
+      if (t.length > max) max = t.length;
     }
-    ws.getColumn(i + 1).width = Math.min(Math.max(max + 3, 10), 60);
+    ws.getColumn(i + 1).width = Math.min(Math.max(max + 3, 8), 60);
   });
 
   // ── Convert as an official Excel Table so users get filter/sort UI ───
   // Range: A4..lastCol(lastRow). Names must be unique per sheet & start
   // with a letter; sanitise the title.
+  // Attach an auto-filter to the header row so the user gets the
+  // dropdown-arrow filter UI in Excel without losing our custom cell
+  // styling (ws.addTable would override the gold-on-dark header look).
   if (rows.length > 0) {
-    const lastCol = String.fromCharCode(64 + colCount);     // A..Z fine for ≤26 cols
-    const lastRow = 4 + rows.length;
-    const tName = ('Tbl_' + (title || 'Export')).replace(/[^A-Za-z0-9_]/g, '_').slice(0, 30);
-    ws.addTable({
-      name: tName,
-      ref: `A4:${lastCol}${lastRow}`,
-      headerRow: true,
-      style: { theme: 'TableStyleLight15', showRowStripes: true },
-      columns: columns.map(c => ({ name: c.label, filterButton: true })),
-      rows: rows.map(r => columns.map(c => cellValue(r, c))),
-    });
+    const lastCol = colCount;
+    ws.autoFilter = {
+      from: { row: 4, column: 1 },
+      to:   { row: 4 + rows.length, column: lastCol },
+    };
   }
 
   const buf = await wb.xlsx.writeBuffer();
@@ -197,9 +216,18 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
   const sub = `${subtitle || ''}${subtitle ? '  ·  ' : ''}${rows.length} row${rows.length !== 1 ? 's' : ''}  ·  ${todayStamp()}`;
   doc.text(sub, 40, 90);
 
-  // Build table data
+  // Build table data — convert hyperlink cells into display text, but keep
+  // the URL in a parallel map so didDrawCell can attach a clickable region.
   const headers = columns.map(c => c.label);
-  const data = rows.map(r => columns.map(c => String(cellValue(r, c) ?? '')));
+  const linkMap = new Map();  // key: "rowIdx,colIdx" → url
+  const data = rows.map((r, ri) => columns.map((c, ci) => {
+    const v = cellValue(r, c);
+    if (isHyperlink(v)) {
+      linkMap.set(`${ri},${ci}`, v.url);
+      return v.text || 'Open';
+    }
+    return String(v ?? '');
+  }));
 
   doc.autoTable({
     head: [headers],
@@ -228,6 +256,25 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
       fillColor: [247, 243, 236],
     },
     bodyStyles: { fillColor: [255, 255, 255] },
+    didParseCell: (d) => {
+      // Style hyperlink cells in gold + bold so they LOOK clickable.
+      if (d.section !== 'body') return;
+      const key = `${d.row.index},${d.column.index}`;
+      if (linkMap.has(key)) {
+        d.cell.styles.textColor = [0x8E, 0x6A, 0x24];
+        d.cell.styles.fontStyle = 'bold';
+        d.cell.styles.halign = 'center';
+      }
+    },
+    didDrawCell: (d) => {
+      // Make the cell a clickable region pointing at the URL.
+      if (d.section !== 'body') return;
+      const key = `${d.row.index},${d.column.index}`;
+      const url = linkMap.get(key);
+      if (url) {
+        doc.link(d.cell.x, d.cell.y, d.cell.width, d.cell.height, { url });
+      }
+    },
     didDrawPage: (data) => {
       // Footer
       doc.setFont('helvetica', 'italic');
