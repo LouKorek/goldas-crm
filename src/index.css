@@ -869,8 +869,12 @@ textarea:focus::placeholder {
     overflow: auto !important;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    /* Explicit touch handling — iOS Safari needs this when a body-level
+       overflow-x:hidden is in effect, otherwise touch-drags on the table
+       get captured by the outer page instead of the inner scroll. */
+    touch-action: pan-x pan-y;
   }
-  .data-table { min-width: 600px; }
+  .data-table { min-width: 700px; }
   /* FilterBar inside a page-table header MUST wrap — three selects at
      min-width:140 don't fit a 332px content area on phones. */
   .page-table .form-grid-2,
@@ -898,17 +902,37 @@ textarea:focus::placeholder {
   /* Pages often wrap their action buttons in their own inline-style
      <div style="display:flex"> WITHOUT flex-wrap, so the 5-button row in
      Matches/Players/etc. overflows the viewport. Force every nested flex
-     container inside .action-bar to wrap + stretch to full bar width. */
+     container inside .action-bar to wrap + stretch to full bar width.
+     Buttons distribute evenly across the available space so no
+     "dead zone" forms on the right. */
   .page-header .action-bar > div {
     flex-wrap: wrap !important;
     max-width: 100%;
     width: 100%;
     gap: 6px;
+    justify-content: space-between;
   }
-  /* SearchInput component wraps its <input> in a relative <div> with no
-     width. On mobile we let it grow to the full row width so search
-     gets a generous, single-row input instead of a cramped 140px box. */
-  .page-header .action-bar > div > div:has(> input) { flex: 1 1 100%; min-width: 0; }
+  /* Primary action ("+ Add ...") gets its own full-width row at the top —
+     unmistakable as the main action, gold-on-dark, immediately visible. */
+  .page-header .action-bar > div > .btn-primary {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  /* Secondary buttons stretch evenly to fill the row beneath the primary
+     button so we don't leak whitespace on the right edge. */
+  .page-header .action-bar > div > .btn:not(.btn-primary) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Export menu wrapper isn't a .btn — it's a <div> containing one.
+     Same flex rule so it sits beside the other secondary buttons. */
+  .page-header .action-bar > div > div:not(:has(> input)) {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .page-header .action-bar > div > div:not(:has(> input)) > .btn-ghost { width: 100%; }
+  /* SearchInput wrapper takes its own full-width row, clear and generous. */
+  .page-header .action-bar > div > div:has(> input) { flex: 1 1 100%; min-width: 0; width: 100%; }
   /* Any direct child of <main> on mobile is clamped to the viewport width
      so a rogue inline width or long inline text can never push the page
      wider than the screen. */
@@ -918,9 +942,12 @@ textarea:focus::placeholder {
      Force it (and any sibling flex row) to keep its children within
      the viewport. */
   .main-content > div > div[style*="flex-wrap"] { max-width: 100%; }
-  /* Card content (match cards, dashboard cards, etc.) wraps long
-     stadium/player/team names instead of being clipped at the edge. */
-  .card { overflow-wrap: anywhere; word-break: normal; }
+  /* Card-BODY content (match cards, KPI cards) wraps long stadium /
+     team names instead of getting clipped. Scoped to .card-body
+     specifically so the bare .card that wraps a data-table doesn't
+     cascade overflow-wrap into table cells (which used to shrink the
+     table below its min-width and kill horizontal scroll). */
+  .card.card-body { overflow-wrap: anywhere; word-break: normal; }
 
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
 
