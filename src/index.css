@@ -840,39 +840,44 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* Mobile: every page that contains a .table-wrap turns into a fixed-
-     height flex column. The PageHeader + filters at the top stay STATIC
-     (don't scroll). The table fills the remaining viewport and scrolls
-     internally — so you can drag through the whole table without the
-     header sliding away. :has() targets only pages that actually contain
-     a table, so the Dashboard / Matches / Login layouts are untouched. */
-  .main-content > div:has(.table-wrap) {
-    display: flex;
+  /* PAGE-TABLE LAYOUT — for screens that have a data table (Players,
+     Pipeline, Requirements). The page becomes a fixed-height flex
+     column: the top (page-header + filter bar) stays STATIC, and the
+     table fills the remaining viewport with its own internal scroll
+     (both vertical AND horizontal — sideways scroll inside the table
+     is REQUIRED because data-table has min-width: 600 and that won't
+     ever fit in a phone). */
+  .page-table {
+    display: flex !important;
     flex-direction: column;
     height: calc(100dvh
       - 64px - env(safe-area-inset-top, 0px)
       - var(--bottom-nav-h, 64px) - env(safe-area-inset-bottom, 0px));
     min-height: 0;
   }
-  .main-content > div:has(.table-wrap) > *:not(.card):not(.table-wrap) {
-    flex-shrink: 0;
-  }
-  /* The card that wraps .table-wrap (and the bare .table-wrap when used
-     without a card) becomes the flex-1 region that scrolls. */
-  .main-content > div:has(.table-wrap) > .card:has(> .table-wrap),
-  .main-content > div:has(.table-wrap) > .table-wrap {
+  .page-table > *           { flex-shrink: 0; }
+  .page-table > .card,
+  .page-table > .table-wrap {
     flex: 1;
     min-height: 0;
     overflow: hidden;
   }
-  .main-content > div:has(.table-wrap) .table-wrap {
+  .page-table .table-wrap {
     border-radius: 10px;
-    height: 100%;
-    max-height: none;
-    overflow: auto;
+    height: 100% !important;
+    max-height: none !important;
+    overflow: auto !important;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .data-table { min-width: 600px; }
+  /* FilterBar inside a page-table header MUST wrap — three selects at
+     min-width:140 don't fit a 332px content area on phones. */
+  .page-table .form-grid-2,
+  .page-table [class*="filter"],
+  .page-header > div { max-width: 100%; }
+  .page-header > div > div[style*="flex-wrap"],
+  .page-header > div[style*="flex-wrap"] { max-width: 100%; }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
@@ -882,16 +887,28 @@ textarea:focus::placeholder {
   .page-subtitle { font-size: 12px; }
   .page-header > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 10px; }
   .page-header .action-bar { flex-wrap: wrap; gap: 6px; width: 100%; max-width: 100%; }
-  .page-header .action-bar input { width: 140px !important; max-width: 100%; }
+  /* Make search the SOLE flex-grow item in the action bar so it spans
+     the full remaining width on whatever row it lands on — search inputs
+     read more elegantly at full bar width than stuck at 140px. */
+  .page-header .action-bar input { width: 100% !important; min-width: 0; flex: 1 1 100%; }
   /* Shrink-fit buttons on mobile so a Matches header's five+ controls
      (Add, Sync, Export, Search, Clear) wrap & fit a 360–390px viewport
      without spilling sideways. */
-  .page-header .action-bar .btn { padding: 8px 12px; font-size: 11.5px; flex-shrink: 1; min-width: 0; }
+  .page-header .action-bar .btn { padding: 8px 14px; font-size: 11.5px; flex-shrink: 1; min-width: 0; }
   /* Pages often wrap their action buttons in their own inline-style
      <div style="display:flex"> WITHOUT flex-wrap, so the 5-button row in
      Matches/Players/etc. overflows the viewport. Force every nested flex
-     container inside .action-bar to wrap. */
-  .page-header .action-bar > div { flex-wrap: wrap !important; max-width: 100%; }
+     container inside .action-bar to wrap + stretch to full bar width. */
+  .page-header .action-bar > div {
+    flex-wrap: wrap !important;
+    max-width: 100%;
+    width: 100%;
+    gap: 6px;
+  }
+  /* SearchInput component wraps its <input> in a relative <div> with no
+     width. On mobile we let it grow to the full row width so search
+     gets a generous, single-row input instead of a cramped 140px box. */
+  .page-header .action-bar > div > div:has(> input) { flex: 1 1 100%; min-width: 0; }
   /* Any direct child of <main> on mobile is clamped to the viewport width
      so a rogue inline width or long inline text can never push the page
      wider than the screen. */
