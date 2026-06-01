@@ -92,7 +92,16 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+  /* Belt-and-suspenders horizontal-scroll lock: applied to BOTH html and
+     body because iOS Safari sometimes ignores overflow-x:hidden on body
+     alone. Combined with the per-component scroll wrappers
+     (.table-wrap, .matches-scroll) the page never scrolls sideways. */
+  overflow-x: hidden;
+  max-width: 100vw;
+}
 
 body {
   background:
@@ -850,8 +859,16 @@ textarea:focus::placeholder {
   .page-title    { font-size: 24px; }
   .page-subtitle { font-size: 12px; }
   .page-header > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 10px; }
-  .page-header .action-bar { flex-wrap: wrap; gap: 6px; width: 100%; }
-  .page-header .action-bar input { width: 140px !important; }
+  .page-header .action-bar { flex-wrap: wrap; gap: 6px; width: 100%; max-width: 100%; }
+  .page-header .action-bar input { width: 140px !important; max-width: 100%; }
+  /* Shrink-fit buttons on mobile so a Matches header's five+ controls
+     (Add, Sync, Export, Search, Clear) wrap & fit a 360–390px viewport
+     without spilling sideways. */
+  .page-header .action-bar .btn { padding: 8px 12px; font-size: 11.5px; flex-shrink: 1; min-width: 0; }
+  /* Any direct child of <main> on mobile is clamped to the viewport width
+     so a rogue inline width or long inline text can never push the page
+     wider than the screen. */
+  .main-content > * { max-width: 100%; }
 
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
 

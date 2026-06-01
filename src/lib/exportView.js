@@ -86,36 +86,47 @@ export async function exportToExcel({ filename, title, subtitle, columns, rows }
     pageSetup: { paperSize: 9, orientation: 'landscape' },
   });
 
+  // Typography palette for Excel:
+  //   • SERIF_DISPLAY = Cambria  — bundled with every Office install since
+  //     2007. ClearType-tuned serif designed for on-screen reading. We use
+  //     it for the big title + italic subtitle to match the app's
+  //     Playfair Display tone.
+  //   • SANS_BODY     = Calibri  — Microsoft's default body font since
+  //     2007, with the most rigorously tested readability for tabular data.
+  //     Used for brand line, headers, data, and hyperlinks.
+  const SERIF_DISPLAY = 'Cambria';
+  const SANS_BODY     = 'Calibri';
+
   // ── Title strip (rows 1–3) ────────────────────────────────────
   const colCount = columns.length;
   ws.mergeCells(1, 1, 1, colCount);
   ws.getCell(1, 1).value = 'GOLD A&S — FOOTBALL AGENCY';
-  ws.getCell(1, 1).font = { name: 'Calibri', size: 10, bold: true, color: { argb: GOLD } };
+  ws.getCell(1, 1).font = { name: SANS_BODY, size: 10, bold: true, color: { argb: GOLD } };
   ws.getCell(1, 1).alignment = { vertical: 'middle', horizontal: 'left' };
   ws.getCell(1, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BG_DARK } };
   ws.getRow(1).height = 22;
 
   ws.mergeCells(2, 1, 2, colCount);
   ws.getCell(2, 1).value = title || 'Export';
-  ws.getCell(2, 1).font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFF' } };
+  ws.getCell(2, 1).font = { name: SERIF_DISPLAY, size: 20, bold: true, color: { argb: 'FFFFFF' } };
   ws.getCell(2, 1).alignment = { vertical: 'middle', horizontal: 'left' };
   ws.getCell(2, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BG_DARK } };
-  ws.getRow(2).height = 30;
+  ws.getRow(2).height = 34;
 
   ws.mergeCells(3, 1, 3, colCount);
   const sub = `${subtitle || ''}${subtitle ? '  ·  ' : ''}${rows.length} row${rows.length !== 1 ? 's' : ''}  ·  ${todayStamp()}`;
   ws.getCell(3, 1).value = sub;
-  ws.getCell(3, 1).font = { name: 'Calibri', size: 10, italic: true, color: { argb: GOLD } };
+  ws.getCell(3, 1).font = { name: SERIF_DISPLAY, size: 11, italic: true, color: { argb: GOLD } };
   ws.getCell(3, 1).alignment = { vertical: 'middle', horizontal: 'left' };
   ws.getCell(3, 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BG_DARK } };
-  ws.getRow(3).height = 20;
+  ws.getRow(3).height = 22;
 
   // ── Header row (row 4) ────────────────────────────────────────
   const headerRow = ws.getRow(4);
   columns.forEach((c, i) => {
     const cell = headerRow.getCell(i + 1);
     cell.value = c.label;
-    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: BG_DARK } };
+    cell.font = { name: SANS_BODY, size: 11, bold: true, color: { argb: BG_DARK } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GOLD } };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.border = {
@@ -137,13 +148,13 @@ export async function exportToExcel({ filename, title, subtitle, columns, rows }
       const v = cellValue(row, c);
       if (isHyperlink(v)) {
         // Native Excel hyperlink — Ctrl+click in Excel, or just click in the
-        // web/mobile viewers. Rendered as gold underlined "View" text.
+        // web/mobile viewers. Rendered as gold underlined text.
         cell.value = { text: v.text || 'Open', hyperlink: v.url };
-        cell.font = { name: 'Calibri', size: 11, bold: true, underline: true, color: { argb: GOLD_DARK } };
+        cell.font = { name: SANS_BODY, size: 11, bold: true, underline: true, color: { argb: GOLD_DARK } };
         cell.alignment = { vertical: 'middle', horizontal: 'center' };
       } else {
         cell.value = v;
-        cell.font = { name: 'Calibri', size: 11, color: { argb: '2A2A2A' } };
+        cell.font = { name: SANS_BODY, size: 11, color: { argb: '2A2A2A' } };
         cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
       }
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: tint } };
@@ -206,24 +217,34 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
   doc.setFillColor(0xC9, 0xA8, 0x4C);
   doc.rect(0, 70, pageWidth, 2, 'F');
 
-  // Brand line
+  // PDF typography palette:
+  //   • Times — Adobe-standard serif baked into every PDF reader. Used
+  //     for the big display title + italic subtitle (matches the app's
+  //     Playfair Display tone).
+  //   • Helvetica — the industry-standard sans for tabular data. 9pt body
+  //     is the size newspaper financial tables and Bloomberg terminals use
+  //     for maximum density without losing readability.
+  //   These two are PDF base-14 fonts so they render identically on every
+  //   reader (Acrobat, Preview, Chrome, mobile) with zero embedding cost.
+
+  // Brand line — small sans caps, gold on dark
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(0xC9, 0xA8, 0x4C);
   doc.text('GOLD A&S — FOOTBALL AGENCY', 40, 28);
 
-  // Title
-  doc.setFont('times', 'bold');   // serif-ish for the elegant title
-  doc.setFontSize(20);
+  // Title — large serif for an elegant "frontispiece" feel
+  doc.setFont('times', 'bold');
+  doc.setFontSize(22);
   doc.setTextColor(255, 255, 255);
-  doc.text(title || 'Export', 40, 54);
+  doc.text(title || 'Export', 40, 56);
 
-  // Subtitle line under the band
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(10);
+  // Subtitle — serif italic, gold tone
+  doc.setFont('times', 'italic');
+  doc.setFontSize(10.5);
   doc.setTextColor(0x8E, 0x6A, 0x24);
   const sub = `${subtitle || ''}${subtitle ? '  ·  ' : ''}${rows.length} row${rows.length !== 1 ? 's' : ''}  ·  ${todayStamp()}`;
-  doc.text(sub, 40, 90);
+  doc.text(sub, 40, 92);
 
   // Build table data — convert hyperlink cells into display text, but keep
   // the URL in a parallel map so didDrawCell can attach a clickable region.
@@ -246,23 +267,25 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
   doc.autoTable({
     head: [headers],
     body: data,
-    startY: 105,
+    startY: 110,
     margin: { left: 40, right: 40 },
     styles: {
-      font: 'helvetica',
-      fontSize: 9,
-      cellPadding: 6,
+      font: 'helvetica',           // industry standard for tabular data
+      fontSize: 9,                 // dense but legible — financial-press norm
+      cellPadding: { top: 7, right: 6, bottom: 7, left: 6 },
       textColor: [42, 42, 42],
       lineColor: [217, 198, 138],
       lineWidth: 0.25,
+      valign: 'middle',
     },
     headStyles: {
-      fillColor: [10, 20, 13],
-      textColor: [0xC9, 0xA8, 0x4C],
+      font: 'helvetica',
       fontStyle: 'bold',
       fontSize: 9.5,
+      fillColor: [10, 20, 13],
+      textColor: [0xC9, 0xA8, 0x4C],
       halign: 'center',
-      cellPadding: 8,
+      cellPadding: 9,
       lineColor: [0x8E, 0x6A, 0x24],
       lineWidth: 0.5,
     },
@@ -290,9 +313,9 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
       }
     },
     didDrawPage: (data) => {
-      // Footer
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(8);
+      // Footer — small italic serif, brand antique-gold
+      doc.setFont('times', 'italic');
+      doc.setFontSize(8.5);
       doc.setTextColor(0x8E, 0x6A, 0x24);
       doc.text(
         `Gold A&S Football Agency  ·  Page ${doc.internal.getNumberOfPages()}`,
