@@ -587,20 +587,20 @@ export default function Matches() {
                   view !== 'Schedule' && `view: ${view}`,
                 ].filter(Boolean).join('  ·  ')}
                 columns={[
-                  { key: 'date',        label: '🗓' },
-                  { key: 'time',        label: '⏰' },
-                  { key: 'homeTeam',    label: 'Home' },
-                  { key: 'awayTeam',    label: 'Away' },
-                  { key: 'stadiumName', label: '🏟',
+                  { key: 'date',        label: '🗓',  pdfLabel: 'Date' },
+                  { key: 'time',        label: '⏰',  pdfLabel: 'Time' },
+                  { key: 'homeTeam',    label: 'Home', pdfLabel: 'Home' },
+                  { key: 'awayTeam',    label: 'Away', pdfLabel: 'Away' },
+                  { key: 'stadiumName', label: '🏟',  pdfLabel: 'Stadium',
                     format: (v, r) => v ? (r.stadiumMapsUrl ? { text: v, url: r.stadiumMapsUrl } : v) : '' },
-                  { key: 'season',      label: 'Season' },
-                  { key: 'source',      label: 'Source' },
-                  { key: 'linkedPlayers', label: '🤝',
+                  { key: 'season',      label: 'Season', pdfLabel: 'Season' },
+                  { key: 'source',      label: 'Source', pdfLabel: 'Source' },
+                  { key: 'linkedPlayers', label: '🤝',  pdfLabel: 'Players',
                     format: (ids) => {
                       if (!Array.isArray(ids) || !ids.length) return '';
                       return ids.map(id => allPlayers.find(p => p.id === id)?.fullName || id).join(', ');
                     } },
-                  { key: 'notes',       label: 'Notes' },
+                  { key: 'notes',       label: 'Notes', pdfLabel: 'Notes' },
                 ]}
                 rows={baseFiltered}
               />

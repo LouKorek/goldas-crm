@@ -78,11 +78,11 @@ export default function Contacts() {
               title="Contacts"
               subtitle={term ? `search: "${term}"` : ''}
               columns={[
-                { key: 'clubName',       label: '🔰',
+                { key: 'clubName',       label: '🔰',   pdfLabel: 'Club',
                   format: (v, r) => v ? `${v}${r.clubIsYouth ? ' (U19)' : ''}${r.league ? `  ·  ${r.league}` : ''}` : '' },
-                { key: 'contactName',    label: '👤' },
-                { key: 'contactRole',    label: 'Role' },
-                { key: 'contactPhone',   label: '📞' },
+                { key: 'contactName',    label: '👤',   pdfLabel: 'Contact' },
+                { key: 'contactRole',    label: 'Role', pdfLabel: 'Role' },
+                { key: 'contactPhone',   label: '📞',   pdfLabel: 'Phone' },
               ]}
               rows={filtered}
             />

@@ -792,18 +792,18 @@ export default function Requirements() {
                 filters.position && `position: ${filters.position}`,
               ].filter(Boolean).join('  ·  ')}
               columns={[
-                { key: 'gender',           label: 'G' },
-                { key: 'clubName',         label: '🔰',
+                { key: 'gender',           label: 'G',     pdfLabel: 'G' },
+                { key: 'clubName',         label: '🔰',   pdfLabel: 'Club',
                   format: (v, r) => v ? `${v}${r.league ? `  ·  ${r.league}` : ''}` : '' },
-                { key: 'jersey',           label: '#' },
-                { key: 'contactName',      label: '👤' },
-                { key: 'requiredPosition', label: '📍' },
-                { key: 'deadline',         label: '🗓️' },
-                { key: 'transferFee',      label: '💰' },
-                { key: 'salary',           label: '💵' },
-                { key: 'contactRole',      label: 'Role' },
-                { key: 'contactPhone',     label: '📞' },
-                { key: 'notes',            label: 'Notes' },
+                { key: 'jersey',           label: '#',     pdfLabel: '#' },
+                { key: 'contactName',      label: '👤',   pdfLabel: 'Contact' },
+                { key: 'requiredPosition', label: '📍',   pdfLabel: 'Position' },
+                { key: 'deadline',         label: '🗓️',   pdfLabel: 'Deadline' },
+                { key: 'transferFee',      label: '💰',   pdfLabel: 'Fee' },
+                { key: 'salary',           label: '💵',   pdfLabel: 'Salary' },
+                { key: 'contactRole',      label: 'Role',  pdfLabel: 'Role' },
+                { key: 'contactPhone',     label: '📞',   pdfLabel: 'Phone' },
+                { key: 'notes',            label: 'Notes', pdfLabel: 'Notes' },
               ]}
               rows={data}
             />

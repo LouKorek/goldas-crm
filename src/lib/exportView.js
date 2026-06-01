@@ -51,6 +51,15 @@ function cellText(v) {
   if (isHyperlink(v)) return v.text ?? 'Open';
   return v == null ? '' : String(v);
 }
+// Drop everything that's not Latin-1 (i.e. anything jsPDF's Helvetica
+// can't render). Used as a last-resort fallback when a column doesn't
+// supply a pdfLabel.
+function stripEmoji(s) {
+  if (s == null) return '';
+  // eslint-disable-next-line no-control-regex
+  const cleaned = String(s).replace(/[^\x00-\xFF]/g, '').replace(/\s+/g, ' ').trim();
+  return cleaned || '—';
+}
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -218,15 +227,20 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
 
   // Build table data — convert hyperlink cells into display text, but keep
   // the URL in a parallel map so didDrawCell can attach a clickable region.
-  const headers = columns.map(c => c.label);
+  // jsPDF's bundled Helvetica is Latin-1 only and prints emoji as garbage,
+  // so per-column `pdfLabel` overrides the emoji header for PDF output.
+  // Excel keeps the emoji label because Excel renders emoji natively.
+  const headers = columns.map(c => c.pdfLabel || stripEmoji(c.label));
   const linkMap = new Map();  // key: "rowIdx,colIdx" → url
   const data = rows.map((r, ri) => columns.map((c, ci) => {
     const v = cellValue(r, c);
     if (isHyperlink(v)) {
       linkMap.set(`${ri},${ci}`, v.url);
-      return v.text || 'Open';
+      return stripEmoji(v.text || 'Open');
     }
-    return String(v ?? '');
+    // Body text — also stripped so cell content with emoji (e.g. club
+    // names with country flags) renders cleanly in the PDF.
+    return stripEmoji(String(v ?? ''));
   }));
 
   doc.autoTable({
