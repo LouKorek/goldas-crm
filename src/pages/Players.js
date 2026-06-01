@@ -4,7 +4,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORD
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
-         useConfirm } from 'components/ui/UI';
+         ExportMenu, useConfirm } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
@@ -325,6 +325,43 @@ export default function Players() {
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Player</button>}
+            <ExportMenu
+              filename="Represented Players"
+              title="Represented Players"
+              subtitle={[
+                search && `search: "${search}"`,
+                filters.gender && `gender: ${filters.gender}`,
+                filters.position && `position: ${filters.position}`,
+                filters.contractStatus && `contract: ${filters.contractStatus}`,
+              ].filter(Boolean).join('  ·  ')}
+              columns={[
+                { key: 'fullName',         label: 'Full Name' },
+                { key: 'gender',           label: 'Gender' },
+                { key: 'dob',              label: 'Date of Birth' },
+                { key: 'nationalities',    label: 'Nationalities' },
+                { key: 'primaryPosition',  label: 'Primary Position' },
+                { key: 'secondaryPosition',label: 'Secondary Position' },
+                { key: 'foot',             label: 'Foot' },
+                { key: 'natTeamStatus',    label: 'National Team' },
+                { key: 'contractStatus',   label: 'Contract Status' },
+                { key: 'currentClub',      label: 'Current Club',
+                  format: (v, r) => r.contractStatus === 'Free' ? 'Free Agent' : (v ? `${v}${r.currentClubIsYouth ? ' (Youth)' : ''}` : '') },
+                { key: 'loanFrom',         label: 'Loan From' },
+                { key: 'leagueCountry',    label: 'League Country' },
+                { key: 'leagueTier',       label: 'League Tier' },
+                { key: 'leagueManual',     label: 'League (manual)' },
+                { key: 'contractStart',    label: 'Contract Start' },
+                { key: 'contractEnd',      label: 'Contract End' },
+                { key: 'loanParentEnd',    label: 'Parent Contract End' },
+                { key: 'reprStart',        label: 'Representation Start' },
+                { key: 'reprEnd',          label: 'Representation End' },
+                { key: 'passportNumber',   label: 'Passport #' },
+                { key: 'passportExpiry',   label: 'Passport Expiry' },
+                { key: 'phone',            label: 'Phone' },
+                { key: 'email',            label: 'Email' },
+              ]}
+              rows={data}
+            />
             <div style={{height:36,display:'flex',alignItems:'center'}}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>

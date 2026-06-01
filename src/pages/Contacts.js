@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
-         PhoneActions, RowActions, toast } from 'components/ui/UI';
+         PhoneActions, RowActions, ExportMenu, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 import { useRole } from 'lib/roleContext';
 
@@ -70,7 +70,27 @@ export default function Contacts() {
       <PageHeader
         title="Contacts"
         subtitle={`${items.length} contact${items.length !== 1 ? 's' : ''}`}
-        action={canEdit ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
+        action={
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Contact</button>}
+            <ExportMenu
+              filename="Contacts"
+              title="Contacts"
+              subtitle={term ? `search: "${term}"` : ''}
+              columns={[
+                { key: 'clubName',       label: 'Club',
+                  format: (v, r) => v ? `${v}${r.clubIsYouth ? ' (Youth)' : ''}` : '' },
+                { key: 'leagueCountry',  label: 'League Country' },
+                { key: 'leagueTier',     label: 'League Tier' },
+                { key: 'leagueManual',   label: 'League (manual)' },
+                { key: 'contactName',    label: 'Contact Name' },
+                { key: 'contactRole',    label: 'Role' },
+                { key: 'contactPhone',   label: 'Phone' },
+              ]}
+              rows={filtered}
+            />
+          </div>
+        }
       />
 
       <div style={{ marginBottom: 14, maxWidth: 360 }}>

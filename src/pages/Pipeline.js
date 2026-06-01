@@ -6,7 +6,7 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
          COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
-         FilterBar, PageHeader, Empty, Spinner, useConfirm,
+         FilterBar, PageHeader, Empty, Spinner, ExportMenu, useConfirm,
          PhoneActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
@@ -188,6 +188,32 @@ export default function Pipeline({ category }) {
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}>+ Add Player</button>}
+            <ExportMenu
+              filename={label}
+              title={label}
+              subtitle={[
+                search && `search: "${search}"`,
+                filters.status && `status: ${filters.status}`,
+                filters.position && `position: ${filters.position}`,
+              ].filter(Boolean).join('  ·  ')}
+              columns={[
+                { key: 'playerName',       label: 'Player Name' },
+                { key: 'dob',              label: 'Date of Birth' },
+                { key: 'nationalities',    label: 'Nationalities' },
+                { key: 'primaryPosition',  label: 'Primary Position' },
+                { key: 'secondaryPosition',label: 'Secondary Position' },
+                { key: 'foot',             label: 'Foot' },
+                { key: 'currentClub',      label: 'Current Club' },
+                { key: 'leagueCountry',    label: 'League Country' },
+                { key: 'leagueTier',       label: 'League Tier' },
+                { key: 'status',           label: 'Status' },
+                { key: 'agentName',        label: 'Agent' },
+                { key: 'agentPhone',       label: 'Agent Phone' },
+                { key: 'agentEmail',       label: 'Agent Email' },
+                { key: 'notes',            label: 'Notes' },
+              ]}
+              rows={data}
+            />
             <div style={{height:36,display:'flex',alignItems:'center'}}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>

@@ -565,6 +565,96 @@ export function FilterBar({ filters, setFilters, options }) {
   );
 }
 
+// ── ExportMenu — dropdown with "Excel" and "PDF" options ──────────
+// Use anywhere in a page-header `action` slot. Pass:
+//   filename:  base name for the downloaded file (no extension)
+//   title:     human title that appears at the top of the export
+//   subtitle:  optional context line (e.g. "filtered by Country: Spain")
+//   columns:   [{ key, label, width?, format? }, ...]
+//   rows:      the array of objects to export (already filtered + sorted
+//              by the page — what's on screen is what gets exported).
+export function ExportMenu({ filename, title, subtitle, columns, rows }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const run = async (kind) => {
+    if (busy) return;
+    setBusy(true);
+    setOpen(false);
+    try {
+      const mod = await import('lib/exportView');
+      const fn = kind === 'pdf' ? mod.exportToPdf : mod.exportToExcel;
+      await fn({ filename, title, subtitle, columns, rows });
+    } catch (e) {
+      toast.error(e?.message || 'Export failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm"
+        onClick={() => setOpen(o => !o)}
+        disabled={busy || !rows?.length}
+        title={rows?.length ? `Export ${rows.length} row${rows.length === 1 ? '' : 's'}` : 'Nothing to export'}
+        style={{ height: 36, whiteSpace: 'nowrap' }}
+      >
+        {busy ? '⏳ Exporting…' : <>↗ Export <span style={{ opacity: 0.6, fontSize: 10, marginLeft: 4 }}>▾</span></>}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          minWidth: 180, zIndex: 60,
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-2)',
+          borderRadius: 10,
+          boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+          padding: 6,
+          animation: 'dropdownIn 0.18s var(--ease-out)',
+        }}>
+          <button type="button" onClick={() => run('excel')}
+            style={menuItemStyle}
+            onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
+            <span style={{ fontSize: 16 }}>📊</span>
+            <div style={{ flex: 1, textAlign: 'left' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 600 }}>Excel</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontStyle: 'italic' }}>Styled table with filters</div>
+            </div>
+          </button>
+          <button type="button" onClick={() => run('pdf')}
+            style={menuItemStyle}
+            onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
+            <span style={{ fontSize: 16 }}>📄</span>
+            <div style={{ flex: 1, textAlign: 'left' }}>
+              <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 600 }}>PDF</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontStyle: 'italic' }}>Branded document</div>
+            </div>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+const menuItemStyle = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  width: '100%', padding: '9px 10px',
+  background: 'transparent', border: 'none', borderRadius: 7,
+  cursor: 'pointer', textAlign: 'left',
+  transition: 'background 0.14s',
+};
+const menuItemHover = (e) => { e.currentTarget.style.background = 'var(--gold-dim)'; };
+const menuItemLeave = (e) => { e.currentTarget.style.background = 'transparent'; };
+
 // Page header
 export function PageHeader({ title, subtitle, action, children }) {
   return (

@@ -13,7 +13,10 @@
     "@netlify/functions": "^2.8.0",
     "firebase-admin": "^12.7.0",
     "nodemailer": "^6.9.16",
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.0.0",
+    "exceljs": "^4.4.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4"
   },
   "scripts": {
     "start": "react-scripts start",

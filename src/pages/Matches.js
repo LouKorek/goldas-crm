@@ -3,7 +3,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
-import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, ActionButtons, ChipGroup } from 'components/ui/UI';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, ActionButtons, ChipGroup, ExportMenu } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -578,6 +578,31 @@ export default function Matches() {
                   {syncing ? '🔄 Syncing…' : '🔄 Sync Now'}
                 </button>
               )}
+              <ExportMenu
+                filename="Matches"
+                title={view === 'Schedule' ? 'Matches' : `Matches — ${view}`}
+                subtitle={[
+                  search && `search: "${search}"`,
+                  playerFilter.length && `${playerFilter.length} player${playerFilter.length===1?'':'s'} filter`,
+                  view !== 'Schedule' && `view: ${view}`,
+                ].filter(Boolean).join('  ·  ')}
+                columns={[
+                  { key: 'date',        label: 'Date' },
+                  { key: 'time',        label: 'Time' },
+                  { key: 'homeTeam',    label: 'Home Team' },
+                  { key: 'awayTeam',    label: 'Away Team' },
+                  { key: 'stadiumName', label: 'Stadium' },
+                  { key: 'season',      label: 'Season' },
+                  { key: 'source',      label: 'Source' },
+                  { key: 'linkedPlayers', label: 'Represented Players',
+                    format: (ids) => {
+                      if (!Array.isArray(ids) || !ids.length) return '';
+                      return ids.map(id => allPlayers.find(p => p.id === id)?.fullName || id).join(', ');
+                    } },
+                  { key: 'notes',       label: 'Notes' },
+                ]}
+                rows={baseFiltered}
+              />
               <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
                 <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
               </div>

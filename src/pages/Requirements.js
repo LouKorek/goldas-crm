@@ -3,7 +3,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
-import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader,
+import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader, ExportMenu,
          Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
@@ -783,6 +783,28 @@ export default function Requirements() {
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Requirement</button>}
+            <ExportMenu
+              filename="Club Requirements"
+              title="Club Requirements"
+              subtitle={[
+                search && `search: "${search}"`,
+                filters.gender && `gender: ${filters.gender}`,
+                filters.position && `position: ${filters.position}`,
+              ].filter(Boolean).join('  ·  ')}
+              columns={[
+                { key: 'clubName',         label: 'Club Name' },
+                { key: 'league',           label: 'League' },
+                { key: 'leagueCountry',    label: 'Country' },
+                { key: 'leagueTier',       label: 'Tier' },
+                { key: 'gender',           label: 'Gender' },
+                { key: 'requiredPosition', label: 'Position Needed' },
+                { key: 'contactName',      label: 'Contact Name' },
+                { key: 'contactRole',      label: 'Contact Role' },
+                { key: 'contactPhone',     label: 'Contact Phone' },
+                { key: 'notes',            label: 'Notes' },
+              ]}
+              rows={data}
+            />
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
