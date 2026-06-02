@@ -866,21 +866,34 @@ textarea:focus::placeholder {
     overflow: hidden;
   }
   /* Table-wrap inside scrolls in BOTH axes — vertical for many rows,
-     horizontal because data-table is wider than the phone. translateZ(0)
-     gives the wrap its own GPU layer so iOS Safari doesn't lose
-     horizontal touch-drags to the parent's overflow:hidden. */
+     horizontal because data-table is wider than the phone. All the
+     belt-and-suspenders below are because nested horizontal scroll
+     inside an overflow:hidden ancestor on iOS Safari is notoriously
+     fragile: overflow:scroll (not auto) forces a scroll context,
+     translateZ(0) puts it on its own GPU layer, contain:strict isolates
+     it from ancestor overflow handling. */
   .page-table .table-wrap {
+    width: 100% !important;
     height: 100% !important;
     max-height: none !important;
-    overflow: auto !important;
+    overflow-x: scroll !important;
+    overflow-y: auto !important;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
     transform: translateZ(0);
+    will-change: transform;
     isolation: isolate;
+    contain: layout paint;
     border-radius: 10px;
   }
-  .data-table { min-width: 700px; }
+  .data-table {
+    /* Force a hard pixel width so the table is unambiguously wider than
+       the viewport — guarantees the inner scroll engages. */
+    min-width: 760px !important;
+    width: 760px !important;
+    table-layout: auto;
+  }
   /* Non-page-table screens (Matches/Dashboard/etc): keep table-wrap
      default behaviour (max-height + overflow:auto) so any future table
      used outside .page-table still works. */

@@ -526,24 +526,36 @@ export default function Matches() {
           )}
         </div>
 
-        {/* Linked players */}
-        {linkedNames.length > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span>🤝</span>
-            {linkedNames.map((n, i) => (
-              <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
-            ))}
+        {/* Linked players (left) + Edit/Delete actions (right) — on the
+            SAME row, aligned to the two edges of the card. */}
+        {(linkedNames.length > 0 || canEdit) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 8,
+            flexWrap: 'wrap',
+          }}>
+            <div style={{
+              fontSize: 11, color: 'var(--text-3)',
+              display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
+              flex: 1, minWidth: 0,
+            }}>
+              {linkedNames.length > 0 && <span>🤝</span>}
+              {linkedNames.map((n, i) => (
+                <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
+              ))}
+            </div>
+            {canEdit && (
+              <div style={{ flexShrink: 0 }}>
+                <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />
+              </div>
+            )}
           </div>
         )}
 
         {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>{m.notes}</div>}
-
-        {/* Edit / Delete — bottom-right corner of the card */}
-        {canEdit && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-            <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />
-          </div>
-        )}
       </div>
     );
   };
