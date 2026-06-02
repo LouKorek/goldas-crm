@@ -489,56 +489,61 @@ export default function Matches() {
   const MatchCard = ({ m }) => {
     const linkedNames = allPlayers.filter(p => (m.linkedPlayers || []).includes(p.id)).map(p => p.fullName);
     return (
-      <div className="card card-body" style={{ marginBottom: 10, transition: 'all 0.18s' }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; e.currentTarget.style.transform = 'translateX(2px)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = ''; }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="card card-body match-card" style={{ marginBottom: 10, transition: 'all 0.18s' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
 
-            {/* Teams row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
-              <TeamLogo name={m.homeTeam} size={22} />
-              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-1)' }}>{m.homeTeam}</span>
-              {m.homeTeamIsYouth && <YouthBadge small />}
-              <span style={{ color: 'var(--text-3)', fontWeight: 400, margin: '0 6px' }}>vs</span>
-              <TeamLogo name={m.awayTeam} size={22} />
-              <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-1)' }}>{m.awayTeam}</span>
-              {m.awayTeamIsYouth && <YouthBadge small />}
-            </div>
-
-            {/* Date / stadium */}
-            <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-              <SourceBadge source={m.source} />
-              <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
-              {m.stadiumName && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  🏟
-                  {m.stadiumMapsUrl
-                    ? <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
-                        style={{ color: 'var(--gold)', textDecoration: 'none' }}
-                        onMouseEnter={e => e.target.style.textDecoration = 'underline'}
-                        onMouseLeave={e => e.target.style.textDecoration = 'none'}>
-                        {m.stadiumName} ↗
-                      </a>
-                    : m.stadiumName}
-                </span>
-              )}
-            </div>
-
-            {/* Linked players */}
-            {linkedNames.length > 0 && (
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span>🤝</span>
-                {linkedNames.map((n, i) => (
-                  <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
-                ))}
-              </div>
-            )}
-
-            {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 5 }}>{m.notes}</div>}
-          </div>
-          {canEdit && <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />}
+        {/* Teams — ALWAYS one line. Long names truncate with ellipsis. */}
+        <div className="match-card__teams" style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          fontWeight: 600, fontSize: 15, color: 'var(--text-1)',
+          minWidth: 0,
+        }}>
+          <TeamLogo name={m.homeTeam} size={22} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.homeTeam}</span>
+          {m.homeTeamIsYouth && <YouthBadge small />}
+          <span style={{ color: 'var(--text-3)', fontWeight: 400, flexShrink: 0 }}>vs</span>
+          <TeamLogo name={m.awayTeam} size={22} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.awayTeam}</span>
+          {m.awayTeamIsYouth && <YouthBadge small />}
         </div>
+
+        {/* Details — date, source, stadium */}
+        <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+          <SourceBadge source={m.source} />
+          <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
+          {m.stadiumName && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              🏟
+              {m.stadiumMapsUrl
+                ? <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--gold)', textDecoration: 'none' }}>
+                    {m.stadiumName} ↗
+                  </a>
+                : m.stadiumName}
+            </span>
+          )}
+        </div>
+
+        {/* Linked players */}
+        {linkedNames.length > 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span>🤝</span>
+            {linkedNames.map((n, i) => (
+              <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
+            ))}
+          </div>
+        )}
+
+        {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>{m.notes}</div>}
+
+        {/* Edit / Delete — bottom-right corner of the card */}
+        {canEdit && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+            <ActionButtons onEdit={() => openEdit(m)} onDelete={() => del(m)} />
+          </div>
+        )}
       </div>
     );
   };

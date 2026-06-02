@@ -840,28 +840,58 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* Mobile: the table is its own scroll pane — the top header row stays
-     frozen (sticky <th>) and all scrolling (vertical AND horizontal)
-     happens inside the table-wrap. data-table has min-width so on a
-     phone you slide the table sideways to see all columns; the outer
-     page header doesn't move. */
-  .table-wrap {
-    border-radius: 10px;
-    max-height: calc(100dvh - 230px);
-    overflow-x: auto !important;
-    overflow-y: auto !important;
+  /* PAGE-TABLE — mobile layout for screens whose root <div> carries
+     .page-table (Players, Pipeline, Requirements). The whole page fits
+     in the viewport, the PageHeader + filters stay STATIC at the top,
+     and the table fills the rest with internal scrolling both
+     vertically and horizontally. The screen itself never scrolls. */
+  .page-table {
+    display: flex !important;
+    flex-direction: column;
+    height: calc(100dvh
+      - 64px - env(safe-area-inset-top, 0px)
+      - var(--bottom-nav-h, 64px) - env(safe-area-inset-bottom, 0px));
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* Everything above the table area is static. */
+  .page-table > *:not(.card) {
+    flex-shrink: 0;
+  }
+  /* The card containing the table fills remaining vertical space and
+     hosts the internal table scroll. */
+  .page-table > .card {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* Table-wrap inside scrolls in BOTH axes — vertical for many rows,
+     horizontal because data-table is wider than the phone. translateZ(0)
+     gives the wrap its own GPU layer so iOS Safari doesn't lose
+     horizontal touch-drags to the parent's overflow:hidden. */
+  .page-table .table-wrap {
+    height: 100% !important;
+    max-height: none !important;
+    overflow: auto !important;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x pan-y;
-    /* iOS Safari: forcing the scrolling box onto its own GPU compositing
-       layer makes it handle its own touch events independently of the
-       parent .card's overflow:hidden, which otherwise hijacks horizontal
-       drags. translateZ(0) is the most compatible trigger across
-       Safari versions. */
     transform: translateZ(0);
     isolation: isolate;
+    border-radius: 10px;
   }
-  .data-table { min-width: 700px; width: 700px; }
+  .data-table { min-width: 700px; }
+  /* Non-page-table screens (Matches/Dashboard/etc): keep table-wrap
+     default behaviour (max-height + overflow:auto) so any future table
+     used outside .page-table still works. */
+  .table-wrap:not(.page-table .table-wrap) {
+    border-radius: 10px;
+    max-height: calc(100dvh - 230px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
