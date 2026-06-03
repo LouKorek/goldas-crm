@@ -158,6 +158,7 @@ export const PATHS = {
   MATCHES:           'matches',
   CONTACTS:          'contacts',
   APP_USERS:         'app_users',
+  TASKS:             'tasks',
 };
 
 // ── User management (app_users collection) ────────────────────────

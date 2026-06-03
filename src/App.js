@@ -16,6 +16,7 @@ import Matches       from 'pages/Matches';
 import Contacts      from 'pages/Contacts';
 import Notifications from 'pages/Notifications';
 import Team          from 'pages/Team';
+import Tasks         from 'pages/Tasks';
 import { ToastProvider } from 'components/ui/UI';
 
 // Animated splash screen shown on app open
@@ -184,6 +185,9 @@ export default function App() {
                 <Route path="pipeline/youth" element={<Pipeline category="youth" />} />
                 <Route path="pipeline/jewish"element={<Pipeline category="jewish" />} />
                 <Route path="notifications"  element={<Notifications />} />
+                <Route path="tasks" element={
+                  access.email === 'lou.korek@gmail.com' ? <Tasks /> : <Navigate to="/dashboard" replace />
+                } />
                 <Route path="team" element={
                   access.role === 'admin' ? <Team /> : <Navigate to="/dashboard" replace />
                 } />

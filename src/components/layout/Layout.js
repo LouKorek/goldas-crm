@@ -20,6 +20,7 @@ const NAV = [
   { label: 'Youth',             path: '/pipeline/youth',  emoji: '🌱', color: '#60A5FA' },
   { label: 'Jewish',            path: '/pipeline/jewish', emoji: '✡️', color: '#A78BFA' },
   { section: 'System' },
+  { label: 'Tasks',             path: '/tasks',           emoji: '✅', ownerOnly: true },
   { label: 'Notifications',     path: '/notifications',   emoji: '🔔' },
   { label: 'Team',              path: '/team',            emoji: '👥', adminOnly: true },
 ];
@@ -39,6 +40,7 @@ export default function Layout({ user }) {
   const [theme, setTheme]     = useState(() => localStorage.getItem('theme') || 'dark');
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
   const { name, role, isAdmin } = useRole();
+  const isOwner = user?.email === 'lou.korek@gmail.com';
   const info = { name: name || user?.email, role: roleLabel(role) };
 
   useEffect(() => {
@@ -191,6 +193,7 @@ export default function Layout({ user }) {
       <nav style={{ flex: 1, padding: '6px 6px', overflowY: 'auto', overflowX: 'hidden' }}>
         {NAV.map((item, i) => {
           if (item.adminOnly && !isAdmin) return null;
+          if (item.ownerOnly && !isOwner) return null;
           if (item.section) {
             /* Section header keeps an EXPLICIT fixed height in both states
                so the stack of NavLinks below it cannot shift vertically.
