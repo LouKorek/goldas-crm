@@ -222,54 +222,68 @@ export default function Tasks() {
     catch (e) { toast.error(e.message || 'Delete failed.'); }
   };
 
-  // Seed the 13 starter tasks. Visible only while the tasks list is empty
-  // (so it can't be triggered twice by mistake). Player auto-linking is
-  // forgiving — tries exact match first, then "all tokens present" — so
-  // either the English or Hebrew spelling of a name will hit.
-  const seedStarter = async () => {
-    const ok = await confirm(`Add the ${STARTER_TASKS.length} starter tasks to your list?`);
-    if (!ok) return;
+  // Auto-seed the 13 starter tasks the first time the owner opens this page
+  // on this browser. Gated by a localStorage flag so it runs exactly once,
+  // and by items.length === 0 so it can never overwrite or duplicate. Player
+  // auto-linking is forgiving — tries exact match first, then "all tokens
+  // present" — so either the English or Hebrew spelling of a name will hit.
+  useEffect(() => {
+    if (loading) return;
+    if (items.length > 0) return;
+    if (localStorage.getItem('starterTasksSeeded') === 'true') return;
 
-    const findId = (name) => {
-      const lc = name.toLowerCase().trim();
-      if (!lc) return null;
-      let m = players.find(p => (p.fullName || '').toLowerCase() === lc);
-      if (m) return m.id;
-      const toks = lc.split(/\s+/).filter(Boolean);
-      m = players.find(p => {
-        const fn = (p.fullName || '').toLowerCase();
-        return toks.every(t => fn.includes(t));
-      });
-      return m?.id || null;
-    };
+    // Give players collection a moment to arrive, then seed even if it
+    // hasn't (worst case: no auto-links, tasks still get created).
+    const tid = setTimeout(async () => {
+      // Re-check inside the timer — listenCollection may have populated
+      // items in the interim.
+      if (items.length > 0) return;
+      if (localStorage.getItem('starterTasksSeeded') === 'true') return;
+      localStorage.setItem('starterTasksSeeded', 'true');
 
-    const resolveLinks = (names) => {
-      if (names === '__ALL__') return players.map(p => p.id);
-      const ids = new Set();
-      (names || []).forEach(n => { const id = findId(n); if (id) ids.add(id); });
-      return Array.from(ids);
-    };
-
-    setSaving(true);
-    let added = 0;
-    try {
-      for (const t of STARTER_TASKS) {
-        const linkedPlayers = resolveLinks(t.linkedNames);
-        await addDoc_(PATHS.TASKS, {
-          title:    t.title,
-          notes:    t.notes || '',
-          dueDate:  '',
-          priority: t.priority || 'Normal',
-          linkedPlayers,
-          done:     false,
+      const findId = (name) => {
+        const lc = name.toLowerCase().trim();
+        if (!lc) return null;
+        let m = players.find(p => (p.fullName || '').toLowerCase() === lc);
+        if (m) return m.id;
+        const toks = lc.split(/\s+/).filter(Boolean);
+        m = players.find(p => {
+          const fn = (p.fullName || '').toLowerCase();
+          return toks.every(t => fn.includes(t));
         });
-        added++;
+        return m?.id || null;
+      };
+
+      const resolveLinks = (names) => {
+        if (names === '__ALL__') return players.map(p => p.id);
+        const ids = new Set();
+        (names || []).forEach(n => { const id = findId(n); if (id) ids.add(id); });
+        return Array.from(ids);
+      };
+
+      let added = 0;
+      try {
+        for (const t of STARTER_TASKS) {
+          await addDoc_(PATHS.TASKS, {
+            title:    t.title,
+            notes:    t.notes || '',
+            dueDate:  '',
+            priority: t.priority || 'Normal',
+            linkedPlayers: resolveLinks(t.linkedNames),
+            done:     false,
+          });
+          added++;
+        }
+        if (added) toast.success(`Added ${added} starter tasks.`);
+      } catch (e) {
+        // If anything fails, clear the flag so a refresh can retry.
+        localStorage.removeItem('starterTasksSeeded');
+        toast.error(e.message || 'Could not seed starter tasks.');
       }
-      toast.success(`Added ${added} starter tasks.`);
-    } catch (e) {
-      toast.error(e.message || 'Could not seed tasks.');
-    } finally { setSaving(false); }
-  };
+    }, 800);
+
+    return () => clearTimeout(tid);
+  }, [loading, items.length, players]);
 
   const toggleDone = async (t) => {
     try {
@@ -317,14 +331,7 @@ export default function Tasks() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
         <Empty icon="✅" message="No tasks yet — add your first one."
-          action={
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-              <button className="btn btn-primary" onClick={openAdd} disabled={saving}>+ Add Task</button>
-              <button className="btn btn-ghost" onClick={seedStarter} disabled={saving}>
-                {saving ? 'Adding…' : `+ Add ${STARTER_TASKS.length} starter tasks`}
-              </button>
-            </div>
-          } />
+          action={<button className="btn btn-primary" onClick={openAdd}>+ Add Task</button>} />
       ) : (
         <>
           {/* Open tasks */}
