@@ -14,6 +14,7 @@ const ITEMS = [
   { section: 'Transfer Window', path: '/pipeline/women',  emoji: '🏃‍♀️', label: 'Women' },
   { section: 'Transfer Window', path: '/pipeline/youth',  emoji: '🌱', label: 'Youth' },
   { section: 'Transfer Window', path: '/pipeline/jewish', emoji: '✡️', label: 'Jewish' },
+  { section: 'System',          path: '/tasks',           emoji: '✅', label: 'Tasks', ownerOnly: true },
   { section: 'System',          path: '/notifications',   emoji: '🔔', label: 'Notifications' },
   { section: 'System',          path: '/team',            emoji: '👥', label: 'Team', adminOnly: true },
 ];
@@ -33,11 +34,18 @@ const ACTIVE_SCALE = 1.18;
 const norm = (a) => ((a % 360) + 360) % 360;
 
 export default function RadialMenu({ open, onClose }) {
-  const { isAdmin }  = useRole();
-  const navigate     = useNavigate();
-  const { pathname } = useLocation();
+  const { isAdmin, email } = useRole();
+  const navigate           = useNavigate();
+  const { pathname }       = useLocation();
+  const isOwner            = email === 'lou.korek@gmail.com';
 
-  const items = useMemo(() => ITEMS.filter(it => !it.adminOnly || isAdmin), [isAdmin]);
+  const items = useMemo(
+    () => ITEMS.filter(it =>
+      (!it.adminOnly || isAdmin) &&
+      (!it.ownerOnly || isOwner)
+    ),
+    [isAdmin, isOwner]
+  );
   const N     = items.length;
   const step  = 360 / N;
 
