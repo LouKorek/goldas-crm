@@ -370,8 +370,97 @@ export function LinkIcon({ url, emoji = '🔗', label = '' }) {
 }
 
 // ── Date input ────────────────────────────────────────────────────
+// DD/MM/YYYY locked across all browsers. The native <input type="date">
+// honours the browser locale, which on most users' machines is en-US
+// and renders MM/DD/YYYY — not what we want. So we render a masked text
+// box ("__/__/____" feel) AND a small hidden native picker behind a
+// calendar button so users can still pick visually if they like.
+//
+// Storage shape stays ISO YYYY-MM-DD (what Firestore + downstream code
+// expects). The component just translates the user-facing display.
 export function DateInput({ value, onChange }) {
-  return <input type="date" value={value || ''} onChange={e => onChange(e.target.value)} style={{ colorScheme: 'dark' }} />;
+  const isoToDisplay = (iso) => {
+    if (!iso) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+  };
+  const displayToIso = (s) => {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+    if (!m) return null;
+    const d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1900 || y > 2200) return null;
+    return `${m[3]}-${m[2]}-${m[1]}`;
+  };
+
+  const [text, setText] = useState(isoToDisplay(value));
+  const nativeRef = useRef(null);
+
+  // Keep local text in sync if external value changes (e.g. form reset).
+  useEffect(() => { setText(isoToDisplay(value)); }, [value]);
+
+  const onTextInput = (e) => {
+    let v = e.target.value.replace(/[^0-9]/g, '').slice(0, 8);
+    if (v.length > 4) v = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+    else if (v.length > 2) v = `${v.slice(0, 2)}/${v.slice(2)}`;
+    setText(v);
+    const iso = displayToIso(v);
+    if (iso) onChange(iso);
+    else if (v === '') onChange('');
+  };
+
+  const onTextBlur = () => {
+    // Snap back to last valid value on blur if partial.
+    const iso = displayToIso(text);
+    if (!iso) setText(isoToDisplay(value));
+  };
+
+  const openNative = () => {
+    const el = nativeRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === 'function') {
+      try { el.showPicker(); return; } catch {}
+    }
+    el.focus(); el.click();
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type="text"
+        value={text}
+        onChange={onTextInput}
+        onBlur={onTextBlur}
+        placeholder="DD/MM/YYYY"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={10}
+        style={{ paddingRight: 38 }}
+      />
+      <button type="button" onClick={openNative} tabIndex={-1}
+        title="Open calendar"
+        style={{
+          position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+          width: 30, height: 30, padding: 0,
+          background: 'transparent', border: 'none', cursor: 'pointer',
+          color: 'var(--gold)', fontSize: 16, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>📅</button>
+      <input
+        ref={nativeRef}
+        type="date"
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        tabIndex={-1}
+        aria-hidden="true"
+        style={{
+          position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+          width: 30, height: 30, padding: 0,
+          opacity: 0, pointerEvents: 'none',
+          colorScheme: 'dark',
+        }}
+      />
+    </div>
+  );
 }
 
 // ── Search input ──────────────────────────────────────────────────
