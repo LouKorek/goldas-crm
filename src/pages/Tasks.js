@@ -25,6 +25,89 @@ const EMPTY = {
   done: false,
 };
 
+// ─── One-shot starter task list ────────────────────────────────
+// Shown as a button on the empty state so Lou can populate the
+// initial agency to-do list in a single click. Each item names
+// the players to auto-link (any matching alias is fine — the
+// finder is case-insensitive and forgiving of transliteration).
+// __ALL__ links every represented player to the task.
+const STARTER_TASKS = [
+  {
+    title: 'הצעת מחנה אימונים של בנפיקה ליסבון למיוצגים',
+    priority: 'High',
+    linkedNames: [],
+  },
+  {
+    title: 'לסגור אימונים לאבו סאלח בהפועל חיפה',
+    priority: 'High',
+    linkedNames: ['Abu Saleh', 'אבו סאלח', 'Saleh Abu'],
+  },
+  {
+    title: 'מציאת קבוצות למיוצגים לעונה הקרובה',
+    notes: 'שיוך כל המיוצגים — סקירת כל הרשימה ושיוך מועדונים פוטנציאליים.',
+    priority: 'Urgent',
+    linkedNames: '__ALL__',
+  },
+  {
+    title: 'פוסט וולקאם לנועם ברזילי במכבי פתח תקווה',
+    priority: 'Normal',
+    linkedNames: ['Noam Barzilay', 'נועם ברזילי', 'Noam Brazilay'],
+  },
+  {
+    title: 'לשלוח לשחקנים יהודים איזה מסמכים צריכים להכין',
+    priority: 'Normal',
+    linkedNames: [],
+  },
+  {
+    title: 'השלמת / חידוש הסכם ייצוג',
+    notes: 'Ezra Aaron, Jay Maltz, Kai Maor, Noam Barzilay, Alon Mahlev, Aviv Palaev, Eli Schnabel, Ran Hasphia',
+    priority: 'High',
+    linkedNames: [
+      'Noam Barzilay', 'נועם ברזילי',
+      'Alon Mahlev',   'אלון מהלב',
+      'Aviv Palaev',   'אביב פלייב', 'Aviv Palayev',
+    ],
+  },
+  {
+    title: 'לחבר את Shaun Ukpeli ואת Alison Mumbere לקבוצות ברואנדה ובאיחוד האמירויות',
+    priority: 'High',
+    linkedNames: ['Alison Mumbere'],
+  },
+  {
+    title: 'להיפגש עם Hamed Roumald',
+    priority: 'Normal',
+    linkedNames: [],
+  },
+  {
+    title: 'מציאת קבוצות ל-Joel Asiama ול-Eric Halfin',
+    priority: 'High',
+    linkedNames: [],
+  },
+  {
+    title: 'וידוא שינוי פרופיל ב-Transfermarkt לאלון מילביצקי ולגאווין כאראם',
+    priority: 'Normal',
+    linkedNames: [
+      'Alon Milevitsky', 'Alon Milebicki', 'אלון מילביצקי',
+      'Gavin Karam',     'גאווין כאראם',
+    ],
+  },
+  {
+    title: 'מציאת קבוצת נוער ל-Orian Nardimon ו-Adir Ozeri',
+    priority: 'High',
+    linkedNames: [],
+  },
+  {
+    title: 'השלמת קורסים בפלטפורמת הסוכנים של FIFA',
+    priority: 'Normal',
+    linkedNames: [],
+  },
+  {
+    title: 'יצירת קשר עם השחקנים מעירוני בת ים',
+    priority: 'Normal',
+    linkedNames: [],
+  },
+];
+
 // ─────────────────────────── Helpers ────────────────────────────
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -139,6 +222,55 @@ export default function Tasks() {
     catch (e) { toast.error(e.message || 'Delete failed.'); }
   };
 
+  // Seed the 13 starter tasks. Visible only while the tasks list is empty
+  // (so it can't be triggered twice by mistake). Player auto-linking is
+  // forgiving — tries exact match first, then "all tokens present" — so
+  // either the English or Hebrew spelling of a name will hit.
+  const seedStarter = async () => {
+    const ok = await confirm(`Add the ${STARTER_TASKS.length} starter tasks to your list?`);
+    if (!ok) return;
+
+    const findId = (name) => {
+      const lc = name.toLowerCase().trim();
+      if (!lc) return null;
+      let m = players.find(p => (p.fullName || '').toLowerCase() === lc);
+      if (m) return m.id;
+      const toks = lc.split(/\s+/).filter(Boolean);
+      m = players.find(p => {
+        const fn = (p.fullName || '').toLowerCase();
+        return toks.every(t => fn.includes(t));
+      });
+      return m?.id || null;
+    };
+
+    const resolveLinks = (names) => {
+      if (names === '__ALL__') return players.map(p => p.id);
+      const ids = new Set();
+      (names || []).forEach(n => { const id = findId(n); if (id) ids.add(id); });
+      return Array.from(ids);
+    };
+
+    setSaving(true);
+    let added = 0;
+    try {
+      for (const t of STARTER_TASKS) {
+        const linkedPlayers = resolveLinks(t.linkedNames);
+        await addDoc_(PATHS.TASKS, {
+          title:    t.title,
+          notes:    t.notes || '',
+          dueDate:  '',
+          priority: t.priority || 'Normal',
+          linkedPlayers,
+          done:     false,
+        });
+        added++;
+      }
+      toast.success(`Added ${added} starter tasks.`);
+    } catch (e) {
+      toast.error(e.message || 'Could not seed tasks.');
+    } finally { setSaving(false); }
+  };
+
   const toggleDone = async (t) => {
     try {
       await updateDoc_(PATHS.TASKS, t.id, {
@@ -185,7 +317,14 @@ export default function Tasks() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
         <Empty icon="✅" message="No tasks yet — add your first one."
-          action={<button className="btn btn-primary" onClick={openAdd}>+ Add Task</button>} />
+          action={
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button className="btn btn-primary" onClick={openAdd} disabled={saving}>+ Add Task</button>
+              <button className="btn btn-ghost" onClick={seedStarter} disabled={saving}>
+                {saving ? 'Adding…' : `+ Add ${STARTER_TASKS.length} starter tasks`}
+              </button>
+            </div>
+          } />
       ) : (
         <>
           {/* Open tasks */}
