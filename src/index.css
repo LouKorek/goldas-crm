@@ -840,13 +840,20 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* MOBILE TABLE — standard responsive-table pattern that every CSS
-     framework uses (Bootstrap, Tailwind, Material, etc.): the table is
-     wider than the viewport, the wrap has overflow-x:auto. Touch-drag
-     inside the wrap scrolls horizontally to reveal the rest of the
-     columns. No flexbox tricks, no display:contents, no transforms
-     — just the boring, universally-working pattern. */
+  /* MOBILE TABLE — the standard responsive-table pattern, but with the
+     CRITICAL ingredient most tutorials skip: every ancestor of the
+     scroll container must be clamped to the viewport width so it
+     doesn't grow to fit the wide table. Without that, the .table-wrap
+     auto-sizes to its content (the wide table), scrollWidth equals
+     clientWidth, and overflow-x:auto never engages — you see the table
+     edge-clipped by body{overflow-x:hidden} with no way to scroll. */
+  .main-content > div { max-width: 100%; min-width: 0; }
+  .main-content > div > * { max-width: 100%; min-width: 0; }
+  .card { max-width: 100%; min-width: 0; }
   .table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
     border-radius: 10px;
     max-height: calc(100dvh - 230px);
     overflow-x: auto;
@@ -855,10 +862,9 @@ textarea:focus::placeholder {
   }
   .data-table {
     /* Hard pixel width so the table is unambiguously wider than the
-       phone viewport — guarantees the wrap actually has something to
-       scroll horizontally. */
-    min-width: 760px;
-    width: 760px;
+       phone viewport — guarantees the wrap has something to scroll. */
+    min-width: 760px !important;
+    width: 760px !important;
   }
 
   /* Match cards: long club / stadium names break onto the next line
