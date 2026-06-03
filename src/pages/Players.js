@@ -387,7 +387,7 @@ export default function Players() {
           message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
           action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
       ) : (
-        <div className="card" style={{padding:0,overflow:'hidden'}}>
+        <div className="card" style={{padding:0}}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>

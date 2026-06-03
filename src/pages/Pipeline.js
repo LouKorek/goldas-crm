@@ -244,7 +244,7 @@ export default function Pipeline({ category }) {
         <Empty icon={CAT_EMOJI[category]} message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
           action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}>+ Add Player</button>} />
       ) : (
-        <div className="card" style={{padding:0,overflow:'hidden'}}>
+        <div className="card" style={{padding:0}}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
