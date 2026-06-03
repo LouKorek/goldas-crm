@@ -776,7 +776,7 @@ export default function Requirements() {
   });
 
   return (
-    <div className="page-table">
+    <div>
       <PageHeader
         title="Club Requirements"
         subtitle={`${items.length} active requirement${items.length !== 1 ? 's' : ''}`}

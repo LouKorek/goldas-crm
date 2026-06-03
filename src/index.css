@@ -840,62 +840,25 @@ textarea:focus::placeholder {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
 
-  /* PAGE-TABLE — mobile layout for screens whose root <div> carries
-     .page-table (Players, Pipeline, Requirements). The whole page fits
-     in the viewport, the PageHeader + filters stay STATIC at the top,
-     and the table fills the rest with internal scrolling both axes.
-     The screen itself never scrolls. */
-  .page-table {
-    display: flex !important;
-    flex-direction: column;
-    height: calc(100dvh
-      - 64px - env(safe-area-inset-top, 0px)
-      - var(--bottom-nav-h, 64px) - env(safe-area-inset-bottom, 0px));
-    min-height: 0;
-    overflow: hidden;
-  }
-  .page-table > * { flex-shrink: 0; }
-  /* CRITICAL: the JSX wraps the table-wrap in a .card with inline
-     overflow:hidden, which on iOS Safari hijacks the inner table-wrap's
-     horizontal touch-drags. We collapse the card with display:contents
-     so the table-wrap promotes to a direct child of .page-table — no
-     overflow:hidden ancestor between table-wrap and the flex container,
-     and iOS handles its scroll cleanly. The card box disappears but
-     its inline styles (padding:0) had nothing to render anyway. */
-  .page-table > .card { display: contents !important; }
-  .page-table .table-wrap {
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-    max-height: none !important;
-    overflow-x: scroll !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
-    transform: translateZ(0);
-    will-change: transform;
-    border-radius: 10px;
-    background: var(--card);
-    border: 1px solid var(--border);
-  }
-  .data-table {
-    /* Force a hard pixel width so the table is unambiguously wider than
-       the viewport — guarantees the inner scroll engages. */
-    min-width: 760px !important;
-    width: 760px !important;
-    table-layout: auto;
-  }
-  /* Non-page-table screens (Matches/Dashboard/etc): keep table-wrap
-     default behaviour (max-height + overflow:auto) so any future table
-     used outside .page-table still works. */
-  .table-wrap:not(.page-table .table-wrap) {
+  /* MOBILE TABLE — standard responsive-table pattern that every CSS
+     framework uses (Bootstrap, Tailwind, Material, etc.): the table is
+     wider than the viewport, the wrap has overflow-x:auto. Touch-drag
+     inside the wrap scrolls horizontally to reveal the rest of the
+     columns. No flexbox tricks, no display:contents, no transforms
+     — just the boring, universally-working pattern. */
+  .table-wrap {
     border-radius: 10px;
     max-height: calc(100dvh - 230px);
-    overflow: auto;
-    overscroll-behavior: contain;
+    overflow-x: auto;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y;
+  }
+  .data-table {
+    /* Hard pixel width so the table is unambiguously wider than the
+       phone viewport — guarantees the wrap actually has something to
+       scroll horizontally. */
+    min-width: 760px;
+    width: 760px;
   }
 
   /* Match cards: long club / stadium names break onto the next line
