@@ -28,33 +28,33 @@ function getDb() {
 // ─── The 13 starter tasks ──────────────────────────────────────────
 const STARTER_TASKS = [
   {
-    title: 'הצעת מחנה אימונים של בנפיקה ליסבון למיוצגים',
+    title: 'Pitch a Benfica Lisbon training camp to represented players',
     priority: 'High',
     linkedNames: [],
   },
   {
-    title: 'לסגור אימונים לאבו סאלח בהפועל חיפה',
+    title: 'Lock in training sessions for Abu Saleh at Hapoel Haifa',
     priority: 'High',
     linkedNames: ['Abu Saleh', 'אבו סאלח', 'Saleh Abu'],
   },
   {
-    title: 'מציאת קבוצות למיוצגים לעונה הקרובה',
-    notes: 'שיוך כל המיוצגים — סקירת כל הרשימה ושיוך מועדונים פוטנציאליים.',
+    title: 'Find clubs for all represented players for next season',
+    notes: 'Link every represented player — review the full roster and shortlist potential clubs.',
     priority: 'Urgent',
     linkedNames: '__ALL__',
   },
   {
-    title: 'פוסט וולקאם לנועם ברזילי במכבי פתח תקווה',
+    title: 'Welcome post for Noam Barzilay at Maccabi Petah Tikva',
     priority: 'Normal',
     linkedNames: ['Noam Barzilay', 'נועם ברזילי', 'Noam Brazilay'],
   },
   {
-    title: 'לשלוח לשחקנים יהודים איזה מסמכים צריכים להכין',
+    title: 'Send Jewish players the list of documents they need to prepare',
     priority: 'Normal',
     linkedNames: [],
   },
   {
-    title: 'השלמת / חידוש הסכם ייצוג',
+    title: 'Complete / renew representation agreements',
     notes: 'Ezra Aaron, Jay Maltz, Kai Maor, Noam Barzilay, Alon Mahlev, Aviv Palaev, Eli Schnabel, Ran Hasphia',
     priority: 'High',
     linkedNames: [
@@ -64,22 +64,22 @@ const STARTER_TASKS = [
     ],
   },
   {
-    title: 'לחבר את Shaun Ukpeli ואת Alison Mumbere לקבוצות ברואנדה ובאיחוד האמירויות',
+    title: 'Connect Shaun Ukpeli and Alison Mumbere with clubs in Rwanda and the UAE',
     priority: 'High',
     linkedNames: ['Alison Mumbere'],
   },
   {
-    title: 'להיפגש עם Hamed Roumald',
+    title: 'Meet with Hamed Roumald',
     priority: 'Normal',
     linkedNames: [],
   },
   {
-    title: 'מציאת קבוצות ל-Joel Asiama ול-Eric Halfin',
+    title: 'Find clubs for Joel Asiama and Eric Halfin',
     priority: 'High',
     linkedNames: [],
   },
   {
-    title: 'וידוא שינוי פרופיל ב-Transfermarkt לאלון מילביצקי ולגאווין כאראם',
+    title: 'Verify Transfermarkt profile updates for Alon Milevitsky and Gavin Karam',
     priority: 'Normal',
     linkedNames: [
       'Alon Milevitsky', 'Alon Milebicki', 'אלון מילביצקי',
@@ -87,17 +87,17 @@ const STARTER_TASKS = [
     ],
   },
   {
-    title: 'מציאת קבוצת נוער ל-Orian Nardimon ו-Adir Ozeri',
+    title: 'Find a youth club for Orian Nardimon and Adir Ozeri',
     priority: 'High',
     linkedNames: [],
   },
   {
-    title: 'השלמת קורסים בפלטפורמת הסוכנים של FIFA',
+    title: 'Complete courses on the FIFA agents platform',
     priority: 'Normal',
     linkedNames: [],
   },
   {
-    title: 'יצירת קשר עם השחקנים מעירוני בת ים',
+    title: 'Reach out to the players from Ironi Bat Yam',
     priority: 'Normal',
     linkedNames: [],
   },
@@ -126,20 +126,35 @@ function resolveLinks(names, players) {
   return Array.from(ids);
 }
 
-exports.handler = async () => {
+exports.handler = async (event) => {
   try {
     const db = getDb();
+    const reseed = event?.queryStringParameters?.reseed === 'true';
 
-    // Idempotency guard — refuse to add if any tasks already exist.
-    const existing = await db.collection('tasks').limit(1).get();
+    // Idempotency guard — refuse to add if any tasks already exist,
+    // UNLESS ?reseed=true is passed, in which case wipe and re-seed.
+    const existing = await db.collection('tasks').get();
     if (!existing.empty) {
-      return {
-        statusCode: 409,
-        body: JSON.stringify({
-          ok: false,
-          reason: 'tasks collection already contains documents; refusing to seed',
-        }),
-      };
+      if (!reseed) {
+        return {
+          statusCode: 409,
+          body: JSON.stringify({
+            ok: false,
+            reason: 'tasks collection already contains documents; pass ?reseed=true to wipe and re-create',
+            existing: existing.size,
+          }),
+        };
+      }
+      // Wipe existing tasks before re-seeding (batched in 400-doc chunks
+      // to stay under Firestore's 500-op batch limit).
+      let batch = db.batch();
+      let n = 0;
+      for (const d of existing.docs) {
+        batch.delete(d.ref);
+        n++;
+        if (n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+      }
+      if (n % 400 !== 0) await batch.commit();
     }
 
     // Load players once for the auto-linking lookup.

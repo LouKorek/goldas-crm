@@ -828,6 +828,32 @@ textarea:focus::placeholder {
 /* ===================================================================
    RESPONSIVE
    =================================================================== */
+
+/* DESKTOP scroll model. We lock <html> + <body> to the viewport and
+   make <main class="main-content"> the single vertical scroll container.
+   This guarantees: (a) wheel scrolling works anywhere inside the page;
+   (b) the sticky sidebar truly stays put — it can't move because the
+   body itself never scrolls; (c) the .table-wrap's own max-height
+   internal scroll still works as a sub-scroll where needed.
+   On mobile we keep the prior body-scroll behaviour (overridden below
+   inside the max-width:768px block by NOT touching .main-content height). */
+@media (min-width: 769px) {
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+  .layout-root {
+    height: 100vh !important;
+    min-height: 100vh;
+  }
+  .main-content {
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+}
+
 @media (max-width: 768px) {
   :root { --sidebar-w: 0px; }
 

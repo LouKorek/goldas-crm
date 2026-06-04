@@ -348,7 +348,7 @@ export default function Layout({ user }) {
   ));
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="layout-root" style={{ display: 'flex', minHeight: '100vh' }}>
 
       {/* Brand image overlay shown briefly on each top-level route change */}
       <RouteTransition />

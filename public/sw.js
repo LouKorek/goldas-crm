@@ -1,6 +1,6 @@
 // CACHE_NAME bumped on every meaningful deploy so users get fresh assets
 // instead of stale CSS/JS pinned in their PWA cache.
-const CACHE_NAME = 'goldas-crm-v6';
+const CACHE_NAME = 'goldas-crm-v7';
 
 // Assets pre-cached for offline use. Hashed /static/* files are NOT in
 // this list — they're populated on first fetch.
