@@ -29,18 +29,18 @@ function getDb() {
 const STARTER_TASKS = [
   {
     title: 'Pitch a Benfica Lisbon training camp to represented players',
-    priority: 'High',
+    priority: 'Normal',
     linkedNames: [],
   },
   {
     title: 'Lock in training sessions for Abu Saleh at Hapoel Haifa',
-    priority: 'High',
+    priority: 'Normal',
     linkedNames: ['Abu Saleh', 'אבו סאלח', 'Saleh Abu'],
   },
   {
     title: 'Find clubs for all represented players for next season',
     notes: 'Link every represented player — review the full roster and shortlist potential clubs.',
-    priority: 'Urgent',
+    priority: 'Normal',
     linkedNames: '__ALL__',
   },
   {
@@ -56,7 +56,7 @@ const STARTER_TASKS = [
   {
     title: 'Complete / renew representation agreements',
     notes: 'Ezra Aaron, Jay Maltz, Kai Maor, Noam Barzilay, Alon Mahlev, Aviv Palaev, Eli Schnabel, Ran Hasphia',
-    priority: 'High',
+    priority: 'Normal',
     linkedNames: [
       'Noam Barzilay', 'נועם ברזילי',
       'Alon Mahlev',   'אלון מהלב',
@@ -65,7 +65,7 @@ const STARTER_TASKS = [
   },
   {
     title: 'Connect Shaun Ukpeli and Alison Mumbere with clubs in Rwanda and the UAE',
-    priority: 'High',
+    priority: 'Normal',
     linkedNames: ['Alison Mumbere'],
   },
   {
@@ -75,7 +75,7 @@ const STARTER_TASKS = [
   },
   {
     title: 'Find clubs for Joel Asiama and Eric Halfin',
-    priority: 'High',
+    priority: 'Normal',
     linkedNames: [],
   },
   {
@@ -88,7 +88,7 @@ const STARTER_TASKS = [
   },
   {
     title: 'Find a youth club for Orian Nardimon and Adir Ozeri',
-    priority: 'High',
+    priority: 'Normal',
     linkedNames: [],
   },
   {

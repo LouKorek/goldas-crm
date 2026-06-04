@@ -1,10 +1,38 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
 import {
   Modal, Field, ChipGroup, DateInput, SearchInput, PageHeader,
   Empty, Spinner, useConfirm, toast,
 } from 'components/ui/UI';
+
+// ─── Starter tasks (auto-migrated on first owner visit) ──────────
+// The Tasks page itself wipes existing tasks and re-seeds these the
+// first time the owner opens it on each browser — gated by a
+// localStorage key so it can never re-run. This guarantees Lou's
+// initial agency to-do list ends up in Firestore without him having
+// to click anything.
+const STARTER_TASKS = [
+  { title: 'Pitch a Benfica Lisbon training camp to represented players',                       linkedNames: [] },
+  { title: 'Lock in training sessions for Abu Saleh at Hapoel Haifa',                            linkedNames: ['Abu Saleh', 'אבו סאלח', 'Saleh Abu'] },
+  { title: 'Find clubs for all represented players for next season',
+    notes: 'Review the full roster and shortlist potential clubs for every represented player.',
+    linkedNames: '__ALL__' },
+  { title: 'Welcome post for Noam Barzilay at Maccabi Petah Tikva',                              linkedNames: ['Noam Barzilay', 'נועם ברזילי', 'Noam Brazilay'] },
+  { title: 'Send Jewish players the list of documents they need to prepare',                     linkedNames: [] },
+  { title: 'Complete / renew representation agreements',
+    notes: 'Ezra Aaron, Jay Maltz, Kai Maor, Noam Barzilay, Alon Mahlev, Aviv Palaev, Eli Schnabel, Ran Hasphia',
+    linkedNames: ['Noam Barzilay', 'נועם ברזילי', 'Alon Mahlev', 'אלון מהלב', 'Aviv Palaev', 'אביב פלייב', 'Aviv Palayev'] },
+  { title: 'Connect Shaun Ukpeli and Alison Mumbere with clubs in Rwanda and the UAE',           linkedNames: ['Alison Mumbere'] },
+  { title: 'Meet with Hamed Roumald',                                                            linkedNames: [] },
+  { title: 'Find clubs for Joel Asiama and Eric Halfin',                                         linkedNames: [] },
+  { title: 'Verify Transfermarkt profile updates for Alon Milevitsky and Gavin Karam',
+    linkedNames: ['Alon Milevitsky', 'Alon Milebicki', 'אלון מילביצקי', 'Gavin Karam', 'גאווין כאראם'] },
+  { title: 'Find a youth club for Orian Nardimon and Adir Ozeri',                                linkedNames: [] },
+  { title: 'Complete courses on the FIFA agents platform',                                       linkedNames: [] },
+  { title: 'Reach out to the players from Ironi Bat Yam',                                        linkedNames: [] },
+];
+const STARTER_VERSION = 'v3-english-normal';
 
 // ─────────────────────────── Constants ───────────────────────────
 const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
@@ -47,44 +75,106 @@ function dueLabel(dateStr) {
 function PlayersMultiSelect({ allPlayers, value, onChange }) {
   const [open, setOpen] = useState(false);
   const [q, setQ]       = useState('');
+  const wrapRef         = useRef(null);
+
   const filtered = q
     ? allPlayers.filter(p => (p.fullName || '').toLowerCase().includes(q.toLowerCase()))
     : allPlayers;
   const toggle = (id) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
   const selected = allPlayers.filter(p => value.includes(p.id));
+  const allChecked = allPlayers.length > 0 && value.length >= allPlayers.length;
+  const someChecked = value.length > 0 && !allChecked;
+  const toggleAll = () => onChange(allChecked ? [] : allPlayers.map(p => p.id));
+
+  // Close on click outside or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('touchstart', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('touchstart', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', minHeight: 40, padding: '8px 12px',
           background: 'var(--input-bg)', border: '1.5px solid var(--border)',
           borderRadius: 'var(--radius-sm)', color: 'var(--input-text)',
           textAlign: 'left', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
         }}>
         {selected.length === 0 && <span style={{ color: 'var(--text-3)' }}>Link represented players…</span>}
-        {selected.map(p => (
-          <span key={p.id} style={{
+        {allChecked ? (
+          <span style={{
             background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
-            borderRadius: 4, padding: '2px 8px', color: 'var(--gold)', fontSize: 12,
-          }}>{p.fullName}</span>
-        ))}
+            borderRadius: 4, padding: '2px 10px', color: 'var(--gold)', fontSize: 12, fontWeight: 600,
+          }}>All represented ({allPlayers.length})</span>
+        ) : (
+          selected.map(p => (
+            <span key={p.id} style={{
+              background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
+              borderRadius: 4, padding: '2px 8px', color: 'var(--gold)', fontSize: 12,
+              whiteSpace: 'nowrap',
+            }}>{p.fullName}</span>
+          ))
+        )}
       </button>
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
-          maxHeight: 280, overflowY: 'auto', zIndex: 80,
+          maxHeight: 320, overflowY: 'auto', zIndex: 80,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
           borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', padding: 8,
         }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search players…" autoFocus
-            style={{ width: '100%', marginBottom: 8 }} />
+          {/* Sticky header: search + select-all toggle + close */}
+          <div style={{
+            position: 'sticky', top: -8, marginTop: -8, paddingTop: 8,
+            background: 'var(--surface-2)', zIndex: 1,
+            display: 'flex', flexDirection: 'column', gap: 8,
+            marginBottom: 6,
+          }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search players…" autoFocus
+                style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" onClick={() => setOpen(false)}
+                title="Close"
+                style={{
+                  width: 32, height: 32, padding: 0, flexShrink: 0,
+                  border: '1px solid var(--border-2)', borderRadius: 6,
+                  background: 'transparent', color: 'var(--text-2)',
+                  cursor: 'pointer', fontSize: 16, lineHeight: 1,
+                }}>×</button>
+            </div>
+            <button type="button" onClick={toggleAll}
+              style={{
+                width: '100%', padding: '7px 10px',
+                background: allChecked ? 'var(--gold-dim)' : 'transparent',
+                border: `1px solid ${allChecked ? 'rgba(212,176,98,0.45)' : 'var(--border-2)'}`,
+                borderRadius: 6, color: allChecked ? 'var(--gold)' : 'var(--text-2)',
+                cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+              <span>{allChecked ? '✓ All selected' : (someChecked ? `${value.length} of ${allPlayers.length} selected` : 'Select all')}</span>
+              <span style={{ fontSize: 11, opacity: 0.8 }}>
+                {allChecked ? 'Tap to clear' : 'Tap to select all'}
+              </span>
+            </button>
+          </div>
           {filtered.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-3)', padding: 8 }}>No matching players.</div>
           ) : filtered.map(p => (
             <label key={p.id} style={{
-              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px',
+              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px',
               cursor: 'pointer', borderRadius: 6,
               background: value.includes(p.id) ? 'var(--gold-dim)' : 'transparent',
             }}>
@@ -113,6 +203,75 @@ export default function Tasks() {
 
   useEffect(() => listenCollection(PATHS.TASKS, data => { setItems(data); setLoading(false); }), []);
   useEffect(() => listenCollection(PATHS.PLAYERS, setPlayers), []);
+
+  // ── One-shot starter-task installer ─────────────────────────────
+  // Runs the first time the owner opens this page on each browser.
+  // Wipes existing tasks and re-creates the canonical English list
+  // with priority=Normal. Guarded by a localStorage flag so it can
+  // never re-run after success.
+  const migratedRef = useRef(false);
+  const itemsRef    = useRef([]);
+  const playersRef  = useRef([]);
+  useEffect(() => { itemsRef.current   = items;   }, [items]);
+  useEffect(() => { playersRef.current = players; }, [players]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (migratedRef.current) return;
+    if (localStorage.getItem('starterTasksMigrated') === STARTER_VERSION) return;
+    migratedRef.current = true;
+
+    // Give Firestore listeners ~1.2s to settle so we wipe what's
+    // actually there and link to the freshly-loaded players.
+    const tid = setTimeout(async () => {
+      if (localStorage.getItem('starterTasksMigrated') === STARTER_VERSION) return;
+      localStorage.setItem('starterTasksMigrated', STARTER_VERSION);
+
+      const findId = (name) => {
+        const lc = (name || '').toLowerCase().trim();
+        if (!lc) return null;
+        const pool = playersRef.current;
+        let m = pool.find(p => (p.fullName || '').toLowerCase() === lc);
+        if (m) return m.id;
+        const toks = lc.split(/\s+/).filter(Boolean);
+        m = pool.find(p => {
+          const fn = (p.fullName || '').toLowerCase();
+          return toks.every(t => fn.includes(t));
+        });
+        return m ? m.id : null;
+      };
+      const resolveLinks = (names) => {
+        if (names === '__ALL__') return playersRef.current.map(p => p.id);
+        const ids = new Set();
+        (names || []).forEach(n => { const id = findId(n); if (id) ids.add(id); });
+        return Array.from(ids);
+      };
+
+      try {
+        // Wipe any existing tasks first.
+        for (const t of itemsRef.current) {
+          await deleteDoc_(PATHS.TASKS, t.id);
+        }
+        // Seed the English starter list — all priority Normal.
+        for (const t of STARTER_TASKS) {
+          await addDoc_(PATHS.TASKS, {
+            title:         t.title,
+            notes:         t.notes || '',
+            dueDate:       '',
+            priority:      'Normal',
+            linkedPlayers: resolveLinks(t.linkedNames),
+            done:          false,
+          });
+        }
+        toast.success(`${STARTER_TASKS.length} tasks ready.`);
+      } catch (e) {
+        localStorage.removeItem('starterTasksMigrated');
+        migratedRef.current = false;
+        toast.error(e.message || 'Could not install starter tasks.');
+      }
+    }, 1200);
+    return () => clearTimeout(tid);
+  }, [loading]);
 
   const s = k => v => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
   const f = k => form[k] ?? '';
@@ -269,6 +428,9 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
   const due       = dueLabel(t.dueDate);
   const linked    = (t.linkedPlayers || []).map(id => players.find(p => p.id === id)).filter(Boolean);
   const pri       = PRIORITY_COLOR[t.priority] || PRIORITY_COLOR.Normal;
+  // Collapse the chip list when every represented player is attached — a
+  // task with 30 chips on a phone screen was unreadable.
+  const allLinked = players.length > 0 && linked.length >= players.length;
 
   return (
     <div className="card card-body" style={{
@@ -318,17 +480,28 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
           )}
 
           {linked.length > 0 && (
-            <span style={{
+            <span className="task-linked-row" style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
-              color: 'var(--text-3)',
+              flexWrap: 'wrap', rowGap: 4,
+              color: 'var(--text-3)', minWidth: 0,
             }}>
-              🤝
-              {linked.map(p => (
-                <span key={p.id} style={{
-                  background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.2)',
-                  borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11,
-                }}>{p.fullName}</span>
-              ))}
+              <span style={{ flexShrink: 0 }}>🤝</span>
+              {allLinked ? (
+                <span style={{
+                  background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.35)',
+                  borderRadius: 4, padding: '1px 8px', color: 'var(--gold)',
+                  fontSize: 11, fontWeight: 600,
+                }}>All represented ({players.length})</span>
+              ) : (
+                linked.map(p => (
+                  <span key={p.id} className="task-linked-chip" style={{
+                    background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.2)',
+                    borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11,
+                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>{p.fullName}</span>
+                ))
+              )}
             </span>
           )}
         </div>
