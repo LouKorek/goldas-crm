@@ -15,6 +15,7 @@ const ROUTE_IMAGE = {
   '/pipeline/youth':  { src: '/photos/Scouting1.png',    label: 'Youth' },
   '/pipeline/jewish': { src: '/photos/Stadium_Road.png', label: 'Jewish' },
   '/notifications':   { src: '/photos/Scouting2.png',    label: 'Notifications' },
+  '/tasks':           { src: '/photos/Tunnel3.png',      label: 'Tasks' },
   '/team':            { src: '/photos/Services.png',     label: 'Team' },
 };
 
