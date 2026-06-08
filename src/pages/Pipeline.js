@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
@@ -85,6 +85,276 @@ async function clearAllCategory(path) {
   for (const d of snap.docs) await deleteDoc(d.ref);
   window.location.reload();
 }
+
+// ─── Linked clubs ────────────────────────────────────────────────
+// Inline cell shown for the four club-related pipeline statuses
+// (Offered, Negotiation, Draft Signed, Contract Signed). Lets the
+// user link any number of clubs (sourced from the Contacts collection
+// with duplicates collapsed), mark a previously-linked club as no
+// longer relevant (moves it to a Previous Clubs sub-section, keeping
+// the audit trail), and re-activate it later.
+const CLUB_RELATED_STATUSES = new Set([
+  'Offered to Club', 'Negotiation', 'Draft Signed', 'Contract Signed',
+]);
+
+function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
+  const [open, setOpen]     = useState(false);
+  const [adding, setAdding] = useState('');
+  const [showPrev, setShowPrev] = useState(false);
+  const btnRef    = useRef(null);
+  const popRef    = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  const linked   = Array.isArray(player.linkedClubs)   ? player.linkedClubs   : [];
+  const previous = Array.isArray(player.previousClubs) ? player.previousClubs : [];
+
+  // Position the popover under the trigger, clamped to viewport.
+  useEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const popW = 280;
+    let left = r.left;
+    if (left + popW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - popW - 8);
+    setPos({ top: r.bottom + 6, left });
+  }, [open]);
+
+  // Click-outside / Escape → close.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => {
+      if (popRef.current?.contains(e.target)) return;
+      if (btnRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('touchstart', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  // Hide the cell entirely for non-club statuses — keeps the row tidy.
+  if (!CLUB_RELATED_STATUSES.has(player.status)) {
+    return <span style={{ color: 'var(--text-mute)', fontSize: 10 }}>—</span>;
+  }
+
+  const persist = async (next) => {
+    try { await updateDoc_(path, player.id, next); }
+    catch (e) { toast.error(e.message || 'Could not save linked clubs.'); }
+  };
+
+  const addClub = async (name) => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    // Refuse duplicates against currently linked (case-insensitive).
+    if (linked.some(c => (c.clubName || '').toLowerCase() === trimmed.toLowerCase())) {
+      toast.error(`${trimmed} is already linked.`); return;
+    }
+    // If it's in Previous Clubs, move it back to Linked instead of duplicating.
+    const prevIdx = previous.findIndex(c => (c.clubName || '').toLowerCase() === trimmed.toLowerCase());
+    if (prevIdx !== -1) {
+      const moved = { clubName: previous[prevIdx].clubName, linkedAt: new Date().toISOString() };
+      await persist({
+        linkedClubs:   [...linked, moved],
+        previousClubs: previous.filter((_, i) => i !== prevIdx),
+      });
+    } else {
+      await persist({
+        linkedClubs: [...linked, { clubName: trimmed, linkedAt: new Date().toISOString() }],
+      });
+    }
+    setAdding('');
+  };
+
+  const markNotRelevant = async (idx) => {
+    const c = linked[idx];
+    if (!c) return;
+    await persist({
+      linkedClubs:   linked.filter((_, i) => i !== idx),
+      previousClubs: [...previous, { ...c, markedAt: new Date().toISOString() }],
+    });
+  };
+
+  const reactivate = async (idx) => {
+    const c = previous[idx];
+    if (!c) return;
+    if (linked.some(l => (l.clubName || '').toLowerCase() === (c.clubName || '').toLowerCase())) {
+      toast.error(`${c.clubName} is already linked.`); return;
+    }
+    await persist({
+      linkedClubs:   [...linked, { clubName: c.clubName, linkedAt: new Date().toISOString() }],
+      previousClubs: previous.filter((_, i) => i !== idx),
+    });
+  };
+
+  const remove = async (idx, which) => {
+    if (which === 'linked') {
+      await persist({ linkedClubs: linked.filter((_, i) => i !== idx) });
+    } else {
+      await persist({ previousClubs: previous.filter((_, i) => i !== idx) });
+    }
+  };
+
+  // Suggestions exclude clubs already linked.
+  const suggestions = clubOptions.filter(
+    c => !linked.some(l => (l.clubName || '').toLowerCase() === c.toLowerCase())
+  );
+
+  return (
+    <>
+      <button ref={btnRef} type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        title={`${linked.length} linked${previous.length ? ` · ${previous.length} previous` : ''}`}
+        style={{
+          background: linked.length ? 'rgba(74,222,128,0.12)' : 'rgba(212,176,98,0.10)',
+          border: `1px solid ${linked.length ? 'rgba(74,222,128,0.35)' : 'rgba(212,176,98,0.30)'}`,
+          color: linked.length ? '#4ADE80' : 'var(--gold)',
+          borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700,
+          cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.3,
+        }}>
+        🏢 {linked.length}{previous.length ? ` · ${previous.length}↩` : ''}
+      </button>
+
+      {open && (
+        <div ref={popRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left,
+            width: 280, maxHeight: '70vh', overflowY: 'auto',
+            background: 'var(--surface-2)', border: '1px solid var(--border-2)',
+            borderRadius: 10, boxShadow: '0 14px 40px rgba(0,0,0,0.55)',
+            padding: 12, zIndex: 200, fontSize: 12,
+          }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <strong style={{ fontSize: 12, color: 'var(--gold)' }}>🏢 Linked Clubs</strong>
+            <button type="button" onClick={() => setOpen(false)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-2)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4 }}>×</button>
+          </div>
+
+          {/* Add club */}
+          {canEdit && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <select value={adding} onChange={e => setAdding(e.target.value)}
+                  style={{ flex: 1, minWidth: 0, fontSize: 11, height: 30, padding: '0 6px' }}>
+                  <option value="">— Select from contacts —</option>
+                  {suggestions.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button type="button" onClick={() => addClub(adding)}
+                  disabled={!adding}
+                  style={{
+                    flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 6,
+                    background: adding ? 'var(--gold)' : 'var(--surface-3)',
+                    color: adding ? '#0A140D' : 'var(--text-3)',
+                    border: 'none', cursor: adding ? 'pointer' : 'not-allowed',
+                    fontSize: 11, fontWeight: 700,
+                  }}>Link</button>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
+                Not in the list? Add the club in Contacts first.
+              </div>
+            </div>
+          )}
+
+          {/* Currently linked clubs */}
+          {linked.length === 0 ? (
+            <div style={{ color: 'var(--text-3)', fontStyle: 'italic', padding: '4px 0' }}>
+              No clubs linked yet.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+              {linked.map((c, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(74,222,128,0.08)', borderRadius: 6, padding: '5px 8px',
+                  border: '1px solid rgba(74,222,128,0.18)',
+                }}>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-1)' }}>
+                    {c.clubName}
+                  </span>
+                  {canEdit && (
+                    <>
+                      <button type="button" onClick={() => markNotRelevant(i)}
+                        title="Move to Previous Clubs (no longer relevant)"
+                        style={{
+                          flexShrink: 0, padding: '2px 6px', fontSize: 10, fontWeight: 600,
+                          background: 'rgba(229,181,71,0.15)', color: 'var(--amber)',
+                          border: '1px solid rgba(229,181,71,0.3)', borderRadius: 4,
+                          cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}>⊘ Not relevant</button>
+                      <button type="button" onClick={() => remove(i, 'linked')}
+                        title="Remove entirely"
+                        style={{
+                          flexShrink: 0, padding: '2px 6px', fontSize: 11,
+                          background: 'transparent', color: 'var(--text-3)',
+                          border: 'none', cursor: 'pointer',
+                        }}>×</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Previous clubs */}
+          {previous.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 6 }}>
+              <button type="button" onClick={() => setShowPrev(v => !v)}
+                style={{
+                  width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer',
+                  padding: '4px 0', fontSize: 11, fontStyle: 'italic',
+                }}>
+                <span>↩ Previous clubs ({previous.length})</span>
+                <span>{showPrev ? '▲' : '▼'}</span>
+              </button>
+              {showPrev && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6, opacity: 0.85 }}>
+                  {previous.map((c, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      background: 'rgba(248,113,113,0.05)', borderRadius: 6, padding: '5px 8px',
+                      border: '1px dashed rgba(248,113,113,0.25)',
+                    }}>
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-2)', textDecoration: 'line-through', textDecorationColor: 'rgba(248,113,113,0.4)' }}>
+                        {c.clubName}
+                      </span>
+                      {canEdit && (
+                        <>
+                          <button type="button" onClick={() => reactivate(i)}
+                            title="Move back to Linked"
+                            style={{
+                              flexShrink: 0, padding: '2px 6px', fontSize: 10, fontWeight: 600,
+                              background: 'rgba(74,222,128,0.12)', color: '#4ADE80',
+                              border: '1px solid rgba(74,222,128,0.3)', borderRadius: 4,
+                              cursor: 'pointer', whiteSpace: 'nowrap',
+                            }}>↩ Reactivate</button>
+                          <button type="button" onClick={() => remove(i, 'previous')}
+                            title="Remove from history"
+                            style={{
+                              flexShrink: 0, padding: '2px 6px', fontSize: 11,
+                              background: 'transparent', color: 'var(--text-3)',
+                              border: 'none', cursor: 'pointer',
+                            }}>×</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Pipeline({ category }) {
   const path     = PATHS[`PIPELINE_${category.toUpperCase()}`];
   const label    = CAT[category];
@@ -118,6 +388,21 @@ export default function Pipeline({ category }) {
       setItems(data); setLoading(false);
     }, 'playerName');
   }, [path]);
+
+  // Contacts feed the LinkedClubsCell dropdown — deduplicated by clubName
+  // (case-insensitive, trimmed) and sorted alphabetically.
+  const [contacts, setContacts] = useState([]);
+  useEffect(() => listenCollection(PATHS.CONTACTS, setContacts), []);
+  const clubOptions = useMemo(() => {
+    const seen = new Map();
+    contacts.forEach(c => {
+      const name = (c.clubName || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      if (!seen.has(key)) seen.set(key, name);
+    });
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+  }, [contacts]);
 
   const s = (k) => (v) => { setForm(p => ({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
@@ -173,8 +458,6 @@ export default function Pipeline({ category }) {
     if (search && !`${p.playerName} ${p.currentClub} ${p.primaryPosition} ${p.agentName}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (filters.status && p.status !== filters.status) return false;
     if (filters.position && p.primaryPosition !== filters.position) return false;
-    if (filters.youthScope === 'Youth'  && !p.currentClubIsYouth) return false;
-    if (filters.youthScope === 'Senior' &&  p.currentClubIsYouth) return false;
     return true;
   });
   data = data.sort((a,b) => {
@@ -209,6 +492,10 @@ export default function Pipeline({ category }) {
                 { key: 'currentClub',        label: '🔰',     pdfLabel: 'Club',
                   format: (v, r) => v ? `${v}${r.league ? `  ·  ${r.league}` : ''}` : '' },
                 { key: 'status',             label: '🚦',     pdfLabel: 'Status' },
+                { key: 'linkedClubs',        label: '🏢',     pdfLabel: 'Linked Clubs',
+                  format: (v) => Array.isArray(v) ? v.map(c => c.clubName).filter(Boolean).join(', ') : '' },
+                { key: 'previousClubs',      label: '↩',      pdfLabel: 'Previous Clubs',
+                  format: (v) => Array.isArray(v) ? v.map(c => c.clubName).filter(Boolean).join(', ') : '' },
                 { key: 'agentName',          label: '👤',     pdfLabel: 'Agent' },
                 { key: 'transferFee',        label: '💰',     pdfLabel: 'Fee' },
                 { key: 'salary',             label: '💵',     pdfLabel: 'Salary' },
@@ -236,7 +523,6 @@ export default function Pipeline({ category }) {
           <FilterBar filters={filters} setFilters={setFilters} options={[
             { key:'status', label:'Status', values:PIPELINE_STATUS },
             { key:'position', label:'Position', values:POSITIONS },
-            { key:'youthScope', label:'🌱 Group', values:['Youth','Senior'] },
           ]} />
         </div>
       </PageHeader>
@@ -261,6 +547,7 @@ export default function Pipeline({ category }) {
                   <SortTh label="🦵"  field="foot"            sort={sort} setSort={setSort} />
                   <th>🔰</th>
                   <SortTh label="🚦"  field="status"          sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}} title="Linked Clubs">🏢</th>
                   <th style={{textAlign:'center'}}>👤</th>
                   <th style={{textAlign:'center'}}>💰</th>
                   <th style={{textAlign:'center'}}>💵</th>
@@ -343,6 +630,11 @@ export default function Pipeline({ category }) {
                           </span>
                         );
                       })()}
+                    </td>
+                    {/* Linked clubs (only visible for the 4 club-related
+                        statuses; otherwise renders a dash) */}
+                    <td onClick={e => e.stopPropagation()} style={{textAlign:'center'}}>
+                      <LinkedClubsCell player={p} path={path} clubOptions={clubOptions} canEdit={canEdit} />
                     </td>
                     {/* Agent — compact: name, small number, small action icons (matches the name column size) */}
                     <td>

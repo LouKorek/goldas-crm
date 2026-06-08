@@ -683,12 +683,14 @@ export default function Matches() {
           <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
 
           {/* Youth/Senior scope — matches any match where at least one team
-              carries the youth flag. */}
+              carries the youth flag. Wider min-width + flex-shrink:0 so
+              the long "🌱 Group: All" label doesn't get clipped when
+              the row gets tight on mobile. */}
           <select value={youthScope} onChange={e => setYouthScope(e.target.value)}
-            style={{ height: 36, minWidth: 130, fontSize: 12 }}>
+            style={{ height: 36, minWidth: 170, fontSize: 12, flexShrink: 0, padding: '0 10px' }}>
             <option value="">🌱 Group: All</option>
-            <option value="Youth">Youth</option>
-            <option value="Senior">Senior</option>
+            <option value="Youth">Youth only</option>
+            <option value="Senior">Senior only</option>
           </select>
         </div>
 
