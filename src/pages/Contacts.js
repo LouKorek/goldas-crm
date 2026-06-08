@@ -11,6 +11,7 @@ const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCo
 export default function Contacts() {
   const [items, setItems]   = useState([]);
   const [search, setSearch] = useState('');
+  const [youthScope, setYouthScope] = useState('');  // '' | 'Youth' | 'Senior'
   const [modal, setModal]   = useState(null);   // 'add' | { edit }
   const [form, setForm]     = useState(EMPTY);
   const { confirm, dialog } = useConfirm();
@@ -61,9 +62,12 @@ export default function Contacts() {
   };
 
   const term = search.trim().toLowerCase();
-  const filtered = items.filter(c =>
-    !term || `${c.clubName || ''} ${c.contactName || ''} ${c.contactRole || ''}`.toLowerCase().includes(term)
-  );
+  const filtered = items.filter(c => {
+    if (term && !`${c.clubName || ''} ${c.contactName || ''} ${c.contactRole || ''}`.toLowerCase().includes(term)) return false;
+    if (youthScope === 'Youth'  && !c.clubIsYouth) return false;
+    if (youthScope === 'Senior' &&  c.clubIsYouth) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -90,8 +94,15 @@ export default function Contacts() {
         }
       />
 
-      <div style={{ marginBottom: 14, maxWidth: 360 }}>
-        <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
+      <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
+          <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
+        </div>
+        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ minWidth: 150 }}>
+          <option value="">🌱 Group: All</option>
+          <option value="Youth">Youth</option>
+          <option value="Senior">Senior</option>
+        </select>
       </div>
 
       {filtered.length === 0 ? (

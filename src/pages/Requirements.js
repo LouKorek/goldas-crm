@@ -768,6 +768,8 @@ export default function Requirements() {
     if (search && !`${p.clubName} ${p.contactName} ${p.league}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (filters.gender   && p.gender           !== filters.gender)   return false;
     if (filters.position && p.requiredPosition !== filters.position) return false;
+    if (filters.youthScope === 'Youth'  && !p.clubIsYouth) return false;
+    if (filters.youthScope === 'Senior' &&  p.clubIsYouth) return false;
     return true;
   });
   data = data.sort((a, b) => {
@@ -821,8 +823,9 @@ export default function Requirements() {
       >
         <div style={{ marginTop: 14 }}>
           <FilterBar filters={filters} setFilters={setFilters} options={[
-            { key: 'gender',   label: 'Gender',   values: ['Men', 'Women'] },
-            { key: 'position', label: 'Position', values: POSITIONS },
+            { key: 'gender',     label: 'Gender',   values: ['Men', 'Women'] },
+            { key: 'position',   label: 'Position', values: POSITIONS },
+            { key: 'youthScope', label: '🌱 Group', values: ['Youth', 'Senior'] },
           ]} />
         </div>
       </PageHeader>

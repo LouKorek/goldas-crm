@@ -297,6 +297,8 @@ export default function Players() {
     if (filters.gender&&p.gender!==filters.gender) return false;
     if (filters.position&&p.primaryPosition!==filters.position) return false;
     if (filters.contractStatus&&p.contractStatus!==filters.contractStatus) return false;
+    if (filters.youthScope === 'Youth'  && !p.currentClubIsYouth) return false;
+    if (filters.youthScope === 'Senior' &&  p.currentClubIsYouth) return false;
     return true;
   }).sort((a,b)=>{
     let av,bv;
@@ -376,6 +378,7 @@ export default function Players() {
             {key:'gender',label:'Gender',values:['Men','Women']},
             {key:'position',label:'Position',values:POSITIONS},
             {key:'contractStatus',label:'Contract',values:CONTRACT_STATUS},
+            {key:'youthScope',label:'🌱 Group',values:['Youth','Senior']},
           ]} />
         </div>
       </PageHeader>

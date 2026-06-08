@@ -173,6 +173,8 @@ export default function Pipeline({ category }) {
     if (search && !`${p.playerName} ${p.currentClub} ${p.primaryPosition} ${p.agentName}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (filters.status && p.status !== filters.status) return false;
     if (filters.position && p.primaryPosition !== filters.position) return false;
+    if (filters.youthScope === 'Youth'  && !p.currentClubIsYouth) return false;
+    if (filters.youthScope === 'Senior' &&  p.currentClubIsYouth) return false;
     return true;
   });
   data = data.sort((a,b) => {
@@ -234,6 +236,7 @@ export default function Pipeline({ category }) {
           <FilterBar filters={filters} setFilters={setFilters} options={[
             { key:'status', label:'Status', values:PIPELINE_STATUS },
             { key:'position', label:'Position', values:POSITIONS },
+            { key:'youthScope', label:'🌱 Group', values:['Youth','Senior'] },
           ]} />
         </div>
       </PageHeader>

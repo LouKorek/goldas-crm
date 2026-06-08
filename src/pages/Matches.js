@@ -367,6 +367,7 @@ export default function Matches() {
   const [view, setView]       = useState('Schedule');         // Schedule | Day | 3 Day | Week | Month
   const [anchorDate, setAnchorDate] = useState(new Date());   // pivot date for range views
   const [playerFilter, setPlayerFilter] = useState([]);       // selected represented player IDs
+  const [youthScope, setYouthScope]     = useState('');       // '' | 'Youth' | 'Senior'
   const { confirm, dialog }   = useConfirm();
   const { canEdit, isAdmin }  = useRole();
   const [syncing, setSyncing] = useState(false);
@@ -451,6 +452,12 @@ export default function Matches() {
     if (playerFilter.length) {
       const linked = m.linkedPlayers || [];
       if (!linked.some(id => playerFilter.includes(id))) return false;
+    }
+    // Youth scope: a match is "youth" when either side is flagged a youth team.
+    if (youthScope) {
+      const isYouthMatch = !!(m.homeTeamIsYouth || m.awayTeamIsYouth);
+      if (youthScope === 'Youth'  && !isYouthMatch) return false;
+      if (youthScope === 'Senior' &&  isYouthMatch) return false;
     }
     return true;
   });
@@ -601,6 +608,7 @@ export default function Matches() {
                 subtitle={[
                   search && `search: "${search}"`,
                   playerFilter.length && `${playerFilter.length} player${playerFilter.length===1?'':'s'} filter`,
+                  youthScope && `group: ${youthScope}`,
                   view !== 'Schedule' && `view: ${view}`,
                 ].filter(Boolean).join('  ·  ')}
                 columns={[
@@ -673,6 +681,15 @@ export default function Matches() {
               next to the view chips in Schedule mode) so on mobile both
               controls fit on the same row instead of wrapping. */}
           <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
+
+          {/* Youth/Senior scope — matches any match where at least one team
+              carries the youth flag. */}
+          <select value={youthScope} onChange={e => setYouthScope(e.target.value)}
+            style={{ height: 36, minWidth: 130, fontSize: 12 }}>
+            <option value="">🌱 Group: All</option>
+            <option value="Youth">Youth</option>
+            <option value="Senior">Senior</option>
+          </select>
         </div>
 
       {/* List section — scrolls with the document so mobile users get
