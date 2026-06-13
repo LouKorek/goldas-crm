@@ -138,6 +138,7 @@ export const COUNTRIES = [
   "Ireland",
   "Israel",
   "Italy",
+  "Ivory Coast",
   "Jamaica",
   "Japan",
   "Jordan",
