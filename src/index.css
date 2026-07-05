@@ -925,14 +925,37 @@ textarea:focus::placeholder {
      "display:flex"> WITHOUT flex-wrap, so when 3+ buttons + search don't
      fit one row, content gets clipped instead of wrapping. Force every
      nested flex container inside .action-bar to wrap, on every screen. */
-  .page-header .action-bar > div {
-    flex-wrap: wrap !important;
+  /* Uniform two-column control grid — Add | Export / Search | Clear —
+     instead of ragged rows of random-width buttons. Matches keeps its own
+     .page-matches layout below. */
+  :not(.page-matches) > .page-header .action-bar > div {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
     max-width: 100%;
     width: 100%;
-    gap: 6px;
-    align-items: center;
+    align-items: stretch;
   }
-  .page-header .action-bar input { width: 140px !important; max-width: 100%; }
+  :not(.page-matches) > .page-header .action-bar > div > * { width: 100% !important; min-width: 0; }
+  :not(.page-matches) > .page-header .action-bar > div > div { height: auto !important; }
+  :not(.page-matches) > .page-header .action-bar > div > .btn,
+  :not(.page-matches) > .page-header .action-bar > div > div > .btn {
+    width: 100% !important;
+    height: 40px !important;
+  }
+  .page-header .action-bar input { width: 100% !important; max-width: 100%; height: 40px !important; }
+
+  /* Filter selects: one horizontal swipe row instead of a wrapping pile. */
+  .filter-bar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-bar > * { flex: 0 0 auto; }
+  .filter-bar select { height: 38px; width: auto; }
 
   /* ──────────────── PAGE-MATCHES (mobile-only polish) ──────────────
      The Matches screen carries the heaviest header (Add / Sync / Export
@@ -1056,6 +1079,7 @@ textarea:focus::placeholder {
 
   /* Task "done" checkbox — comfortable thumb target. */
   .task-check { width: 32px !important; height: 32px !important; }
+  .tasks-page { max-width: 100%; }
 
   /* ── Mobile card lists — replace the 760px horizontal-scroll tables on
      Players / Pipeline / Requirements / Contacts. Everything important is
@@ -1106,6 +1130,10 @@ textarea:focus::placeholder {
 }
 
 .view-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+/* Tasks reads like a list, not a spreadsheet — cap the column so cards
+   don't stretch across a 1500px viewport. */
+.tasks-page { max-width: 900px; }
 
 /* ===================================================================
    LIGHT MODE

@@ -881,13 +881,13 @@ export default function Requirements() {
                 <tr>
                   <th></th>{/* Actions — first */}
                   <th>G</th>
-                  <SortTh label="🔰" field="clubName" sort={sort} setSort={setSort} />
+                  <SortTh label="Club" field="clubName" sort={sort} setSort={setSort} />
                   <th>#</th>
-                  <th>👤</th>
-                  <th>📍</th>
-                  <th>🗓️</th>
-                  <th>💰</th>
-                  <th>💵</th>
+                  <th>Contact</th>
+                  <th>Pos</th>
+                  <th>Age</th>
+                  <th>Fee</th>
+                  <th>Salary</th>
                 </tr>
               </thead>
               <tbody>

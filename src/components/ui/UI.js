@@ -638,7 +638,7 @@ export function SortTh({ label, field, sort, setSort }) {
 // Filter bar
 export function FilterBar({ filters, setFilters, options }) {
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div className="filter-bar" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
       {options.map(opt => (
         <div key={opt.key} style={{ minWidth: 140 }}>
           <select value={filters[opt.key] || ''} onChange={e => setFilters(f => ({ ...f, [opt.key]: e.target.value }))}>

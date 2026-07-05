@@ -591,19 +591,19 @@ export default function Pipeline({ category }) {
               <thead>
                 <tr>
                   <th style={{width:66}}></th>
-                  <SortTh label="🏃‍♂️" field="playerName"      sort={sort} setSort={setSort} />
-                  <SortTh label="🗓️"  field="dob"             sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>🌎</th>
-                  <SortTh label="📍"  field="primaryPosition" sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>📌</th>
-                  <SortTh label="🦵"  field="foot"            sort={sort} setSort={setSort} />
-                  <th>🔰</th>
-                  <SortTh label="🚦"  field="status"          sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}} title="Linked Clubs">🏢</th>
-                  <th style={{textAlign:'center'}}>👤</th>
-                  <th style={{textAlign:'center'}}>💰</th>
-                  <th style={{textAlign:'center'}}>💵</th>
-                  <SortTh label="🏟️"  field="natTeamStatus"   sort={sort} setSort={setSort} />
+                  <SortTh label="Name" field="playerName"      sort={sort} setSort={setSort} />
+                  <SortTh label="Born"  field="dob"             sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>Nat</th>
+                  <SortTh label="Pos"  field="primaryPosition" sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>2nd</th>
+                  <SortTh label="Foot"  field="foot"            sort={sort} setSort={setSort} />
+                  <th>Club</th>
+                  <SortTh label="Status"  field="status"          sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}} title="Linked Clubs">Clubs</th>
+                  <th style={{textAlign:'center'}}>Agent</th>
+                  <th style={{textAlign:'center'}}>Fee</th>
+                  <th style={{textAlign:'center'}}>Salary</th>
+                  <SortTh label="NT"  field="natTeamStatus"   sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>

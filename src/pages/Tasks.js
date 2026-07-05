@@ -326,7 +326,7 @@ export default function Tasks() {
   const done = sorted.filter(t =>  t.done && matchesSearch(t));
 
   return (
-    <div>
+    <div className="tasks-page">
       <PageHeader
         title="Tasks"
         subtitle={`${open.length} open  ·  ${done.length} done`}
@@ -434,7 +434,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
 
   return (
     <div className="card card-body" style={{
-      padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'flex-start',
+      padding: '11px 14px', display: 'flex', gap: 10, alignItems: 'flex-start',
       borderLeft: `3px solid ${pri.fg}`,
     }}>
       {/* Done checkbox */}

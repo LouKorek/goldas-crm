@@ -108,11 +108,11 @@ export default function Team() {
               <thead>
                 <tr>
                   <th style={{ width: 70 }}></th>
-                  <th title="Name">👤</th>
-                  <th title="Email">📧</th>
-                  <th title="Role">🛡️</th>
-                  <th title="Access">🟢</th>
-                  <th style={{ width: 80, textAlign: 'center' }} title="Receive email alerts">✉️</th>
+                  <th title="Name">Name</th>
+                  <th title="Email">Email</th>
+                  <th title="Role">Role</th>
+                  <th title="Access">Access</th>
+                  <th style={{ width: 80, textAlign: 'center' }} title="Receive email alerts">Alerts</th>
                 </tr>
               </thead>
               <tbody>

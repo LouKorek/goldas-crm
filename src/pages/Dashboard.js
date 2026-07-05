@@ -20,7 +20,7 @@ function KPI({ label, value, color, bg, to, onClick }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-end',
-      aspectRatio: '1 / 1',
+      height: 148,
       cursor: interactive ? 'pointer' : 'default',
       transition: 'transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s, border-color 0.22s',
       position: 'relative',
@@ -40,7 +40,7 @@ function KPI({ label, value, color, bg, to, onClick }) {
       }} />
       <div style={{
         fontFamily: 'Cormorant Garamond, serif',
-        fontSize: 52, fontWeight: 700, lineHeight: 1,
+        fontSize: 40, fontWeight: 700, lineHeight: 1,
         color: color || 'var(--gold)',
         textAlign: 'center',
         position: 'absolute',

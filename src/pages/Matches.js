@@ -690,7 +690,7 @@ export default function Matches() {
               the long "🌱 Group: All" label doesn't get clipped when
               the row gets tight on mobile. */}
           <select value={youthScope} onChange={e => setYouthScope(e.target.value)}
-            style={{ height: 36, minWidth: 170, fontSize: 12, flexShrink: 0, padding: '0 10px' }}>
+            style={{ width: 'auto', height: 36, minWidth: 170, fontSize: 12, flexShrink: 0, padding: '0 10px' }}>
             <option value="">🌱 Group: All</option>
             <option value="Youth">Youth only</option>
             <option value="Senior">Senior only</option>

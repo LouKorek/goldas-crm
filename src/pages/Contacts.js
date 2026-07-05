@@ -94,11 +94,11 @@ export default function Contacts() {
         }
       />
 
-      <div style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="filter-bar" style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
           <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
         </div>
-        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ minWidth: 150 }}>
+        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 36, flexShrink: 0 }}>
           <option value="">🌱 Group: All</option>
           <option value="Youth">Youth</option>
           <option value="Senior">Senior</option>
@@ -144,9 +144,9 @@ export default function Contacts() {
               <thead>
                 <tr>
                   <th style={{ width: 100, paddingRight: 20 }}></th>
-                  <th style={{ width: '36%', textAlign: 'center' }}>🔰</th>
-                  <th style={{ width: '36%', textAlign: 'center' }}>👤</th>
-                  <th style={{ width: 210, textAlign: 'center' }}>📞</th>
+                  <th style={{ width: '36%', textAlign: 'center' }}>Club</th>
+                  <th style={{ width: '36%', textAlign: 'center' }}>Contact</th>
+                  <th style={{ width: 210, textAlign: 'center' }}>Phone</th>
                 </tr>
               </thead>
               <tbody>

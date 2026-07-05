@@ -443,19 +443,19 @@ export default function Players() {
               <thead>
                 <tr>
                   <th style={{width:70}}>Actions</th>
-                  <SortTh label="🏃‍♂️" field="fullName" sort={sort} setSort={setSort} />
+                  <SortTh label="Name" field="fullName" sort={sort} setSort={setSort} />
                   <SortTh label='G' field='gender' sort={sort} setSort={setSort} />
-                  <SortTh label='🗓️' field='dob' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>🌎</th>
-                  <SortTh label='📍' field='primaryPosition' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Sec 📍</th>
-                  <SortTh label='🦵' field='foot' sort={sort} setSort={setSort} />
-                  <th>🔰</th>
-                  <SortTh label='📑' field='contractStatus' sort={sort} setSort={setSort} />
-                  <SortTh label='End 📑' field='contractEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='End 🤝' field='reprEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='End 🪪' field='passportExpiry' sort={sort} setSort={setSort} />
-                  <SortTh label='🏟️' field='natTeamStatus' sort={sort} setSort={setSort} />
+                  <SortTh label='Born' field='dob' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>Nat</th>
+                  <SortTh label='Pos' field='primaryPosition' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>2nd</th>
+                  <SortTh label='Foot' field='foot' sort={sort} setSort={setSort} />
+                  <th>Club</th>
+                  <SortTh label='Contract' field='contractStatus' sort={sort} setSort={setSort} />
+                  <SortTh label='Con. End' field='contractEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='Rep. End' field='reprEnd' sort={sort} setSort={setSort} />
+                  <SortTh label='Passport' field='passportExpiry' sort={sort} setSort={setSort} />
+                  <SortTh label='NT' field='natTeamStatus' sort={sort} setSort={setSort} />
                 </tr>
               </thead>
               <tbody>
