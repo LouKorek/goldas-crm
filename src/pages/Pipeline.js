@@ -533,7 +533,59 @@ export default function Pipeline({ category }) {
         <Empty icon={CAT_EMOJI[category]} message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
           action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}>+ Add Player</button>} />
       ) : (
-        <div className="card" style={{padding:0}}>
+        <>
+        <div className="mobile-cards">
+          {data.map(p=>{
+            const pIsEU=isEuropean(p.nationalities||[]);
+            const dobDisplay=p.dob?`${fmtDate(p.dob)} (${calcAge(p.dob)})`:'';
+            const sc=PIPELINE_STATUS_COLORS[p.status]||{bg:'var(--surface-3)',text:'var(--text-2)'};
+            return (
+              <div key={p.id} className="m-card" onClick={()=>setCardFor(p)}>
+                <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <span style={{fontWeight:600,fontSize:14.5}}>{p.playerName}</span>
+                    {p.height&&<span className="m-sub" style={{marginLeft:6}}>{p.height}cm</span>}
+                  </div>
+                  {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius:6,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{p.status}</span>}
+                </div>
+                <div className="m-meta" style={{marginTop:5}}>
+                  {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
+                  {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0&&<span className="m-sub">({p.secondaryPositions.join(', ')})</span>}
+                  {dobDisplay&&<span>🗓 {dobDisplay}</span>}
+                  {p.foot&&<span>🦵 {p.foot}</span>}
+                  <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5}}>{pIsEU?'EU':'Non-EU'}</span>
+                </div>
+                <div className="m-meta" style={{marginTop:5}}>
+                  <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.currentClub||'Free'}</span>
+                  {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                  {p.league&&<span className="m-sub">{p.league}</span>}
+                  {(p.transferFee&&p.transferFee!=='Not specified')&&<span>💰 €{Number(p.transferFee).toLocaleString()}</span>}
+                  {(p.salary&&p.salary!=='Not specified')&&<span>💵 €{Number(p.salary).toLocaleString()}/mo</span>}
+                </div>
+                {(p.agentName||p.agentPhone)&&(
+                  <div className="m-meta" style={{marginTop:5}} onClick={e=>e.stopPropagation()}>
+                    <span>👤 {p.agentName||'—'}</span>
+                    {p.agentPhone&&<span className="m-sub">{formatPhone(p.agentPhone)}</span>}
+                    {p.agentPhone&&<PhoneActions phone={p.agentPhone} />}
+                  </div>
+                )}
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:9}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8}} onClick={e=>e.stopPropagation()}>
+                    <NatFlags nats={p.nationalities} />
+                    <LinkedClubsCell player={p} path={path} clubOptions={clubOptions} canEdit={canEdit} />
+                  </div>
+                  <div className="action-btns" style={{display:'flex',gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:7,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}} title="Delete" onClick={()=>del(p)}>🗑</button>)}
+                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:7,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}} title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
+                    {p.profileLink&&(<a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius:7,fontSize:13,textDecoration:'none'}} title="Profile">🧑‍💼</a>)}
+                    {p.videoLink&&(<a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius:7,fontSize:13,textDecoration:'none'}} title="Video">📹</a>)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="card desktop-table" style={{padding:0}}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -661,6 +713,7 @@ export default function Pipeline({ category }) {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* Add/Edit Modal */}

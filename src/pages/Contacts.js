@@ -112,7 +112,33 @@ export default function Contacts() {
           action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
         />
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <>
+        <div className="mobile-cards">
+          {filtered.map(c => (
+            <div key={c.id} className="m-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ClubLogoOrAvatar name={c.clubName} size={30} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.clubName || '—'}</span>
+                    {c.clubIsYouth && <U19 />}
+                  </div>
+                  {c.league && <div className="m-sub">{c.league}</div>}
+                </div>
+                {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
+              </div>
+              {(c.contactName || c.contactRole || c.contactPhone) && (
+                <div className="m-meta" style={{ marginTop: 8 }}>
+                  {c.contactName && <span>👤 {c.contactName}</span>}
+                  {c.contactRole && <span className="m-sub">{c.contactRole}</span>}
+                  {c.contactPhone && <span>{formatPhone(c.contactPhone)}</span>}
+                  {c.contactPhone && <PhoneActions phone={c.contactPhone} />}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="card desktop-table" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -163,6 +189,7 @@ export default function Contacts() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {modal && (

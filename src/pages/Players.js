@@ -390,7 +390,54 @@ export default function Players() {
           message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
           action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
       ) : (
-        <div className="card" style={{padding:0}}>
+        <>
+        <div className="mobile-cards">
+          {data.map(p=>{
+            const contractDays=daysUntil(p.contractEnd);
+            const reprDays=daysUntil(p.reprEnd);
+            const passportDays=daysUntil(p.passportExpiry);
+            const pAge=calcAge(p.dob);
+            const pIsEU=isEuropean(p.nationalities||[]);
+            return (
+              <div key={p.id} className="m-card" onClick={()=>setViewPlayer(p)}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontWeight:600,fontSize:14.5,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.fullName}</span>
+                  <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5,flexShrink:0}}>{pIsEU?'EU':'Non-EU'}</span>
+                </div>
+                <div className="m-meta" style={{marginTop:5}}>
+                  {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
+                  {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0&&<span className="m-sub">({p.secondaryPositions.join(', ')})</span>}
+                  {p.dob&&<span>🗓 {fmtDate(p.dob)} ({pAge})</span>}
+                  {p.foot&&<span>🦵 {p.foot}</span>}
+                </div>
+                <div className="m-meta" style={{marginTop:5}}>
+                  <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
+                  {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                  {p.league&&<span className="m-sub">{p.league}</span>}
+                  <span className="badge" style={{background:p.contractStatus==='Free'?'var(--amber-bg)':p.contractStatus==='Under Contract'?'var(--green-bg)':'var(--blue-bg)',color:p.contractStatus==='Free'?'var(--amber)':p.contractStatus==='Under Contract'?'var(--green-ok)':'var(--blue)',fontSize:9.5}}>{p.contractStatus||'—'}</span>
+                </div>
+                {(p.contractEnd||p.reprEnd||p.passportExpiry||p.natTeamStatus)&&(
+                  <div className="m-meta" style={{marginTop:5,fontSize:11}}>
+                    {p.contractEnd&&<span style={{color:alertColor(contractDays)}}>📑 {fmtDate(p.contractEnd)}</span>}
+                    {p.reprEnd&&<span style={{color:alertColor(reprDays)}}>🤝 {fmtDate(p.reprEnd)}</span>}
+                    {p.passportExpiry&&<span style={{color:alertColor(passportDays)}}>🪪 {fmtDate(p.passportExpiry)}</span>}
+                    {p.natTeamStatus&&<span className="m-sub">🏟 {p.natTeamStatus}</span>}
+                  </div>
+                )}
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:9}}>
+                  <NatFlags nats={p.nationalities} />
+                  <div className="action-btns" style={{display:'flex',gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:7,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}} title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
+                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:7,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}} title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
+                    {p.profileLink&&(<a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius:7,fontSize:13,textDecoration:'none'}} title="Profile">🧑‍💼</a>)}
+                    {p.videoLink&&(<a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius:7,fontSize:13,textDecoration:'none'}} title="Video">📹</a>)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="card desktop-table" style={{padding:0}}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -489,6 +536,7 @@ export default function Players() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* Add/Edit Modal */}

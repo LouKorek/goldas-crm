@@ -449,7 +449,7 @@ export default function Layout({ user }) {
       <main
         className="main-content"
         key={location.pathname}
-        style={{ flex: 1, padding: '22px 22px', minHeight: '100vh' }}
+        style={{ flex: 1, padding: '18px 20px', minHeight: '100vh' }}
       >
         <Outlet />
       </main>

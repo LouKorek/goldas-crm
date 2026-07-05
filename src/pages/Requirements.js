@@ -837,7 +837,44 @@ export default function Requirements() {
           message={search || Object.values(filters).some(Boolean) ? 'No club requirements match your search.' : 'No club requirements added yet.'}
           action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
       ) : (
-        <div className="card" style={{ padding: 0 }}>
+        <>
+        <div className="mobile-cards">
+          {data.map(p => (
+            <div key={p.id} className="m-card" onClick={() => setViewReq(p)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ClubLogoOrAvatar name={p.clubName} size={30} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.clubName}</span>
+                    {p.clubIsYouth && <U19 />}
+                  </div>
+                  <div className="m-sub">{p.league || ''}{p.tablePosition ? ` · #${p.tablePosition}` : ''}{p.gender ? ` · ${p.gender}` : ''}</div>
+                </div>
+              </div>
+              <div className="m-meta" style={{ marginTop: 6 }}>
+                {p.requiredPosition && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>📍 {p.requiredPosition}</span>}
+                {!p.ageNotSpecified && (p.ageMin || p.ageMax) && <span>🗓 {p.ageMin && p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin || p.ageMax}</span>}
+                {(p.transferFee && p.transferFee !== 'Not specified') && <span>💰 €{Number(p.transferFee).toLocaleString()}</span>}
+                {(p.salary && p.salary !== 'Not specified') && <span>💵 €{Number(p.salary).toLocaleString()}/mo</span>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
+                {(p.contactName || p.contactPhone) ? (
+                  <div className="m-meta" onClick={e => e.stopPropagation()}>
+                    <span>👤 {p.contactName || '—'}</span>
+                    {p.contactRole && <span className="m-sub">{p.contactRole}</span>}
+                    {p.contactPhone && <PhoneActions phone={p.contactPhone} />}
+                  </div>
+                ) : <span />}
+                {canEdit && (
+                  <span onClick={e => e.stopPropagation()}>
+                    <RowActions onDelete={() => del(p)} onEdit={() => openEdit(p)} onDuplicate={() => openDup(p)} />
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="card desktop-table" style={{ padding: 0 }}>
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -934,6 +971,7 @@ export default function Requirements() {
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* View modal — opened by row click */}
