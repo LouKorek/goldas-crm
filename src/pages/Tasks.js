@@ -438,7 +438,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       borderLeft: `3px solid ${pri.fg}`,
     }}>
       {/* Done checkbox */}
-      <button type="button" onClick={onToggle}
+      <button type="button" onClick={onToggle} className="task-check"
         title={t.done ? 'Mark as open' : 'Mark as done'}
         style={{
           width: 24, height: 24, borderRadius: 6, flexShrink: 0,
@@ -518,7 +518,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       </div>
 
       {/* Edit + Delete actions */}
-      <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+      <div className="action-btns" style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
         <button type="button" onClick={onEdit} title="Edit"
           style={{
             width: 28, height: 28, padding: 0, border: 'none', borderRadius: 7,

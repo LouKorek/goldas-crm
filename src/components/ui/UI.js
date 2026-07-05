@@ -833,7 +833,7 @@ export function RowActions({ onEdit, onDuplicate, onDelete }) {
     onMouseLeave: (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; },
   });
   return (
-    <div style={{ display: 'flex', gap: 5 }}>
+    <div className="action-btns" style={{ display: 'flex', gap: 5 }}>
       {onDelete && <button title="Delete" onClick={onDelete}
         style={{ ...BTN, background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
         {...hov('rgba(248,113,113,0.15)', 'rgba(248,113,113,0.3)')}>🗑</button>}

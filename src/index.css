@@ -43,8 +43,10 @@
   /* — Stronger text hierarchy — */
   --text-1:      #F6FBF6;
   --text-2:      #B5CCB8;
-  --text-3:      #6E9472;
-  --text-mute:   #4A6E50;
+  /* text-3 carries real secondary content (leagues, roles, dates) — lifted
+     slightly for contrast without losing the muted-green character. */
+  --text-3:      #7DA282;
+  --text-mute:   #567D5C;
 
   /* — Borders: quiet by default, gold-lit on emphasis — */
   --border:      rgba(212,176,98,0.07);
@@ -768,7 +770,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 /* Placeholder */
 ::placeholder {
-  color: rgba(100, 145, 105, 0.5) !important;
+  color: rgba(110, 155, 115, 0.62) !important;
   opacity: 1 !important;
 }
 input:focus::placeholder,
@@ -904,6 +906,10 @@ textarea:focus::placeholder {
     min-width: 760px !important;
     width: 760px !important;
   }
+  /* Mobile table readability: 11px cells / 9.5px headers were below a
+     comfortable reading size on phone DPIs. */
+  .data-table td { font-size: 12px; padding: 9px 8px; }
+  .data-table th { font-size: 10px; }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
@@ -995,8 +1001,14 @@ textarea:focus::placeholder {
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
 
   .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  .kpi-value { font-size: 32px !important; }
-  .kpi-card { min-height: 90px; height: auto !important; aspect-ratio: 1 / 1; }
+  .kpi-value { font-size: 32px !important; margin-bottom: 8px; }
+  /* Natural height instead of forced 1:1 squares — saves ~150px of scroll
+     on the Dashboard without losing readability. */
+  .kpi-card { min-height: 90px; height: auto !important; padding: 16px 18px; }
+
+  /* Dashboard drill-down (Men/Women/Youth/Jewish) — 2x2 instead of four
+     ~85px slivers side by side. */
+  .drill-grid { grid-template-columns: repeat(2, 1fr) !important; }
 
   .dashboard-panels { grid-template-columns: 1fr !important; }
 
@@ -1016,7 +1028,10 @@ textarea:focus::placeholder {
   }
   .modal-box {
     border-radius: 22px 22px 0 0;
+    /* dvh (with vh fallback) — on iOS Safari 94vh sits behind the URL bar
+       and hides the footer buttons; dvh tracks the *visible* viewport. */
     max-height: 94vh;
+    max-height: 94dvh;
     height: auto;
     max-width: 100%;
     width: 100%;
@@ -1036,6 +1051,9 @@ textarea:focus::placeholder {
 
   .action-btns { width: auto !important; gap: 5px !important; }
   .action-btns button { width: 38px !important; height: 38px !important; font-size: 15px !important; }
+
+  /* Task "done" checkbox — comfortable thumb target. */
+  .task-check { width: 32px !important; height: 32px !important; }
 
   .view-grid-2 { grid-template-columns: 1fr !important; gap: 16px; }
 
@@ -1144,6 +1162,13 @@ body.light-mode textarea:focus::placeholder { color: rgba(74,60,30,0.2) !importa
 
 body.light-mode aside { background: var(--surface-1) !important; border-color: var(--border) !important; }
 body.light-mode .bottom-nav { background: rgba(237,231,217,0.94) !important; }
+
+/* Touch devices have no hover — the "Clear All" buttons in page headers
+   are hover-revealed (opacity 0.45 → 1) which reads as permanently
+   disabled on phones. Keep them visibly enabled there. */
+@media (hover: none) {
+  .page-header .action-bar .btn-danger { opacity: 0.75 !important; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

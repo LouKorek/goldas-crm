@@ -508,11 +508,14 @@ export default function Matches() {
           minWidth: 0,
         }}>
           <TeamLogo name={m.homeTeam} size={22} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.homeTeam}</span>
+          {/* minWidth:0 + flexShrink:1 are what let flex children actually
+              shrink below their content width — without them the ellipsis
+              never triggers and the away team just gets clipped. */}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{m.homeTeam}</span>
           {m.homeTeamIsYouth && <YouthBadge small />}
           <span style={{ color: 'var(--text-3)', fontWeight: 400, flexShrink: 0 }}>vs</span>
           <TeamLogo name={m.awayTeam} size={22} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.awayTeam}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{m.awayTeam}</span>
           {m.awayTeamIsYouth && <YouthBadge small />}
         </div>
 
@@ -569,7 +572,7 @@ export default function Matches() {
 
   // Style for the prev / today / next buttons in the date navigator.
   const navBtnStyle = () => ({
-    width: 30, height: 30, borderRadius: 8,
+    width: 34, height: 34, borderRadius: 8,
     background: 'rgba(255,255,255,0.04)',
     border: '1px solid var(--border)',
     color: 'var(--text-1)', fontSize: 16,

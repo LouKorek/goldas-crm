@@ -124,7 +124,7 @@ function DrillDown({ kind, pipeByCat, onBack }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, position: 'relative' }}>
+      <div className="drill-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, position: 'relative' }}>
         {counts.map(c => {
           const url = `/pipeline/${c.key}` + (config.statusParam ? `?status=${encodeURIComponent(config.statusParam)}` : '');
           return (

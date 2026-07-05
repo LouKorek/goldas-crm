@@ -134,7 +134,7 @@ export default function Contacts() {
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
                         <div style={{ textAlign: 'left' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{c.clubName || '—'}</span>
+                            <span style={{ fontWeight: 500, whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.clubName || '—'}</span>
                             {c.clubIsYouth && <U19 />}
                           </div>
                           {c.league && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>{c.league}</div>}

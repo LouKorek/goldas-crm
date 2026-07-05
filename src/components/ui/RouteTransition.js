@@ -97,7 +97,9 @@ export default function RouteTransition() {
         </div>
         <div style={{
           fontFamily: 'Cormorant Garamond, serif',
-          fontSize: 44, fontWeight: 700,
+          /* Scales down on narrow phones so long labels ("Club Requirements")
+             don't dominate the viewport. */
+          fontSize: 'clamp(30px, 9vw, 44px)', fontWeight: 700,
           background: 'linear-gradient(135deg, #F0D27E 0%, #E8C96A 35%, #C9A84C 65%, #A07830 100%)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',

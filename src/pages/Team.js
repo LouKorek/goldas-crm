@@ -125,7 +125,7 @@ export default function Team() {
                         {owner ? (
                           <span style={{ fontSize: 11, color: 'var(--text-3)' }}>🔒</span>
                         ) : (
-                          <div style={{ display: 'flex', gap: 4 }}>
+                          <div className="action-btns" style={{ display: 'flex', gap: 4 }}>
                             <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}
                               title="Edit" onClick={() => openEdit(u)}>✏️</button>
                             <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
