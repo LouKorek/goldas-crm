@@ -955,7 +955,7 @@ textarea:focus::placeholder {
   }
   .filter-bar::-webkit-scrollbar { display: none; }
   .filter-bar > * { flex: 0 0 auto; }
-  .filter-bar select { height: 38px; width: auto; }
+  .filter-bar select { height: 38px; width: auto; padding-top: 0; padding-bottom: 0; }
 
   /* ──────────────── PAGE-MATCHES (mobile-only polish) ──────────────
      The Matches screen carries the heaviest header (Add / Sync / Export

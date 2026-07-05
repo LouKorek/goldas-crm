@@ -98,7 +98,7 @@ export default function Contacts() {
         <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
           <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
         </div>
-        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 36, flexShrink: 0 }}>
+        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
           <option value="">🌱 Group: All</option>
           <option value="Youth">Youth</option>
           <option value="Senior">Senior</option>
