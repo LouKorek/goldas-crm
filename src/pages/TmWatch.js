@@ -30,21 +30,22 @@ const ISO2 = {
   'South Africa':'ZA','Morocco':'MA','Tunisia':'TN','Egypt':'EG','Algeria':'DZ',
   "Cote d'Ivoire":'CI','Ghana':'GH','Nigeria':'NG','Senegal':'SN','Cameroon':'CM',
 };
-const SPECIAL_FLAG = {
-  'GB-ENG':'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',
-  'GB-SCT':'\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}',
-  'GB-WLS':'\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}',
-  'GB-NIR':'\u{1F3F4}',
-};
-function flagEmoji(country) {
+// Windows ships no country-flag emoji glyphs at all, so flags are rendered
+// as tiny images (flagcdn serves every ISO code incl. gb-eng / xk) with a
+// text-chip fallback for anything unmapped.
+function Flag({ country, size = 15 }) {
   const code = ISO2[(country || '').trim()];
-  if (!code) return null;
-  if (SPECIAL_FLAG[code]) return SPECIAL_FLAG[code];
-  return code.split('').map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
-}
-function Flag({ country, size = 14 }) {
-  const f = flagEmoji(country);
-  if (f) return <span title={country} style={{ fontSize: size, cursor: 'default' }}>{f}</span>;
+  if (code) {
+    return (
+      <img
+        src={`https://flagcdn.com/w20/${code.toLowerCase()}.png`}
+        srcSet={`https://flagcdn.com/w40/${code.toLowerCase()}.png 2x`}
+        alt={country} title={country}
+        style={{ width: size + 5, height: 'auto', borderRadius: 2, flexShrink: 0, boxShadow: '0 0 0 1px rgba(255,255,255,0.08)', verticalAlign: 'middle' }}
+        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+      />
+    );
+  }
   if (!country) return null;
   return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
 }
@@ -207,9 +208,9 @@ export default function TmWatch() {
                       </a>
                       {p.age && <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{p.age}</span>}
                       {p.position && <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{p.position}</span>}
-                      <span style={{
+                      <span title={`${p.matchedOn || ''}${p.firstSeen ? ` · first seen ${fmtDate(tsToDate(p.firstSeen).toISOString().slice(0, 10))}` : ''}`} style={{
                         background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}`,
-                        borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600,
+                        borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
                       {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
@@ -231,9 +232,6 @@ export default function TmWatch() {
                       )}
                       {p.marketValue && <span>💰 {p.marketValue}</span>}
                       {p.contractUntil && <span>📑 {p.contractUntil}</span>}
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-3)' }}>
-                      {p.matchedOn}{p.firstSeen && <> · first seen {fmtDate(tsToDate(p.firstSeen).toISOString().slice(0, 10))}</>}
                     </div>
                   </div>
                   {canEdit && (
