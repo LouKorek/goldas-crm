@@ -110,15 +110,29 @@ async function scanCitizenshipTrack(log) {
         if (!id || players.has(id)) return;
         const cells = $tr.children('td').map((_, td) => $(td).text().trim().replace(/\s+/g, ' ')).get();
         if (cells.length < 4) return; // nested sub-row
-        const club = $tr.find('a[href*="/startseite/verein/"]').first();
-        const flags = $tr.find('img.flaggenrahmen').map((_, f) => $(f).attr('title')).get().filter(Boolean);
+        const clubA   = $tr.find('a[href*="/startseite/verein/"]').first();
+        const clubTd  = clubA.closest('td').last();
+        const leagueA = $tr.find('a[href*="/wettbewerb/"]').first();
+        const leagueCode = (/\/wettbewerb\/([A-Za-z0-9]+)/.exec(leagueA.attr('href') || '') || [])[1] || '';
+        // Citizenship flags only — drop any flag rendered inside the club/league cell.
+        const flags = $tr.find('img.flaggenrahmen')
+          .filter((_, f) => !(clubTd.length && $.contains(clubTd.get(0), f)))
+          .map((_, f) => $(f).attr('title')).get().filter(Boolean);
+        const name = a.text().trim() || a.attr('title') || '';
+        // cells[1] is "Name Position" from the nested table — strip the name.
+        const position = (cells[1] || '').replace(name, '').trim();
+        const contractUntil = cells.find(c => /^\d{2}[./-]\d{2}[./-]\d{4}$/.test(c)) || '';
         const mv = cells[cells.length - 1] || '';
         players.set(id, {
           tmId: id,
-          name: a.text().trim() || a.attr('title') || '',
+          name,
           tmUrl: abs(a.attr('href')),
-          club: club.attr('title') || club.text().trim() || '',
+          club: clubA.attr('title') || clubA.text().trim() || '',
           clubCountry: host.country,
+          league: leagueA.text().trim() || '',
+          leagueCode,
+          contractUntil,
+          position,
           citizenships: flags,
           marketValue: /€|k|m/.test(mv) ? mv : '',
           age: parseInt(cells[2], 10) || null,
@@ -209,6 +223,9 @@ async function verifyCandidate(cand, log) {
   const club  = clubA.text().trim() || (info['Current club'] ? info['Current club'].text().trim() : '');
   const leagueA = $('a[href*="/startseite/wettbewerb/"]').first();
   const league  = leagueA.text().trim();
+  const leagueCode = (/\/wettbewerb\/([A-Za-z0-9]+)/.exec(leagueA.attr('href') || '') || [])[1] || '';
+  const tierWord = /League level:?\s*([A-Za-z]+)\s+Tier/i.exec($('.data-header').text());
+  const leagueTier = tierWord ? ({ first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6 }[tierWord[1].toLowerCase()] || null) : null;
   // League country: the small flag beside the league line in the header.
   const clubCountry = $('.data-header__league-area img.flaggenrahmen, .data-header__club-info img.flaggenrahmen')
     .first().attr('title') || '';
@@ -225,7 +242,7 @@ async function verifyCandidate(cand, log) {
     ...cand,
     citizenships,
     club: club || cand.club || '',
-    league, clubCountry,
+    league, leagueCode, leagueTier, clubCountry,
     marketValue: /€/.test(mv) ? mv : '',
     position: pos,
     // A name candidate that turns out to hold Israeli citizenship but plays
@@ -294,6 +311,40 @@ async function run() {
     }
     log.push(`Track B: ${fetches} profiles verified, ${verified.length} passed`);
 
+    // League tier resolution — one competition-page fetch per league, cached
+    // forever in app_meta/tmLeagues ({ code: { name, tier } }).
+    const leagueCacheRef = db.collection('app_meta').doc('tmLeagues');
+    const leagueCache = (await leagueCacheRef.get()).data() || {};
+    const wanted = new Map();
+    for (const p of [...abroad.values(), ...verified]) {
+      if (p.leagueCode && p.leagueTier == null && !(p.leagueCode in leagueCache)) {
+        wanted.set(p.leagueCode, p.league || '');
+      }
+    }
+    let leagueFetches = 0;
+    for (const [code, lname] of wanted) {
+      if (leagueFetches >= 25) break;
+      leagueFetches++;
+      try {
+        const html = await fetchHtml(`${TM_BASE}/x/startseite/wettbewerb/${code}`);
+        const m = /League level:?[\s\S]{0,300}?(First|Second|Third|Fourth|Fifth|Sixth)\s+Tier/i.exec(html);
+        leagueCache[code] = {
+          name: lname,
+          tier: m ? ({ first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6 }[m[1].toLowerCase()] || null) : null,
+        };
+      } catch (e) { leagueCache[code] = { name: lname, tier: null }; }
+    }
+    if (leagueFetches) await leagueCacheRef.set(leagueCache, { merge: true });
+    log.push(`Leagues: ${leagueFetches} fetched, ${Object.keys(leagueCache).length} cached`);
+    const applyTier = (p) => {
+      if (p.leagueTier == null && p.leagueCode && leagueCache[p.leagueCode]) {
+        p.leagueTier = leagueCache[p.leagueCode].tier;
+      }
+      return p;
+    };
+    abroad.forEach(applyTier);
+    verified.forEach(applyTier);
+
     // Merge + diff
     const now = admin.firestore.Timestamp.now();
     const newOnes = [];
@@ -316,6 +367,11 @@ async function run() {
         writes.push(ref.set({
           name: p.name, tmUrl: p.tmUrl,
           club: p.club || prev.club || '', clubCountry: p.clubCountry || prev.clubCountry || '',
+          league: p.league || prev.league || '',
+          leagueCode: p.leagueCode || prev.leagueCode || '',
+          leagueTier: p.leagueTier ?? prev.leagueTier ?? null,
+          contractUntil: p.contractUntil || prev.contractUntil || '',
+          position: p.position || prev.position || '',
           citizenships: p.citizenships?.length ? p.citizenships : prev.citizenships || [],
           marketValue: p.marketValue || prev.marketValue || '',
           age: p.age || prev.age || null,

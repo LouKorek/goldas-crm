@@ -11,6 +11,45 @@ import { useRole } from 'lib/roleContext';
 // Israeli connection playing outside Israel, produced daily by the
 // tm-watch-background Netlify function.
 
+// Country name (as Transfermarkt writes it) → ISO alpha-2 for emoji flags.
+const ISO2 = {
+  'Israel':'IL','United States':'US','USA':'US','Germany':'DE','Spain':'ES','France':'FR',
+  'Italy':'IT','England':'GB-ENG','Scotland':'GB-SCT','Wales':'GB-WLS','Northern Ireland':'GB-NIR',
+  'United Kingdom':'GB','Netherlands':'NL','Belgium':'BE','Portugal':'PT','Austria':'AT',
+  'Switzerland':'CH','Greece':'GR','Cyprus':'CY','Türkiye':'TR','Turkey':'TR','Romania':'RO',
+  'Bulgaria':'BG','Hungary':'HU','Poland':'PL','Czech Republic':'CZ','Slovakia':'SK','Slovenia':'SI',
+  'Croatia':'HR','Serbia':'RS','Montenegro':'ME','Bosnia-Herzegovina':'BA','North Macedonia':'MK',
+  'Macedonia':'MK','Albania':'AL','Kosovo':'XK','Moldova':'MD','Ukraine':'UA','Belarus':'BY',
+  'Russia':'RU','Georgia':'GE','Armenia':'AM','Azerbaijan':'AZ','Kazakhstan':'KZ','Latvia':'LV',
+  'Lithuania':'LT','Estonia':'EE','Finland':'FI','Sweden':'SE','Norway':'NO','Denmark':'DK',
+  'Iceland':'IS','Ireland':'IE','Luxembourg':'LU','Malta':'MT','Canada':'CA','Mexico':'MX',
+  'Brazil':'BR','Argentina':'AR','Uruguay':'UY','Chile':'CL','Colombia':'CO','Ecuador':'EC',
+  'Peru':'PE','Paraguay':'PY','Bolivia':'BO','Venezuela':'VE','Japan':'JP','Korea, South':'KR',
+  'South Korea':'KR','China':'CN','Thailand':'TH','Singapore':'SG','Australia':'AU','New Zealand':'NZ',
+  'United Arab Emirates':'AE','Saudi Arabia':'SA','Qatar':'QA','India':'IN','Indonesia':'ID',
+  'South Africa':'ZA','Morocco':'MA','Tunisia':'TN','Egypt':'EG','Algeria':'DZ',
+  "Cote d'Ivoire":'CI','Ghana':'GH','Nigeria':'NG','Senegal':'SN','Cameroon':'CM',
+};
+const SPECIAL_FLAG = {
+  'GB-ENG':'\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}',
+  'GB-SCT':'\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}',
+  'GB-WLS':'\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}',
+  'GB-NIR':'\u{1F3F4}',
+};
+function flagEmoji(country) {
+  const code = ISO2[(country || '').trim()];
+  if (!code) return null;
+  if (SPECIAL_FLAG[code]) return SPECIAL_FLAG[code];
+  return code.split('').map(c => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
+}
+function Flag({ country, size = 14 }) {
+  const f = flagEmoji(country);
+  if (f) return <span title={country} style={{ fontSize: size, cursor: 'default' }}>{f}</span>;
+  if (!country) return null;
+  return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
+}
+const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3', 4: 'Tier 4', 5: 'Tier 5', 6: 'Tier 6' };
+
 const TIER_BADGE = {
   0: { label: '🇮🇱 Citizenship', bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
   1: { label: '🕎 Strong name',  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
@@ -79,6 +118,14 @@ export default function TmWatch() {
       toast.success(`${p.name} added to the Jewish pipeline.`);
     } catch (e) { toast.error(e.message); }
   };
+  const markAllSeen = async () => {
+    const news = items.filter(p => p.status === 'new');
+    if (!news.length) return;
+    try {
+      await Promise.all(news.map(p => updateDoc_(PATHS.TM_WATCH, p.id, { status: 'seen' })));
+      toast.success(`${news.length} candidates marked as seen.`);
+    } catch (e) { toast.error(e.message); }
+  };
   const scanNow = async () => {
     setScanning(true);
     try {
@@ -102,6 +149,12 @@ export default function TmWatch() {
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }}
                 onClick={scanNow} disabled={scanning || running}>
                 {running ? <><Spinner size={12} /> Scanning…</> : '🔄 Scan now'}
+              </button>
+            )}
+            {canEdit && newCount > 0 && (
+              <button className="btn btn-ghost btn-sm" style={{ height: 36 }} onClick={markAllSeen}
+                title="Mark every NEW candidate as seen">
+                ✓ Mark all seen ({newCount})
               </button>
             )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
@@ -160,11 +213,22 @@ export default function TmWatch() {
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
                     </div>
-                    <div className="m-meta" style={{ marginTop: 5 }}>
-                      {p.club && <span style={{ fontWeight: 500, color: 'var(--text-1)' }}>{p.club}</span>}
-                      {p.clubCountry && <span>{p.clubCountry}</span>}
+                    <div className="m-meta" style={{ marginTop: 5, fontSize: 12 }}>
+                      {(p.citizenships || []).length > 0 && (
+                        <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
+                          {(p.citizenships || []).map(c => <Flag key={c} country={c} size={15} />)}
+                        </span>
+                      )}
+                      {p.club && <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>{p.club}</span>}
+                      {(p.league || p.clubCountry) && (
+                        <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                          <Flag country={p.clubCountry} />
+                          {p.league || p.clubCountry}
+                          {p.leagueTier != null && <span className="m-sub">({TIER_LABEL[p.leagueTier] || `Tier ${p.leagueTier}`})</span>}
+                        </span>
+                      )}
                       {p.marketValue && <span>💰 {p.marketValue}</span>}
-                      {(p.citizenships || []).length > 0 && <span className="m-sub">{(p.citizenships || []).join(' · ')}</span>}
+                      {p.contractUntil && <span>📑 {p.contractUntil}</span>}
                     </div>
                     <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-3)' }}>
                       {p.matchedOn}{p.firstSeen && <> · first seen {fmtDate(tsToDate(p.firstSeen).toISOString().slice(0, 10))}</>}
