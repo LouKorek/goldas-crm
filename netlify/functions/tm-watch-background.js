@@ -79,7 +79,7 @@ const tmIdFromHref = (href) => {
 const abs = (href) => (href && href.startsWith('/') ? TM_BASE + href : href);
 
 // ───────────────────── Track A: citizenship (Foreigners pages) ──────────
-async function scanCitizenshipTrack(log) {
+async function scanCitizenshipTrack(log, timeUp) {
   const players = new Map(); // tmId → player
   const overviewUrl = `${TM_BASE}/land-statistik/legionaere/statistik/stat/?land_id=${ISRAEL_LAND_ID}`;
   const $ov = cheerio.load(await fetchHtml(overviewUrl));
@@ -94,7 +94,9 @@ async function scanCitizenshipTrack(log) {
   });
   log.push(`Track A: ${hosts.length} host countries`);
 
+  let complete = true;
   for (const host of hosts) {
+    if (timeUp()) { complete = false; log.push('Track A: time budget hit'); break; }
     const seenPages = new Set();
     let pageUrls = [abs(host.href)];
     for (let i = 0; i < pageUrls.length && seenPages.size < DEFAULTS.maxPagesPerHost; i++) {
@@ -154,12 +156,12 @@ async function scanCitizenshipTrack(log) {
       }
     }
   }
-  log.push(`Track A: ${players.size} players with Israeli citizenship abroad`);
-  return players;
+  log.push(`Track A: ${players.size} players with Israeli citizenship abroad${complete ? '' : ' (partial)'}`);
+  return { players, complete };
 }
 
 // ───────────────────── Track B: name search rotation ─────────────────────
-async function scanNameTrack(meta, existingIds, log) {
+async function scanNameTrack(meta, existingIds, log, timeUp) {
   const queries = buildQueries();
   const perRun  = meta.nameQueriesPerRun || DEFAULTS.nameQueriesPerRun;
   const start   = (meta.cursor || 0) % queries.length;
@@ -167,7 +169,10 @@ async function scanNameTrack(meta, existingIds, log) {
   for (let i = 0; i < perRun; i++) batch.push(queries[(start + i) % queries.length]);
 
   const candidates = new Map(); // tmId → shallow candidate
+  let processed = 0;
   for (const q of batch) {
+    if (timeUp()) { log.push('Track B: time budget hit'); break; }
+    processed++;
     let $;
     try { $ = cheerio.load(await fetchHtml(`${TM_BASE}/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(q)}`)); }
     catch (e) { log.push(`B "${q}": ${e.message}`); continue; }
@@ -194,8 +199,8 @@ async function scanNameTrack(meta, existingIds, log) {
       });
     });
   }
-  const nextCursor = (start + perRun) % queries.length;
-  log.push(`Track B: queries ${start}–${start + perRun} / ${queries.length}, ${candidates.size} unverified candidates`);
+  const nextCursor = (start + processed) % queries.length;
+  log.push(`Track B: queries ${start}–${start + processed} / ${queries.length}, ${candidates.size} unverified candidates`);
   return { candidates, nextCursor };
 }
 
@@ -325,22 +330,28 @@ async function run() {
   }
   await metaRef.set({ running: true, runStartedAt: admin.firestore.Timestamp.now() }, { merge: true });
 
+  // Netlify background functions are killed at 15 minutes — leave margin so
+  // every run finishes its writes and clears the running flag.
+  const t0 = Date.now();
+  const RUN_BUDGET_MS = 11 * 60 * 1000;
+  const timeUp = () => Date.now() - t0 > RUN_BUDGET_MS;
+
   try {
     const existingSnap = await db.collection('tmWatch').get();
     const existing = new Map(existingSnap.docs.map(d => [d.id, d.data()]));
     const existingIds = new Set(existing.keys());
 
     // Track A
-    const abroad = await scanCitizenshipTrack(log);
+    const { players: abroad, complete: abroadComplete } = await scanCitizenshipTrack(log, timeUp);
 
     // Track B
-    const { candidates, nextCursor } = await scanNameTrack(meta, existingIds, log);
+    const { candidates, nextCursor } = await scanNameTrack(meta, existingIds, log, timeUp);
     const verified = [];
     let fetches = 0;
     const cap = meta.profileFetchCap || DEFAULTS.profileFetchCap;
     for (const cand of candidates.values()) {
       if (abroad.has(cand.tmId)) continue;
-      if (fetches >= cap) break;
+      if (fetches >= cap || timeUp()) break;
       fetches++;
       const v = await verifyCandidate(cand, log);
       if (v && !v.verifyFailed) verified.push(v);
@@ -359,7 +370,7 @@ async function run() {
     }
     let leagueFetches = 0;
     for (const [code, lname] of wanted) {
-      if (leagueFetches >= 25) break;
+      if (leagueFetches >= 25 || timeUp()) break;
       leagueFetches++;
       try {
         const html = await fetchHtml(`${TM_BASE}/x/startseite/wettbewerb/${code}`);
@@ -423,10 +434,13 @@ async function run() {
     verified.forEach(upsert);
 
     // Citizenship players who vanished from the abroad list (moved to Israel,
-    // retired, or lost the flag) — mark inactive, keep the record.
-    for (const [id, prev] of existing) {
-      if (prev.matchType === 'citizenship' && prev.activeAbroad !== false && !seenThisRun.has(id)) {
-        writes.push(db.collection('tmWatch').doc(id).set({ activeAbroad: false, lastSeen: now }, { merge: true }));
+    // retired, or lost the flag) — mark inactive, keep the record. Only valid
+    // when Track A actually completed; a partial scan proves nothing.
+    if (abroadComplete) {
+      for (const [id, prev] of existing) {
+        if (prev.matchType === 'citizenship' && prev.activeAbroad !== false && !seenThisRun.has(id)) {
+          writes.push(db.collection('tmWatch').doc(id).set({ activeAbroad: false, lastSeen: now }, { merge: true }));
+        }
       }
     }
     await Promise.all(writes);
@@ -446,7 +460,7 @@ async function run() {
     let histChecked = 0, histNever = 0, histPlayed = 0, histFailed = 0;
     const histWrites = [];
     for (const id of needHistory) {
-      if (histChecked >= histCap) break;
+      if (histChecked >= histCap || timeUp()) break;
       histChecked++;
       const h = await checkIsraelHistory(id);
       if (h) {
@@ -478,6 +492,7 @@ async function run() {
       running: false, cursor: nextCursor,
       lastRunAt: now, lastRunLog: log.slice(0, 40).join(' | '),
       lastRunRequests: REQUEST_COUNT, lastRunNew: newOnes.length,
+      lastRunSeconds: Math.round((Date.now() - t0) / 1000),
       totalTracked: existingIds.size + newOnes.filter(p => !p.upgraded).length,
     }, { merge: true });
 

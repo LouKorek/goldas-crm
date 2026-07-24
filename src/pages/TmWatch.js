@@ -119,7 +119,10 @@ export default function TmWatch() {
   useEffect(() => onSnapshot(doc(db, 'app_meta', 'tmWatch'),
     s => setMeta(s.exists() ? s.data() : null), () => setMeta(null)), []);
 
-  const running = !!meta?.running;
+  // A crashed run can leave running=true forever — treat the flag as stale
+  // after 20 minutes so the Scan button never stays locked.
+  const runStarted = tsToDate(meta?.runStartedAt)?.getTime() || 0;
+  const running = !!meta?.running && (Date.now() - runStarted) < 20 * 60 * 1000;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();

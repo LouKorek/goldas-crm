@@ -869,6 +869,12 @@ textarea:focus::placeholder {
     padding-right: 14px !important;
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
+  /* overflow-x:hidden (set below) turns .main-content into a clip container,
+     which silently disables position:sticky for everything inside it on
+     mobile (body is the real scroller there). `clip` clips horizontal
+     overflow WITHOUT creating a scroll container, so the TM Watch frozen
+     header keeps working. Browsers without `clip` support keep `hidden`. */
+  .main-content { overflow-x: clip; }
 
   /* MOBILE TABLE — the standard responsive-table pattern, but with the
      CRITICAL ingredient most tutorials skip: every ancestor of the
