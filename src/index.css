@@ -1148,6 +1148,17 @@ textarea:focus::placeholder {
   border-bottom: 1px solid var(--border-2);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
 }
+/* Opaque shield above the pinned header — whatever gap the current
+   viewport/zoom leaves between the viewport top and the sticky position,
+   scrolled cards must never peek through it. */
+.tmw-sticky::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 100%;
+  height: 120px;
+  background: var(--bg);
+}
 .tmw-sticky .page-header { margin-bottom: 0; }
 @media (min-width: 769px) {
   .tmw-sticky {
