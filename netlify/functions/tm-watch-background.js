@@ -255,6 +255,33 @@ async function verifyCandidate(cand, log) {
   };
 }
 
+// ───────────────── Israel career-history check ─────────────────
+// TM's internal transfer-history API returns every career move (youth
+// included) with a country flag URL per club — /flagge/.../74.png = Israel.
+// One request per player, cached forever on the doc as israelHistory:
+// 'never' | 'played'.
+async function checkIsraelHistory(tmId) {
+  try {
+    const raw = await fetchHtml(`${TM_BASE}/ceapi/transferHistory/list/${tmId}`);
+    const j = JSON.parse(raw);
+    const transfers = Array.isArray(j.transfers) ? j.transfers : [];
+    const israelClubs = new Set();
+    for (const t of transfers) {
+      for (const side of [t.from, t.to]) {
+        if (side && /\/(74)\.png/.test(side.countryFlag || '')) {
+          israelClubs.add(side.clubName || '');
+        }
+      }
+    }
+    return {
+      israelHistory: israelClubs.size ? 'played' : 'never',
+      israelClubs: [...israelClubs].filter(Boolean),
+    };
+  } catch (e) {
+    return null; // retried on a later run
+  }
+}
+
 // ───────────────────── Email digest ─────────────────────
 function buildEmail(newOnes) {
   const gold = '#C9A84C', dark = '#16201A';
@@ -394,6 +421,31 @@ async function run() {
       }
     }
     await Promise.all(writes);
+
+    // Backfill Israel career history for docs that don't have it yet
+    // (existing + just-created), capped per run.
+    const histCap = meta.historyChecksPerRun || 40;
+    const needHistory = [];
+    for (const [id, prev] of existing) {
+      if (prev.israelHistory == null) needHistory.push(id);
+    }
+    for (const p of newOnes) {
+      if (!p.upgraded && !existing.has(p.tmId)) needHistory.push(p.tmId);
+    }
+    let histChecked = 0;
+    const histWrites = [];
+    for (const id of needHistory) {
+      if (histChecked >= histCap) break;
+      histChecked++;
+      const h = await checkIsraelHistory(id);
+      if (h) {
+        histWrites.push(db.collection('tmWatch').doc(id).set({
+          ...h, historyCheckedAt: now,
+        }, { merge: true }));
+      }
+    }
+    await Promise.all(histWrites);
+    log.push(`History: ${histChecked} checked, ${needHistory.length - histChecked} remaining`);
 
     // Email digest for genuinely new/upgraded candidates.
     if (newOnes.length && process.env.GMAIL_APP_PASSWORD) {

@@ -106,6 +106,7 @@ export default function TmWatch() {
   const [meta, setMeta]     = useState(null);
   const [tab, setTab]       = useState('New');
   const [tierFilter, setTierFilter] = useState('');
+  const [histFilter, setHistFilter] = useState('');
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
 
@@ -125,10 +126,11 @@ export default function TmWatch() {
         return p.status !== 'dismissed';
       })
       .filter(p => tierFilter === '' || String(p.tier) === tierFilter)
+      .filter(p => histFilter === '' || p.israelHistory === histFilter)
       .filter(p => !term || `${p.name} ${p.club} ${p.clubCountry}`.toLowerCase().includes(term))
       .sort((a, b) => (a.tier ?? 2) - (b.tier ?? 2) ||
         (tsToDate(b.firstSeen)?.getTime() || 0) - (tsToDate(a.firstSeen)?.getTime() || 0));
-  }, [items, tab, tierFilter, search]);
+  }, [items, tab, tierFilter, histFilter, search]);
 
   const newCount = items.filter(p => p.status === 'new').length;
 
@@ -209,6 +211,12 @@ export default function TmWatch() {
             labels={['All types', '🇮🇱 Citizenship', '🕎 Strong name', '❔ Possible']}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
+          <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
+          <ChipGroup
+            options={['', 'never', 'played']}
+            labels={['Any history', '💎 Never in Israel', '🇮🇱 Played in Israel']}
+            value={histFilter} onChange={(v) => setHistFilter(v ?? '')} required
+          />
         </div>
         {meta && (
           <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--text-3)' }}>
@@ -249,6 +257,8 @@ export default function TmWatch() {
                         borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
                       {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
+                      {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>💎 Never in Israel</span>}
+                      {p.israelHistory === 'played' && <span title={`Israeli clubs in career: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', fontSize: 10, cursor: 'default' }}>🇮🇱 Played in IL</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
                     </div>
