@@ -357,6 +357,13 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
 
 export default function Pipeline({ category }) {
   const path     = PATHS[`PIPELINE_${category.toUpperCase()}`];
+
+  // TM Watch badge (Jewish screen only) — count of new Transfermarkt candidates.
+  const [tmNew, setTmNew] = useState(0);
+  useEffect(() => {
+    if (category !== 'jewish') { setTmNew(0); return; }
+    return listenCollection(PATHS.TM_WATCH, (d) => setTmNew(d.filter(x => x.status === 'new').length));
+  }, [category]);
   const label    = CAT[category];
   const color    = CAT_COLOR[category];
 
