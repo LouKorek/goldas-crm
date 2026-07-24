@@ -268,28 +268,35 @@ async function verifyCandidate(cand, log) {
 // One request per player, cached forever on the doc as israelHistory:
 // 'never' | 'played'.
 async function checkIsraelHistory(tmId) {
+  // TM's ceapi transfer API rejects proxied requests, but the career
+  // performance page is fully server-rendered: every competition the player
+  // ever appeared in is listed with its country flag (/flagge/.../74.png =
+  // Israel). Any Israeli competition in the table = played in Israel.
+  // The header citizenship flag is excluded by scoping to table rows.
   try {
-    const raw = await fetchHtml(`${TM_BASE}/ceapi/transferHistory/list/${tmId}`);
-    const j = JSON.parse(raw);
-    // Strict shape check: anything unexpected (error payloads, challenge
-    // pages that happen to parse) must NOT be misread as "no transfers".
-    if (!j || !Array.isArray(j.transfers)) return null;
-    const israelClubs = new Set();
-    let sides = 0;
-    for (const t of j.transfers) {
-      for (const side of [t.from, t.to]) {
-        if (!side) continue;
-        sides++;
-        if (/\/74\.png/.test(side.countryFlag || '')) israelClubs.add(side.clubName || '');
+    const html = await fetchHtml(`${TM_BASE}/x/leistungsdatendetails/spieler/${tmId}`);
+    // Sanity: must actually be this player's performance page, not a
+    // challenge/error page.
+    if (!html.includes(`/spieler/${tmId}`)) return null;
+    const $ = cheerio.load(html);
+    const tables = $('table.items');
+    const rowCount = tables.find('tbody > tr').length;
+    const israelComps = new Set();
+    tables.find('img.flaggenrahmen').each((_, f) => {
+      const src = $(f).attr('src') || $(f).attr('data-src') || '';
+      if (/\/74\.png/.test(src)) {
+        const row = $(f).closest('tr');
+        const comp = row.find('a[href*="/wettbewerb/"]').first().text().trim()
+          || $(f).attr('title') || 'Israel';
+        israelComps.add(comp);
       }
-    }
-    // A valid response with transfer rows but zero country flags is also
-    // suspicious — treat as inconclusive rather than declaring "never".
-    if (j.transfers.length > 0 && sides === 0) return null;
+    });
+    // No performance table at all (young college players etc.) — the page is
+    // valid and shows no Israeli football history.
     return {
-      israelHistory: israelClubs.size ? 'played' : 'never',
-      israelClubs: [...israelClubs].filter(Boolean),
-      transferCount: j.transfers.length,
+      israelHistory: israelComps.size ? 'played' : 'never',
+      israelClubs: [...israelComps].filter(Boolean),
+      transferCount: rowCount,
     };
   } catch (e) {
     return null; // retried on a later run

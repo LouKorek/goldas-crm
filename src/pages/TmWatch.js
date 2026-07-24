@@ -267,7 +267,7 @@ export default function TmWatch() {
                       }}>{badge.label}</span>
                       {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
                       {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>💎 Never in Israel</span>}
-                      {p.israelHistory === 'played' && <span title={`Israeli clubs in career: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
+                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
                     </div>
