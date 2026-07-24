@@ -1096,13 +1096,6 @@ textarea:focus::placeholder {
     box-shadow: var(--shadow-inset);
   }
   .m-card:active { background: var(--card-hover); }
-  .m-meta {
-    display: flex; flex-wrap: wrap; align-items: center;
-    gap: 4px 10px;
-    font-size: 11.5px; color: var(--text-2);
-    min-width: 0;
-  }
-  .m-sub { font-size: 11px; color: var(--text-3); }
   /* Profile/video links in card action rows get the same thumb size the
      buttons do. */
   .action-btns a { width: 38px !important; height: 38px !important; }
@@ -1134,6 +1127,16 @@ textarea:focus::placeholder {
 /* Tasks reads like a list, not a spreadsheet — cap the column so cards
    don't stretch across a 1500px viewport. */
 .tasks-page { max-width: 900px; }
+
+/* Meta rows on cards (mobile card lists + TM Watch on every screen size):
+   a flex row with real breathing room between items. */
+.m-meta {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 5px 14px;
+  font-size: 11.5px; color: var(--text-2);
+  min-width: 0;
+}
+.m-sub { font-size: 11px; color: var(--text-3); }
 
 /* ── TM Watch: frozen header ──
    The title + actions + tabs + last-scan line stay pinned while the

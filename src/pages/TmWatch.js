@@ -216,9 +216,9 @@ export default function TmWatch() {
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
                     </div>
-                    <div className="m-meta" style={{ marginTop: 5, fontSize: 12 }}>
+                    <div className="m-meta" style={{ marginTop: 8, fontSize: 12 }}>
                       {(p.citizenships || []).length > 0 && (
-                        <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
+                        <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
                           {(p.citizenships || []).map(c => <Flag key={c} country={c} size={15} />)}
                         </span>
                       )}
