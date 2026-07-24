@@ -86,9 +86,14 @@ function Flag({ country, size = 15 }) {
   return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
 }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3', 4: 'Tier 4', 5: 'Tier 5', 6: 'Tier 6' };
+// Inline Israel flag image — flag EMOJI renders as plain letters on Windows.
+const IL = () => (
+  <img src="https://flagcdn.com/w20/il.png" alt="Israel"
+    style={{ width: 14, height: 'auto', borderRadius: 2, verticalAlign: '-2px' }} />
+);
 
 const TIER_BADGE = {
-  0: { label: '🇮🇱 Citizenship', bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
+  0: { label: <><IL /> Citizenship</>, bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
   1: { label: '🕎 Strong name',  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
   2: { label: '❔ Possible',     bg: 'rgba(177,156,245,0.12)', fg: 'var(--purple)', border: 'rgba(177,156,245,0.35)' },
 };
@@ -208,13 +213,13 @@ export default function TmWatch() {
           <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', '0', '1', '2']}
-            labels={['All types', '🇮🇱 Citizenship', '🕎 Strong name', '❔ Possible']}
+            labels={['All types', <><IL /> Citizenship</>, '🕎 Strong name', '❔ Possible']}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
           <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', 'never', 'played']}
-            labels={['Any history', '💎 Never in Israel', '🇮🇱 Played in Israel']}
+            labels={['Any history', '💎 Never in Israel', <><IL /> Played in Israel</>]}
             value={histFilter} onChange={(v) => setHistFilter(v ?? '')} required
           />
         </div>
@@ -222,6 +227,7 @@ export default function TmWatch() {
           <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--text-3)' }}>
             {lastRun ? <>Last scan: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
             {meta.lastRunNew != null && <> · {meta.lastRunNew} new last run</>}
+            {items.length > 0 && <> · career history checked: {items.filter(p => p.israelHistory).length}/{items.length}</>}
             {meta.lastError && <span style={{ color: 'var(--red)' }}> · Last error: {String(meta.lastError).slice(0, 120)}</span>}
           </div>
         )}
@@ -258,7 +264,7 @@ export default function TmWatch() {
                       }}>{badge.label}</span>
                       {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
                       {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>💎 Never in Israel</span>}
-                      {p.israelHistory === 'played' && <span title={`Israeli clubs in career: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', fontSize: 10, cursor: 'default' }}>🇮🇱 Played in IL</span>}
+                      {p.israelHistory === 'played' && <span title={`Israeli clubs in career: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
                     </div>

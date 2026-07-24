@@ -59,10 +59,12 @@ async function fetchHtml(targetUrl) {
     ? `https://api.scraperapi.com/?${new URLSearchParams({ api_key: apiKey, url: targetUrl }).toString()}`
     : targetUrl;
   REQUEST_COUNT++;
+  const isJson = targetUrl.includes('/ceapi/');
   const res = await fetch(fetchUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml',
+      'Accept': isJson ? 'application/json' : 'text/html,application/xhtml+xml',
+      ...(isJson ? { 'X-Requested-With': 'XMLHttpRequest', 'Referer': TM_BASE + '/' } : {}),
       'Accept-Language': 'en-US,en;q=0.9',
     },
   });
@@ -264,18 +266,25 @@ async function checkIsraelHistory(tmId) {
   try {
     const raw = await fetchHtml(`${TM_BASE}/ceapi/transferHistory/list/${tmId}`);
     const j = JSON.parse(raw);
-    const transfers = Array.isArray(j.transfers) ? j.transfers : [];
+    // Strict shape check: anything unexpected (error payloads, challenge
+    // pages that happen to parse) must NOT be misread as "no transfers".
+    if (!j || !Array.isArray(j.transfers)) return null;
     const israelClubs = new Set();
-    for (const t of transfers) {
+    let sides = 0;
+    for (const t of j.transfers) {
       for (const side of [t.from, t.to]) {
-        if (side && /\/(74)\.png/.test(side.countryFlag || '')) {
-          israelClubs.add(side.clubName || '');
-        }
+        if (!side) continue;
+        sides++;
+        if (/\/74\.png/.test(side.countryFlag || '')) israelClubs.add(side.clubName || '');
       }
     }
+    // A valid response with transfer rows but zero country flags is also
+    // suspicious — treat as inconclusive rather than declaring "never".
+    if (j.transfers.length > 0 && sides === 0) return null;
     return {
       israelHistory: israelClubs.size ? 'played' : 'never',
       israelClubs: [...israelClubs].filter(Boolean),
+      transferCount: j.transfers.length,
     };
   } catch (e) {
     return null; // retried on a later run
@@ -427,25 +436,28 @@ async function run() {
     const histCap = meta.historyChecksPerRun || 40;
     const needHistory = [];
     for (const [id, prev] of existing) {
-      if (prev.israelHistory == null) needHistory.push(id);
+      // transferCount was added with the hardened checker — entries written
+      // before it exists are re-verified once with the strict logic.
+      if (prev.israelHistory == null || prev.transferCount == null) needHistory.push(id);
     }
     for (const p of newOnes) {
       if (!p.upgraded && !existing.has(p.tmId)) needHistory.push(p.tmId);
     }
-    let histChecked = 0;
+    let histChecked = 0, histNever = 0, histPlayed = 0, histFailed = 0;
     const histWrites = [];
     for (const id of needHistory) {
       if (histChecked >= histCap) break;
       histChecked++;
       const h = await checkIsraelHistory(id);
       if (h) {
+        if (h.israelHistory === 'never') histNever++; else histPlayed++;
         histWrites.push(db.collection('tmWatch').doc(id).set({
           ...h, historyCheckedAt: now,
         }, { merge: true }));
-      }
+      } else histFailed++;
     }
     await Promise.all(histWrites);
-    log.push(`History: ${histChecked} checked, ${needHistory.length - histChecked} remaining`);
+    log.push(`History: ${histChecked} checked (never ${histNever} / played ${histPlayed} / failed ${histFailed}), ${needHistory.length - histChecked} remaining`);
 
     // Email digest for genuinely new/upgraded candidates.
     if (newOnes.length && process.env.GMAIL_APP_PASSWORD) {
