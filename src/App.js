@@ -17,6 +17,7 @@ import Contacts      from 'pages/Contacts';
 import Notifications from 'pages/Notifications';
 import Team          from 'pages/Team';
 import Tasks         from 'pages/Tasks';
+import TmWatch       from 'pages/TmWatch';
 import { ToastProvider } from 'components/ui/UI';
 
 // Animated splash screen shown on app open
@@ -184,6 +185,7 @@ export default function App() {
                 <Route path="pipeline/women" element={<Pipeline category="women" />} />
                 <Route path="pipeline/youth" element={<Pipeline category="youth" />} />
                 <Route path="pipeline/jewish"element={<Pipeline category="jewish" />} />
+                <Route path="pipeline/jewish/tm-watch" element={<TmWatch />} />
                 <Route path="notifications"  element={<Notifications />} />
                 <Route path="tasks" element={
                   access.email === 'lou.korek@gmail.com' ? <Tasks /> : <Navigate to="/dashboard" replace />

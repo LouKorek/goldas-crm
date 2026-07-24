@@ -159,6 +159,7 @@ export const PATHS = {
   CONTACTS:          'contacts',
   APP_USERS:         'app_users',
   TASKS:             'tasks',
+  TM_WATCH:          'tmWatch',
 };
 
 // ── User management (app_users collection) ────────────────────────

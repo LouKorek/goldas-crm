@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
@@ -472,6 +472,13 @@ export default function Pipeline({ category }) {
         subtitle={`${items.length} player${items.length!==1?'s':''} in this category`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            {category==='jewish'&&(
+              <Link to="/pipeline/jewish/tm-watch" className="btn btn-secondary btn-sm"
+                style={{height:36,textDecoration:'none',position:'relative'}}>
+                🌍 TM Watch
+                {tmNew>0&&<span style={{position:'absolute',top:-6,right:-6,background:'var(--red)',color:'#fff',borderRadius:999,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
+              </Link>
+            )}
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}>+ Add Player</button>}
             <ExportMenu
               filename={label}
