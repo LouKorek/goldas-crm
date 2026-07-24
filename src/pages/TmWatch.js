@@ -139,6 +139,7 @@ export default function TmWatch() {
 
   return (
     <div>
+      <div className="tmw-sticky">
       <PageHeader
         title="TM Watch"
         subtitle={`Transfermarkt scouting — Jewish & Israeli connections abroad · ${items.length} tracked${newCount ? ` · ${newCount} new` : ''}`}
@@ -180,6 +181,7 @@ export default function TmWatch() {
           </div>
         )}
       </PageHeader>
+      </div>
 
       {items.length === 0 ? (
         <Empty icon="🌍" message="No candidates yet — the first daily scan will populate this screen."

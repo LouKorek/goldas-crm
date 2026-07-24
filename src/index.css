@@ -1135,6 +1135,32 @@ textarea:focus::placeholder {
    don't stretch across a 1500px viewport. */
 .tasks-page { max-width: 900px; }
 
+/* ── TM Watch: frozen header ──
+   The title + actions + tabs + last-scan line stay pinned while the
+   candidate list scrolls underneath. */
+.tmw-sticky {
+  position: sticky;
+  z-index: 40;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-2);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+.tmw-sticky .page-header { margin-bottom: 0; }
+@media (min-width: 769px) {
+  .tmw-sticky {
+    top: 0;
+    margin: -18px -20px 16px;
+    padding: 18px 20px 12px;
+  }
+}
+@media (max-width: 768px) {
+  .tmw-sticky {
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    margin: 0 -14px 12px;
+    padding: 8px 14px 10px;
+  }
+}
+
 /* ===================================================================
    LIGHT MODE
    =================================================================== */
