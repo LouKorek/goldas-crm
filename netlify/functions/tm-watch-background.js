@@ -201,7 +201,7 @@ async function scanNameTrack(meta, existingIds, log, timeUp) {
   }
   const nextCursor = (start + processed) % queries.length;
   log.push(`Track B: queries ${start}–${start + processed} / ${queries.length}, ${candidates.size} unverified candidates`);
-  return { candidates, nextCursor };
+  return { candidates, nextCursor, processed };
 }
 
 // Verify a name-track candidate via their profile page. Returns enriched
@@ -348,11 +348,18 @@ async function run() {
     const existing = new Map(existingSnap.docs.map(d => [d.id, d.data()]));
     const existingIds = new Set(existing.keys());
 
-    // Track A
-    const { players: abroad, complete: abroadComplete } = await scanCitizenshipTrack(log, timeUp);
+    // Track A — runs in full at every chain start (daily cron / manual
+    // click). Chained continuation runs skip it: they exist purely to finish
+    // the name cycle + history backfill, and citizenship was already fully
+    // covered by link 0 of the chain.
+    const chainDepth = meta.chainDepth || 0;
+    const { players: abroad, complete: abroadComplete } = chainDepth > 0
+      ? { players: new Map(), complete: false }
+      : await scanCitizenshipTrack(log, timeUp);
+    if (chainDepth > 0) log.push(`Chain link ${chainDepth}: citizenship track already covered`);
 
     // Track B
-    const { candidates, nextCursor } = await scanNameTrack(meta, existingIds, log, timeUp);
+    const { candidates, nextCursor, processed } = await scanNameTrack(meta, existingIds, log, timeUp);
     const verified = [];
     let fetches = 0;
     const cap = meta.profileFetchCap || DEFAULTS.profileFetchCap;
@@ -495,16 +502,36 @@ async function run() {
       log.push(`Email sent (${newOnes.length} new)`);
     }
 
+    // ── Full-coverage chaining ──
+    // One "scan" (daily cron or the Scan button) keeps re-invoking itself
+    // until the ENTIRE name list has been searched and the history backfill
+    // is drained — so a single daily scan means full Transfermarkt coverage,
+    // not a partial slice. Hard cap of 20 links as a safety brake.
+    const totalQueries = buildQueries().length;
+    const cycleProgress = (chainDepth === 0 ? 0 : (meta.cycleProgress || 0)) + processed;
+    const historyRemaining = needHistory.length - histChecked;
+    const shouldChain = (cycleProgress < totalQueries || historyRemaining > 0) && chainDepth < 20;
+    log.push(`Cycle: ${cycleProgress}/${totalQueries} names, ${historyRemaining} history left → ${shouldChain ? `chaining (link ${chainDepth + 1})` : 'cycle complete'}`);
+
     await metaRef.set({
       running: false, cursor: nextCursor,
+      chainDepth: shouldChain ? chainDepth + 1 : 0,
+      cycleProgress: shouldChain ? cycleProgress : 0,
+      lastCycleCompletedAt: shouldChain ? (meta.lastCycleCompletedAt || null) : now,
       lastRunAt: now, lastRunLog: log.slice(0, 40).join(' | '),
       lastRunRequests: REQUEST_COUNT, lastRunNew: newOnes.length,
       lastRunSeconds: Math.round((Date.now() - t0) / 1000),
       totalTracked: existingIds.size + newOnes.filter(p => !p.upgraded).length,
     }, { merge: true });
 
+    if (shouldChain) {
+      const base = process.env.URL || 'https://goldas-crm.netlify.app';
+      try { await fetch(`${base}/.netlify/functions/tm-watch-background`, { method: 'POST' }); }
+      catch (e) { console.error('chain trigger failed:', e); }
+    }
+
     console.log(log.join('\n'));
-    return { statusCode: 200, body: `ok: ${newOnes.length} new, ${REQUEST_COUNT} requests` };
+    return { statusCode: 200, body: `ok: ${newOnes.length} new, ${REQUEST_COUNT} requests, chain=${shouldChain}` };
   } catch (e) {
     await metaRef.set({ running: false, lastError: String(e), lastRunAt: admin.firestore.Timestamp.now() }, { merge: true });
     console.error('tm-watch failed:', e);

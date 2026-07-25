@@ -124,29 +124,30 @@ export default function TmWatch() {
   const runStarted = tsToDate(meta?.runStartedAt)?.getTime() || 0;
   const running = !!meta?.running && (Date.now() - runStarted) < 20 * 60 * 1000;
 
-  // Filter predicates — shared by the list itself and by the per-chip counts.
-  const passTab  = (p, t) => t === 'New' ? p.status === 'new'
-    : t === 'Starred' ? !!p.starred
-    : t === 'Dismissed' ? p.status === 'dismissed'
-    : p.status !== 'dismissed';
-  const passTier = (p, v) => v === '' || String(p.tier) === v;
-  const passHist = (p, v) => v === '' || p.israelHistory === v;
-  const term = search.trim().toLowerCase();
-  const passText = (p) => !term || `${p.name} ${p.club} ${p.clubCountry}`.toLowerCase().includes(term);
+  // List + faceted chip counts, computed together. Every chip shows how
+  // many players selecting it would yield, respecting the other filters.
+  const { filtered, tabCounts, tierCounts, histCounts } = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const passTab  = (p, t) => t === 'New' ? p.status === 'new'
+      : t === 'Starred' ? !!p.starred
+      : t === 'Dismissed' ? p.status === 'dismissed'
+      : p.status !== 'dismissed';
+    const passTier = (p, v) => v === '' || String(p.tier) === v;
+    const passHist = (p, v) => v === '' || p.israelHistory === v;
+    const passText = (p) => !term || `${p.name} ${p.club} ${p.clubCountry}`.toLowerCase().includes(term);
+    const select = (t, v, h) => items.filter(p => passTab(p, t) && passTier(p, v) && passHist(p, h) && passText(p));
 
-  const filtered = useMemo(() =>
-    items
-      .filter(p => passTab(p, tab) && passTier(p, tierFilter) && passHist(p, histFilter) && passText(p))
-      .sort((a, b) => (a.tier ?? 2) - (b.tier ?? 2) ||
-        (tsToDate(b.firstSeen)?.getTime() || 0) - (tsToDate(a.firstSeen)?.getTime() || 0)),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [items, tab, tierFilter, histFilter, term]);
+    const list = select(tab, tierFilter, histFilter).sort((a, b) =>
+      (a.tier ?? 2) - (b.tier ?? 2) ||
+      (tsToDate(b.firstSeen)?.getTime() || 0) - (tsToDate(a.firstSeen)?.getTime() || 0));
 
-  // Faceted counts: every chip shows how many players you'd see if you
-  // picked it, respecting whatever else is currently filtered.
-  const countTab  = (t) => items.filter(p => passTab(p, t) && passTier(p, tierFilter) && passHist(p, histFilter) && passText(p)).length;
-  const countTier = (v) => items.filter(p => passTab(p, tab) && passTier(p, v) && passHist(p, histFilter) && passText(p)).length;
-  const countHist = (v) => items.filter(p => passTab(p, tab) && passTier(p, tierFilter) && passHist(p, v) && passText(p)).length;
+    return {
+      filtered: list,
+      tabCounts:  Object.fromEntries(TABS.map(t => [t, select(t, tierFilter, histFilter).length])),
+      tierCounts: Object.fromEntries(['', '0', '1', '2'].map(v => [v, select(tab, v, histFilter).length])),
+      histCounts: Object.fromEntries(['', 'never', 'played'].map(h => [h, select(tab, tierFilter, h).length])),
+    };
+  }, [items, tab, tierFilter, histFilter, search]);
 
   const newCount = items.filter(p => p.status === 'new').length;
 
@@ -220,17 +221,17 @@ export default function TmWatch() {
         }
       >
         <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
-          <ChipGroup options={TABS} labels={TABS.map(t => `${t} (${countTab(t)})`)} value={tab} onChange={setTab} required />
+          <ChipGroup options={TABS} labels={TABS.map(t => `${t} (${tabCounts[t]})`)} value={tab} onChange={setTab} required />
           <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', '0', '1', '2']}
-            labels={[`All types (${countTier('')})`, <><IL /> Citizenship ({countTier('0')})</>, `🕎 Strong name (${countTier('1')})`, `❔ Possible (${countTier('2')})`]}
+            labels={[`All types (${tierCounts['']})`, <><IL /> Citizenship ({tierCounts['0']})</>, `🕎 Strong name (${tierCounts['1']})`, `❔ Possible (${tierCounts['2']})`]}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
           <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', 'never', 'played']}
-            labels={[`Any history (${countHist('')})`, `💎 Never in Israel (${countHist('never')})`, <><IL /> Played in Israel ({countHist('played')})</>]}
+            labels={[`Any history (${histCounts['']})`, `💎 Never in Israel (${histCounts['never']})`, <><IL /> Played in Israel ({histCounts['played']})</>]}
             value={histFilter} onChange={(v) => setHistFilter(v ?? '')} required
           />
         </div>
