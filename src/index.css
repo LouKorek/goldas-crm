@@ -94,6 +94,10 @@
 
   --sidebar-w:    220px;
   --bottom-nav-h: 64px;
+  /* Single source of truth: the mobile top bar's height is consumed both by
+     the bar itself and by the content pane's top padding, so no transparent
+     gap can open up between them. */
+  --topbar-h:     54px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -922,7 +926,7 @@ textarea:focus::placeholder {
   .desktop-sidebar { display: none !important; }
   .mobile-topbar   { display: flex !important; }
   .main-content    {
-    padding-top: calc(64px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)) !important;
     padding-left: 14px !important;
     padding-right: 14px !important;
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
@@ -1004,20 +1008,34 @@ textarea:focus::placeholder {
      .page-matches layout below. */
   :not(.page-matches) > .page-header .action-bar > div {
     display: grid !important;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
     max-width: 100%;
     width: 100%;
     align-items: stretch;
+  }
+  /* The search field is the one control that needs room to be usable, so it
+     takes the full row underneath the compact action buttons. */
+  :not(.page-matches) > .page-header .action-bar > div > div:has(input) {
+    grid-column: 1 / -1;
   }
   :not(.page-matches) > .page-header .action-bar > div > * { width: 100% !important; min-width: 0; }
   :not(.page-matches) > .page-header .action-bar > div > div { height: auto !important; }
   :not(.page-matches) > .page-header .action-bar > div > .btn,
   :not(.page-matches) > .page-header .action-bar > div > div > .btn {
     width: 100% !important;
-    height: 40px !important;
+    height: 34px !important;
+    /* Tightened type so four labelled controls sit on one line. */
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    padding: 0 4px;
+    gap: 4px;
   }
-  .page-header .action-bar input { width: 100% !important; max-width: 100%; height: 40px !important; }
+  .page-header .action-bar input { width: 100% !important; max-width: 100%; height: 36px !important; }
+  /* Trim the masthead's own breathing room on phones — the frozen band
+     should cost as little vertical space as possible. */
+  .page-title { font-size: 21px; }
+  .page-subtitle { font-size: 10.5px; margin-top: 4px; }
 
   /* Filters wrap onto as many rows as they need — controls must always be
      reachable at the natural width of the screen. Horizontal scrolling is
@@ -1195,7 +1213,7 @@ textarea:focus::placeholder {
 
 @media (max-width: 480px) {
   .main-content {
-    padding-top: calc(60px + env(safe-area-inset-top, 0px)) !important;
+    padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)) !important;
     padding-left: 10px !important;
     padding-right: 10px !important;
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 20px) !important;
