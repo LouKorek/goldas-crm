@@ -12,48 +12,40 @@ function KPI({ label, value, color, bg, to, onClick }) {
   const interactive = !!(to || onClick);
   const inner = (
     <div style={{
-      background: bg || 'var(--card)',
-      border: `1.5px solid ${color || 'var(--border)'}`,
+      background: 'var(--card)',
+      border: '1px solid var(--border)',
+      borderTop: `2px solid ${color || 'var(--gold-dk)'}`,
       borderRadius: 0,
-      padding: '0 16px 18px',
+      padding: '14px 16px 16px',
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      height: 148,
+      justifyContent: 'space-between',
+      height: 112,
       cursor: interactive ? 'pointer' : 'default',
-      transition: 'transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s, border-color 0.22s',
+      transition: 'background 0.11s linear, border-color 0.11s linear',
       position: 'relative',
-      overflow: 'hidden',
     }}
     onMouseEnter={e => {
       if (!interactive) return;
-      e.currentTarget.style.transform = 'translateY(-4px)';
-      e.currentTarget.style.boxShadow = `0 12px 32px ${color || 'rgba(201,168,76,0.25)'}55, 0 0 0 1px ${color || 'rgba(201,168,76,0.35)'} inset`;
+      e.currentTarget.style.background = 'var(--card-hover)';
+      e.currentTarget.style.borderTopColor = color || 'var(--gold)';
     }}
-    onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
+    onMouseLeave={e => {
+      e.currentTarget.style.background = 'var(--card)';
+      e.currentTarget.style.borderTopColor = color || 'var(--gold-dk)';
+    }}
     >
-      {/* Subtle radial glow */}
       <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        background: `radial-gradient(circle at 50% 18%, ${color || 'rgba(201,168,76,0.4)'}22 0%, transparent 55%)`,
-      }} />
-      <div style={{
-        fontFamily: 'Cormorant Garamond, serif',
-        fontSize: 40, fontWeight: 700, lineHeight: 1,
-        color: color || 'var(--gold)',
-        textAlign: 'center',
-        position: 'absolute',
-        top: '30%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        textShadow: `0 0 22px ${color || 'rgba(201,168,76,0.4)'}33`,
+        fontFamily: 'var(--font-mono)',
+        fontSize: 34, fontWeight: 500, lineHeight: 1,
+        letterSpacing: '-0.03em',
+        color: color || 'var(--text-1)',
+        fontVariantNumeric: 'tabular-nums',
       }}>{value ?? 0}</div>
       <div style={{
-        color: color || 'var(--text-3)',
-        fontSize: 10, fontWeight: 700,
-        textTransform: 'uppercase', letterSpacing: '0.08em',
-        textAlign: 'center', opacity: 0.85,
-        position: 'relative', zIndex: 1,
+        color: 'var(--text-3)',
+        fontSize: 9.5, fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.14em',
       }}>{label}</div>
     </div>
   );
@@ -84,20 +76,16 @@ function DrillDown({ kind, pipeByCat, onBack }) {
 
   return (
     <div style={{
-      background: config.bg,
-      border: `1.5px solid ${config.color}`,
+      background: 'var(--surface-1)',
+      border: '1px solid var(--border)',
+      borderTop: `2px solid ${config.color}`,
       borderRadius: 0,
       padding: '14px 18px 18px',
       marginBottom: 20,
       position: 'relative',
-      overflow: 'hidden',
-      animation: 'dd-in 0.28s cubic-bezier(0.16,1,0.3,1)',
+      animation: 'dd-in 0.18s cubic-bezier(0.2,0,0,1)',
     }}>
-      <style>{`@keyframes dd-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        background: `radial-gradient(circle at 20% 0%, ${config.color}22 0%, transparent 50%)`,
-      }} />
+      <style>{`@keyframes dd-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, position: 'relative' }}>
         <button onClick={onBack}
@@ -114,13 +102,13 @@ function DrillDown({ kind, pipeByCat, onBack }) {
           onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
         >← Back</button>
         <div style={{
-          fontFamily: 'Cormorant Garamond, serif',
-          fontSize: 24, fontWeight: 700, color: config.color,
-          letterSpacing: '0.02em',
+          fontFamily: 'var(--font-display)',
+          fontSize: 14, fontWeight: 600, color: 'var(--text-1)',
+          letterSpacing: '0.12em', textTransform: 'uppercase',
         }}>{config.title}</div>
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Total <strong style={{ color: 'var(--text-1)', marginLeft: 4, fontSize: 14 }}>{total}</strong>
+        <div style={{ fontSize: 9.5, color: 'var(--text-3)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+          Total <strong style={{ color: 'var(--text-1)', marginLeft: 6, fontSize: 14, fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{total}</strong>
         </div>
       </div>
 
@@ -131,33 +119,27 @@ function DrillDown({ kind, pipeByCat, onBack }) {
             <Link key={c.key} to={url}
               style={{
                 textDecoration: 'none',
-                background: 'rgba(255,255,255,0.03)',
-                border: `1px solid ${c.color}55`,
+                background: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderLeft: `2px solid ${c.color}`,
                 borderRadius: 0,
-                padding: '14px 12px',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                transition: 'transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease',
+                padding: '12px 14px 14px',
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                minHeight: 84,
+                transition: 'background 0.11s linear',
                 cursor: 'pointer',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-3px)';
-                e.currentTarget.style.boxShadow = `0 8px 24px ${c.color}33`;
-                e.currentTarget.style.borderColor = c.color;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = '';
-                e.currentTarget.style.boxShadow = '';
-                e.currentTarget.style.borderColor = `${c.color}55`;
-              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--card-hover)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--card)'; }}
             >
-              <div style={{ fontSize: 24, lineHeight: 1, marginBottom: 4 }}>{c.emoji}</div>
               <div style={{
-                fontFamily: 'Cormorant Garamond, serif',
-                fontSize: 36, fontWeight: 700, color: c.color, lineHeight: 1,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 28, fontWeight: 500, color: c.color, lineHeight: 1,
+                letterSpacing: '-0.03em',
               }}>{c.count}</div>
               <div style={{
-                fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                letterSpacing: '0.1em', color: 'var(--text-2)', marginTop: 6,
+                fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.14em', color: 'var(--text-3)', marginTop: 10,
               }}>{c.label}</div>
             </Link>
           );
@@ -235,12 +217,12 @@ export default function Dashboard() {
         <DrillDown kind={drillDown} pipeByCat={pipeByCat} onBack={() => setDrillDown(null)} />
       ) : (
         <div className='kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:20}}>
-          <KPI label="Represented Players" color="#4ADE80" bg="rgba(74,222,128,0.08)"  value={players.length}  to="/players" />
-          <KPI label="Club Requirements"   color="#60A5FA" bg="rgba(96,165,250,0.08)"  value={req.length}      to="/requirements" />
-          <KPI label="Transfer Candidates" color="#A78BFA" bg="rgba(167,139,250,0.08)" value={pipeAll.length}  onClick={() => setDrillDown('transfer')} />
-          <KPI label="Active Mandates"     color="#4ADE80" bg="rgba(74,222,128,0.08)"  value={mandates}        onClick={() => setDrillDown('mandates')} />
-          <KPI label="Contracts Signed"    color="#C9A84C" bg="rgba(201,168,76,0.1)"   value={contracts}       onClick={() => setDrillDown('contracts')} />
-          <KPI label="Alerts"              color={alertCount>0?'var(--red)':'#6E9870'} bg={alertCount>0?'rgba(248,113,113,0.08)':'rgba(110,152,112,0.06)'} value={alertCount} to="/notifications" />
+          <KPI label="Represented Players" color="#4ADE80"  value={players.length}  to="/players" />
+          <KPI label="Club Requirements"   color="#60A5FA"  value={req.length}      to="/requirements" />
+          <KPI label="Transfer Candidates" color="#A78BFA" value={pipeAll.length}  onClick={() => setDrillDown('transfer')} />
+          <KPI label="Active Mandates"     color="#4ADE80"  value={mandates}        onClick={() => setDrillDown('mandates')} />
+          <KPI label="Contracts Signed"    color="#C9A84C"   value={contracts}       onClick={() => setDrillDown('contracts')} />
+          <KPI label="Alerts"              color={alertCount>0?'var(--red)':'#6E9870'} value={alertCount} to="/notifications" />
         </div>
       )}
 
@@ -249,16 +231,16 @@ export default function Dashboard() {
         {/* Alerts panel */}
         <div className="card card-body">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-            <div className="section-label" style={{marginBottom:0}}>🔔 Active Alerts</div>
-            {alertCount>0&&<Link to="/notifications" style={{fontSize:11,color:'var(--gold)',textDecoration:'none',opacity:0.8}}>View all →</Link>}
+            <div className="section-label" style={{marginBottom:0}}>Active Alerts</div>
+            {alertCount>0&&<Link to="/notifications" style={{fontSize:9.5,fontWeight:700,letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--gold)',textDecoration:'none'}}>View all</Link>}
           </div>
           {alertCount === 0 ? (
-            <p style={{color:'var(--text-3)',fontSize:13}}>No active alerts — all clear! ✅</p>
+            <p style={{color:'var(--text-3)',fontSize:12,letterSpacing:'0.06em',textTransform:'uppercase'}}>No active alerts</p>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {contractAlerts.map(a => (
                 <div key={a.id+'c'} className={`alert-row ${a.days<=7?'urgent':'warning'}`}>
-                  <span style={{fontSize:16}}>📋</span>
+                  <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>CON</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
                     <div style={{fontSize:11,color:'var(--text-3)'}}>Contract expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.contractEnd)})</div>
@@ -267,7 +249,7 @@ export default function Dashboard() {
               ))}
               {reprAlerts.map(a => (
                 <div key={a.id+'r'} className={`alert-row ${a.days<=7?'urgent':'warning'}`}>
-                  <span style={{fontSize:16}}>🤝</span>
+                  <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>REP</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
                     <div style={{fontSize:11,color:'var(--text-3)'}}>Representation expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.reprEnd)})</div>
@@ -276,7 +258,7 @@ export default function Dashboard() {
               ))}
               {passportAlerts.map(a => (
                 <div key={a.id+'p'} className={`alert-row ${a.days<=30?'urgent':'warning'}`}>
-                  <span style={{fontSize:16}}>🛂</span>
+                  <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>PAS</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
                     <div style={{fontSize:11,color:'var(--text-3)'}}>Passport expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.passportExpiry)})</div>
@@ -285,7 +267,7 @@ export default function Dashboard() {
               ))}
               {birthdays.map(a => (
                 <div key={a.id+'b'} className="alert-row" style={a.turning18?{borderLeftColor:'var(--gold)',borderLeftWidth:3}:{}}>
-                  <span style={{fontSize:16}}>{a.turning18?'⭐':'🎂'}</span>
+                  <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:a.turning18?'var(--gold)':'var(--text-mute)',flexShrink:0,width:24}}>{a.turning18?'18':'DOB'}</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName} {a.turning18?'— Turning 18!':''}</div>
                     <div style={{fontSize:11,color:'var(--text-3)'}}>{a.days===0?'Birthday is today!':`Birthday in ${a.days} day${a.days!==1?'s':''}`} · Turning {a.age}</div>
@@ -298,14 +280,14 @@ export default function Dashboard() {
 
         {/* Upcoming matches */}
         <div className="card card-body">
-          <div className="section-label" style={{marginBottom:14}}>🏟 Upcoming Matches</div>
+          <div className="section-label" style={{marginBottom:14}}>Upcoming Matches</div>
           {upcomingMatches.length === 0 ? (
-            <p style={{color:'var(--text-3)',fontSize:13}}>No upcoming matches scheduled.</p>
+            <p style={{color:'var(--text-3)',fontSize:12,letterSpacing:'0.06em',textTransform:'uppercase'}}>No upcoming matches</p>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:10}}>
               {upcomingMatches.map(m => (
                 <div key={m.id} className="alert-row">
-                  <span style={{fontSize:16}}>⚽</span>
+                  <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>FIX</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{m.homeTeam} vs {m.awayTeam}</div>
                     <div style={{fontSize:11,color:'var(--text-3)'}}>{fmtDate(m.date)} · {m.time} · {m.stadium}</div>

@@ -82,9 +82,9 @@ function Splash({ fading }) {
           position: 'relative',
           width: 110, height: 110,
           margin: '0 auto 26px',
-          borderRadius: 26,
+          borderRadius: 0,
           overflow: 'hidden',
-          border: '1.5px solid rgba(201,168,76,0.4)',
+          border: '1px solid rgba(201,168,76,0.5)',
           animation: 'splash-logo-in 0.9s cubic-bezier(0.34,1.56,0.64,1) both, splash-glow 2.4s ease-in-out 0.9s infinite',
         }}>
           <img src="/logo.png" alt="Gold A&S"
@@ -101,10 +101,10 @@ function Splash({ fading }) {
 
         {/* Wordmark */}
         <div style={{
-          fontFamily: 'Cormorant Garamond, serif',
-          fontSize: 34, fontWeight: 700,
-          background: 'linear-gradient(135deg, #E8C96A 0%, #C9A84C 50%, #A07830 100%)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          fontFamily: 'var(--font-display)',
+          fontSize: 22, fontWeight: 700,
+          color: 'var(--text-1)',
+          letterSpacing: '0.2em', textTransform: 'uppercase',
           animation: 'splash-text-in 0.9s cubic-bezier(0.16,1,0.3,1) 0.25s both',
           lineHeight: 1,
         }}>
@@ -113,9 +113,9 @@ function Splash({ fading }) {
 
         {/* Tagline */}
         <div style={{
-          marginTop: 10,
-          fontSize: 11, color: 'var(--text-3)',
-          letterSpacing: '0.18em',
+          marginTop: 12,
+          fontSize: 9, color: 'var(--text-3)',
+          letterSpacing: '0.28em',
           textTransform: 'uppercase',
           animation: 'splash-tagline-in 1.4s ease 0.4s both',
         }}>

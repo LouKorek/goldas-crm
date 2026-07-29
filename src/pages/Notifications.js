@@ -10,24 +10,27 @@ const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
 
 function AlertCard({ icon, title, sub, urgency, extra }) {
   const colors = {
-    critical: { border:'var(--red)',   bg:'rgba(248,113,113,0.06)' },
-    warning:  { border:'var(--amber)', bg:'rgba(251,191,36,0.06)'  },
-    info:     { border:'var(--blue)',  bg:'rgba(96,165,250,0.06)'  },
-    gold:     { border:'var(--gold)',  bg:'var(--gold-dim)'        },
+    critical: 'var(--red)',
+    warning:  'var(--amber)',
+    info:     'var(--blue)',
+    gold:     'var(--gold)',
   };
   const c = colors[urgency] || colors.info;
   return (
     <div style={{
-      background:c.bg, border:`1px solid ${c.border}`, borderLeft:`3px solid ${c.border}`,
-      borderRadius: 0, padding:'12px 16px', display:'flex', gap:12, alignItems:'flex-start',
-      transition:'transform 0.15s',
+      background:'var(--card)', border:'1px solid var(--border)', borderLeft:`2px solid ${c}`,
+      borderRadius: 0, padding:'11px 14px', display:'flex', gap:12, alignItems:'flex-start',
+      transition:'background 0.11s linear',
     }}
-    onMouseEnter={e=>e.currentTarget.style.transform='translateX(3px)'}
-    onMouseLeave={e=>e.currentTarget.style.transform=''}>
-      <span style={{fontSize:20,flexShrink:0}}>{icon}</span>
-      <div style={{flex:1}}>
-        <div style={{fontWeight:500,fontSize:14,color:'var(--text-1)'}}>{title}</div>
-        {sub   && <div style={{fontSize:12,color:'var(--text-2)',marginTop:2}}>{sub}</div>}
+    onMouseEnter={e=>e.currentTarget.style.background='var(--card-hover)'}
+    onMouseLeave={e=>e.currentTarget.style.background='var(--card)'}>
+      {icon && <span style={{
+        fontFamily:'var(--font-mono)', fontSize:9, fontWeight:700, letterSpacing:'0.06em',
+        color:c, flexShrink:0, width:26, paddingTop:2,
+      }}>{icon}</span>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontWeight:500,fontSize:13.5,color:'var(--text-1)'}}>{title}</div>
+        {sub   && <div style={{fontSize:11.5,color:'var(--text-2)',marginTop:3}}>{sub}</div>}
         {extra && <div style={{fontSize:11,color:'var(--text-3)',marginTop:2}}>{extra}</div>}
       </div>
     </div>
@@ -152,40 +155,40 @@ export default function Notifications() {
         action={
           canEdit ? (
             <button className="btn btn-ghost" onClick={()=>setShowSettings(true)}>
-              ⚙️ Alert Settings
+              Alert Settings
             </button>
           ) : null
         }
       />
 
       {total===0 && upcomingMatches.length===0 ? (
-        <div style={{textAlign:'center',padding:'64px 20px',color:'var(--text-3)'}}>
-          <div style={{fontSize:48,marginBottom:16}}>✅</div>
-          <p style={{fontSize:16}}>All clear — no active alerts!</p>
+        <div style={{textAlign:'center',padding:'44px 20px',color:'var(--text-3)'}}>
+          <div style={{width:42,height:1,background:'var(--gold-dk)',margin:'0 auto 18px'}} />
+          <p style={{fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase'}}>All clear — no active alerts</p>
           {canEdit && (
-            <button className="btn btn-ghost" style={{marginTop:16}} onClick={()=>setShowSettings(true)}>
-              Configure alert timing →
+            <button className="btn btn-ghost" style={{marginTop:18}} onClick={()=>setShowSettings(true)}>
+              Configure alert timing
             </button>
           )}
         </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:28}}>
-          <Section title="Contract Expiry"       items={contractAlerts}  icon="📋" />
-          <Section title="Representation Expiry" items={reprAlerts}       icon="🤝" />
-          <Section title="Passport Expiry"       items={passportAlerts}  icon="🛂" />
-          <Section title="Upcoming Birthdays"    items={birthdayAlerts}  icon="🎂" />
+          <Section title="Contract Expiry"       items={contractAlerts} icon="CON" />
+          <Section title="Representation Expiry" items={reprAlerts}      icon="REP" />
+          <Section title="Passport Expiry"       items={passportAlerts} icon="PAS" />
+          <Section title="Upcoming Birthdays"    items={birthdayAlerts} icon="DOB" />
 
           {upcomingMatches.length > 0 && (
             <div>
-              <div className="section-label" style={{marginBottom:12}}>🏟 Upcoming Matches ({upcomingMatches.length})</div>
+              <div className="section-label" style={{marginBottom:12}}>Upcoming Matches ({upcomingMatches.length})</div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {upcomingMatches.map(m => {
                   const days = Math.ceil((new Date(m.date)-now)/(1000*60*60*24));
                   return (
-                    <AlertCard key={m.id} icon="⚽"
+                    <AlertCard key={m.id} icon="FIX"
                       title={`${m.homeTeam} vs ${m.awayTeam}`}
                       sub={`${fmtDate(m.date)}${m.time?' · '+m.time:''} · ${days===0?'Today!':days+' day'+( days!==1?'s':'')}`}
-                      extra={m.stadiumName ? `📍 ${m.stadiumName}` : undefined}
+                      extra={m.stadiumName || undefined}
                       urgency={days===0?'critical':days<=3?'warning':'info'}
                     />
                   );

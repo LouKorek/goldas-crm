@@ -73,36 +73,39 @@ export default function Login({ denied }) {
             width: 80, height: 80,
             borderRadius: 0,
             overflow: 'hidden',
-            border: '1.5px solid rgba(201,168,76,0.3)',
-            marginBottom: 32,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            border: '1px solid var(--gold-dk)',
+            marginBottom: 34,
           }}>
             <img src="/logo.png" alt="Gold A&S" style={{width:'100%',height:'100%',objectFit:'cover'}} />
           </div>
 
-          <h1 style={{
-            fontFamily: 'Cormorant Garamond, serif',
-            fontSize: 52, fontWeight: 700,
-            background: 'linear-gradient(135deg, #E8C96A, #C9A84C, #A07830)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            lineHeight: 1.1, marginBottom: 16,
-          }}>Gold A&S<br />Football Agency</h1>
+          <div style={{ width: 46, height: 2, background: 'var(--gold)', marginBottom: 20 }} />
 
-          <p style={{ color: '#7A9B7C', fontSize: 16, lineHeight: 1.7, marginBottom: 40 }}>
-            Professional player representation &amp; transfer management platform. Built for agents who operate at the highest level.
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 40, fontWeight: 600,
+            color: 'var(--text-1)',
+            textTransform: 'uppercase',
+            letterSpacing: '-0.01em',
+            lineHeight: 1.05, marginBottom: 18,
+          }}>Gold A&amp;S<br />Football Agency</h1>
+
+          <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.7, marginBottom: 36, maxWidth: 380 }}>
+            Player representation and transfer management, run from a single front office.
           </p>
 
           {/* Feature pills */}
           {['Player Representation', 'Transfer Window Management', 'Real-time Collaboration', 'Contract Tracking'].map(f => (
             <div key={f} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.15)',
-              borderRadius: 0, padding: '6px 14px', marginRight: 8, marginBottom: 8,
+              display: 'flex', alignItems: 'center', gap: 10,
+              borderTop: '1px solid var(--rule)',
+              padding: '9px 0', maxWidth: 380,
             }}>
-              <span style={{width:6,height:6,borderRadius: 0,background:'#C9A84C',flexShrink:0}} />
-              <span style={{fontSize:12,color:'#A8C4AA',fontWeight:500}}>{f}</span>
+              <span style={{width:5,height:5,background:'var(--gold)',flexShrink:0}} />
+              <span style={{
+                fontSize:10, color:'var(--text-3)', fontWeight:700,
+                letterSpacing:'0.14em', textTransform:'uppercase',
+              }}>{f}</span>
             </div>
           ))}
         </div>
@@ -115,24 +118,26 @@ export default function Login({ denied }) {
           {/* Mobile logo */}
           <div className="login-mobile-logo">
             <div style={{
-              width:64,height:64,borderRadius: 0,
+              width:56,height:56,borderRadius: 0,
               overflow:'hidden',
-              border:'1.5px solid rgba(201,168,76,0.3)',
-              margin:'0 auto 16px',
+              border:'1px solid var(--gold-dk)',
+              margin:'0 auto 14px',
             }}>
               <img src="/logo.png" alt="Gold A&S" style={{width:'100%',height:'100%',objectFit:'cover'}} />
             </div>
-            <h2 style={{fontFamily:'Cormorant Garamond,serif',fontSize:32,color:'#C9A84C',fontWeight:700}}>Gold A&S</h2>
+            <h2 style={{fontFamily:'var(--font-display)',fontSize:16,color:'var(--text-1)',fontWeight:700,letterSpacing:'0.16em',textTransform:'uppercase'}}>Gold A&amp;S</h2>
           </div>
 
           <h2 style={{
-            fontFamily: 'Cormorant Garamond, serif',
-            fontSize: 28, fontWeight: 700, color: '#F0F7F1',
+            fontFamily: 'var(--font-display)',
+            fontSize: 20, fontWeight: 600, color: 'var(--text-1)',
+            letterSpacing: '0.1em', textTransform: 'uppercase',
             marginBottom: 8,
-          }}>Welcome back</h2>
-          <p style={{ color: '#7A9B7C', fontSize: 13, marginBottom: 32 }}>
-            Sign in to access your agency dashboard
-          </p>
+          }}>Sign in</h2>
+          <p style={{
+            color: 'var(--text-3)', fontSize: 10, marginBottom: 30,
+            letterSpacing: '0.14em', textTransform: 'uppercase',
+          }}>Authorised personnel only</p>
 
           {denied && (
             <div style={{

@@ -89,37 +89,33 @@ export default function RouteTransition() {
         animation: `rt-rise ${FADE_MS}ms cubic-bezier(0.16,1,0.3,1) both`,
       }}>
         <div style={{
-          width: 96, height: 96, borderRadius: 20, overflow: 'hidden',
-          border: '1.5px solid rgba(201,168,76,0.55)',
-          boxShadow: '0 0 0 6px rgba(201,168,76,0.10), 0 12px 50px rgba(201,168,76,0.45)',
+          width: 78, height: 78, borderRadius: 0, overflow: 'hidden',
+          border: '1px solid rgba(201,168,76,0.6)',
           margin: '0 auto 22px',
         }}>
           <img src="/logo.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <div style={{
-          fontFamily: 'Cormorant Garamond, serif',
+          fontFamily: 'var(--font-display)',
           /* Scales down on narrow phones so long labels ("Club Requirements")
              don't dominate the viewport. */
-          fontSize: 'clamp(30px, 9vw, 44px)', fontWeight: 700,
-          background: 'linear-gradient(135deg, #F0D27E 0%, #E8C96A 35%, #C9A84C 65%, #A07830 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          backgroundClip: 'text',
-          letterSpacing: '0.04em',
-          lineHeight: 1.05,
-          textShadow: '0 4px 24px rgba(0,0,0,0.55)',
+          fontSize: 'clamp(24px, 7.5vw, 34px)', fontWeight: 600,
+          color: '#EDF1EC',
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          lineHeight: 1.1,
         }}>{overlay.label}</div>
 
         {/* Slim animated gold underline. */}
         <div style={{
-          height: 2, background: 'linear-gradient(90deg, transparent, #C9A84C, transparent)',
-          margin: '14px auto 12px',
+          height: 2, background: '#C8A24A',
+          margin: '16px auto 14px',
           animation: `rt-line ${FADE_MS + 120}ms ease-out forwards`,
         }} />
 
         <div style={{
-          fontSize: 11, color: 'rgba(168,196,170,0.85)',
-          letterSpacing: '0.28em',
+          fontSize: 9, color: 'rgba(163,176,164,0.75)',
+          letterSpacing: '0.3em',
           textTransform: 'uppercase',
         }}>Gold A&amp;S — Football Agency</div>
       </div>
