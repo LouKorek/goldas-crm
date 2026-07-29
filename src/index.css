@@ -1054,7 +1054,27 @@ textarea:focus::placeholder {
   }
   /* The thin vertical dividers between groups are meaningless once each
      group owns its own row. */
-  .filter-bar > span { display: none !important; }
+  .filter-div { display: none !important; }
+
+  /* Dropdown controls share a single row, each taking an equal slice of it:
+     four selects across a phone screen rather than two per row. */
+  .filter-cell {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+  .filter-cell select {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 9.5px;
+    padding: 0 4px;
+    height: 32px;
+  }
+  /* Matches pairs its player filter with the group select on one line. */
+  .filter-pair { flex: 1 1 100% !important; min-width: 0 !important; }
+  .filter-pair > * { flex: 1 1 0 !important; min-width: 0 !important; width: auto !important; }
+  .filter-pair select { font-size: 9.5px; padding: 0 4px; height: 32px; min-width: 0 !important; }
+  .filter-pair button { width: 100% !important; font-size: 9.5px; }
   .filter-bar select {
     min-width: 0 !important;
     width: 100% !important;

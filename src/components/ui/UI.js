@@ -652,7 +652,7 @@ export function FilterBar({ filters, setFilters, options }) {
   return (
     <div className="filter-bar" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
       {options.map(opt => (
-        <div key={opt.key} style={{ minWidth: 140 }}>
+        <div key={opt.key} className="filter-cell" style={{ minWidth: 140 }}>
           <select value={filters[opt.key] || ''} onChange={e => setFilters(f => ({ ...f, [opt.key]: e.target.value }))}>
             <option value="">{opt.label}: All</option>
             {opt.values.map(v => <option key={v} value={v}>{v}</option>)}

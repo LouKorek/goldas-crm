@@ -684,6 +684,7 @@ export default function Matches() {
           {/* Players filter sits right next to the range navigator (or right
               next to the view chips in Schedule mode) so on mobile both
               controls fit on the same row instead of wrapping. */}
+          <div className="filter-pair" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
 
           {/* Youth/Senior scope — matches any match where at least one team
@@ -696,6 +697,7 @@ export default function Matches() {
             <option value="Youth">Youth only</option>
             <option value="Senior">Senior only</option>
           </select>
+          </div>
           <ScraperCredits />
         </div>
         </PageHeader>

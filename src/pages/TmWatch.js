@@ -222,13 +222,13 @@ export default function TmWatch() {
       >
         <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
           <ChipGroup options={TABS} labels={TABS.map(t => `${t} (${tabCounts[t]})`)} value={tab} onChange={setTab} required />
-          <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
+          <span className="filter-div" style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', '0', '1', '2']}
             labels={[`All types (${tierCounts['']})`, <><IL /> Citizenship ({tierCounts['0']})</>, `Strong name (${tierCounts['1']})`, `Possible (${tierCounts['2']})`]}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
-          <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
+          <span className="filter-div" style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', 'never', 'played']}
             labels={[`Any history (${histCounts['']})`, `Never in Israel (${histCounts['never']})`, <><IL /> Played in Israel ({histCounts['played']})</>]}
