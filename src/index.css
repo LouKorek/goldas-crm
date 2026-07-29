@@ -640,22 +640,22 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   }
 }
 @media (max-width: 768px) {
+  /* Phones: plain flow. No sticky, no bleed, no shield — the fixed top bar
+     is the only pinned chrome, and the masthead sits at the natural width
+     of the screen so nothing can overhang or shift. */
   .page-header {
-    top: calc(64px + env(safe-area-inset-top, 0px));
-    margin-left: -14px;
-    margin-right: -14px;
-    padding-left: 14px;
-    padding-right: 14px;
+    position: static;
+    top: auto;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    max-width: 100%;
   }
-}
-@media (max-width: 480px) {
-  .page-header {
-    top: calc(60px + env(safe-area-inset-top, 0px));
-    margin-left: -10px;
-    margin-right: -10px;
-    padding-left: 10px;
-    padding-right: 10px;
-  }
+  .page-header::before { display: none; }
 }
 .page-title {
   color: var(--text-1);
@@ -961,7 +961,14 @@ textarea:focus::placeholder {
   /* Mobile table readability: 11px cells / 9.5px headers were below a
      comfortable reading size on phone DPIs. */
   .data-table td { font-size: 12px; padding: 9px 8px; }
-  .data-table th { font-size: 10px; }
+  /* Column headers stay frozen at the top of the scrolling table body. */
+  .data-table th {
+    font-size: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--bg);
+  }
 
   /* Match cards: long club / stadium names break onto the next line
      instead of getting clipped at the card edge. */
