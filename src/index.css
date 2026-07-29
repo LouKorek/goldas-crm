@@ -1124,9 +1124,9 @@ textarea:focus::placeholder {
 
 .view-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 
-/* Tasks reads like a list, not a spreadsheet — cap the column so cards
-   don't stretch across a 1500px viewport. */
-.tasks-page { max-width: 900px; }
+/* Full-bleed: every screen uses the whole canvas — the hairlines provide
+   the structure that a narrow column used to. */
+.tasks-page { max-width: none; }
 
 /* Meta rows on cards (mobile card lists + TM Watch on every screen size):
    a flex row with real breathing room between items. */

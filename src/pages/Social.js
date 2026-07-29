@@ -214,7 +214,7 @@ export default function Social() {
           {postList.length === 0 ? (
             <Empty icon="🖼" message="Post data appears once Instagram serves the post feed to the collector." />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 980 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {postList.map(p => {
                 const t = TYPE_META[p.type] || TYPE_META.image;
                 return (

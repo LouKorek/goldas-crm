@@ -253,7 +253,7 @@ export default function TmWatch() {
       ) : filtered.length === 0 ? (
         <Empty icon="🌍" message={`Nothing in "${tab}"${tierFilter !== '' ? ' with this match type' : ''}.`} />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 980 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {filtered.map(p => {
             const badge = TIER_BADGE[p.tier] || TIER_BADGE[2];
             return (
