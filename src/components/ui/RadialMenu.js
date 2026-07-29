@@ -6,6 +6,7 @@ import { useRole } from 'lib/roleContext';
 // a colour tint so users can spot where they are on the dial.
 const ITEMS = [
   { section: 'Overview',        path: '/dashboard',       emoji: '◈',  label: 'Dashboard' },
+  { section: 'Overview',        path: '/social',          emoji: '📸', label: 'Social' },
   { section: 'Players',         path: '/players',         emoji: '🤝', label: 'Represented' },
   { section: 'Players',         path: '/matches',         emoji: '🏟', label: 'Matches' },
   { section: 'Players',         path: '/contacts',        emoji: '📇', label: 'Contacts' },
