@@ -17,6 +17,7 @@ const ROUTE_IMAGE = {
   '/notifications':   { src: '/photos/Scouting2.png',    label: 'Notifications' },
   '/tasks':           { src: '/photos/Tunnel3.png',      label: 'Tasks' },
   '/team':            { src: '/photos/Services.png',     label: 'Team' },
+  '/social':          { src: '/photos/Brand.png',        label: 'Social' },
 };
 
 // Timings (ms). Keep these tuned together: HOLD_MS is the time the overlay

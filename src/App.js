@@ -18,6 +18,7 @@ import Notifications from 'pages/Notifications';
 import Team          from 'pages/Team';
 import Tasks         from 'pages/Tasks';
 import TmWatch       from 'pages/TmWatch';
+import Social        from 'pages/Social';
 import { ToastProvider } from 'components/ui/UI';
 
 // Animated splash screen shown on app open
@@ -177,6 +178,7 @@ export default function App() {
               <Route path="/" element={<Layout user={user} />}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard"      element={<Dashboard />} />
+                <Route path="social"         element={<Social />} />
                 <Route path="players"        element={<Players />} />
                 <Route path="matches"        element={<Matches />} />
                 <Route path="requirements"   element={<Requirements />} />

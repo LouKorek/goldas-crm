@@ -9,6 +9,7 @@ import RadialMenu from 'components/ui/RadialMenu';
 const NAV = [
   { section: 'Overview' },
   { label: 'Dashboard',         path: '/dashboard',       emoji: '◈' },
+  { label: 'Social',            path: '/social',          emoji: '📸' },
   { section: 'Players' },
   { label: 'Represented',       path: '/players',         emoji: '🤝' },
   { label: 'Matches',           path: '/matches',         emoji: '🏟' },

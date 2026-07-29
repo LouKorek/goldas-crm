@@ -160,6 +160,8 @@ export const PATHS = {
   APP_USERS:         'app_users',
   TASKS:             'tasks',
   TM_WATCH:          'tmWatch',
+  IG_DAILY:          'igDaily',
+  IG_POSTS:          'igPosts',
 };
 
 // ── User management (app_users collection) ────────────────────────
