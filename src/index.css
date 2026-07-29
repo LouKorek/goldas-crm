@@ -1043,6 +1043,18 @@ textarea:focus::placeholder {
   /* Filter selects: three per row rather than two, and the inline
      min-widths the screens set for desktop are neutralised here. */
   .filter-bar > div { min-width: 0 !important; flex: 1 1 96px; max-width: 100%; }
+  /* A chip group is a row of its own — it must never be squeezed into a
+     narrow flex column alongside other groups (that is what pushed the TM
+     Watch filters off the side of the screen). */
+  .filter-bar .chip-group {
+    flex: 1 1 100% !important;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+  /* The thin vertical dividers between groups are meaningless once each
+     group owns its own row. */
+  .filter-bar > span { display: none !important; }
   .filter-bar select {
     min-width: 0 !important;
     width: 100% !important;
@@ -1055,47 +1067,10 @@ textarea:focus::placeholder {
   .page-title { font-size: 20px; }
   .page-subtitle { font-size: 10px; margin-top: 3px; }
 
-  /* ──────────────── PAGE-MATCHES (mobile-only polish) ──────────────
-     The Matches screen carries the heaviest header (Add / Sync / Export
-     / Search / Clear) and on mobile it ends up looking ragged unless we
-     organise it deliberately. The rules below are scoped to .page-matches
-     ONLY — other screens keep their original mobile layout untouched. */
-  .page-matches .page-header .action-bar > div {
-    flex-wrap: wrap !important;
-    width: 100%;
-    max-width: 100%;
-    gap: 8px;
-  }
-  /* Row 1 — "+ Add Match" alone, gold, full width. Unmistakable CTA. */
-  .page-matches .page-header .action-bar > div > .btn-primary {
-    flex: 1 1 100%;
-    width: 100%;
-    height: 40px;
-  }
-  /* Row 2 — Sync / Export / Clear share the row in equal thirds. No
-     dead space on the right. */
-  .page-matches .page-header .action-bar > div > .btn:not(.btn-primary),
-  .page-matches .page-header .action-bar > div > div:not(:has(input)) {
-    flex: 1 1 0;
-    min-width: 0;
-    height: 38px;
-  }
-  .page-matches .page-header .action-bar > div > div:not(:has(input)) > .btn-ghost {
-    width: 100%;
-    height: 38px;
-  }
-  .page-matches .page-header .action-bar > div > .btn { font-size: 12px; padding: 0 12px; }
-  /* Row 3 — Search input, full row width, generous touch target. */
-  .page-matches .page-header .action-bar > div > div:has(input) {
-    flex: 1 1 100%;
-    min-width: 0;
-    width: 100%;
-  }
-  .page-matches .page-header .action-bar input {
-    width: 100% !important;
-    height: 40px !important;
-    flex: 1 1 100%;
-  }
+  /* (Matches used to carry a bespoke mobile toolbar layout; it now uses the
+     same icon-only single-row toolbar as every other screen, so the special
+     case is retired. Only its card padding remains, further down.) */
+
   /* Any direct child of <main> on mobile is clamped to the viewport width
      so a rogue inline width or long inline text can never push the page
      wider than the screen. */

@@ -602,7 +602,7 @@ export default function Matches() {
                 <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
                   style={{ height: 36, whiteSpace: 'nowrap' }}
                   title="Pull match fixtures from IFA / 365 / SofaScore for every represented player">
-                  {syncing ? '🔄 Syncing…' : '🔄 Sync Now'}
+                  {syncing ? <><Spinner size={12} /><span className="btn-text">Syncing…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Sync Now</span></>}
                 </button>
               )}
               <ExportMenu
