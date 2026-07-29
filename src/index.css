@@ -640,39 +640,25 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   }
 }
 @media (max-width: 768px) {
-  /* Phones: the masthead freezes directly beneath the fixed top bar, so
-     the screen title, its actions and its filters are always in reach.
-     Crucially it stays at the NATURAL width — no negative margins, which
-     is what previously fought the viewport guards and skewed the layout.
-     Records pass behind an opaque ground; the side gutters stay empty
-     because every element shares the same 14px inset. */
+  /* Phones: plain flow. The fixed top bar is the only pinned chrome, and
+     the masthead sits at the natural width of the screen so nothing can
+     overhang or shift. (A sticky masthead was tried here twice and both
+     times fought the mobile width guards — it stays out until it can be
+     proven on a real phone viewport.) */
   .page-header {
-    position: sticky;
-    top: calc(64px + env(safe-area-inset-top, 0px));
-    z-index: 40;
-    background: var(--bg);
+    position: static;
+    top: auto;
     margin-left: 0;
     margin-right: 0;
     margin-top: 0;
     padding-left: 0;
     padding-right: 0;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-top: 12px;
+    padding-bottom: 12px;
     margin-bottom: 14px;
     max-width: 100%;
   }
-  /* Opaque strip filling the gap between the top bar and the pinned
-     masthead, so nothing is ever glimpsed sliding between them. */
-  .page-header::before {
-    display: block;
-    left: -14px; right: -14px;
-    height: 14px;
-    bottom: 100%;
-  }
-}
-@media (max-width: 480px) {
-  .page-header { top: calc(60px + env(safe-area-inset-top, 0px)); }
-  .page-header::before { left: -10px; right: -10px; }
+  .page-header::before { display: none; }
 }
 .page-title {
   color: var(--text-1);
