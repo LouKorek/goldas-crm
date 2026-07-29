@@ -77,19 +77,19 @@ function Flag({ country, size = 15 }) {
         src={`https://flagcdn.com/w20/${code.toLowerCase()}.png`}
         srcSet={`https://flagcdn.com/w40/${code.toLowerCase()}.png 2x`}
         alt={country} title={country}
-        style={{ width: size + 5, height: 'auto', borderRadius: 2, flexShrink: 0, boxShadow: '0 0 0 1px rgba(255,255,255,0.08)', verticalAlign: 'middle' }}
+        style={{ width: size + 5, height: 'auto', borderRadius: 0, flexShrink: 0, boxShadow: '0 0 0 1px rgba(255,255,255,0.08)', verticalAlign: 'middle' }}
         onError={(e) => { e.currentTarget.style.display = 'none'; }}
       />
     );
   }
   if (!country) return null;
-  return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
+  return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
 }
 const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3', 4: 'Tier 4', 5: 'Tier 5', 6: 'Tier 6' };
 // Inline Israel flag image — flag EMOJI renders as plain letters on Windows.
 const IL = () => (
   <img src="https://flagcdn.com/w20/il.png" alt="Israel"
-    style={{ width: 14, height: 'auto', borderRadius: 2, verticalAlign: '-2px' }} />
+    style={{ width: 14, height: 'auto', borderRadius: 0, verticalAlign: '-2px' }} />
 );
 
 const TIER_BADGE = {
@@ -246,10 +246,10 @@ export default function TmWatch() {
       </PageHeader>
 
       {items.length === 0 ? (
-        <Empty icon="🌍" message="No candidates yet — the first daily scan will populate this screen."
+        <Empty message="No candidates yet — the first daily scan will populate this screen."
           action={isAdmin ? <button className="btn btn-primary" onClick={scanNow} disabled={scanning || running}>{running ? 'Scanning…' : '🔄 Run first scan'}</button> : null} />
       ) : filtered.length === 0 ? (
-        <Empty icon="🌍" message={`Nothing in "${tab}"${tierFilter !== '' ? ' with this match type' : ''}.`} />
+        <Empty message={`Nothing in "${tab}"${tierFilter !== '' ? ' with this match type' : ''}.`} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {filtered.map(p => {
@@ -271,11 +271,11 @@ export default function TmWatch() {
                       {p.position && <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{p.position}</span>}
                       <span title={`${p.matchedOn || ''}${p.firstSeen ? ` · first seen ${fmtDate(tsToDate(p.firstSeen).toISOString().slice(0, 10))}` : ''}`} style={{
                         background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}`,
-                        borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
+                        borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
-                      {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 999, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
-                      {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 999, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>💎 Never in Israel</span>}
-                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 999, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
+                      {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 0, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
+                      {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>💎 Never in Israel</span>}
+                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
                     </div>
@@ -300,23 +300,23 @@ export default function TmWatch() {
                   {canEdit && (
                     <div className="action-btns" style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
                       <button title={p.starred ? 'Unstar' : 'Star'} onClick={() => toggleStar(p)}
-                        style={{ width: 30, height: 30, border: 'none', borderRadius: 7, cursor: 'pointer', background: p.starred ? 'rgba(212,176,98,0.25)' : 'rgba(255,255,255,0.05)', color: 'var(--gold)', fontSize: 14 }}>
+                        style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: p.starred ? 'rgba(212,176,98,0.25)' : 'rgba(255,255,255,0.05)', color: 'var(--gold)', fontSize: 14 }}>
                         {p.starred ? '★' : '☆'}
                       </button>
                       {!p.addedToPipeline && p.status !== 'dismissed' && (
                         <button title="Add to Jewish pipeline" onClick={() => addToPipeline(p)}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 7, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 15 }}>＋</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 15 }}>＋</button>
                       )}
                       {p.status === 'new' && (
                         <button title="Mark seen" onClick={() => setStatus(p, 'seen')}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 7, cursor: 'pointer', background: 'rgba(107,174,245,0.15)', color: 'var(--blue)', fontSize: 14 }}>✓</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(107,174,245,0.15)', color: 'var(--blue)', fontSize: 14 }}>✓</button>
                       )}
                       {p.status !== 'dismissed' ? (
                         <button title="Not relevant" onClick={() => setStatus(p, 'dismissed')}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 7, cursor: 'pointer', background: 'rgba(240,114,110,0.14)', color: 'var(--red)', fontSize: 14 }}>⊘</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(240,114,110,0.14)', color: 'var(--red)', fontSize: 14 }}>⊘</button>
                       ) : (
                         <button title="Restore" onClick={() => setStatus(p, 'seen')}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 7, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 14 }}>↩</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 14 }}>↩</button>
                       )}
                     </div>
                   )}

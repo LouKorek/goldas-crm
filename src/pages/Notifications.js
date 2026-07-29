@@ -19,7 +19,7 @@ function AlertCard({ icon, title, sub, urgency, extra }) {
   return (
     <div style={{
       background:c.bg, border:`1px solid ${c.border}`, borderLeft:`3px solid ${c.border}`,
-      borderRadius:10, padding:'12px 16px', display:'flex', gap:12, alignItems:'flex-start',
+      borderRadius: 0, padding:'12px 16px', display:'flex', gap:12, alignItems:'flex-start',
       transition:'transform 0.15s',
     }}
     onMouseEnter={e=>e.currentTarget.style.transform='translateX(3px)'}

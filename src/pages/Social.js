@@ -187,7 +187,7 @@ export default function Social() {
       </PageHeader>
 
       {daily.length === 0 ? (
-        <Empty icon="📸" message="No Instagram data yet — snapshots begin once the daily collector runs (or hit Sync now)."
+        <Empty message="No Instagram data yet — snapshots begin once the daily collector runs (or hit Sync now)."
           action={isAdmin ? <button className="btn btn-primary" onClick={syncNow} disabled={syncing}>🔄 First snapshot</button> : null} />
       ) : (
         <>
@@ -212,7 +212,7 @@ export default function Social() {
           {/* Posts */}
           <div className="section-label">Posts · engagement &amp; follower impact</div>
           {postList.length === 0 ? (
-            <Empty icon="🖼" message="Post data appears once Instagram serves the post feed to the collector." />
+            <Empty message="Post data appears once Instagram serves the post feed to the collector." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {postList.map(p => {
@@ -231,7 +231,7 @@ export default function Social() {
                             <span style={{
                               background: p.impact >= 0 ? 'var(--green-bg)' : 'var(--red-bg)',
                               color: p.impact >= 0 ? 'var(--green-ok)' : 'var(--red)',
-                              borderRadius: 999, padding: '2px 9px', fontSize: 10.5, fontWeight: 600,
+                              borderRadius: 0, padding: '2px 9px', fontSize: 10.5, fontWeight: 600,
                             }} title="Follower change in the 3 days after this post">
                               {p.impact >= 0 ? '+' : ''}{p.impact} followers / 3d
                             </span>

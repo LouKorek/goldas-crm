@@ -108,7 +108,7 @@ export default function Contacts() {
 
       {filtered.length === 0 ? (
         <Empty
-          icon="📇"
+         
           message={items.length === 0 ? 'No contacts yet — add your first one.' : 'No matching contacts.'}
           action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
         />

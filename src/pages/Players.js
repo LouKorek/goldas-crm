@@ -19,7 +19,7 @@ function NatFlags({ nats=[] }) {
   return (
     <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
       {nats.filter(Boolean).map(n=>(
-        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius:4,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
+        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius: 0,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
       ))}
     </div>
   );
@@ -73,9 +73,9 @@ function DocViewer({ files, title, onClose }) {
               {loadingFile || !url ? (
                 <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>{loadingFile ? 'Loading file…' : 'File unavailable.'}</div>
               ) : file.type?.startsWith('image/') ? (
-                <img src={url} alt={file.name} style={{width:'100%',borderRadius:8,border:'1px solid var(--border)'}} />
+                <img src={url} alt={file.name} style={{width:'100%',borderRadius: 0,border:'1px solid var(--border)'}} />
               ) : (
-                <iframe src={url} style={{width:'100%',height:480,borderRadius:8,border:'1px solid var(--border)'}} title={file.name} />
+                <iframe src={url} style={{width:'100%',height:480,borderRadius: 0,border:'1px solid var(--border)'}} title={file.name} />
               )}
             </div>
           )}
@@ -386,7 +386,7 @@ export default function Players() {
       {loading ? (
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length===0 ? (
-        <Empty icon="🤝"
+        <Empty
           message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
           action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
       ) : (
@@ -412,7 +412,7 @@ export default function Players() {
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
-                  {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                  {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                   {p.league&&<span className="m-sub">{p.league}</span>}
                   <span className="badge" style={{background:p.contractStatus==='Free'?'var(--amber-bg)':p.contractStatus==='Under Contract'?'var(--green-bg)':'var(--blue-bg)',color:p.contractStatus==='Free'?'var(--amber)':p.contractStatus==='Under Contract'?'var(--green-ok)':'var(--blue)',fontSize:9.5}}>{p.contractStatus||'—'}</span>
                 </div>
@@ -427,10 +427,10 @@ export default function Players() {
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:9}}>
                   <NatFlags nats={p.nationalities} />
                   <div className="action-btns" style={{display:'flex',gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:7,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}} title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
-                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:7,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}} title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
-                    {p.profileLink&&(<a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius:7,fontSize:13,textDecoration:'none'}} title="Profile">🧑‍💼</a>)}
-                    {p.videoLink&&(<a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius:7,fontSize:13,textDecoration:'none'}} title="Video">📹</a>)}
+                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}} title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
+                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}} title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
+                    {p.profileLink&&(<a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}} title="Profile">🧑‍💼</a>)}
+                    {p.videoLink&&(<a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}} title="Video">📹</a>)}
                   </div>
                 </div>
               </div>
@@ -478,20 +478,20 @@ export default function Players() {
                       {/* Actions cell - click stops propagation */}
                       <td onClick={e=>e.stopPropagation()}>
                         <div style={{display:'flex',gap:3,flexWrap:'wrap',width:66}}>
-                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)',transition:'all 0.15s'}}
+                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)',transition:'all 0.15s'}}
                             title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
-                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius:6,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
+                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
                             title="Edit" onClick={(e)=>{e.stopPropagation();openEdit(p);}}>✏️</button>)}
                           {p.profileLink&&(
                             <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
                               target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                              style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius:6,fontSize:13,textDecoration:'none'}}
+                              style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}}
                               title="Profile">🧑‍💼</a>
                           )}
                           {p.videoLink&&(
                             <a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink}
                               target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                              style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius:6,fontSize:13,textDecoration:'none'}}
+                              style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}}
                               title="Video">📹</a>
                           )}
                         </div>
@@ -513,11 +513,11 @@ export default function Players() {
                       <td>
                         <div style={{display:'flex',alignItems:'center',gap:5}}>
                           <span style={{fontWeight:500}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
-                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:4,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                         </div>
                         <div style={{fontSize:10,color:'var(--text-3)',display:'flex',alignItems:'center',gap:4}}>
                           {p.league||''}
-                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius:3,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
+                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
                         </div>
                       </td>
                       <td style={{textAlign:'center'}}>

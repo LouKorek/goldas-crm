@@ -109,7 +109,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
         style={{
           width: '100%', minHeight: 40, padding: '8px 12px',
           background: 'var(--input-bg)', border: '1.5px solid var(--border)',
-          borderRadius: 'var(--radius-sm)', color: 'var(--input-text)',
+          borderRadius: 0, color: 'var(--input-text)',
           textAlign: 'left', cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
         }}>
@@ -117,13 +117,13 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
         {allChecked ? (
           <span style={{
             background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
-            borderRadius: 4, padding: '2px 10px', color: 'var(--gold)', fontSize: 12, fontWeight: 600,
+            borderRadius: 0, padding: '2px 10px', color: 'var(--gold)', fontSize: 12, fontWeight: 600,
           }}>All represented ({allPlayers.length})</span>
         ) : (
           selected.map(p => (
             <span key={p.id} style={{
               background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
-              borderRadius: 4, padding: '2px 8px', color: 'var(--gold)', fontSize: 12,
+              borderRadius: 0, padding: '2px 8px', color: 'var(--gold)', fontSize: 12,
               whiteSpace: 'nowrap',
             }}>{p.fullName}</span>
           ))
@@ -134,7 +134,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
           position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
           maxHeight: 320, overflowY: 'auto', zIndex: 80,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
-          borderRadius: 10, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', padding: 8,
+          borderRadius: 0, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', padding: 8,
         }}>
           {/* Sticky header: search + select-all toggle + close */}
           <div style={{
@@ -150,7 +150,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
                 title="Close"
                 style={{
                   width: 32, height: 32, padding: 0, flexShrink: 0,
-                  border: '1px solid var(--border-2)', borderRadius: 6,
+                  border: '1px solid var(--border-2)', borderRadius: 0,
                   background: 'transparent', color: 'var(--text-2)',
                   cursor: 'pointer', fontSize: 16, lineHeight: 1,
                 }}>×</button>
@@ -160,7 +160,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
                 width: '100%', padding: '7px 10px',
                 background: allChecked ? 'var(--gold-dim)' : 'transparent',
                 border: `1px solid ${allChecked ? 'rgba(212,176,98,0.45)' : 'var(--border-2)'}`,
-                borderRadius: 6, color: allChecked ? 'var(--gold)' : 'var(--text-2)',
+                borderRadius: 0, color: allChecked ? 'var(--gold)' : 'var(--text-2)',
                 cursor: 'pointer', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
@@ -175,7 +175,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
           ) : filtered.map(p => (
             <label key={p.id} style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px',
-              cursor: 'pointer', borderRadius: 6,
+              cursor: 'pointer', borderRadius: 0,
               background: value.includes(p.id) ? 'var(--gold-dim)' : 'transparent',
             }}>
               <input type="checkbox" checked={value.includes(p.id)} onChange={() => toggle(p.id)} />
@@ -343,13 +343,13 @@ export default function Tasks() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
-        <Empty icon="✅" message="No tasks yet — add your first one."
+        <Empty message="No tasks yet — add your first one."
           action={<button className="btn btn-primary" onClick={openAdd}>+ Add Task</button>} />
       ) : (
         <>
           {/* Open tasks */}
           {open.length === 0 ? (
-            <Empty icon="🎉" message={search ? 'No open tasks match your search.' : 'All caught up — no open tasks.'} />
+            <Empty message={search ? 'No open tasks match your search.' : 'All caught up — no open tasks.'} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {open.map(t => <TaskCard key={t.id} t={t} players={players}
@@ -441,7 +441,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       <button type="button" onClick={onToggle} className="task-check"
         title={t.done ? 'Mark as open' : 'Mark as done'}
         style={{
-          width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+          width: 24, height: 24, borderRadius: 0, flexShrink: 0,
           border: `1.5px solid ${t.done ? 'var(--green-ok)' : 'var(--border-2)'}`,
           background: t.done ? 'var(--green-ok)' : 'transparent',
           color: '#0A140D', cursor: 'pointer', marginTop: 2,
@@ -469,7 +469,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
         }}>
           <span style={{
             background: pri.bg, color: pri.fg, border: `1px solid ${pri.border}`,
-            borderRadius: 999, padding: '2px 10px',
+            borderRadius: 0, padding: '2px 10px',
             fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
           }}>{t.priority || 'Normal'}</span>
 
@@ -489,14 +489,14 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
               {allLinked ? (
                 <span style={{
                   background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.35)',
-                  borderRadius: 4, padding: '1px 8px', color: 'var(--gold)',
+                  borderRadius: 0, padding: '1px 8px', color: 'var(--gold)',
                   fontSize: 11, fontWeight: 600,
                 }}>All represented ({players.length})</span>
               ) : (
                 linked.map(p => (
                   <span key={p.id} className="task-linked-chip" style={{
                     background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.2)',
-                    borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11,
+                    borderRadius: 0, padding: '1px 7px', color: 'var(--gold)', fontSize: 11,
                     maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                   }}>{p.fullName}</span>
@@ -521,14 +521,14 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       <div className="action-btns" style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
         <button type="button" onClick={onEdit} title="Edit"
           style={{
-            width: 28, height: 28, padding: 0, border: 'none', borderRadius: 7,
+            width: 28, height: 28, padding: 0, border: 'none', borderRadius: 0,
             background: 'rgba(201,168,76,0.15)', color: 'var(--gold)',
             cursor: 'pointer', fontSize: 13,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>✏️</button>
         <button type="button" onClick={onDelete} title="Delete"
           style={{
-            width: 28, height: 28, padding: 0, border: 'none', borderRadius: 7,
+            width: 28, height: 28, padding: 0, border: 'none', borderRadius: 0,
             background: 'rgba(248,113,113,0.15)', color: 'var(--red)',
             cursor: 'pointer', fontSize: 13,
             display: 'flex', alignItems: 'center', justifyContent: 'center',

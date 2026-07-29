@@ -61,7 +61,7 @@ function TeamLogo({ name, size = 24 }) {
   if (!url) return null;
   return (
     <img src={url} alt={name} title={name}
-      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 0, flexShrink: 0 }}
       onError={e => { e.currentTarget.style.display = 'none'; }} />
   );
 }
@@ -144,7 +144,7 @@ function StadiumInput({ value, onSelect }) {
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
-          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', marginTop: 2,
+          borderRadius: 0, boxShadow: 'var(--shadow-md)', marginTop: 2,
         }}>
           {results.map((r, i) => (
             <div key={i} onMouseDown={() => select(r)}
@@ -169,7 +169,7 @@ function YouthBadge({ small }) {
   return (
     <span style={{
       background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
-      borderRadius: 4, color: '#4ADE80', fontSize: small ? 9 : 11,
+      borderRadius: 0, color: '#4ADE80', fontSize: small ? 9 : 11,
       fontWeight: 700, padding: small ? '1px 5px' : '2px 7px',
       letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
     }}>U19</span>
@@ -190,14 +190,14 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
       {selected.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
           {selected.map(p => (
-            <span key={p.id} style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)', borderRadius: 6, padding: '3px 8px', fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span key={p.id} style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)', borderRadius: 0, padding: '3px 8px', fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 5 }}>
               {p.fullName}
               <button type="button" onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
             </span>
           ))}
         </div>
       )}
-      <div style={{ border: '1px solid var(--border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 0, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
         {filtered.length === 0
           ? <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
           : filtered.map(p => {
@@ -237,7 +237,7 @@ function SourceBadge({ source }) {
       display: 'inline-flex', alignItems: 'center', gap: 4,
       background: c.bg, color: c.color,
       border: `1px solid ${c.color}55`,
-      borderRadius: 4, padding: '2px 7px',
+      borderRadius: 0, padding: '2px 7px',
       fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
       textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
@@ -296,7 +296,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{
-          height: 36, padding: '0 12px', borderRadius: 8,
+          height: 36, padding: '0 12px', borderRadius: 0,
           background: selectedCount ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)',
           border: `1px solid ${selectedCount ? 'var(--gold)' : 'var(--border)'}`,
           color: selectedCount ? 'var(--gold)' : 'var(--text-2)',
@@ -311,7 +311,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
           width: 280, zIndex: 60,
           background: 'var(--surface-2)',
           border: '1px solid var(--border-2)',
-          borderRadius: 10,
+          borderRadius: 0,
           boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
           padding: 10,
         }}>
@@ -328,7 +328,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
               </button>
             )}
           </div>
-          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--input-bg)' }}>
+          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--input-bg)' }}>
             {filtered.length === 0 ? (
               <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
             ) : filtered.map(p => {
@@ -554,7 +554,7 @@ export default function Matches() {
             }}>
               {linkedNames.length > 0 && <span>🤝</span>}
               {linkedNames.map((n, i) => (
-                <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 4, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
+                <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 0, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
               ))}
             </div>
             {canEdit && (
@@ -572,7 +572,7 @@ export default function Matches() {
 
   // Style for the prev / today / next buttons in the date navigator.
   const navBtnStyle = () => ({
-    width: 34, height: 34, borderRadius: 8,
+    width: 34, height: 34, borderRadius: 0,
     background: 'rgba(255,255,255,0.04)',
     border: '1px solid var(--border)',
     color: 'var(--text-1)', fontSize: 16,
@@ -706,12 +706,12 @@ export default function Matches() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
-        <Empty icon="🏟" message="No matches scheduled."
+        <Empty message="No matches scheduled."
           action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
       ) : range ? (
         // ── Range view (Day / 3 Day / Week / Month) ──
         groupedByDay.length === 0 ? (
-          <Empty icon="📅" message={`No matches in this ${view.toLowerCase()}.`} />
+          <Empty message={`No matches in this ${view.toLowerCase()}.`} />
         ) : (
           groupedByDay.map(g => (
             <div key={g.date} style={{ marginBottom: 22 }}>
@@ -745,7 +745,7 @@ export default function Matches() {
             </div>
           )}
           {upcoming.length === 0 && past.length === 0 && (
-            <Empty icon="🔍" message="No matches match your filters." />
+            <Empty message="No matches match your filters." />
           )}
         </>
       )}

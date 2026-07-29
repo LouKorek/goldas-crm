@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { COUNTRIES, formatPhone } from 'lib/constants';
 import { resolveFileUrl } from 'lib/db';
+import Icon from './Icons';
 
 // ── Toast ─────────────────────────────────────────────────────────
 let _addToast = null;
@@ -18,7 +19,7 @@ export function ToastProvider() {
     setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), 3500);
   }, []);
   if (!toasts.length) return null;
-  const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+  const icons = { success: '✓', error: '✕', warning: '!', info: 'i' };
   return (
     <div className="toast-container">
       {toasts.map(t => (
@@ -120,7 +121,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
         <div className="modal-header-frozen">
           <span className="modal-grab" />
           <span className="modal-title">{title}</span>
-          <button className="modal-close-btn" onClick={handleClose} aria-label="Close">×</button>
+          <button className="modal-close-btn" onClick={handleClose} aria-label="Close"><Icon name="close" size={13} /></button>
         </div>
 
         {/* Body */}
@@ -165,13 +166,13 @@ export function useConfirm() {
       <div className="modal-box" style={{ maxWidth: 400 }}>
         <div className="modal-header-frozen">
           <span className="modal-title" style={{ fontSize: 17 }}>{state.title || 'Confirm'}</span>
-          <button className="modal-close-btn" onClick={handleCancel}>×</button>
+          <button className="modal-close-btn" onClick={handleCancel} aria-label="Close"><Icon name="close" size={13} /></button>
         </div>
         <div className="modal-scroll-body">
           <p style={{ color: 'var(--text-1)', marginBottom: 20, fontSize: 14, lineHeight: 1.6 }}>{state.msg}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button className="btn btn-ghost" onClick={handleCancel}>Cancel</button>
-            <button className="btn btn-danger" onClick={handleConfirm}>{state.confirmLabel || '🗑 Delete'}</button>
+            <button className="btn btn-danger" onClick={handleConfirm}>{state.confirmLabel || 'Delete'}</button>
           </div>
         </div>
       </div>
@@ -336,18 +337,20 @@ export function PhoneActions({ phone, vertical }) {
   const wa = phone.replace(/[^0-9]/g, '');
   const btn = {
     width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: 6, textDecoration: 'none', fontSize: 12, flexShrink: 0,
-    transition: 'transform 0.12s',
+    borderRadius: 0, border: '1px solid var(--border)',
+    textDecoration: 'none', fontSize: 11, fontWeight: 700, flexShrink: 0,
+    letterSpacing: '0.04em',
+    transition: 'border-color 0.12s linear',
   };
-  const onEnter = (e) => { e.currentTarget.style.transform = 'scale(1.1)'; };
-  const onLeave = (e) => { e.currentTarget.style.transform = ''; };
+  const onEnter = (e) => { e.currentTarget.style.borderColor = 'currentColor'; };
+  const onLeave = (e) => { e.currentTarget.style.borderColor = 'var(--border)'; };
   return (
     <span style={{ display: 'inline-flex', flexDirection: vertical ? 'column' : 'row', gap: 4, alignItems: 'center' }}>
       <a href={`tel:${phone}`} title="Call" onMouseEnter={onEnter} onMouseLeave={onLeave}
-        style={{ ...btn, background: 'rgba(96,165,250,0.15)', color: '#60A5FA' }}>📞</a>
+        style={{ ...btn, background: 'transparent', color: 'var(--blue)' }}>TEL</a>
       <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" title="WhatsApp"
         onMouseEnter={onEnter} onMouseLeave={onLeave}
-        style={{ ...btn, background: 'rgba(37,211,102,0.15)', color: '#25D166' }}>💬</a>
+        style={{ ...btn, background: 'transparent', color: 'var(--green-ok)' }}>WA</a>
     </span>
   );
 }
@@ -442,9 +445,9 @@ export function DateInput({ value, onChange }) {
           position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
           width: 30, height: 30, padding: 0,
           background: 'transparent', border: 'none', cursor: 'pointer',
-          color: 'var(--gold)', fontSize: 16, lineHeight: 1,
+          color: 'var(--gold)', lineHeight: 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>📅</button>
+        }}><Icon name="matches" size={14} /></button>
       <input
         ref={nativeRef}
         type="date"
@@ -469,14 +472,14 @@ export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
     <div style={{ position: 'relative' }}>
       <span style={{
         position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-        color: 'var(--text-3)', pointerEvents: 'none', fontSize: 14
-      }}>🔍</span>
+        color: 'var(--text-3)', pointerEvents: 'none', display: 'flex',
+      }}><Icon name="search" size={13} /></span>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         className="search-input-field"
-        style={{ paddingLeft: 32, paddingRight: value ? 30 : 13, height: 36, width: 200 }}
+        style={{ paddingLeft: 30, paddingRight: value ? 28 : 12, height: 36, width: 200 }}
       />
       {value && (
         <button
@@ -514,11 +517,20 @@ export function Spinner({ size = 20 }) {
   return <span className="spinner" style={{ width: size, height: size }} />;
 }
 
-export function Empty({ icon = '📋', message = 'No records yet', action }) {
+export function Empty({ icon, message = 'No records yet', action }) {
   return (
     <div className="empty-state">
-      <div className="empty-icon">{icon}</div>
-      <p style={{ marginBottom: action ? 16 : 0, fontSize: 14 }}>{message}</p>
+      {/* A ruled void rather than a floating emoji. */}
+      <div style={{
+        width: 42, height: 1, background: 'var(--gold-dk)',
+        margin: '0 auto 18px',
+      }} />
+      {icon ? <div className="empty-icon">{icon}</div> : null}
+      <p style={{
+        marginBottom: action ? 18 : 0, fontSize: 12,
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+        color: 'var(--text-3)',
+      }}>{message}</p>
       {action}
     </div>
   );
@@ -566,7 +578,7 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
           {showH && (
             <div style={{
               marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4,
-              padding: '8px', background: 'var(--surface-3)', borderRadius: 8
+              padding: '8px', background: 'var(--surface-3)', borderRadius: 0
             }}>
               {history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
@@ -590,7 +602,7 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
       ) : file ? (
         <div style={{
           display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap',
-          background: 'var(--surface-3)', padding: 12, borderRadius: 8,
+          background: 'var(--surface-3)', padding: 12, borderRadius: 0,
           border: '1px solid var(--border)'
         }}>
           <div style={{ flex: 1, minWidth: 140 }}>
@@ -698,7 +710,7 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
         title={rows?.length ? `Export ${rows.length} row${rows.length === 1 ? '' : 's'}` : 'Nothing to export'}
         style={{ height: 36, whiteSpace: 'nowrap' }}
       >
-        {busy ? '⏳ Exporting…' : <>↗ Export <span style={{ opacity: 0.6, fontSize: 10, marginLeft: 4 }}>▾</span></>}
+        {busy ? 'Exporting…' : <><Icon name="external" size={12} /> Export</>}
       </button>
       {open && (
         <div style={{
@@ -706,7 +718,7 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
           minWidth: 180, zIndex: 60,
           background: 'var(--surface-2)',
           border: '1px solid var(--border-2)',
-          borderRadius: 10,
+          borderRadius: 0,
           boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
           padding: 6,
           animation: 'dropdownIn 0.18s var(--ease-out)',
@@ -714,19 +726,17 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
           <button type="button" onClick={() => run('excel')}
             style={menuItemStyle}
             onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
-            <span style={{ fontSize: 16 }}>📊</span>
             <div style={{ flex: 1, textAlign: 'left' }}>
-              <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 600 }}>Excel</div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontStyle: 'italic' }}>Styled table with filters</div>
+              <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Excel</div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Styled table with filters</div>
             </div>
           </button>
           <button type="button" onClick={() => run('pdf')}
             style={menuItemStyle}
             onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
-            <span style={{ fontSize: 16 }}>📄</span>
             <div style={{ flex: 1, textAlign: 'left' }}>
-              <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 600 }}>PDF</div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-3)', fontStyle: 'italic' }}>Branded document</div>
+              <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>PDF</div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Branded document</div>
             </div>
           </button>
         </div>
@@ -737,7 +747,7 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
 const menuItemStyle = {
   display: 'flex', alignItems: 'center', gap: 10,
   width: '100%', padding: '9px 10px',
-  background: 'transparent', border: 'none', borderRadius: 7,
+  background: 'transparent', border: 'none', borderRadius: 0,
   cursor: 'pointer', textAlign: 'left',
   transition: 'background 0.14s',
 };
@@ -769,8 +779,11 @@ export function ScraperCredits() {
         fontSize: 11, whiteSpace: 'nowrap', cursor: 'default',
         color: empty ? 'var(--red)' : high ? 'var(--amber)' : 'var(--text-3)',
       }}>
-      <span style={{ fontSize: 12 }}>{empty ? '🪫' : '🔋'}</span>
-      {used.toLocaleString()}/{limit.toLocaleString()}
+      <span style={{
+        width: 6, height: 6, flexShrink: 0,
+        background: empty ? 'var(--red)' : high ? 'var(--amber)' : 'var(--green-ok)',
+      }} />
+      <span style={{ fontFamily: 'var(--font-mono)' }}>{used.toLocaleString()}/{limit.toLocaleString()}</span>
       {resetTxt && <span style={{ opacity: 0.85 }}>· resets {resetTxt}</span>}
     </span>
   );
@@ -797,7 +810,7 @@ export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelet
   const BTN = {
     width: 28, height: 28, padding: 0,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 13, border: 'none', borderRadius: 7,
+    fontSize: 13, border: 'none', borderRadius: 0,
     cursor: 'pointer', transition: 'background 0.15s, transform 0.12s',
     flexShrink: 0,
   };
@@ -857,7 +870,7 @@ export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelet
 export function RowActions({ onEdit, onDuplicate, onDelete }) {
   const BTN = {
     width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 13, border: 'none', borderRadius: 7, cursor: 'pointer', flexShrink: 0,
+    fontSize: 13, border: 'none', borderRadius: 0, cursor: 'pointer', flexShrink: 0,
     transition: 'background 0.15s, transform 0.12s',
   };
   const hov = (bg, bgH) => ({
@@ -866,15 +879,15 @@ export function RowActions({ onEdit, onDuplicate, onDelete }) {
   });
   return (
     <div className="action-btns" style={{ display: 'flex', gap: 5 }}>
-      {onDelete && <button title="Delete" onClick={onDelete}
-        style={{ ...BTN, background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
-        {...hov('rgba(248,113,113,0.15)', 'rgba(248,113,113,0.3)')}>🗑</button>}
-      {onEdit && <button title="Edit" onClick={onEdit}
-        style={{ ...BTN, background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}
-        {...hov('rgba(201,168,76,0.15)', 'rgba(201,168,76,0.3)')}>✏️</button>}
-      {onDuplicate && <button title="Duplicate" onClick={onDuplicate}
-        style={{ ...BTN, background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}
-        {...hov('rgba(167,139,250,0.15)', 'rgba(167,139,250,0.3)')}>⧉</button>}
+      {onDelete && <button title="Delete" onClick={onDelete} aria-label="Delete"
+        style={{ ...BTN, background: 'transparent', border: '1px solid var(--border)', color: 'var(--red)' }}
+        {...hov('transparent', 'var(--red-bg)')}><Icon name="trash" size={13} /></button>}
+      {onEdit && <button title="Edit" onClick={onEdit} aria-label="Edit"
+        style={{ ...BTN, background: 'transparent', border: '1px solid var(--border)', color: 'var(--gold)' }}
+        {...hov('transparent', 'var(--gold-dim)')}><Icon name="edit" size={13} /></button>}
+      {onDuplicate && <button title="Duplicate" onClick={onDuplicate} aria-label="Duplicate"
+        style={{ ...BTN, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-2)' }}
+        {...hov('transparent', 'var(--surface-3)')}><Icon name="copy" size={13} /></button>}
     </div>
   );
 }

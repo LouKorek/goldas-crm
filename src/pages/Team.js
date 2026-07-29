@@ -5,6 +5,7 @@ import { useRole, roleLabel } from 'lib/roleContext';
 import {
   PageHeader, Modal, Field, ChipGroup, Empty, Spinner, useConfirm, toast,
 } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 
 const ROLE_OPTIONS = ['Manager', 'Viewer'];
 const ROLE_DESC = {
@@ -80,7 +81,7 @@ export default function Team() {
   const remove = async (u) => {
     const ok = await confirm(
       `Remove access for "${u.name || u.email}"? They will no longer be able to sign in.`,
-      { confirmLabel: '🗑 Remove' }
+      { confirmLabel: 'Remove' }
     );
     if (!ok) return;
     try { await removeAppUser(u.email); toast.success('Access removed.'); }
@@ -100,7 +101,7 @@ export default function Team() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : users.length === 0 ? (
-        <Empty icon="👥" message="No users yet." action={<button className="btn btn-primary" onClick={openAdd}>+ Add User</button>} />
+        <Empty message="No users yet." action={<button className="btn btn-primary" onClick={openAdd}>+ Add User</button>} />
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-wrap">
@@ -123,20 +124,20 @@ export default function Team() {
                     <tr key={u.id}>
                       <td onClick={e => e.stopPropagation()}>
                         {owner ? (
-                          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>🔒</span>
+                          <span style={{ fontSize: 9, color: 'var(--text-mute)', letterSpacing: '0.12em' }}>OWNER</span>
                         ) : (
                           <div className="action-btns" style={{ display: 'flex', gap: 4 }}>
-                            <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(201,168,76,0.15)', color: 'var(--gold)' }}
-                              title="Edit" onClick={() => openEdit(u)}>✏️</button>
-                            <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
-                              title="Remove" onClick={() => remove(u)}>🗑</button>
+                            <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 0, cursor: 'pointer', background: 'transparent', color: 'var(--gold)' }}
+                              title="Edit" aria-label="Edit" onClick={() => openEdit(u)}><Icon name="edit" size={13} /></button>
+                            <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 0, cursor: 'pointer', background: 'transparent', color: 'var(--red)' }}
+                              title="Remove" aria-label="Remove" onClick={() => remove(u)}><Icon name="trash" size={13} /></button>
                           </div>
                         )}
                       </td>
                       <td style={{ fontWeight: 600 }}>{u.name || '—'}</td>
                       <td style={{ color: 'var(--text-2)', fontSize: 13 }}>{u.email}</td>
                       <td>
-                        <span style={{ display: 'inline-block', background: c.bg, color: c.text, borderRadius: 6, fontSize: 11, fontWeight: 600, padding: '3px 9px' }}>
+                        <span style={{ display: 'inline-block', background: c.bg, color: c.text, borderRadius: 0, fontSize: 11, fontWeight: 600, padding: '3px 9px' }}>
                           {roleLabel(u.role)}
                         </span>
                         <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>{ROLE_DESC[u.role] || ''}</div>

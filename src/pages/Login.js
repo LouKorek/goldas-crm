@@ -25,19 +25,19 @@ export default function Login({ denied }) {
       }}>
         <div style={{
           position: 'absolute', width: 600, height: 600,
-          borderRadius: '50%', top: '-200px', right: '-100px',
+          borderRadius: 0, top: '-200px', right: '-100px',
           background: 'radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%)',
           animation: 'pulse 8s ease-in-out infinite',
         }} />
         <div style={{
           position: 'absolute', width: 500, height: 500,
-          borderRadius: '50%', bottom: '-150px', left: '-100px',
+          borderRadius: 0, bottom: '-150px', left: '-100px',
           background: 'radial-gradient(circle, rgba(22,107,40,0.15) 0%, transparent 70%)',
           animation: 'pulse 10s ease-in-out infinite 2s',
         }} />
         <div style={{
           position: 'absolute', width: 300, height: 300,
-          borderRadius: '50%', top: '40%', left: '30%',
+          borderRadius: 0, top: '40%', left: '30%',
           background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%)',
           animation: 'pulse 12s ease-in-out infinite 4s',
         }} />
@@ -71,7 +71,7 @@ export default function Login({ denied }) {
           {/* Logo */}
           <div style={{
             width: 80, height: 80,
-            borderRadius: 20,
+            borderRadius: 0,
             overflow: 'hidden',
             border: '1.5px solid rgba(201,168,76,0.3)',
             marginBottom: 32,
@@ -99,9 +99,9 @@ export default function Login({ denied }) {
             <div key={f} style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.15)',
-              borderRadius: 20, padding: '6px 14px', marginRight: 8, marginBottom: 8,
+              borderRadius: 0, padding: '6px 14px', marginRight: 8, marginBottom: 8,
             }}>
-              <span style={{width:6,height:6,borderRadius:'50%',background:'#C9A84C',flexShrink:0}} />
+              <span style={{width:6,height:6,borderRadius: 0,background:'#C9A84C',flexShrink:0}} />
               <span style={{fontSize:12,color:'#A8C4AA',fontWeight:500}}>{f}</span>
             </div>
           ))}
@@ -115,7 +115,7 @@ export default function Login({ denied }) {
           {/* Mobile logo */}
           <div className="login-mobile-logo">
             <div style={{
-              width:64,height:64,borderRadius:18,
+              width:64,height:64,borderRadius: 0,
               overflow:'hidden',
               border:'1.5px solid rgba(201,168,76,0.3)',
               margin:'0 auto 16px',
@@ -138,7 +138,7 @@ export default function Login({ denied }) {
             <div style={{
               background: 'rgba(248,113,113,0.1)',
               border: '1px solid rgba(248,113,113,0.25)',
-              borderRadius: 10, color: '#F87171',
+              borderRadius: 0, color: '#F87171',
               fontSize: 13, marginBottom: 20, padding: '12px 16px',
               display: 'flex', gap: 8, alignItems: 'flex-start',
             }}>
@@ -156,7 +156,7 @@ export default function Login({ denied }) {
               padding: '14px 20px',
               background: loading ? 'rgba(201,168,76,0.5)' : 'linear-gradient(135deg, #C9A84C, #B8902E)',
               border: 'none',
-              borderRadius: 12,
+              borderRadius: 0,
               color: '#060E08',
               fontSize: 15,
               fontWeight: 700,
@@ -172,7 +172,7 @@ export default function Login({ denied }) {
             }}
           >
             {loading ? (
-              <span style={{width:20,height:20,border:'2px solid rgba(6,14,8,0.3)',borderTopColor:'#060E08',borderRadius:'50%',animation:'spin 0.7s linear infinite',display:'inline-block'}} />
+              <span style={{width:20,height:20,border:'2px solid rgba(6,14,8,0.3)',borderTopColor:'#060E08',borderRadius: 0,animation:'spin 0.7s linear infinite',display:'inline-block'}} />
             ) : (
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -189,7 +189,7 @@ export default function Login({ denied }) {
             padding: '16px',
             background: 'rgba(201,168,76,0.05)',
             border: '1px solid rgba(201,168,76,0.1)',
-            borderRadius: 10,
+            borderRadius: 0,
           }}>
             <p style={{ color: '#5E8060', fontSize: 11, textAlign: 'center', lineHeight: 1.6 }}>
               🔒 Access restricted to authorized users only.<br />

@@ -569,7 +569,7 @@ export function ClubLogoOrAvatar({ name, size = 28 }) {
   if (url) {
     return (
       <img src={url} alt={name} title={name}
-        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 0, flexShrink: 0 }}
         onError={() => setUrl(null)} />
     );
   }
@@ -582,7 +582,7 @@ export function ClubLogoOrAvatar({ name, size = 28 }) {
   const hue = (name || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xFFFF, 0) % 360;
   return (
     <div style={{
-      width: size, height: size, borderRadius: 6, flexShrink: 0,
+      width: size, height: size, borderRadius: 0, flexShrink: 0,
       background: `hsl(${hue},45%,22%)`, border: `1px solid hsl(${hue},50%,35%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: size <= 28 ? 9 : 11, fontWeight: 800,
@@ -595,7 +595,7 @@ export function ClubLogoOrAvatar({ name, size = 28 }) {
 export const U19 = () => (
   <span style={{
     background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
-    borderRadius: 4, color: '#4ADE80', fontSize: 9, fontWeight: 700,
+    borderRadius: 0, color: '#4ADE80', fontSize: 9, fontWeight: 700,
     padding: '1px 5px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
   }}>U19</span>
 );
@@ -623,7 +623,7 @@ function RequirementView({ req, onClose }) {
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-1)' }}>{req.clubName}</span>
-            {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 4, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>Youth Team 🌱</span>}
+            {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>Youth Team 🌱</span>}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
             {req.league || 'League not set'}
@@ -833,7 +833,7 @@ export default function Requirements() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : data.length === 0 ? (
-        <Empty icon="📋"
+        <Empty
           message={search || Object.values(filters).some(Boolean) ? 'No club requirements match your search.' : 'No club requirements added yet.'}
           action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
       ) : (
