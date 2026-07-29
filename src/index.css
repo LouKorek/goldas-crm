@@ -1220,95 +1220,114 @@ textarea:focus::placeholder {
    masthead now freezes by default, so that special case is retired.) */
 
 /* ===================================================================
-   LIGHT MODE
+   LIGHT MODE — the same instrument, printed on paper.
+   Ivory stock, ink-black type, bronze as the signature. Structure is
+   still carried by hairlines; nothing softens or glows.
    =================================================================== */
 body.light-mode {
-  background:
-    radial-gradient(ellipse 800px 600px at 80% -200px, rgba(26,92,42,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 600px 800px at -200px 80%, rgba(201,168,76,0.05) 0%, transparent 60%),
-    #F7F3EC;
-  background-attachment: fixed;
+  background: #F4F1EA;
 
-  --bg:        #F7F3EC;
-  --surface-1: #EDE7D9;
-  --surface-2: #E6DFC8;
-  --surface-3: #DDD6BF;
-  --card:      #EAE3CE;
-  --card-hover:#E0D9C0;
+  --bg:        #F4F1EA;
+  --surface-1: #EFEBE1;
+  --surface-2: #E9E4D7;
+  --surface-3: #E1DBCB;
+  --card:      #FAF8F3;
+  --card-hover:#F1EDE3;
 
-  --text-1:    #1C1408;
-  --text-2:    #4A3C1E;
-  --text-3:    #7A6438;
+  --text-1:    #14171A;
+  --text-2:    #4A5157;
+  --text-3:    #767E85;
+  --text-mute: #9AA1A7;
 
-  --gold:      #1A5C2A;
-  --gold-lt:   #226B32;
-  --gold-dk:   #134820;
-  --gold-dim:  rgba(26,92,42,0.12);
-  --gold-glow: rgba(26,92,42,0.2);
+  /* Bronze rather than green — gold on paper reads as metal, not lime. */
+  --gold:      #8A6A28;
+  --gold-lt:   #A5813A;
+  --gold-dk:   #6B5220;
+  --gold-soft: #7C5F24;
+  --gold-dim:  rgba(138,106,40,0.08);
+  --gold-glow: none;
 
-  --border:    rgba(26,92,42,0.12);
-  --border-2:  rgba(26,92,42,0.25);
-  --border-3:  rgba(26,92,42,0.40);
+  --border:    rgba(20,23,26,0.14);
+  --border-2:  rgba(20,23,26,0.26);
+  --border-3:  rgba(138,106,40,0.5);
+  --rule:      rgba(20,23,26,0.09);
 
-  --input-bg:  #EDE7D9;
-  --input-text:#1C1408;
+  --input-bg:  #FFFFFF;
+  --input-text:#14171A;
 
-  --red:       #C0392B;
-  --red-bg:    rgba(192,57,43,0.1);
-  --amber:     #B7770D;
-  --amber-bg:  rgba(183,119,13,0.1);
-  --green-ok:  #1A8C3C;
-  --green-bg:  rgba(26,140,60,0.12);
-  --blue:      #1565C0;
-  --blue-bg:   rgba(21,101,192,0.12);
-  --purple:    #6A1B9A;
+  --red:       #B3352F;
+  --red-bg:    rgba(179,53,47,0.10);
+  --amber:     #96650C;
+  --amber-bg:  rgba(150,101,12,0.10);
+  --green-ok:  #1E7A45;
+  --green-bg:  rgba(30,122,69,0.10);
+  --blue:      #1B5C99;
+  --blue-bg:   rgba(27,92,153,0.10);
+  --purple:    #5B3E8F;
 
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 20px rgba(0,0,0,0.12);
-  --shadow-lg: 0 8px 40px rgba(0,0,0,0.16);
-  --shadow-xl: 0 16px 60px rgba(0,0,0,0.2);
-  --shadow-gold: 0 4px 20px rgba(26,92,42,0.2);
-  --shadow-gold-lg: 0 8px 32px rgba(26,92,42,0.3);
+  --shadow-sm: none;
+  --shadow-md: 0 2px 12px rgba(20,23,26,0.12);
+  --shadow-lg: 0 0 30px rgba(20,23,26,0.14);
+  --shadow-xl: -18px 0 50px rgba(20,23,26,0.18);
+  --shadow-gold: none;
+  --shadow-gold-lg: none;
+  --shadow-inset: none;
 }
 
-body.light-mode .data-table tbody tr:nth-child(odd)  td { background: rgba(234,227,206,1.0); }
-body.light-mode .data-table tbody tr:nth-child(even) td { background: rgba(224,217,192,1.0); }
-body.light-mode .data-table tbody tr:hover td { background: rgba(26,92,42,0.08) !important; }
-body.light-mode .data-table th { background: rgb(180,170,145); color: rgba(28,20,8,0.7); }
+/* Tables: ruled register on paper — no fills, just rules. */
+body.light-mode .data-table th {
+  background: var(--bg);
+  color: var(--text-3);
+  border-bottom-color: var(--border-2);
+}
+body.light-mode .data-table tbody tr:nth-child(odd)  td { background: transparent; }
+body.light-mode .data-table tbody tr:nth-child(even) td { background: rgba(20,23,26,0.022); }
+body.light-mode .data-table tbody tr:hover td { background: var(--card-hover) !important; }
 
-body.light-mode .modal-box { background: linear-gradient(180deg, var(--surface-2), var(--surface-1)); border-color: var(--border-2); }
-body.light-mode .modal-header-frozen { background: var(--surface-2); }
-body.light-mode .modal-footer-bar { background: linear-gradient(180deg, rgba(230,223,200,0.4), var(--surface-2)); }
+body.light-mode .modal-box {
+  background: var(--surface-1);
+  border-left-color: var(--border-2);
+}
+body.light-mode .modal-header-frozen { background: var(--surface-1); }
+body.light-mode .modal-footer-bar { background: var(--surface-1); }
 
 body.light-mode input,
 body.light-mode select,
-body.light-mode textarea { background: #F0E9D6 !important; color: var(--input-text) !important; border-color: var(--border); }
+body.light-mode textarea {
+  background: var(--input-bg) !important;
+  color: var(--input-text) !important;
+  border-color: var(--border);
+  border-bottom-color: var(--border-2);
+}
+body.light-mode input:focus,
+body.light-mode select:focus,
+body.light-mode textarea:focus {
+  background: #FFFFFF !important;
+  border-bottom-color: var(--gold);
+}
 
-body.light-mode .dropdown-list { background: var(--surface-1); border-color: var(--border-2); }
+body.light-mode .dropdown-list { background: #FFFFFF; border-color: var(--border-2); }
 body.light-mode .dropdown-item { color: var(--text-2); }
 body.light-mode .dropdown-item:hover,
 body.light-mode .dropdown-item.sel { background: var(--gold-dim); color: var(--gold); }
 
-body.light-mode .toast { background: var(--surface-1); border-color: var(--border-2); color: var(--text-1); }
-body.light-mode .chip { background: var(--surface-3); border-color: var(--border); color: var(--text-2); }
-body.light-mode .chip.active { background: var(--gold-dim); border-color: var(--gold); color: var(--gold); }
-body.light-mode .card { background: var(--card); border-color: var(--border); }
-body.light-mode .kpi-card { background: var(--card); border-color: var(--border); }
-body.light-mode .alert-row { background: var(--card); border-color: var(--border); }
+body.light-mode .toast { background: #FFFFFF; border-color: var(--border-2); color: var(--text-1); }
+body.light-mode .chip  { background: transparent; border-color: var(--border-2); color: var(--text-2); }
+body.light-mode .chip.active { background: var(--gold); border-color: var(--gold); color: #FAF8F3; }
+body.light-mode .card,
+body.light-mode .kpi-card,
+body.light-mode .alert-row,
+body.light-mode .m-card { background: var(--card); border-color: var(--border); }
+body.light-mode .btn-primary { color: #FAF8F3; }
 
-body.light-mode ::placeholder { color: rgba(74,60,30,0.4) !important; }
+body.light-mode ::placeholder { color: rgba(20,23,26,0.35) !important; }
 body.light-mode input:focus::placeholder,
-body.light-mode textarea:focus::placeholder { color: rgba(74,60,30,0.2) !important; }
+body.light-mode textarea:focus::placeholder { color: rgba(20,23,26,0.2) !important; }
 
-body.light-mode aside { background: var(--surface-1) !important; border-color: var(--border) !important; }
-body.light-mode .bottom-nav { background: rgba(237,231,217,0.94) !important; }
-
-/* Touch devices have no hover — the "Clear All" buttons in page headers
-   are hover-revealed (opacity 0.45 → 1) which reads as permanently
-   disabled on phones. Keep them visibly enabled there. */
-@media (hover: none) {
-  .page-header .action-bar .btn-danger { opacity: 0.75 !important; }
-}
+body.light-mode aside { background: var(--surface-1) !important; border-color: var(--border-2) !important; }
+body.light-mode .bottom-nav { background: var(--surface-1) !important; border-top-color: var(--border-2) !important; }
+body.light-mode ::-webkit-scrollbar-thumb { background: rgba(20,23,26,0.2); }
+body.light-mode ::selection { background: rgba(138,106,40,0.22); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
