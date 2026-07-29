@@ -5,6 +5,7 @@ import {
   Modal, Field, ChipGroup, DateInput, SearchInput, PageHeader,
   Empty, Spinner, useConfirm, toast, RowActions,
 } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 
 // ─── Starter tasks (auto-migrated on first owner visit) ──────────
 // The Tasks page itself wipes existing tasks and re-seeds these the
@@ -332,7 +333,7 @@ export default function Tasks() {
         subtitle={`${open.length} open  ·  ${done.length} done`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Task</button>
+            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Task</span></button>
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>

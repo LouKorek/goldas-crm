@@ -8,6 +8,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STA
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, ExportMenu, useConfirm,
          PhoneActions, NumberInput, RowActions } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -482,11 +483,11 @@ export default function Pipeline({ category }) {
             {category==='jewish'&&(
               <Link to="/pipeline/jewish/tm-watch" className="btn btn-secondary btn-sm"
                 style={{height:36,textDecoration:'none',position:'relative'}}>
-                🌍 TM Watch
+                <Icon name="social" size={12} /><span className="btn-text">TM Watch</span>
                 {tmNew>0&&<span style={{position:'absolute',top:-6,right:-6,background:'var(--red)',color:'#fff',borderRadius: 0,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
               </Link>
             )}
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}>+ Add Player</button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>}
             <ExportMenu
               filename={label}
               title={label}
@@ -528,7 +529,7 @@ export default function Pipeline({ category }) {
               style={{height:36,opacity:0.45,whiteSpace:'nowrap'}} title="Clear all"
               onMouseEnter={e=>e.currentTarget.style.opacity='1'}
               onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
-              Clear All
+              <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
             </button>}
           </div>
         }
@@ -545,7 +546,7 @@ export default function Pipeline({ category }) {
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length === 0 ? (
         <Empty  message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
-          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}>+ Add Player</button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">

@@ -5,6 +5,7 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader, ExportMenu,
          Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -784,7 +785,7 @@ export default function Requirements() {
         subtitle={`${items.length} active requirement${items.length !== 1 ? 's' : ''}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Requirement</button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Requirement</span></button>}
             <ExportMenu
               filename="Club Requirements"
               title="Club Requirements"
@@ -816,7 +817,7 @@ export default function Requirements() {
               style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
               onMouseEnter={e => e.currentTarget.style.opacity = '1'}
               onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-              Clear All
+              <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
             </button>}
           </div>
         }
@@ -835,7 +836,7 @@ export default function Requirements() {
       ) : data.length === 0 ? (
         <Empty
           message={search || Object.values(filters).some(Boolean) ? 'No club requirements match your search.' : 'No club requirements added yet.'}
-          action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}>+ Add Requirement</button>} />
+          action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Requirement</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">

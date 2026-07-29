@@ -710,7 +710,7 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
         title={rows?.length ? `Export ${rows.length} row${rows.length === 1 ? '' : 's'}` : 'Nothing to export'}
         style={{ height: 36, whiteSpace: 'nowrap' }}
       >
-        {busy ? 'Exporting…' : <><Icon name="external" size={12} /> Export</>}
+        {busy ? <span className="btn-text">Exporting…</span> : <><Icon name="external" size={12} /><span className="btn-text">Export</span></>}
       </button>
       {open && (
         <div style={{

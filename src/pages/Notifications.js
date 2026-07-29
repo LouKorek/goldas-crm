@@ -3,6 +3,7 @@ import { listenCollection, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
 import { DEFAULT_SETTINGS, loadSettings, persistSettings, computeAlerts } from 'lib/alerts';
 import { PageHeader, Modal } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -155,7 +156,7 @@ export default function Notifications() {
         action={
           canEdit ? (
             <button className="btn btn-ghost" onClick={()=>setShowSettings(true)}>
-              Alert Settings
+              <Icon name="bell" size={12} /><span className="btn-text">Alert Settings</span>
             </button>
           ) : null
         }

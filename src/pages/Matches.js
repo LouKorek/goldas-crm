@@ -4,6 +4,7 @@ import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -596,7 +597,7 @@ export default function Matches() {
           subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
           action={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add Match</button>}
+              {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Match</span></button>}
               {isAdmin && (
                 <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
                   style={{ height: 36, whiteSpace: 'nowrap' }}
@@ -638,7 +639,7 @@ export default function Matches() {
                 style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
                 onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-                Clear All
+                <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
               </button>}
             </div>
           }
@@ -707,7 +708,7 @@ export default function Matches() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
         <Empty message="No matches scheduled."
-          action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}>+ Add Match</button>} />
+          action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Match</span></button>} />
       ) : range ? (
         // ── Range view (Day / 3 Day / Week / Month) ──
         groupedByDay.length === 0 ? (

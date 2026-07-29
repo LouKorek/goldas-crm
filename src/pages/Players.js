@@ -5,6 +5,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORD
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
          ExportMenu, useConfirm, RowActions } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
@@ -326,7 +327,7 @@ export default function Players() {
         subtitle={`${players.length} player${players.length!==1?'s':''} under representation`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Player</button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>}
             <ExportMenu
               filename="Represented Players"
               title="Represented Players"
@@ -368,7 +369,7 @@ export default function Players() {
               style={{height:36,opacity:0.45,whiteSpace:'nowrap'}}
               onMouseEnter={e=>e.currentTarget.style.opacity='1'}
               onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
-              Clear All
+              <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
             </button>}
           </div>
         }
@@ -388,7 +389,7 @@ export default function Players() {
       ) : data.length===0 ? (
         <Empty
           message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
-          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}>+ Add Player</button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">

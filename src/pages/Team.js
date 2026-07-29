@@ -5,6 +5,7 @@ import { useRole, roleLabel } from 'lib/roleContext';
 import {
   PageHeader, Modal, Field, ChipGroup, Empty, Spinner, useConfirm, toast, RowActions,
 } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 
 const ROLE_OPTIONS = ['Manager', 'Viewer'];
 const ROLE_DESC = {
@@ -94,13 +95,13 @@ export default function Team() {
       <PageHeader
         title="Team"
         subtitle="Manage who can sign in and what they can do"
-        action={<button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}>+ Add User</button>}
+        action={<button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add User</span></button>}
       />
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : users.length === 0 ? (
-        <Empty message="No users yet." action={<button className="btn btn-primary" onClick={openAdd}>+ Add User</button>} />
+        <Empty message="No users yet." action={<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add User</span></button>} />
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-wrap">

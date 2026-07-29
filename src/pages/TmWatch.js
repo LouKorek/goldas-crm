@@ -5,6 +5,7 @@ import { db } from 'lib/firebase';
 import { listenCollection, updateDoc_, addDoc_, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
 import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
 
 // Sub-screen of the Jewish pipeline: Transfermarkt candidates with a Jewish /
@@ -200,17 +201,17 @@ export default function TmWatch() {
         subtitle={`Transfermarkt scouting — Jewish & Israeli connections abroad · ${items.length} tracked${newCount ? ` · ${newCount} new` : ''}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to="/pipeline/jewish" className="btn btn-ghost btn-sm" style={{ height: 36, textDecoration: 'none' }}>← Jewish</Link>
+            <Link to="/pipeline/jewish" className="btn btn-ghost btn-sm" style={{ height: 36, textDecoration: 'none' }}><Icon name="chevron" size={12} style={{ transform: 'rotate(180deg)' }} /><span className="btn-text">Jewish</span></Link>
             {isAdmin && (
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }}
                 onClick={scanNow} disabled={scanning || running}>
-                {running ? <><Spinner size={12} /> Scanning…</> : 'Scan now'}
+                {running ? <><Spinner size={12} /><span className="btn-text">Scanning…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Scan now</span></>}
               </button>
             )}
             {canEdit && newCount > 0 && (
               <button className="btn btn-ghost btn-sm" style={{ height: 36 }} onClick={markAllSeen}
                 title="Mark every NEW candidate as seen">
-                Mark all seen ({newCount})
+                <Icon name="tasks" size={12} /><span className="btn-text">Mark all seen ({newCount})</span>
               </button>
             )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>

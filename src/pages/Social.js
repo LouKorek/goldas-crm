@@ -4,6 +4,7 @@ import { db } from 'lib/firebase';
 import { listenCollection, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
 import { PageHeader, ChipGroup, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
 
 // Social dashboard — Instagram growth for @goldas_loukorek, built from the
@@ -168,7 +169,7 @@ export default function Social() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {isAdmin && (
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }} onClick={syncNow} disabled={syncing}>
-                {syncing ? <><Spinner size={12} /> Syncing…</> : 'Sync now'}
+                {syncing ? <><Spinner size={12} /><span className="btn-text">Syncing…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Sync now</span></>}
               </button>
             )}
           </div>

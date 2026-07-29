@@ -3,6 +3,7 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db
 import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
          PhoneActions, RowActions, ExportMenu, toast } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 import { useRole } from 'lib/roleContext';
 
@@ -76,7 +77,7 @@ export default function Contacts() {
         subtitle={`${items.length} contact${items.length !== 1 ? 's' : ''}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}>+ Add Contact</button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">Add Contact</span></button>}
             <ExportMenu
               filename="Contacts"
               title="Contacts"
