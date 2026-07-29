@@ -4,7 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, updateDoc_, addDoc_, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
-import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast } from 'components/ui/UI';
+import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
 // Sub-screen of the Jewish pipeline: Transfermarkt candidates with a Jewish /
@@ -114,13 +114,6 @@ export default function TmWatch() {
   const [histFilter, setHistFilter] = useState('');
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
-  const [credits, setCredits] = useState(null);
-
-  // ScraperAPI credit status — so an empty tank is visible before a scan.
-  useEffect(() => {
-    fetch('/.netlify/functions/scraper-status')
-      .then(r => r.json()).then(setCredits).catch(() => setCredits(null));
-  }, []);
 
   useEffect(() => listenCollection(PATHS.TM_WATCH, setItems), []);
   useEffect(() => onSnapshot(doc(db, 'app_meta', 'tmWatch'),
@@ -247,12 +240,7 @@ export default function TmWatch() {
             {lastRun ? <>Last scan: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
             {meta.lastRunNew != null && <> · {meta.lastRunNew} new last run</>}
             {items.length > 0 && <> · career history checked: {items.filter(p => p.israelHistory).length}/{items.length}</>}
-            {credits && !credits.error && credits.requestLimit != null && (
-              <span style={{ color: credits.requestCount >= credits.requestLimit ? 'var(--red)' : 'var(--text-3)' }}>
-                {' '}· ScraperAPI: {Number(credits.requestCount).toLocaleString()}/{Number(credits.requestLimit).toLocaleString()} credits
-                {(credits.renewalDate || credits.subscriptionDate) && <> · renews {String(credits.renewalDate || credits.subscriptionDate).slice(0, 10)}</>}
-              </span>
-            )}
+            {' '}· <ScraperCredits />
             {meta.lastError && <span style={{ color: 'var(--red)' }}> · Last error: {String(meta.lastError).slice(0, 120)}</span>}
           </div>
         )}

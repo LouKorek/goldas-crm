@@ -3,7 +3,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
-import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu } from 'components/ui/UI';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -695,6 +695,7 @@ export default function Matches() {
             <option value="Youth">Youth only</option>
             <option value="Senior">Senior only</option>
           </select>
+          <ScraperCredits />
         </div>
 
       {/* List section — scrolls with the document so mobile users get

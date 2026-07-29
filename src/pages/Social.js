@@ -3,7 +3,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
-import { PageHeader, ChipGroup, Empty, Spinner, toast } from 'components/ui/UI';
+import { PageHeader, ChipGroup, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
 // Social dashboard — Instagram growth for @goldas_loukorek, built from the
@@ -182,6 +182,7 @@ export default function Social() {
             ? <>Last snapshot: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)} · {daily.length} days collected</>
             : 'No snapshot yet — the first daily run starts the history.'}
           {meta?.lastError && <span style={{ color: 'var(--red)' }}> · Last error: {String(meta.lastError).slice(0, 90)}</span>}
+          {' '}· <ScraperCredits />
         </div>
       </PageHeader>
 

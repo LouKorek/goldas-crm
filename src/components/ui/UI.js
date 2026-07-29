@@ -744,6 +744,38 @@ const menuItemStyle = {
 const menuItemHover = (e) => { e.currentTarget.style.background = 'var(--gold-dim)'; };
 const menuItemLeave = (e) => { e.currentTarget.style.background = 'transparent'; };
 
+// ── ScraperAPI credit meter ───────────────────────────────────────
+// Small inline gauge shown next to every credit-consuming sync action:
+// used/limit + the date the quota resets. Red when the tank is empty,
+// amber when above 85%.
+export function ScraperCredits() {
+  const [c, setC] = useState(null);
+  useEffect(() => {
+    fetch('/.netlify/functions/scraper-status')
+      .then(r => r.json()).then(setC).catch(() => setC(null));
+  }, []);
+  if (!c || c.error || c.requestLimit == null) return null;
+  const used = Number(c.requestCount) || 0;
+  const limit = Number(c.requestLimit) || 0;
+  const empty = limit > 0 && used >= limit;
+  const high = limit > 0 && used / limit > 0.85;
+  const d = c.nextReset ? c.nextReset.split('-') : null;      // YYYY-MM-DD
+  const resetTxt = d ? `${d[2]}/${d[1]}/${d[0].slice(2)}` : null;
+  return (
+    <span
+      title={`ScraperAPI credits used this cycle${resetTxt ? ` — quota resets on ${resetTxt}` : ''}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        fontSize: 11, whiteSpace: 'nowrap', cursor: 'default',
+        color: empty ? 'var(--red)' : high ? 'var(--amber)' : 'var(--text-3)',
+      }}>
+      <span style={{ fontSize: 12 }}>{empty ? '🪫' : '🔋'}</span>
+      {used.toLocaleString()}/{limit.toLocaleString()}
+      {resetTxt && <span style={{ opacity: 0.85 }}>· resets {resetTxt}</span>}
+    </span>
+  );
+}
+
 // Page header
 export function PageHeader({ title, subtitle, action, children }) {
   return (
