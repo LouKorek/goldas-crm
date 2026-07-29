@@ -123,8 +123,17 @@ body {
   touch-action: manipulation;
   /* Prevent any rogue element (long match card, wide table inside a card,
      etc.) from leaking horizontal scroll to the whole page on mobile.
-     .table-wrap / .matches-scroll keep their own internal overflow. */
+     .table-wrap / .matches-scroll keep their own internal overflow.
+
+     `clip` — not `hidden` — is essential: `hidden` on one axis promotes the
+     other axis from `visible` to `auto`, which makes <body> a scroll
+     container and silently disables position: sticky for everything inside
+     it. `clip` guards the same way without creating that container, so
+     sticky headers anchor to the viewport as intended. `hidden` is left as
+     a fallback for engines without `clip`. */
   overflow-x: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 /* Selection */
@@ -640,25 +649,38 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   }
 }
 @media (max-width: 768px) {
-  /* Phones: plain flow. The fixed top bar is the only pinned chrome, and
-     the masthead sits at the natural width of the screen so nothing can
-     overhang or shift. (A sticky masthead was tried here twice and both
-     times fought the mobile width guards — it stays out until it can be
-     proven on a real phone viewport.) */
+  /* Phones: the masthead freezes just beneath the fixed top bar — title,
+     actions and filters stay reachable while records scroll past.
+     It keeps the NATURAL width (no negative margins): every element on the
+     screen shares the same 14px inset, so the gutters are empty anyway and
+     nothing can overhang. */
   .page-header {
-    position: static;
-    top: auto;
+    position: sticky;
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    z-index: 40;
+    background: var(--bg);
     margin-left: 0;
     margin-right: 0;
     margin-top: 0;
     padding-left: 0;
     padding-right: 0;
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding-top: 10px;
+    padding-bottom: 10px;
     margin-bottom: 14px;
     max-width: 100%;
   }
-  .page-header::before { display: none; }
+  /* Opaque strip covering the gap between top bar and masthead, widened to
+     the gutters so no sliver of a passing record shows at the edges. */
+  .page-header::before {
+    display: block;
+    left: -16px; right: -16px;
+    height: 16px;
+    bottom: 100%;
+  }
+}
+@media (max-width: 480px) {
+  .page-header { top: calc(60px + env(safe-area-inset-top, 0px)); }
+  .page-header::before { left: -12px; right: -12px; }
 }
 .page-title {
   color: var(--text-1);
