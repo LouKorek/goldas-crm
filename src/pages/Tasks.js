@@ -3,7 +3,7 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db
 import { fmtDate } from 'lib/constants';
 import {
   Modal, Field, ChipGroup, DateInput, SearchInput, PageHeader,
-  Empty, Spinner, useConfirm, toast,
+  Empty, Spinner, useConfirm, toast, RowActions,
 } from 'components/ui/UI';
 
 // ─── Starter tasks (auto-migrated on first owner visit) ──────────
@@ -164,7 +164,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
                 cursor: 'pointer', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
-              <span>{allChecked ? '✓ All selected' : (someChecked ? `${value.length} of ${allPlayers.length} selected` : 'Select all')}</span>
+              <span>{allChecked ? 'All selected' : (someChecked ? `${value.length} of ${allPlayers.length} selected` : 'Select all')}</span>
               <span style={{ fontSize: 11, opacity: 0.8 }}>
                 {allChecked ? 'Tap to clear' : 'Tap to select all'}
               </span>
@@ -475,7 +475,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
 
           {due && (
             <span style={{ color: due.color, fontWeight: 500 }}>
-              🗓 {due.text}
+              {due.text}
             </span>
           )}
 
@@ -518,22 +518,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       </div>
 
       {/* Edit + Delete actions */}
-      <div className="action-btns" style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-        <button type="button" onClick={onEdit} title="Edit"
-          style={{
-            width: 28, height: 28, padding: 0, border: 'none', borderRadius: 0,
-            background: 'rgba(201,168,76,0.15)', color: 'var(--gold)',
-            cursor: 'pointer', fontSize: 13,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>✏️</button>
-        <button type="button" onClick={onDelete} title="Delete"
-          style={{
-            width: 28, height: 28, padding: 0, border: 'none', borderRadius: 0,
-            background: 'rgba(248,113,113,0.15)', color: 'var(--red)',
-            cursor: 'pointer', fontSize: 13,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>🗑</button>
-      </div>
+      <RowActions onEdit={onEdit} onDelete={onDelete} />
     </div>
   );
 }

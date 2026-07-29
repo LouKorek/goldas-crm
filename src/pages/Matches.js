@@ -151,7 +151,7 @@ function StadiumInput({ value, onSelect }) {
               style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, transition: 'background 0.12s' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--gold-dim)'}
               onMouseLeave={e => e.currentTarget.style.background = ''}>
-              <span style={{ fontSize: 14, marginTop: 1 }}>📍</span>
+              <span style={{ width: 4, height: 4, background: 'var(--gold)', marginTop: 7, flexShrink: 0 }} />
               <div>
                 <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>{r.main}</div>
                 {r.secondary && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{r.secondary}</div>}
@@ -168,10 +168,10 @@ function StadiumInput({ value, onSelect }) {
 function YouthBadge({ small }) {
   return (
     <span style={{
-      background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
-      borderRadius: 0, color: '#4ADE80', fontSize: small ? 9 : 11,
-      fontWeight: 700, padding: small ? '1px 5px' : '2px 7px',
-      letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
+      background: 'transparent', borderLeft: '2px solid var(--green-ok)',
+      borderRadius: 0, color: 'var(--green-ok)', fontSize: small ? 8.5 : 10,
+      fontWeight: 700, padding: small ? '0 0 0 4px' : '1px 0 1px 5px',
+      letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0,
     }}>U19</span>
   );
 }
@@ -235,13 +235,13 @@ function SourceBadge({ source }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      background: c.bg, color: c.color,
-      border: `1px solid ${c.color}55`,
-      borderRadius: 0, padding: '2px 7px',
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+      background: 'transparent', color: c.color,
+      borderLeft: `2px solid ${c.color}`,
+      borderRadius: 0, padding: '1px 0 1px 6px',
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
       textTransform: 'uppercase', whiteSpace: 'nowrap',
     }}>
-      <span style={{ fontSize: 11 }}>{c.icon}</span> {c.label}
+      {c.label}
     </span>
   );
 }
@@ -522,14 +522,13 @@ export default function Matches() {
         {/* Details — date, source, stadium */}
         <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
           <SourceBadge source={m.source} />
-          <span>🗓 {fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
           {m.stadiumName && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              🏟
               {m.stadiumMapsUrl
                 ? <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
                     style={{ color: 'var(--gold)', textDecoration: 'none' }}>
-                    {m.stadiumName} ↗
+                    {m.stadiumName}
                   </a>
                 : m.stadiumName}
             </span>
@@ -552,9 +551,9 @@ export default function Matches() {
               display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
               flex: 1, minWidth: 0,
             }}>
-              {linkedNames.length > 0 && <span>🤝</span>}
+              {linkedNames.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-mute)' }}>REP</span>}
               {linkedNames.map((n, i) => (
-                <span key={i} style={{ background: 'var(--gold-dim)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 0, padding: '1px 7px', color: 'var(--gold)', fontSize: 11 }}>{n}</span>
+                <span key={i} style={{ background: 'transparent', borderLeft: '2px solid var(--gold-dk)', borderRadius: 0, padding: '0 0 0 6px', color: 'var(--gold)', fontSize: 10.5, letterSpacing: '0.02em' }}>{n}</span>
               ))}
             </div>
             {canEdit && (
@@ -586,7 +585,7 @@ export default function Matches() {
       className={`chip${form[field] ? ' active' : ''}`}
       onClick={() => s(field)(!form[field])}
       style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'center', marginTop: 4 }}>
-      🌱 Youth
+      Youth
     </button>
   );
 
@@ -639,7 +638,7 @@ export default function Matches() {
                 style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
                 onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-                🗑 Clear All
+                Clear All
               </button>}
             </div>
           }
@@ -665,8 +664,9 @@ export default function Matches() {
                 // the player filter can sit on the same row on mobile.
                 width: 115,
                 textAlign: 'center',
-                fontSize: 13, color: 'var(--text-2)', fontWeight: 500,
-                letterSpacing: '0.01em',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11.5, color: 'var(--text-1)', fontWeight: 500,
+                letterSpacing: '-0.01em',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -691,7 +691,7 @@ export default function Matches() {
               the row gets tight on mobile. */}
           <select value={youthScope} onChange={e => setYouthScope(e.target.value)}
             style={{ width: 'auto', height: 36, minWidth: 170, fontSize: 12, flexShrink: 0, padding: '0 10px' }}>
-            <option value="">🌱 Group: All</option>
+            <option value="">Group: All</option>
             <option value="Youth">Youth only</option>
             <option value="Senior">Senior only</option>
           </select>

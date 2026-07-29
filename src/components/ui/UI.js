@@ -805,89 +805,68 @@ export function PageHeader({ title, subtitle, action, children }) {
   );
 }
 
-// ActionButtons: 2x2 grid
-export function ActionButtons({ onView, onWhatsApp, onEdit, onDuplicate, onDelete }) {
-  const BTN = {
-    width: 28, height: 28, padding: 0,
+// ── Action buttons — ONE definition for the whole app ────────────
+// Every screen used to hand-roll its own row buttons, which is why edit and
+// delete looked different depending on where you were. There is now a single
+// square hairline button, a single set of tones, and a single canonical
+// order: edit → duplicate → view → profile → video → delete (destructive
+// last). Sizing is shared with .action-btns so mobile gets 38px targets.
+const ACTION_TONES = {
+  gold:    'var(--gold)',
+  red:     'var(--red)',
+  blue:    'var(--blue)',
+  green:   'var(--green-ok)',
+  neutral: 'var(--text-2)',
+};
+
+export function ActionBtn({ icon, title, onClick, href, tone = 'neutral', text }) {
+  const color = ACTION_TONES[tone] || ACTION_TONES.neutral;
+  const style = {
+    width: 28, height: 28, padding: 0, flexShrink: 0,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 13, border: 'none', borderRadius: 0,
-    cursor: 'pointer', transition: 'background 0.15s, transform 0.12s',
-    flexShrink: 0,
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    borderRadius: 0,
+    color,
+    cursor: 'pointer',
+    textDecoration: 'none',
+    fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+    transition: 'border-color 0.11s linear, background 0.11s linear',
   };
-  const hover = (bg) => (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = 'scale(1.08)'; };
-  const leave = (bg) => (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; };
-
-  const hasLeft = !!(onView || onWhatsApp);
-  const alwaysGrid = !!onDuplicate;
+  const enter = (e) => { e.currentTarget.style.borderColor = color; e.currentTarget.style.background = 'var(--surface-2)'; };
+  const leave = (e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; };
+  const body = icon ? <Icon name={icon} size={13} /> : text;
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" title={title} aria-label={title}
+        style={style} onMouseEnter={enter} onMouseLeave={leave}
+        onClick={(e) => e.stopPropagation()}>{body}</a>
+    );
+  }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, width: 60 }} className="action-btns">
-      {onView && (
-        <button
-          style={{ ...BTN, background: 'rgba(96,165,250,0.15)', color: '#60A5FA' }}
-          title="View" onClick={onView}
-          onMouseEnter={hover('rgba(96,165,250,0.3)')}
-          onMouseLeave={leave('rgba(96,165,250,0.15)')}
-        >👁</button>
-      )}
-      {onWhatsApp && !onView && (
-        <button
-          style={{ ...BTN, background: 'rgba(37,211,102,0.12)', color: '#25D166' }}
-          title="WhatsApp" onClick={onWhatsApp}
-          onMouseEnter={hover('rgba(37,211,102,0.25)')}
-          onMouseLeave={leave('rgba(37,211,102,0.12)')}
-        >💬</button>
-      )}
-      {!hasLeft && alwaysGrid && <div />}
-      <button
-        style={{ ...BTN, background: 'rgba(248,113,113,0.15)', color: 'var(--red)' }}
-        title="Delete" onClick={onDelete}
-        onMouseEnter={hover('rgba(248,113,113,0.3)')}
-        onMouseLeave={leave('rgba(248,113,113,0.15)')}
-      >🗑</button>
-      <button
-        style={{
-          ...BTN,
-          background: 'rgba(201,168,76,0.15)', color: 'var(--gold)',
-          gridColumn: (hasLeft || alwaysGrid) ? 'auto' : '1 / -1'
-        }}
-        title="Edit" onClick={onEdit}
-        onMouseEnter={hover('rgba(201,168,76,0.3)')}
-        onMouseLeave={leave('rgba(201,168,76,0.15)')}
-      >✏️</button>
-      {onDuplicate && (
-        <button
-          style={{ ...BTN, background: 'rgba(167,139,250,0.15)', color: '#A78BFA' }}
-          title="Duplicate" onClick={onDuplicate}
-          onMouseEnter={hover('rgba(167,139,250,0.3)')}
-          onMouseLeave={leave('rgba(167,139,250,0.15)')}
-        >⧉</button>
-      )}
+    <button type="button" title={title} aria-label={title} style={style}
+      onMouseEnter={enter} onMouseLeave={leave}
+      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}>{body}</button>
+  );
+}
+
+// RowActions — the canonical action cluster. Pass only what applies; the
+// order below is fixed so muscle memory works on every screen.
+export function RowActions({ onEdit, onDuplicate, onView, onDelete, profileUrl, videoUrl, children }) {
+  const abs = (u) => (u.startsWith('http://') || u.startsWith('https://')) ? u : 'https://' + u;
+  return (
+    <div className="action-btns" style={{ display: 'flex', gap: 4 }}>
+      {onView      && <ActionBtn icon="social"   tone="blue"    title="View"      onClick={onView} />}
+      {onEdit      && <ActionBtn icon="edit"     tone="gold"    title="Edit"      onClick={onEdit} />}
+      {onDuplicate && <ActionBtn icon="copy"     tone="neutral" title="Duplicate" onClick={onDuplicate} />}
+      {profileUrl  && <ActionBtn icon="players"  tone="blue"    title="Profile"   href={abs(profileUrl)} />}
+      {videoUrl    && <ActionBtn icon="external" tone="green"   title="Video"     href={abs(videoUrl)} />}
+      {children}
+      {onDelete    && <ActionBtn icon="trash"    tone="red"     title="Delete"    onClick={onDelete} />}
     </div>
   );
 }
 
-// RowActions: delete / edit / duplicate side by side (in that order).
-export function RowActions({ onEdit, onDuplicate, onDelete }) {
-  const BTN = {
-    width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 13, border: 'none', borderRadius: 0, cursor: 'pointer', flexShrink: 0,
-    transition: 'background 0.15s, transform 0.12s',
-  };
-  const hov = (bg, bgH) => ({
-    onMouseEnter: (e) => { e.currentTarget.style.background = bgH; e.currentTarget.style.transform = 'scale(1.08)'; },
-    onMouseLeave: (e) => { e.currentTarget.style.background = bg; e.currentTarget.style.transform = ''; },
-  });
-  return (
-    <div className="action-btns" style={{ display: 'flex', gap: 5 }}>
-      {onDelete && <button title="Delete" onClick={onDelete} aria-label="Delete"
-        style={{ ...BTN, background: 'transparent', border: '1px solid var(--border)', color: 'var(--red)' }}
-        {...hov('transparent', 'var(--red-bg)')}><Icon name="trash" size={13} /></button>}
-      {onEdit && <button title="Edit" onClick={onEdit} aria-label="Edit"
-        style={{ ...BTN, background: 'transparent', border: '1px solid var(--border)', color: 'var(--gold)' }}
-        {...hov('transparent', 'var(--gold-dim)')}><Icon name="edit" size={13} /></button>}
-      {onDuplicate && <button title="Duplicate" onClick={onDuplicate} aria-label="Duplicate"
-        style={{ ...BTN, background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-2)' }}
-        {...hov('transparent', 'var(--surface-3)')}><Icon name="copy" size={13} /></button>}
-    </div>
-  );
-}
+// Kept as an alias so older call sites keep working — both render the same
+// cluster now, which is the whole point.
+export const ActionButtons = RowActions;

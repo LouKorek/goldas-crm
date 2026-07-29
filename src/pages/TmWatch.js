@@ -94,8 +94,8 @@ const IL = () => (
 
 const TIER_BADGE = {
   0: { label: <><IL /> Citizenship</>, bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
-  1: { label: '🕎 Strong name',  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
-  2: { label: '❔ Possible',     bg: 'rgba(177,156,245,0.12)', fg: 'var(--purple)', border: 'rgba(177,156,245,0.35)' },
+  1: { label: 'Strong name',  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
+  2: { label: 'Possible',     bg: 'rgba(177,156,245,0.12)', fg: 'var(--purple)', border: 'rgba(177,156,245,0.35)' },
 };
 const TABS = ['New', 'All', 'Starred', 'Dismissed'];
 
@@ -204,13 +204,13 @@ export default function TmWatch() {
             {isAdmin && (
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }}
                 onClick={scanNow} disabled={scanning || running}>
-                {running ? <><Spinner size={12} /> Scanning…</> : '🔄 Scan now'}
+                {running ? <><Spinner size={12} /> Scanning…</> : 'Scan now'}
               </button>
             )}
             {canEdit && newCount > 0 && (
               <button className="btn btn-ghost btn-sm" style={{ height: 36 }} onClick={markAllSeen}
                 title="Mark every NEW candidate as seen">
-                ✓ Mark all seen ({newCount})
+                Mark all seen ({newCount})
               </button>
             )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
@@ -224,13 +224,13 @@ export default function TmWatch() {
           <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', '0', '1', '2']}
-            labels={[`All types (${tierCounts['']})`, <><IL /> Citizenship ({tierCounts['0']})</>, `🕎 Strong name (${tierCounts['1']})`, `❔ Possible (${tierCounts['2']})`]}
+            labels={[`All types (${tierCounts['']})`, <><IL /> Citizenship ({tierCounts['0']})</>, `Strong name (${tierCounts['1']})`, `Possible (${tierCounts['2']})`]}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
           <span style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', 'never', 'played']}
-            labels={[`Any history (${histCounts['']})`, `💎 Never in Israel (${histCounts['never']})`, <><IL /> Played in Israel ({histCounts['played']})</>]}
+            labels={[`Any history (${histCounts['']})`, `Never in Israel (${histCounts['never']})`, <><IL /> Played in Israel ({histCounts['played']})</>]}
             value={histFilter} onChange={(v) => setHistFilter(v ?? '')} required
           />
         </div>
@@ -247,7 +247,7 @@ export default function TmWatch() {
 
       {items.length === 0 ? (
         <Empty message="No candidates yet — the first daily scan will populate this screen."
-          action={isAdmin ? <button className="btn btn-primary" onClick={scanNow} disabled={scanning || running}>{running ? 'Scanning…' : '🔄 Run first scan'}</button> : null} />
+          action={isAdmin ? <button className="btn btn-primary" onClick={scanNow} disabled={scanning || running}>{running ? 'Scanning…' : 'Run first scan'}</button> : null} />
       ) : filtered.length === 0 ? (
         <Empty message={`Nothing in "${tab}"${tierFilter !== '' ? ' with this match type' : ''}.`} />
       ) : (
@@ -274,10 +274,10 @@ export default function TmWatch() {
                         borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
                       {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 0, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
-                      {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>💎 Never in Israel</span>}
+                      {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>Never in Israel</span>}
                       {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
-                      {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>✓ in pipeline</span>}
-                      {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>⚠ no longer abroad</span>}
+                      {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>in pipeline</span>}
+                      {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>no longer abroad</span>}
                     </div>
                     <div className="m-meta" style={{ marginTop: 8, fontSize: 12 }}>
                       {(p.citizenships || []).length > 0 && (
@@ -293,8 +293,8 @@ export default function TmWatch() {
                           {p.leagueTier != null && <span className="m-sub">({TIER_LABEL[p.leagueTier] || `Tier ${p.leagueTier}`})</span>}
                         </span>
                       )}
-                      {p.marketValue && <span>💰 {p.marketValue}</span>}
-                      {p.contractUntil && <span>📑 {p.contractUntil}</span>}
+                      {p.marketValue && <span>{p.marketValue}</span>}
+                      {p.contractUntil && <span>{p.contractUntil}</span>}
                     </div>
                   </div>
                   {canEdit && (

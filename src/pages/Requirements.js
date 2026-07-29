@@ -816,7 +816,7 @@ export default function Requirements() {
               style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
               onMouseEnter={e => e.currentTarget.style.opacity = '1'}
               onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-              🗑 Clear All
+              Clear All
             </button>}
           </div>
         }
@@ -825,7 +825,7 @@ export default function Requirements() {
           <FilterBar filters={filters} setFilters={setFilters} options={[
             { key: 'gender',     label: 'Gender',   values: ['Men', 'Women'] },
             { key: 'position',   label: 'Position', values: POSITIONS },
-            { key: 'youthScope', label: '🌱 Group', values: ['Youth', 'Senior'] },
+            { key: 'youthScope', label: 'Group', values: ['Youth', 'Senior'] },
           ]} />
         </div>
       </PageHeader>
@@ -852,15 +852,15 @@ export default function Requirements() {
                 </div>
               </div>
               <div className="m-meta" style={{ marginTop: 6 }}>
-                {p.requiredPosition && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>📍 {p.requiredPosition}</span>}
-                {!p.ageNotSpecified && (p.ageMin || p.ageMax) && <span>🗓 {p.ageMin && p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin || p.ageMax}</span>}
-                {(p.transferFee && p.transferFee !== 'Not specified') && <span>💰 €{Number(p.transferFee).toLocaleString()}</span>}
-                {(p.salary && p.salary !== 'Not specified') && <span>💵 €{Number(p.salary).toLocaleString()}/mo</span>}
+                {p.requiredPosition && <span style={{ color: 'var(--gold)', fontWeight: 600 }}>{p.requiredPosition}</span>}
+                {!p.ageNotSpecified && (p.ageMin || p.ageMax) && <span>{p.ageMin && p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin || p.ageMax}</span>}
+                {(p.transferFee && p.transferFee !== 'Not specified') && <span>€{Number(p.transferFee).toLocaleString()}</span>}
+                {(p.salary && p.salary !== 'Not specified') && <span>€{Number(p.salary).toLocaleString()}/mo</span>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
                 {(p.contactName || p.contactPhone) ? (
                   <div className="m-meta" onClick={e => e.stopPropagation()}>
-                    <span>👤 {p.contactName || '—'}</span>
+                    <span>{p.contactName || '—'}</span>
                     {p.contactRole && <span className="m-sub">{p.contactRole}</span>}
                     {p.contactPhone && <PhoneActions phone={p.contactPhone} />}
                   </div>
@@ -998,7 +998,7 @@ export default function Requirements() {
               <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder="Club name" />
               <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
                 onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
-                style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>🌱 Youth Team</button>
+                style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>Youth Team</button>
             </Field>
           </div>
           <Field label="League">
@@ -1020,7 +1020,7 @@ export default function Requirements() {
             {league && (
               <div className="form-hint">
                 League: <strong>{league}</strong>
-                {form.clubIsYouth && <span style={{ marginLeft: 8 }}>· <strong>🌱 Youth League</strong></span>}
+                {form.clubIsYouth && <span style={{ marginLeft: 8 }}>· <strong>Youth League</strong></span>}
               </div>
             )}
           </Field>

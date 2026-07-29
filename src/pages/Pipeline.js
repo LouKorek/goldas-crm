@@ -7,7 +7,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STA
          COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, ExportMenu, useConfirm,
-         PhoneActions, NumberInput } from 'components/ui/UI';
+         PhoneActions, NumberInput, RowActions } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 
@@ -47,11 +47,11 @@ function PlayerCardModal({ player, onClose }) {
   const card = [
     `⚽ PLAYER PROFILE — GOLD A&S`,
     ``,
-    `👤 ${player.playerName}`,
+    `${player.playerName}`,
     `🌍 ${(player.nationalities||[]).join(' / ') || '—'}`,
     '📅 DOB: ' + fmtDate(player.dob) + (age ? ' (' + age + ' yrs)' : ''),
-    '🏟 Club: ' + (player.currentClub||'Free Agent') + (league ? ' | ' + league : ''),
-    '📍 Position: ' + (player.primaryPosition||'—') + (player.secondaryPositions?.length ? ' / ' + player.secondaryPositions.join(', ') : ''),
+    'Club: ' + (player.currentClub||'Free Agent') + (league ? ' | ' + league : ''),
+    'Position: ' + (player.primaryPosition||'—') + (player.secondaryPositions?.length ? ' / ' + player.secondaryPositions.join(', ') : ''),
     `📏 Height: ${player.height||'—'}`,
     `👟 Foot: ${player.foot||'—'}`,
     player.profileLink ? `🔗 Profile: ${player.profileLink}` : '',
@@ -67,7 +67,7 @@ function PlayerCardModal({ player, onClose }) {
 
   return (
     <Modal title="Player Card" onClose={onClose} footer={
-      <button className="btn btn-primary" onClick={copy}>{copied?'✓ Copied!':'Copy Card'}</button>
+      <button className="btn btn-primary" onClick={copy}>{copied?'Copied!':'Copy Card'}</button>
     }>
       <pre style={{
         background:'var(--surface-3)', border:'1px solid var(--border)', borderRadius: 0,
@@ -216,7 +216,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
           borderRadius: 0, padding: '3px 8px', fontSize: 10, fontWeight: 700,
           cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.3,
         }}>
-        🏢 {linked.length}{previous.length ? ` · ${previous.length}↩` : ''}
+        {linked.length}{previous.length ? ` · ${previous.length}↩` : ''}
       </button>
 
       {open && (
@@ -231,7 +231,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
           }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <strong style={{ fontSize: 12, color: 'var(--gold)' }}>🏢 Linked Clubs</strong>
+            <strong style={{ fontSize: 12, color: 'var(--gold)' }}>Linked Clubs</strong>
             <button type="button" onClick={() => setOpen(false)}
               style={{ background: 'transparent', border: 'none', color: 'var(--text-2)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4 }}>×</button>
           </div>
@@ -286,7 +286,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                           background: 'rgba(229,181,71,0.15)', color: 'var(--amber)',
                           border: '1px solid rgba(229,181,71,0.3)', borderRadius: 0,
                           cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}>⊘ Not relevant</button>
+                        }}>Not relevant</button>
                       <button type="button" onClick={() => remove(i, 'linked')}
                         title="Remove entirely"
                         style={{
@@ -310,7 +310,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                   background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer',
                   padding: '4px 0', fontSize: 11, fontStyle: 'italic',
                 }}>
-                <span>↩ Previous clubs ({previous.length})</span>
+                <span>Previous clubs ({previous.length})</span>
                 <span>{showPrev ? '▲' : '▼'}</span>
               </button>
               {showPrev && (
@@ -333,7 +333,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                               background: 'rgba(74,222,128,0.12)', color: '#4ADE80',
                               border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0,
                               cursor: 'pointer', whiteSpace: 'nowrap',
-                            }}>↩ Reactivate</button>
+                            }}>Reactivate</button>
                           <button type="button" onClick={() => remove(i, 'previous')}
                             title="Remove from history"
                             style={{
@@ -528,7 +528,7 @@ export default function Pipeline({ category }) {
               style={{height:36,opacity:0.45,whiteSpace:'nowrap'}} title="Clear all"
               onMouseEnter={e=>e.currentTarget.style.opacity='1'}
               onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
-              🗑 Clear All
+              Clear All
             </button>}
           </div>
         }
@@ -565,20 +565,20 @@ export default function Pipeline({ category }) {
                 <div className="m-meta" style={{marginTop:5}}>
                   {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
                   {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0&&<span className="m-sub">({p.secondaryPositions.join(', ')})</span>}
-                  {dobDisplay&&<span>🗓 {dobDisplay}</span>}
-                  {p.foot&&<span>🦵 {p.foot}</span>}
+                  {dobDisplay&&<span>{dobDisplay}</span>}
+                  {p.foot&&<span>{p.foot}</span>}
                   <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.currentClub||'Free'}</span>
                   {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                   {p.league&&<span className="m-sub">{p.league}</span>}
-                  {(p.transferFee&&p.transferFee!=='Not specified')&&<span>💰 €{Number(p.transferFee).toLocaleString()}</span>}
-                  {(p.salary&&p.salary!=='Not specified')&&<span>💵 €{Number(p.salary).toLocaleString()}/mo</span>}
+                  {(p.transferFee&&p.transferFee!=='Not specified')&&<span>€{Number(p.transferFee).toLocaleString()}</span>}
+                  {(p.salary&&p.salary!=='Not specified')&&<span>€{Number(p.salary).toLocaleString()}/mo</span>}
                 </div>
                 {(p.agentName||p.agentPhone)&&(
                   <div className="m-meta" style={{marginTop:5}} onClick={e=>e.stopPropagation()}>
-                    <span>👤 {p.agentName||'—'}</span>
+                    <span>{p.agentName||'—'}</span>
                     {p.agentPhone&&<span className="m-sub">{formatPhone(p.agentPhone)}</span>}
                     {p.agentPhone&&<PhoneActions phone={p.agentPhone} />}
                   </div>
@@ -588,12 +588,14 @@ export default function Pipeline({ category }) {
                     <NatFlags nats={p.nationalities} />
                     <LinkedClubsCell player={p} path={path} clubOptions={clubOptions} canEdit={canEdit} />
                   </div>
-                  <div className="action-btns" style={{display:'flex',gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}} title="Delete" onClick={()=>del(p)}>🗑</button>)}
-                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}} title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
-                    {p.profileLink&&(<a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}} title="Profile">🧑‍💼</a>)}
-                    {p.videoLink&&(<a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}} title="Video">📹</a>)}
-                  </div>
+                  <span onClick={e=>e.stopPropagation()}>
+                    <RowActions
+                      onEdit={canEdit?()=>openEdit(p):undefined}
+                      onDelete={canEdit?()=>del(p):undefined}
+                      profileUrl={p.profileLink}
+                      videoUrl={p.videoLink}
+                    />
+                  </span>
                 </div>
               </div>
             );
@@ -634,24 +636,12 @@ export default function Pipeline({ category }) {
                   >
                     {/* Actions — icons arranged 2-over-2; row click opens the player card */}
                     <td onClick={e => e.stopPropagation()}>
-                      <div style={{display:'flex',gap:3,flexWrap:'wrap',width:55}}>
-                        {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}}
-                          title="Delete" onClick={()=>del(p)}>🗑</button>)}
-                        {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}}
-                          title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
-                        {p.profileLink&&(
-                          <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
-                            target="_blank" rel="noopener noreferrer"
-                            style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}}
-                            title="Profile">🧑‍💼</a>
-                        )}
-                        {p.videoLink&&(
-                          <a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink}
-                            target="_blank" rel="noopener noreferrer"
-                            style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}}
-                            title="Video">📹</a>
-                        )}
-                      </div>
+                      <RowActions
+                          onEdit={canEdit?()=>openEdit(p):undefined}
+                          onDelete={canEdit?()=>del(p):undefined}
+                          profileUrl={p.profileLink}
+                          videoUrl={p.videoLink}
+                        />
                     </td>
                     {/* Name */}
                     <td>
@@ -796,7 +786,7 @@ export default function Pipeline({ category }) {
             <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name or Free Agent" />
             <button type="button" className={`chip${form.currentClubIsYouth?' active':''}`}
               onClick={()=>s('currentClubIsYouth')(!form.currentClubIsYouth)}
-              style={{fontSize:11,padding:'4px 10px',marginTop:6}}>🌱 Youth Team</button>
+              style={{fontSize:11,padding:'4px 10px',marginTop:6}}>Youth Team</button>
           </Field>
           <Field label="League">
             <div style={{display:'flex',gap:8,marginBottom:8}}>

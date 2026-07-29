@@ -99,7 +99,7 @@ export default function Contacts() {
           <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
         </div>
         <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
-          <option value="">🌱 Group: All</option>
+          <option value="">Group: All</option>
           <option value="Youth">Youth</option>
           <option value="Senior">Senior</option>
         </select>
@@ -130,7 +130,7 @@ export default function Contacts() {
               </div>
               {(c.contactName || c.contactRole || c.contactPhone) && (
                 <div className="m-meta" style={{ marginTop: 8 }}>
-                  {c.contactName && <span>👤 {c.contactName}</span>}
+                  {c.contactName && <span>{c.contactName}</span>}
                   {c.contactRole && <span className="m-sub">{c.contactRole}</span>}
                   {c.contactPhone && <span>{formatPhone(c.contactPhone)}</span>}
                   {c.contactPhone && <PhoneActions phone={c.contactPhone} />}
@@ -206,7 +206,7 @@ export default function Contacts() {
             <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder="Club name" />
             <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
               onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
-              style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>🌱 Youth Team</button>
+              style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>Youth Team</button>
           </Field>
           <Field label="League">
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>

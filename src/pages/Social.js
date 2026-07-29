@@ -168,7 +168,7 @@ export default function Social() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {isAdmin && (
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }} onClick={syncNow} disabled={syncing}>
-                {syncing ? <><Spinner size={12} /> Syncing…</> : '🔄 Sync now'}
+                {syncing ? <><Spinner size={12} /> Syncing…</> : 'Sync now'}
               </button>
             )}
           </div>
@@ -188,7 +188,7 @@ export default function Social() {
 
       {daily.length === 0 ? (
         <Empty message="No Instagram data yet — snapshots begin once the daily collector runs (or hit Sync now)."
-          action={isAdmin ? <button className="btn btn-primary" onClick={syncNow} disabled={syncing}>🔄 First snapshot</button> : null} />
+          action={isAdmin ? <button className="btn btn-primary" onClick={syncNow} disabled={syncing}>First snapshot</button> : null} />
       ) : (
         <>
           {/* KPI row */}
@@ -238,8 +238,8 @@ export default function Social() {
                           )}
                         </div>
                         <div className="m-meta" style={{ marginTop: 6 }}>
-                          {p.likes != null && <span>❤️ {fmtNum(p.likes)}</span>}
-                          {p.comments != null && <span>💬 {fmtNum(p.comments)}</span>}
+                          {p.likes != null && <span>{fmtNum(p.likes)}</span>}
+                          {p.comments != null && <span>{fmtNum(p.comments)}</span>}
                         </div>
                         {p.caption && (
                           <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>

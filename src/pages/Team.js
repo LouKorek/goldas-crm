@@ -3,9 +3,8 @@ import { listenAppUsers, addAppUser, updateAppUser, removeAppUser, setUserEmailA
 import { OWNER_EMAIL } from 'lib/firebase';
 import { useRole, roleLabel } from 'lib/roleContext';
 import {
-  PageHeader, Modal, Field, ChipGroup, Empty, Spinner, useConfirm, toast,
+  PageHeader, Modal, Field, ChipGroup, Empty, Spinner, useConfirm, toast, RowActions,
 } from 'components/ui/UI';
-import Icon from 'components/ui/Icons';
 
 const ROLE_OPTIONS = ['Manager', 'Viewer'];
 const ROLE_DESC = {
@@ -126,12 +125,7 @@ export default function Team() {
                         {owner ? (
                           <span style={{ fontSize: 9, color: 'var(--text-mute)', letterSpacing: '0.12em' }}>OWNER</span>
                         ) : (
-                          <div className="action-btns" style={{ display: 'flex', gap: 4 }}>
-                            <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 0, cursor: 'pointer', background: 'transparent', color: 'var(--gold)' }}
-                              title="Edit" aria-label="Edit" onClick={() => openEdit(u)}><Icon name="edit" size={13} /></button>
-                            <button style={{ width: 28, height: 28, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)', borderRadius: 0, cursor: 'pointer', background: 'transparent', color: 'var(--red)' }}
-                              title="Remove" aria-label="Remove" onClick={() => remove(u)}><Icon name="trash" size={13} /></button>
-                          </div>
+                          <RowActions onEdit={() => openEdit(u)} onDelete={() => remove(u)} />
                         )}
                       </td>
                       <td style={{ fontWeight: 600 }}>{u.name || '—'}</td>

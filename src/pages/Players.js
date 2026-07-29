@@ -4,7 +4,7 @@ import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORD
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
-         ExportMenu, useConfirm } from 'components/ui/UI';
+         ExportMenu, useConfirm, RowActions } from 'components/ui/UI';
 import { toast } from 'components/ui/UI';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
@@ -147,8 +147,8 @@ function PlayerView({ player, onClose }) {
         <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
           {[
             {label:'📋 Contract',        files:player.contractFiles},
-            {label:'🤝 Repr. Agreement', files:player.reprFiles},
-            {label:'🪪 Passport',        files:player.passportFiles},
+            {label:'Repr. Agreement', files:player.reprFiles},
+            {label:'Passport',        files:player.passportFiles},
           ].map(({label,files})=>(
             <button key={label} className="btn btn-secondary btn-sm"
               onClick={()=>setDocModal({files:files||[],title:label})}>
@@ -368,7 +368,7 @@ export default function Players() {
               style={{height:36,opacity:0.45,whiteSpace:'nowrap'}}
               onMouseEnter={e=>e.currentTarget.style.opacity='1'}
               onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
-              🗑 Clear All
+              Clear All
             </button>}
           </div>
         }
@@ -378,7 +378,7 @@ export default function Players() {
             {key:'gender',label:'Gender',values:['Men','Women']},
             {key:'position',label:'Position',values:POSITIONS},
             {key:'contractStatus',label:'Contract',values:CONTRACT_STATUS},
-            {key:'youthScope',label:'🌱 Group',values:['Youth','Senior']},
+            {key:'youthScope',label:'Group',values:['Youth','Senior']},
           ]} />
         </div>
       </PageHeader>
@@ -407,8 +407,8 @@ export default function Players() {
                 <div className="m-meta" style={{marginTop:5}}>
                   {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
                   {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0&&<span className="m-sub">({p.secondaryPositions.join(', ')})</span>}
-                  {p.dob&&<span>🗓 {fmtDate(p.dob)} ({pAge})</span>}
-                  {p.foot&&<span>🦵 {p.foot}</span>}
+                  {p.dob&&<span>{fmtDate(p.dob)} ({pAge})</span>}
+                  {p.foot&&<span>{p.foot}</span>}
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
@@ -418,20 +418,22 @@ export default function Players() {
                 </div>
                 {(p.contractEnd||p.reprEnd||p.passportExpiry||p.natTeamStatus)&&(
                   <div className="m-meta" style={{marginTop:5,fontSize:11}}>
-                    {p.contractEnd&&<span style={{color:alertColor(contractDays)}}>📑 {fmtDate(p.contractEnd)}</span>}
-                    {p.reprEnd&&<span style={{color:alertColor(reprDays)}}>🤝 {fmtDate(p.reprEnd)}</span>}
-                    {p.passportExpiry&&<span style={{color:alertColor(passportDays)}}>🪪 {fmtDate(p.passportExpiry)}</span>}
-                    {p.natTeamStatus&&<span className="m-sub">🏟 {p.natTeamStatus}</span>}
+                    {p.contractEnd&&<span style={{color:alertColor(contractDays)}}>{fmtDate(p.contractEnd)}</span>}
+                    {p.reprEnd&&<span style={{color:alertColor(reprDays)}}>{fmtDate(p.reprEnd)}</span>}
+                    {p.passportExpiry&&<span style={{color:alertColor(passportDays)}}>{fmtDate(p.passportExpiry)}</span>}
+                    {p.natTeamStatus&&<span className="m-sub">{p.natTeamStatus}</span>}
                   </div>
                 )}
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:9}}>
                   <NatFlags nats={p.nationalities} />
-                  <div className="action-btns" style={{display:'flex',gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)'}} title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
-                    {canEdit&&(<button style={{width:30,height:30,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)'}} title="Edit" onClick={()=>openEdit(p)}>✏️</button>)}
-                    {p.profileLink&&(<a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}} title="Profile">🧑‍💼</a>)}
-                    {p.videoLink&&(<a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink} target="_blank" rel="noopener noreferrer" style={{width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}} title="Video">📹</a>)}
-                  </div>
+                  <span onClick={e=>e.stopPropagation()}>
+                    <RowActions
+                      onEdit={canEdit?()=>openEdit(p):undefined}
+                      onDelete={canEdit?(e)=>del(p,e):undefined}
+                      profileUrl={p.profileLink}
+                      videoUrl={p.videoLink}
+                    />
+                  </span>
                 </div>
               </div>
             );
@@ -477,24 +479,12 @@ export default function Players() {
                     >
                       {/* Actions cell - click stops propagation */}
                       <td onClick={e=>e.stopPropagation()}>
-                        <div style={{display:'flex',gap:3,flexWrap:'wrap',width:66}}>
-                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(248,113,113,0.15)',color:'var(--red)',transition:'all 0.15s'}}
-                            title="Delete" onClick={(e)=>del(p,e)}>🗑</button>)}
-                          {canEdit&&(<button style={{width:26,height:26,padding:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,border:'none',borderRadius: 0,cursor:'pointer',background:'rgba(201,168,76,0.15)',color:'var(--gold)',transition:'all 0.15s'}}
-                            title="Edit" onClick={(e)=>{e.stopPropagation();openEdit(p);}}>✏️</button>)}
-                          {p.profileLink&&(
-                            <a href={p.profileLink.startsWith('http')?p.profileLink:'https://'+p.profileLink}
-                              target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                              style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(96,165,250,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}}
-                              title="Profile">🧑‍💼</a>
-                          )}
-                          {p.videoLink&&(
-                            <a href={p.videoLink.startsWith('http')?p.videoLink:'https://'+p.videoLink}
-                              target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                              style={{width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(74,222,128,0.15)',borderRadius: 0,fontSize:13,textDecoration:'none'}}
-                              title="Video">📹</a>
-                          )}
-                        </div>
+                        <RowActions
+                          onEdit={canEdit?()=>openEdit(p):undefined}
+                          onDelete={canEdit?(e)=>del(p,e):undefined}
+                          profileUrl={p.profileLink}
+                          videoUrl={p.videoLink}
+                        />
                       </td>
                       <td style={{fontWeight:600}}>{p.fullName}</td>
                       <td style={{textAlign:'center',color:'var(--text-2)'}}>{genderShort}</td>
@@ -586,7 +576,7 @@ export default function Players() {
                 <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name" />
                 <button type="button" className={`chip${form.currentClubIsYouth?' active':''}`}
                   onClick={()=>s('currentClubIsYouth')(!form.currentClubIsYouth)}
-                  style={{fontSize:11,padding:'4px 10px',marginTop:6}}>🌱 Youth Team</button>
+                  style={{fontSize:11,padding:'4px 10px',marginTop:6}}>Youth Team</button>
               </Field>
               {isLoan&&<Field label="Loan From"><input value={f('loanFrom')} onChange={e=>s('loanFrom')(e.target.value)} placeholder="Parent club" /></Field>}
             </div>
@@ -621,7 +611,7 @@ export default function Players() {
           </>)}
 
           <hr className="divider" />
-          <div className="form-section-title">🪪 Passport</div>
+          <div className="form-section-title">Passport</div>
           <div className="form-grid-2">
             <Field label="Passport Number"><input value={f('passportNumber')} onChange={e=>s('passportNumber')(e.target.value)} placeholder="Passport number" /></Field>
             <Field label="Passport Expiry"><DateInput value={f('passportExpiry')} onChange={s('passportExpiry')} /></Field>
