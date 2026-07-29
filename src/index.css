@@ -1,93 +1,96 @@
-/* Display: Playfair Display (high-contrast serif, for the very large
-   "moment" headings). Sub-display + section: Cormorant Garamond
-   (italic — for chapter titles and section labels).
-   UI body: Plus Jakarta Sans (geometric with subtle warmth, used by
-   premium SaaS — replaces the previous Outfit choice for a more
-   "tailored" look). Hebrew text falls through to Heebo, which is the
-   sibling Hebrew typeface designed to pair with Latin sans-serifs. */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Heebo:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+/* ===================================================================
+   GOLD A&S — "The Front Office"
+   A luxury front-office terminal, not a website.
 
-/* Body-font token used by every UI element that previously hard-coded
-   'Outfit'. Latin glyphs render in Plus Jakarta Sans; Hebrew falls
-   through to Heebo per-glyph (browsers pick the first font in the
-   stack that has the codepoint). */
+   Typography — three voices, no decoration:
+     Space Grotesk  · display. Squared geometric grotesk; headings are set
+                      uppercase and tight, engineered rather than romantic.
+     Inter Tight    · UI body. Dense, quiet, highly legible at small sizes.
+     JetBrains Mono · data. Every figure, date, count and metric — the
+                      tabular spine that makes the app read as an instrument.
+   Hebrew falls through to Heebo in all three (browsers pick the first
+   font in the stack carrying the codepoint).
+   =================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Heebo:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --font-body: 'Plus Jakarta Sans', 'Heebo', system-ui, -apple-system, sans-serif;
-  --font-display: 'Playfair Display', 'Cormorant Garamond', serif;
-  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'Inter Tight', 'Heebo', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Heebo', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  /* Legacy alias — anything that still asks for the old serif now gets the
+     display grotesk, so no screen is left with an orphaned typeface. */
+  --font-serif:   'Space Grotesk', 'Heebo', system-ui, sans-serif;
 }
 
 /* ===================================================================
-   GOLD A&S — Design tokens (Tuxedo Club refresh)
-   - Palette: deeper club-green base + warmer "antique" gold
-   - Typography: stronger display hierarchy, italic accents
-   - Motion: longer, calmer transitions
+   Design tokens.
+   Gold stops being a fill and becomes a signature: hairlines, the active
+   marker, section numerals. Surfaces are flat near-black with a green
+   cast — the contrast comes from structure, not from glow.
    =================================================================== */
 :root {
-  /* — Gold, refined toward champagne/antique rather than canary — */
-  --gold:        #D4B062;
-  --gold-lt:     #ECD180;
-  --gold-dk:     #8E6A24;
-  --gold-soft:   #B59548;
-  --gold-dim:    rgba(212,176,98,0.10);
-  --gold-glow:   0 0 36px rgba(212,176,98,0.22);
+  --gold:        #C8A24A;
+  --gold-lt:     #E4C87A;
+  --gold-dk:     #8A6B22;
+  --gold-soft:   #A98E48;
+  --gold-dim:    rgba(200,162,74,0.10);
+  --gold-glow:   none;
 
-  /* — Deep, slightly cooler club green; subtle layered surfaces — */
-  --bg:          #0A140D;
-  --surface-1:   #131F18;
-  --surface-2:   #182520;
-  --surface-3:   #1F2D27;
-  --card:        #15211A;
-  --card-hover:  #1B2922;
+  --bg:          #080B09;
+  --surface-1:   #0D110E;
+  --surface-2:   #111614;
+  --surface-3:   #171D1A;
+  --card:        #0D110E;
+  --card-hover:  #131917;
 
-  /* — Stronger text hierarchy — */
-  --text-1:      #F6FBF6;
-  --text-2:      #B5CCB8;
-  /* text-3 carries real secondary content (leagues, roles, dates) — lifted
-     slightly for contrast without losing the muted-green character. */
-  --text-3:      #7DA282;
-  --text-mute:   #567D5C;
+  --text-1:      #EDF1EC;
+  --text-2:      #A3B0A4;
+  --text-3:      #6F7C70;
+  --text-mute:   #4E594F;
 
-  /* — Borders: quiet by default, gold-lit on emphasis — */
-  --border:      rgba(212,176,98,0.07);
-  --border-2:    rgba(212,176,98,0.18);
-  --border-3:    rgba(212,176,98,0.32);
+  /* Hairlines do the structural work everywhere. */
+  --border:      rgba(237,241,236,0.09);
+  --border-2:    rgba(237,241,236,0.16);
+  --border-3:    rgba(200,162,74,0.45);
+  --rule:        rgba(237,241,236,0.06);
 
-  --input-bg:    #1A271F;
-  --input-text:  #F0F7F1;
+  --input-bg:    #0F1411;
+  --input-text:  #EDF1EC;
 
   /* — Accent colors — slightly softened to feel less "web app" — */
-  --red:         #F0726E;
-  --red-bg:      rgba(240,114,110,0.10);
-  --amber:       #E5B547;
-  --amber-bg:    rgba(229,181,71,0.10);
-  --green-ok:    #5DD68A;
-  --green-bg:    rgba(93,214,138,0.10);
-  --blue:        #6BAEF5;
-  --blue-bg:     rgba(107,174,245,0.10);
-  --purple:      #B19CF5;
+  --red:         #E05A55;
+  --red-bg:      rgba(224,90,85,0.12);
+  --amber:       #D9A036;
+  --amber-bg:    rgba(217,160,54,0.12);
+  --green-ok:    #4DBE7A;
+  --green-bg:    rgba(77,190,122,0.12);
+  --blue:        #5B9DE0;
+  --blue-bg:     rgba(91,157,224,0.12);
+  --purple:      #9C8AE0;
 
-  /* — Radii — */
-  --radius-sm:   8px;
-  --radius-md:   12px;
-  --radius-lg:   16px;
-  --radius-xl:   22px;
+  /* Geometry: the whole system is squared. 2px is the only softening
+     allowed, and only on interactive surfaces. */
+  --radius-sm:   2px;
+  --radius-md:   2px;
+  --radius-lg:   0px;
+  --radius-xl:   0px;
 
-  /* — Motion — */
-  --trans:        200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --trans-fast:   130ms cubic-bezier(0.4, 0, 0.2, 1);
-  --trans-slow:   360ms cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+  /* Motion: fast and mechanical. Nothing bounces. */
+  --trans:        150ms cubic-bezier(0.2, 0, 0, 1);
+  --trans-fast:   110ms cubic-bezier(0.2, 0, 0, 1);
+  --trans-slow:   240ms cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring:  cubic-bezier(0.2, 0, 0, 1);
+  --ease-out:     cubic-bezier(0.2, 0, 0, 1);
 
-  /* — Shadows: deeper and more refined — */
-  --shadow-sm:       0 2px 10px rgba(0,0,0,0.34);
-  --shadow-md:       0 6px 22px rgba(0,0,0,0.46);
-  --shadow-lg:       0 12px 44px rgba(0,0,0,0.56);
-  --shadow-xl:       0 20px 64px rgba(0,0,0,0.66);
-  --shadow-gold:     0 4px 26px rgba(212,176,98,0.18);
-  --shadow-gold-lg:  0 10px 44px rgba(212,176,98,0.30);
-  --shadow-inset:    inset 0 1px 0 rgba(255,255,255,0.035);
+  /* Depth is drawn with lines, not blur. Shadows exist only to lift
+     genuinely floating layers (drawers, menus, toasts). */
+  --shadow-sm:       none;
+  --shadow-md:       0 2px 14px rgba(0,0,0,0.5);
+  --shadow-lg:       0 0 40px rgba(0,0,0,0.6);
+  --shadow-xl:       -18px 0 60px rgba(0,0,0,0.65);
+  --shadow-gold:     none;
+  --shadow-gold-lg:  none;
+  --shadow-inset:    none;
 
   --sidebar-w:    220px;
   --bottom-nav-h: 64px;
@@ -102,20 +105,14 @@ html {
 }
 
 body {
-  background:
-    /* Quiet "suit fabric" grain — barely visible but lifts the whole UI
-       out of the flat-app look. SVG fractal noise inlined as data URI. */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>"),
-    radial-gradient(ellipse 900px 700px at 80% -240px, rgba(212,176,98,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 700px 900px at -240px 80%, rgba(20,80,32,0.08) 0%, transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
+  /* Flat. No texture, no gradient wash — the structure carries the room. */
+  background: var(--bg);
   color: var(--text-1);
   font-family: var(--font-body);
   font-size: 13px;
   font-weight: 400;
-  line-height: 1.55;
-  letter-spacing: 0.005em;
+  line-height: 1.5;
+  letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -129,39 +126,42 @@ body {
 }
 
 /* Selection */
-::selection { background: rgba(201,168,76,0.35); color: var(--text-1); }
+::selection { background: rgba(200,162,74,0.28); color: var(--text-1); }
 
 /* Scrollbars */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(201,168,76,0.22);
-  border-radius: 3px;
+  background: rgba(237,241,236,0.14);
+  border-radius: 0;
   transition: background var(--trans);
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.45); }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-soft); }
 
 /* Inputs */
+/* Fields read as ruled entry lines, not as containers. */
 input, select, textarea {
   width: 100%;
   background: var(--input-bg) !important;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-bottom-color: var(--border-2);
+  border-radius: 0;
   color: var(--input-text) !important;
   font-family: var(--font-body);
   font-size: 13px;
-  padding: 10px 13px;
+  padding: 9px 12px;
   outline: none;
-  transition: border-color var(--trans), box-shadow var(--trans), background var(--trans);
+  transition: border-color var(--trans-fast), background var(--trans-fast);
 }
 
 input:hover:not(:focus), select:hover:not(:focus), textarea:hover:not(:focus) {
-  border-color: var(--border-2);
+  border-bottom-color: var(--text-3);
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(201,168,76,0.15);
+  border-color: var(--border-2);
+  border-bottom: 1px solid var(--gold);
+  background: var(--surface-2) !important;
 }
 
 select option { background: var(--surface-2) !important; color: var(--input-text) !important; }
@@ -178,148 +178,144 @@ input[type="number"] { -moz-appearance: textfield; }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
-/* Buttons */
+/* Buttons — pressed-metal rectangles. Uppercase, tracked, no fills that
+   draw attention away from the data. */
 .btn {
-  align-items: center; border: none; border-radius: var(--radius-sm);
+  align-items: center; border: 1px solid transparent; border-radius: 0;
   cursor: pointer; display: inline-flex; font-family: var(--font-body);
-  font-size: 12.5px; font-weight: 500; gap: 7px; justify-content: center;
-  padding: 10px 20px; white-space: nowrap; letter-spacing: 0.03em;
-  position: relative; overflow: hidden;
-  transition: background var(--trans), border-color var(--trans),
-              color var(--trans), box-shadow var(--trans), transform var(--trans);
+  font-size: 11px; font-weight: 600; gap: 7px; justify-content: center;
+  padding: 9px 18px; white-space: nowrap;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  position: relative;
+  transition: background var(--trans-fast), border-color var(--trans-fast), color var(--trans-fast);
   -webkit-tap-highlight-color: transparent;
 }
-.btn::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit;
-  background: radial-gradient(circle at var(--x,50%) var(--y,50%), rgba(255,255,255,0.18), transparent 60%);
-  opacity: 0; transition: opacity var(--trans-fast);
-  pointer-events: none;
-}
-.btn:hover::after { opacity: 1; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-.btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--gold), var(--gold-dk));
-  color: #060E08;
-  box-shadow: 0 2px 10px rgba(201,168,76,0.18);
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0A0C0A;
 }
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--gold-lt), var(--gold));
-  box-shadow: var(--shadow-gold-lg);
-  transform: translateY(-1px);
-}
-.btn-secondary { background: var(--surface-3); border: 1.5px solid var(--border-2); color: var(--text-1); }
-.btn-secondary:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); transform: translateY(-1px); }
-.btn-ghost { background: transparent; border: 1.5px solid var(--border-2); color: var(--text-2); }
-.btn-ghost:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
-.btn-danger { background: var(--red-bg); border: 1.5px solid rgba(248,113,113,0.25); color: var(--red); }
-.btn-danger:hover:not(:disabled) { background: rgba(248,113,113,0.22); transform: translateY(-1px); }
-.btn-sm { padding: 5px 12px; font-size: 12px; }
-.btn-lg { padding: 13px 28px; font-size: 15px; }
-.btn-icon { padding: 8px; border-radius: var(--radius-sm); }
+.btn-primary:hover:not(:disabled) { background: var(--gold-lt); border-color: var(--gold-lt); }
 
-/* Cards — refined for tuxedo aesthetic: subtle inset highlight + gold-lit
-   hover. The inset rim catches light like a polished wood panel edge. */
+.btn-secondary { background: var(--surface-3); border-color: var(--border-2); color: var(--text-1); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+
+.btn-ghost { background: transparent; border-color: var(--border-2); color: var(--text-2); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); background: transparent; }
+
+.btn-danger { background: transparent; border-color: rgba(224,90,85,0.4); color: var(--red); }
+.btn-danger:hover:not(:disabled) { background: var(--red-bg); border-color: var(--red); }
+
+.btn-sm { padding: 6px 12px; font-size: 10px; letter-spacing: 0.08em; }
+.btn-lg { padding: 13px 26px; font-size: 12px; }
+.btn-icon { padding: 8px; }
+
+/* Panels — a hairline box on a flat ground. No lift, no glow: emphasis is
+   a brighter rule and a gold edge marker. */
 .card {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.012), transparent 40%),
-    var(--card);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-inset);
-  transition: border-color var(--trans), transform var(--trans), box-shadow var(--trans);
+  border-radius: 0;
+  transition: border-color var(--trans-fast), background var(--trans-fast);
 }
 .card:hover { border-color: var(--border-2); }
-.card-body { padding: 18px; }
-.card-interactive { cursor: pointer; }
-.card-interactive:hover {
-  border-color: var(--border-3);
-  box-shadow: var(--shadow-md), var(--shadow-inset), 0 0 0 1px rgba(212,176,98,0.06) inset;
-  transform: translateY(-2px);
+.card-body { padding: 18px 20px; }
+.card-interactive { cursor: pointer; position: relative; }
+.card-interactive::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--gold); opacity: 0; transition: opacity var(--trans-fast);
 }
+.card-interactive:hover { border-color: var(--border-2); background: var(--card-hover); }
+.card-interactive:hover::before { opacity: 1; }
 
-/* Chips — refined for tuxedo aesthetic. Quiet outline base, gold-lit
-   filled active state with soft glow. Letter-spacing for premium feel. */
+/* Tags — printed labels, not pills. The active state inverts to solid
+   gold: unmistakable at a glance, no glow required. */
 .chip {
   align-items: center;
   background: transparent;
   border: 1px solid var(--border-2);
-  border-radius: 999px;
+  border-radius: 0;
   color: var(--text-2);
   cursor: pointer;
   display: inline-flex;
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 10.5px;
+  font-weight: 600;
   gap: 5px;
-  padding: 6px 14px;
-  letter-spacing: 0.03em;
-  transition: background var(--trans), border-color var(--trans),
-              color var(--trans), transform var(--trans-fast), box-shadow var(--trans);
+  padding: 6px 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: background var(--trans-fast), border-color var(--trans-fast), color var(--trans-fast);
   white-space: nowrap;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.chip:hover { border-color: var(--border-3); color: var(--text-1); transform: translateY(-1px); }
-.chip:active { transform: translateY(0) scale(0.97); }
+.chip:hover { border-color: var(--text-3); color: var(--text-1); }
 .chip.active {
-  background: linear-gradient(135deg, rgba(212,176,98,0.18), rgba(212,176,98,0.08));
+  background: var(--gold);
   border-color: var(--gold);
-  color: var(--gold-lt);
-  font-weight: 600;
-  box-shadow:
-    0 0 0 1px rgba(212,176,98,0.12) inset,
-    0 2px 12px rgba(212,176,98,0.15);
+  color: #0A0C0A;
+  font-weight: 700;
 }
-.chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-group { display: flex; flex-wrap: wrap; gap: 5px; }
 
-/* Badge — pill-shaped, refined letter-spacing, subtle inset rim for that
-   "engraved metal label" look. */
+/* Status labels — squared stamps with a solid left edge. */
 .badge {
-  border-radius: 999px;
+  border-radius: 0;
   display: inline-block;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  padding: 4px 11px;
+  font-family: var(--font-body);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
   white-space: nowrap;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
   text-transform: uppercase;
+  border-left: 2px solid currentColor;
 }
 
 /* Modal */
+/* Overlays are drawers on the desktop: a full-height panel that slides in
+   from the right edge, the way a real workstation opens a record. */
 .modal-overlay {
-  align-items: center;
-  background: rgba(0,0,0,0.72);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  align-items: stretch;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: flex;
   inset: 0;
-  justify-content: center;
-  padding: 16px;
+  justify-content: flex-end;
+  padding: 0;
   position: fixed;
   z-index: 200;
-  animation: fadeIn 0.18s ease;
+  animation: fadeIn 0.15s linear;
 }
 @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 .modal-box {
-  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
-  border: 1.5px solid var(--border-2);
-  border-radius: 18px;
-  max-height: 88vh;
+  background: var(--surface-1);
+  border: none;
+  border-left: 1px solid var(--border-2);
+  border-radius: 0;
+  height: 100vh;
+  max-height: 100vh;
   width: 100%;
-  max-width: 640px;
-  box-shadow: var(--shadow-xl), 0 0 0 1px rgba(255,255,255,0.02) inset;
-  animation: modalIn 0.28s var(--ease-spring);
+  max-width: 620px;
+  box-shadow: var(--shadow-xl);
+  animation: drawerIn 0.24s var(--ease-out);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-@keyframes modalIn {
-  from { opacity: 0; transform: translateY(20px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+@keyframes drawerIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }
-.modal-box.modal-wide { max-width: 860px; }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.modal-box.modal-wide { max-width: 940px; }
 .modal-header {
   align-items: center;
   display: flex;
@@ -354,24 +350,25 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 /* Form */
 .form-section-title {
-  color: var(--gold-soft);
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  margin-bottom: 18px;
-  padding-bottom: 10px;
+  color: var(--gold);
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border-2);
 }
 .form-field { margin-bottom: 18px; }
 .form-label {
-  color: var(--text-2);
+  color: var(--text-3);
   display: block;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  margin-bottom: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  margin-bottom: 7px;
   text-transform: uppercase;
 }
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -383,8 +380,8 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .dropdown-wrap { position: relative; }
 .dropdown-list {
   background: var(--surface-2);
-  border: 1.5px solid var(--border-2);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-2);
+  border-radius: 0;
   box-shadow: var(--shadow-md);
   display: none;
   left: 0;
@@ -420,40 +417,49 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   overscroll-behavior: contain;
   position: relative;
 }
+/* Tables — editorial register. No zebra striping: thin rules separate
+   rows, figures are monospaced, and hover lights a gold edge on the row. */
 .data-table { border-collapse: collapse; width: 100%; min-width: 700px; }
 .data-table thead tr { border-bottom: none; }
 .data-table th {
-  background: #06100A;
-  color: var(--gold-soft);
+  background: var(--bg);
+  color: var(--text-3);
   font-family: var(--font-body);
   font-size: 9.5px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.14em;
-  padding: 10px 7px;
+  padding: 11px 8px;
   text-align: center;
   text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
-  transition: color var(--trans), background var(--trans);
+  transition: color var(--trans-fast);
   position: sticky;
   top: 0;
   z-index: 2;
   border-bottom: 1px solid var(--border-2);
 }
-.data-table th:hover { color: var(--gold); background: #06100A; }
+.data-table th:hover { color: var(--gold); }
 .data-table td {
-  border-bottom: 1px solid rgba(212,176,98,0.04);
+  border-bottom: 1px solid var(--rule);
   border-right: none;
-  padding: 8px 7px;
-  font-size: 11px;
+  padding: 9px 8px;
+  font-size: 11.5px;
   white-space: nowrap;
   color: var(--text-1);
   vertical-align: middle;
+  background: transparent;
+  position: relative;
 }
 .data-table tbody tr { transition: background var(--trans-fast); }
-.data-table tbody tr td { background: var(--card); }
-.data-table tbody tr:nth-child(even) td { background: var(--surface-1); }
-.data-table tbody tr:hover td { background: rgba(212,176,98,0.05) !important; }
+.data-table tbody tr td { background: transparent; }
+.data-table tbody tr:nth-child(even) td { background: rgba(237,241,236,0.012); }
+.data-table tbody tr:hover td { background: var(--card-hover) !important; }
+/* Gold marker on the row being pointed at. */
+.data-table tbody tr:hover td:first-child::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--gold);
+}
 
 /* Toast */
 .toast-container {
@@ -462,11 +468,11 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 .toast {
   align-items: center;
-  animation: toastIn 0.32s cubic-bezier(0.34,1.56,0.64,1);
-  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
-  border: 1.5px solid var(--border-2);
+  animation: toastIn 0.18s var(--ease-out);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
   border-left: 3px solid var(--gold);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   box-shadow: var(--shadow-lg);
   color: var(--text-1);
   display: flex; font-size: 13px; gap: 10px;
@@ -478,101 +484,86 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .toast.error   { border-left-color: var(--red); }
 .toast.warning { border-left-color: var(--amber); }
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(24px) scale(0.95); }
-  to   { opacity: 1; transform: translateX(0) scale(1); }
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
-/* KPI cards — large Playfair Display numerals over a quiet card, with
-   a subtle gold underline that lights up on hover (drawer-pull motif). */
+/* Metric blocks — instrument readouts: a gold rule on top, a monospaced
+   figure, a micro label underneath. */
 .kpi-card {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.012), transparent 50%),
-    var(--card);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px 20px;
-  transition: border-color var(--trans), transform var(--trans), box-shadow var(--trans);
+  border-top: 2px solid var(--gold-dk);
+  border-radius: 0;
+  padding: 14px 18px 16px;
+  transition: border-color var(--trans-fast), background var(--trans-fast);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-end;
   height: 100px;
   position: relative;
-  overflow: hidden;
-  box-shadow: var(--shadow-inset);
 }
-.kpi-card::after {
-  content: '';
-  position: absolute;
-  left: 24px; right: 24px; bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
-  opacity: 0.25;
-  transition: opacity var(--trans);
-}
-.kpi-card:hover {
-  border-color: var(--border-3);
-  box-shadow: var(--shadow-md), var(--shadow-inset);
-  transform: translateY(-3px);
-}
-.kpi-card:hover::after { opacity: 0.7; }
+.kpi-card:hover { border-top-color: var(--gold); background: var(--card-hover); }
 .kpi-value {
-  font-family: var(--font-display);
-  font-size: 38px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.015em;
-  color: var(--gold);
-  background: linear-gradient(135deg, var(--gold-lt), var(--gold) 60%, var(--gold-dk));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  margin-bottom: 6px;
+  letter-spacing: -0.03em;
+  color: var(--text-1);
+  -webkit-text-fill-color: currentColor;
+  margin-bottom: 0;
+  font-variant-numeric: tabular-nums;
 }
 .kpi-label {
-  color: var(--gold-soft);
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  margin-top: 4px;
+  color: var(--text-3);
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: 8px;
 }
 
 /* Alert row */
 .alert-row {
   align-items: center; background: var(--card);
-  border: 1.5px solid var(--border); border-radius: var(--radius-md);
-  display: flex; gap: 12px; padding: 13px 16px;
-  transition: border-color var(--trans), transform var(--trans), background var(--trans);
+  border: 1px solid var(--border); border-radius: 0;
+  display: flex; gap: 12px; padding: 12px 16px;
+  transition: border-color var(--trans-fast), background var(--trans-fast);
 }
-.alert-row:hover { border-color: var(--border-2); transform: translateX(3px); background: var(--card-hover); }
+.alert-row:hover { border-color: var(--border-2); background: var(--card-hover); }
 .alert-row.urgent  { border-left: 3px solid var(--red); }
 .alert-row.warning { border-left: 3px solid var(--amber); }
 
 /* Misc */
+/* Section rule — a micro caption riding a hairline that runs to the edge. */
 .section-label {
-  color: var(--gold-soft);
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  color: var(--text-3);
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   margin-bottom: 12px;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  width: 100%;
 }
 .section-label::before {
   content: '';
-  width: 18px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--gold-soft));
+  width: 14px; height: 2px;
+  background: var(--gold);
+  flex-shrink: 0;
 }
 .section-label::after {
   content: '';
-  width: 18px;
+  flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, var(--gold-soft), transparent);
+  background: var(--rule);
 }
 .spinner {
   width: 20px; height: 20px;
@@ -590,18 +581,18 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   animation: fadeUp 0.5s var(--ease-out);
 }
 .empty-icon {
-  font-size: 48px;
+  font-size: 34px;
   margin-bottom: 14px;
-  filter: grayscale(0.4);
-  animation: float 4s ease-in-out infinite;
+  filter: grayscale(1);
+  opacity: 0.5;
 }
 @keyframes float {
   0%,100% { transform: translateY(0); }
   50%     { transform: translateY(-6px); }
 }
 .file-drop {
-  border: 2px dashed var(--border-2);
-  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-2);
+  border-radius: 0;
   padding: 20px;
   text-align: center;
   color: var(--text-3);
@@ -610,33 +601,39 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 .file-drop:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
 .divider { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
-.page-header { margin-bottom: 20px; animation: fadeUp 0.4s var(--ease-out); }
+/* Page masthead — a gold rule, then the title set tight and uppercase.
+   Identical on every screen: same rhythm, same anchor point. */
+.page-header {
+  margin-bottom: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gold-dk);
+  animation: fadeUp 0.3s var(--ease-out);
+}
 .page-title {
-  color: var(--gold);
+  color: var(--text-1);
   font-family: var(--font-display);
-  font-size: 27px;
+  font-size: 26px;
   font-weight: 600;
+  text-transform: uppercase;
   /* line-height kept comfortable so Playfair Display's tall ascenders
      (J, K, M…) and serif overshoots aren't clipped by
      -webkit-background-clip: text. Adding a hair of padding-top is the
      belt-and-suspenders fix — gradients are sometimes drawn at the box
      edge, not the glyph metric, so this guarantees no chop on top. */
-  line-height: 1.2;
-  padding-top: 2px;
-  letter-spacing: -0.005em;
-  background: linear-gradient(135deg, var(--gold-lt) 0%, var(--gold) 45%, var(--gold-dk) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  line-height: 1.05;
+  padding-top: 0;
+  letter-spacing: -0.01em;
+  background: none;
+  -webkit-text-fill-color: currentColor;
 }
 .page-subtitle {
   color: var(--text-3);
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.015em;
-  margin-top: 3px;
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin-top: 6px;
 }
 
 [data-tooltip] { position: relative; }
@@ -672,7 +669,10 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .main-content > * { animation: fadeUp 0.36s var(--ease-out); }
 
 /* Utility */
-.serif { font-family: var(--font-serif); }
+/* Every figure in the app is monospaced — the tabular spine. */
+.data-table td, .kpi-value, .m-meta, .badge { font-variant-numeric: tabular-nums; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.serif { font-family: var(--font-display); }
 .text-gold { color: var(--gold); }
 .text-muted { color: var(--text-2); }
 .text-dim   { color: var(--text-3); }
@@ -693,23 +693,25 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 22px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-2);
+  padding: 18px 24px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--gold-dk);
   flex-shrink: 0;
   position: relative;
   z-index: 1;
 }
 .modal-title {
-  font-family: var(--font-serif);
-  font-size: 21px;
-  font-weight: 700;
-  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-1);
 }
 .modal-close-btn {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--border-2);
+  border-radius: 0;
   color: var(--text-2);
   cursor: pointer;
   width: 32px;
@@ -724,10 +726,9 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
               border-color var(--trans), transform var(--trans);
 }
 .modal-close-btn:hover {
-  background: rgba(248,113,113,0.15);
+  background: var(--red-bg);
   color: var(--red);
-  border-color: rgba(248,113,113,0.25);
-  transform: rotate(90deg);
+  border-color: var(--red);
 }
 
 .modal-grab {
@@ -747,7 +748,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   overflow-x: hidden;
   overscroll-behavior: contain;
   touch-action: pan-y;
-  padding: 20px 22px 22px;
+  padding: 22px 24px 24px;
   min-height: 0;
 }
 .modal-box { touch-action: pan-y; }
@@ -755,16 +756,13 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .modal-footer-bar {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 22px 20px;
-  margin: 20px -22px -22px;
+  gap: 8px;
+  padding: 14px 24px 20px;
+  margin: 22px -24px -24px;
   border-top: 1px solid var(--border-2);
   position: sticky;
-  bottom: -22px;
-  background: linear-gradient(180deg, rgba(26,40,32,0.5), var(--surface-2));
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 -8px 24px rgba(0,0,0,0.4);
+  bottom: -24px;
+  background: var(--surface-1);
   z-index: 10;
 }
 
@@ -792,14 +790,11 @@ textarea:focus::placeholder {
     left: 0;
     right: 0;
     height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
-    background: rgba(22, 32, 25, 0.94);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    backdrop-filter: blur(20px) saturate(160%);
-    border-top: 1px solid var(--border);
+    background: var(--surface-1);
+    border-top: 1px solid var(--border-2);
     z-index: 60;
     justify-content: space-around;
     align-items: stretch;
-    box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
     box-sizing: border-box;
   }
   .bottom-nav-item {
@@ -808,24 +803,22 @@ textarea:focus::placeholder {
     gap: 3px;
     padding: 6px 4px;
     padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
-    font-size: 9.5px; font-weight: 600;
-    letter-spacing: 0.04em;
-    transition: color var(--trans), transform var(--trans-fast);
+    font-size: 8.5px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    transition: color var(--trans-fast);
     -webkit-tap-highlight-color: transparent;
     position: relative;
   }
-  .bottom-nav-item:active { transform: scale(0.92); }
+  .bottom-nav-item:active { background: var(--surface-3); }
   .bottom-nav-item .icon { font-size: 19px; line-height: 1; transition: transform var(--trans); }
   .bottom-nav-item.active { color: var(--gold); }
-  .bottom-nav-item.active .icon { transform: translateY(-2px); }
+  .bottom-nav-item.active .icon { transform: none; }
   .bottom-nav-item.active::before {
     content: '';
     position: absolute;
-    top: 0; left: 30%; right: 30%;
-    height: 2.5px;
+    top: 0; left: 0; right: 0;
+    height: 2px;
     background: var(--gold);
-    border-radius: 0 0 3px 3px;
-    box-shadow: 0 0 10px rgba(201,168,76,0.55);
   }
 }
 
@@ -1032,7 +1025,7 @@ textarea:focus::placeholder {
   .form-grid-2, .form-grid-3 { grid-template-columns: 1fr !important; }
 
   .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  .kpi-value { font-size: 32px !important; margin-bottom: 8px; }
+  .kpi-value { font-size: 28px !important; margin-bottom: 0; }
   /* Natural height instead of forced 1:1 squares — saves ~150px of scroll
      on the Dashboard without losing readability. */
   .kpi-card { min-height: 90px; height: auto !important; padding: 16px 18px; }
@@ -1055,10 +1048,13 @@ textarea:focus::placeholder {
   .modal-overlay {
     padding: 0;
     align-items: flex-end;
-    background: rgba(0,0,0,0.85);
+    justify-content: center;
+    background: rgba(0,0,0,0.8);
   }
   .modal-box {
-    border-radius: 22px 22px 0 0;
+    border-radius: 0;
+    border-left: none;
+    border-top: 2px solid var(--gold-dk);
     /* dvh (with vh fallback) — on iOS Safari 94vh sits behind the URL bar
        and hides the footer buttons; dvh tracks the *visible* viewport. */
     max-height: 94vh;
@@ -1066,7 +1062,7 @@ textarea:focus::placeholder {
     height: auto;
     max-width: 100%;
     width: 100%;
-    animation: modalUp 0.34s var(--ease-spring);
+    animation: modalUp 0.24s var(--ease-out);
   }
 
   @keyframes modalUp {
@@ -1074,7 +1070,7 @@ textarea:focus::placeholder {
     to   { opacity: 1; transform: translateY(0); }
   }
   .modal-box.modal-wide { max-width: 100%; }
-  .modal-title { font-size: 18px; }
+  .modal-title { font-size: 13px; }
   .modal-grab { display: block; }
   .modal-scroll-body   { padding: 22px 16px 20px; }
   .modal-header-frozen { padding: 18px 16px 14px; position: relative; }
@@ -1093,13 +1089,11 @@ textarea:focus::placeholder {
   .desktop-table { display: none !important; }
   .mobile-cards  { display: flex; flex-direction: column; gap: 10px; }
   .m-card {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.012), transparent 40%),
-      var(--card);
+    background: var(--card);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-left: 2px solid var(--gold-dk);
+    border-radius: 0;
     padding: 12px 14px;
-    box-shadow: var(--shadow-inset);
   }
   .m-card:active { background: var(--card-hover); }
   /* Profile/video links in card action rows get the same thumb size the
@@ -1152,7 +1146,6 @@ textarea:focus::placeholder {
   z-index: 40;
   background: var(--bg);
   border-bottom: 1px solid var(--border-2);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
 }
 /* Opaque shield above the pinned header — whatever gap the current
    viewport/zoom leaves between the viewport top and the sticky position,
