@@ -92,9 +92,9 @@ export default function Contacts() {
             />
           </div>
         }
-      />
+      >
 
-      <div className="filter-bar" style={{ marginBottom: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="filter-bar" style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
           <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
         </div>
@@ -104,6 +104,7 @@ export default function Contacts() {
           <option value="Senior">Senior</option>
         </select>
       </div>
+      </PageHeader>
 
       {filtered.length === 0 ? (
         <Empty

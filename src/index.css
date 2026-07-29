@@ -119,6 +119,8 @@ body {
   text-rendering: optimizeLegibility;
   min-height: 100vh;
   overscroll-behavior-y: none;
+  /* Application surface: taps act immediately, double-tap never zooms. */
+  touch-action: manipulation;
   /* Prevent any rogue element (long match card, wide table inside a card,
      etc.) from leaking horizontal scroll to the whole page on mobile.
      .table-wrap / .matches-scroll keep their own internal overflow. */
@@ -602,12 +604,58 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .file-drop:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
 .divider { border: none; border-top: 1px solid var(--border); margin: 22px 0; }
 /* Page masthead — a gold rule, then the title set tight and uppercase.
-   Identical on every screen: same rhythm, same anchor point. */
+   Identical on every screen: same rhythm, same anchor point.
+
+   It is also FROZEN on every screen: title, actions and filters stay
+   pinned while the records scroll beneath them. The block is fully
+   opaque and carries a shield above it, so nothing can ever be seen
+   sliding behind the header at any zoom level or viewport. */
 .page-header {
+  position: sticky;
+  z-index: 40;
+  background: var(--bg);
   margin-bottom: 20px;
   padding-top: 12px;
+  padding-bottom: 12px;
   border-top: 1px solid var(--gold-dk);
+  border-bottom: 1px solid var(--border);
   animation: fadeUp 0.3s var(--ease-out);
+}
+.page-header::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 100%;
+  height: 220px;
+  background: var(--bg);
+}
+@media (min-width: 769px) {
+  .page-header {
+    top: 0;
+    margin-top: -18px;
+    margin-left: -20px;
+    margin-right: -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-top: 18px;
+  }
+}
+@media (max-width: 768px) {
+  .page-header {
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+@media (max-width: 480px) {
+  .page-header {
+    top: calc(60px + env(safe-area-inset-top, 0px));
+    margin-left: -10px;
+    margin-right: -10px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 }
 .page-title {
   color: var(--text-1);
@@ -891,14 +939,17 @@ textarea:focus::placeholder {
   .main-content > div { max-width: 100%; min-width: 0; }
   .main-content > div > * { max-width: 100%; min-width: 0; }
   .card { max-width: 100%; min-width: 0; }
+  /* The data table is the single element allowed to scroll sideways —
+     and only inside its own frame, never the page. */
   .table-wrap {
     display: block;
     width: 100%;
     max-width: 100%;
-    border-radius: 10px;
-    max-height: calc(100dvh - 230px);
+    border-radius: 0;
+    max-height: calc(100dvh - 260px);
     overflow-x: auto;
     overflow-y: auto;
+    overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
   }
   .data-table {
@@ -944,17 +995,20 @@ textarea:focus::placeholder {
   }
   .page-header .action-bar input { width: 100% !important; max-width: 100%; height: 40px !important; }
 
-  /* Filter selects: one horizontal swipe row instead of a wrapping pile. */
+  /* Filters wrap onto as many rows as they need — controls must always be
+     reachable at the natural width of the screen. Horizontal scrolling is
+     reserved exclusively for wide data tables. */
   .filter-bar {
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
-    scrollbar-width: none;
+    flex-wrap: wrap !important;
+    overflow-x: visible;
+    row-gap: 8px;
   }
-  .filter-bar::-webkit-scrollbar { display: none; }
-  .filter-bar > * { flex: 0 0 auto; }
-  .filter-bar select { height: 38px; width: auto; padding-top: 0; padding-bottom: 0; }
+  .filter-bar > * { max-width: 100%; }
+  .filter-bar select {
+    height: 38px; width: auto; max-width: 100%;
+    padding-top: 0; padding-bottom: 0;
+  }
+  .filter-bar .chip-group { width: 100%; }
 
   /* ──────────────── PAGE-MATCHES (mobile-only polish) ──────────────
      The Matches screen carries the heaviest header (Add / Sync / Export
@@ -1146,41 +1200,8 @@ textarea:focus::placeholder {
 }
 .m-sub { font-size: 11px; color: var(--text-3); }
 
-/* ── TM Watch: frozen header ──
-   The title + actions + tabs + last-scan line stay pinned while the
-   candidate list scrolls underneath. */
-.tmw-sticky {
-  position: sticky;
-  z-index: 40;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border-2);
-}
-/* Opaque shield above the pinned header — whatever gap the current
-   viewport/zoom leaves between the viewport top and the sticky position,
-   scrolled cards must never peek through it. */
-.tmw-sticky::before {
-  content: '';
-  position: absolute;
-  left: 0; right: 0;
-  bottom: 100%;
-  height: 120px;
-  background: var(--bg);
-}
-.tmw-sticky .page-header { margin-bottom: 0; }
-@media (min-width: 769px) {
-  .tmw-sticky {
-    top: 0;
-    margin: -18px -20px 16px;
-    padding: 18px 20px 12px;
-  }
-}
-@media (max-width: 768px) {
-  .tmw-sticky {
-    top: calc(64px + env(safe-area-inset-top, 0px));
-    margin: 0 -14px 12px;
-    padding: 8px 14px 10px;
-  }
-}
+/* (The TM Watch screen used to carry a bespoke frozen header; every
+   masthead now freezes by default, so that special case is retired.) */
 
 /* ===================================================================
    LIGHT MODE

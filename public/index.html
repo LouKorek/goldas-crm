@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <!-- Fixed scale: this is an application surface, not a document. Pinch
+       and double-tap zoom are disabled so the layout can never be knocked
+       out of its designed proportions. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 
   <!-- PWA / Theme -->
   <meta name="theme-color" content="#0C1A0E" />
