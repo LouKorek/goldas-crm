@@ -1128,6 +1128,14 @@ textarea:focus::placeholder {
    the structure that a narrow column used to. */
 .tasks-page { max-width: none; }
 
+/* Toolbar — the action row of a page masthead reads as one instrument
+   strip: hairline-separated controls, no floating buttons. */
+.page-header .action-bar { align-items: stretch; }
+.page-header .action-bar .btn { height: 34px; }
+
+/* Sidebar / index scrollbars stay invisible until used. */
+.desktop-sidebar nav::-webkit-scrollbar { width: 4px; }
+
 /* Meta rows on cards (mobile card lists + TM Watch on every screen size):
    a flex row with real breathing room between items. */
 .m-meta {

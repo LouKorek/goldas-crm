@@ -1,38 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import Icon from 'components/ui/Icons';
 import { signOut } from 'firebase/auth';
 import { auth } from 'lib/firebase';
 import { useRole, roleLabel } from 'lib/roleContext';
 import RouteTransition from 'components/ui/RouteTransition';
-import RadialMenu from 'components/ui/RadialMenu';
+import NavIndex from 'components/ui/NavIndex';
 
+// Sections are numbered like chapters in a dossier — the rail reads as a
+// document index rather than a list of buttons.
 const NAV = [
-  { section: 'Overview' },
-  { label: 'Dashboard',         path: '/dashboard',       emoji: '◈' },
-  { label: 'Social',            path: '/social',          emoji: '📸' },
-  { section: 'Players' },
-  { label: 'Represented',       path: '/players',         emoji: '🤝' },
-  { label: 'Matches',           path: '/matches',         emoji: '🏟' },
-  { label: 'Contacts',          path: '/contacts',        emoji: '📇' },
-  { section: 'Transfer Window' },
-  { label: 'Club Requirements', path: '/requirements',    emoji: '📋' },
-  { label: 'Men',               path: '/pipeline/men',    emoji: '🏃', color: '#4ADE80' },
-  { label: 'Women',             path: '/pipeline/women',  emoji: '🏃‍♀️', color: '#F472B6' },
-  { label: 'Youth',             path: '/pipeline/youth',  emoji: '🌱', color: '#60A5FA' },
-  { label: 'Jewish',            path: '/pipeline/jewish', emoji: '✡️', color: '#A78BFA' },
-  { section: 'System' },
-  { label: 'Tasks',             path: '/tasks',           emoji: '✅', ownerOnly: true },
-  { label: 'Notifications',     path: '/notifications',   emoji: '🔔' },
-  { label: 'Team',              path: '/team',            emoji: '👥', adminOnly: true },
+  { section: 'Overview',        num: '01' },
+  { label: 'Dashboard',         path: '/dashboard',       icon: 'dashboard' },
+  { label: 'Social',            path: '/social',          icon: 'social' },
+  { section: 'Players',         num: '02' },
+  { label: 'Represented',       path: '/players',         icon: 'players' },
+  { label: 'Matches',           path: '/matches',         icon: 'matches' },
+  { label: 'Contacts',          path: '/contacts',        icon: 'contacts' },
+  { section: 'Transfer Window', num: '03' },
+  { label: 'Club Requirements', path: '/requirements',    icon: 'clipboard' },
+  { label: 'Men',               path: '/pipeline/men',    icon: 'men' },
+  { label: 'Women',             path: '/pipeline/women',  icon: 'women' },
+  { label: 'Youth',             path: '/pipeline/youth',  icon: 'youth' },
+  { label: 'Jewish',            path: '/pipeline/jewish', icon: 'star' },
+  { section: 'System',          num: '04' },
+  { label: 'Tasks',             path: '/tasks',           icon: 'tasks', ownerOnly: true },
+  { label: 'Notifications',     path: '/notifications',   icon: 'bell' },
+  { label: 'Team',              path: '/team',            icon: 'team', adminOnly: true },
 ];
 
 // Bottom nav for mobile - 5 most important destinations
 const BOTTOM_NAV = [
-  { label: 'Home',     path: '/dashboard',     icon: '◈' },
-  { label: 'Players',  path: '/players',       icon: '🤝' },
-  { label: 'Matches',  path: '/matches',       icon: '🏟' },
-  { label: 'Clubs',    path: '/requirements',  icon: '📋' },
-  { label: 'More',     path: '__more__',       icon: '⋯' },
+  { label: 'Home',     path: '/dashboard',     icon: 'dashboard' },
+  { label: 'Players',  path: '/players',       icon: 'players' },
+  { label: 'Matches',  path: '/matches',       icon: 'matches' },
+  { label: 'Clubs',    path: '/requirements',  icon: 'clipboard' },
+  { label: 'More',     path: '__more__',       icon: 'menu' },
 ];
 
 export default function Layout({ user }) {
@@ -159,16 +162,15 @@ export default function Layout({ user }) {
       {/* Logo — IDENTICAL geometry in both states. The icon never moves;
           the text on its right only fades. */}
       <div style={{
-        padding: '14px 12px',
-        borderBottom: '1px solid var(--border)',
+        padding: '16px 12px',
+        borderBottom: '1px solid var(--border-2)',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 9, flexShrink: 0, overflow: 'hidden',
-            border: '1px solid rgba(201,168,76,0.3)',
-            boxShadow: '0 2px 10px rgba(201,168,76,0.18)',
+            width: 32, height: 32, borderRadius: 0, flexShrink: 0, overflow: 'hidden',
+            border: '1px solid var(--gold-dk)',
           }}>
             <img src="/logo.png" alt="Gold A&S" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
@@ -179,19 +181,19 @@ export default function Layout({ user }) {
             pointerEvents: (collapsed && !isMobile) ? 'none' : 'auto',
           }}>
             <div style={{
-              fontFamily: 'Cormorant Garamond,serif',
-              fontSize: 16, fontWeight: 700, lineHeight: 1,
-              background: 'linear-gradient(135deg, var(--gold-lt), var(--gold))',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              fontFamily: 'var(--font-display)',
+              fontSize: 13, fontWeight: 700, lineHeight: 1,
+              letterSpacing: '0.14em', textTransform: 'uppercase',
+              color: 'var(--text-1)',
               whiteSpace: 'nowrap',
-            }}>Gold A&S</div>
-            <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 1, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>gold-as.com</div>
+            }}>Gold A&amp;S</div>
+            <div style={{ fontSize: 8.5, color: 'var(--text-3)', marginTop: 3, letterSpacing: '0.18em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Football Agency</div>
           </div>
         </div>
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '6px 6px', overflowY: 'auto', overflowX: 'hidden' }}>
+      <nav style={{ flex: 1, padding: '4px 0 10px', overflowY: 'auto', overflowX: 'hidden' }}>
         {NAV.map((item, i) => {
           if (item.adminOnly && !isAdmin) return null;
           if (item.ownerOnly && !isOwner) return null;
@@ -202,17 +204,22 @@ export default function Layout({ user }) {
             const isCollapsedOnDesktop = collapsed && !isMobile;
             return (
               <div key={i} style={{
-                color: 'var(--text-3)', fontSize: 8.5, fontWeight: 700,
-                letterSpacing: '0.1em', textTransform: 'uppercase',
-                height: 30,
-                lineHeight: '30px',
-                paddingLeft: 8,
+                display: 'flex', alignItems: 'center', gap: 8,
+                color: 'var(--text-mute)', fontSize: 8.5, fontWeight: 700,
+                letterSpacing: '0.16em', textTransform: 'uppercase',
+                height: 34,
+                paddingLeft: 12, paddingRight: 10,
+                marginTop: i === 0 ? 6 : 10,
                 opacity: isCollapsedOnDesktop ? 0 : 1,
                 transition: 'opacity 0.2s ease',
                 boxSizing: 'border-box',
                 overflow: 'hidden',
                 whiteSpace: 'nowrap',
-              }}>{item.section}</div>
+              }}>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--gold-dk)', letterSpacing: 0 }}>{item.num}</span>
+                <span>{item.section}</span>
+                <span style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+              </div>
             );
           }
           const isActive = location.pathname === item.path ||
@@ -229,42 +236,42 @@ export default function Layout({ user }) {
                 alignItems: 'center',
                 gap: 10,
                 padding: '0 12px',
-                height: 36,
-                borderRadius: 8,
-                marginBottom: 2,
+                height: 34,
+                borderRadius: 0,
+                marginBottom: 0,
                 textDecoration: 'none',
                 fontWeight: isActive ? 600 : 400,
                 color: isActive ? 'var(--text-1)' : 'var(--text-2)',
-                background: isActive ? 'rgba(201,168,76,0.10)' : 'transparent',
-                transition: 'background 0.18s ease, color 0.18s ease',
+                background: isActive ? 'var(--surface-2)' : 'transparent',
+                transition: 'background 0.12s linear, color 0.12s linear',
                 position: 'relative',
                 overflow: 'hidden',
                 boxSizing: 'border-box',
               }}
-              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'var(--text-1)'; } }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'var(--surface-1)'; e.currentTarget.style.color = 'var(--text-1)'; } }}
               onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-2)'; } }}
             >
-              {isActive && !isCollapsedDesktop && (
+              {isActive && (
                 <span style={{
-                  position: 'absolute', left: 0, top: '22%', bottom: '22%',
-                  width: 3, background: 'var(--gold)',
-                  borderRadius: '0 3px 3px 0',
-                  boxShadow: '0 0 8px rgba(201,168,76,0.5)',
+                  position: 'absolute', left: 0, top: 0, bottom: 0,
+                  width: 2, background: 'var(--gold)',
                 }} />
               )}
               {/* Icon — fixed-width, never moves */}
               <span style={{
-                fontSize: 16,
-                flexShrink: 0,
-                width: 18,
-                textAlign: 'center',
-                lineHeight: 1,
-              }} title={isCollapsedDesktop ? item.label : ''}>{item.emoji}</span>
+                flexShrink: 0, width: 18,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: isActive ? 'var(--gold)' : 'inherit',
+              }} title={isCollapsedDesktop ? item.label : ''}>
+                <Icon name={item.icon} size={15} />
+              </span>
               {/* Label — fades + collapses horizontally when the rail
                   shrinks, but the icon to its left does NOT shift. */}
               <span style={{
-                color: isActive ? (item.color || 'var(--gold)') : 'inherit',
-                fontSize: 11.5,
+                color: 'inherit',
+                fontSize: 11,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
                 whiteSpace: 'nowrap',
                 opacity: isCollapsedDesktop ? 0 : 1,
                 transition: 'opacity 0.18s ease',
@@ -285,18 +292,19 @@ export default function Layout({ user }) {
         {(!collapsed || isMobile) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 2px' }}>
             <div style={{
-              width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-              background: 'linear-gradient(135deg, rgba(201,168,76,0.25), rgba(201,168,76,0.1))',
-              border: '1px solid rgba(201,168,76,0.3)',
+              width: 30, height: 30, borderRadius: 0, flexShrink: 0,
+              background: 'transparent',
+              border: '1px solid var(--gold-dk)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: 'var(--gold)', fontWeight: 700, fontSize: 12,
+              fontFamily: 'var(--font-mono)',
             }}>{info.name?.charAt(0)}</div>
             <div style={{ overflow: 'hidden' }}>
               <div style={{
                 fontSize: 11.5, color: 'var(--text-1)', fontWeight: 600,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
               }}>{info.name}</div>
-              <div style={{ fontSize: 9.5, color: 'var(--text-3)' }}>{info.role}</div>
+              <div style={{ fontSize: 8.5, color: 'var(--text-3)', letterSpacing: '0.14em', textTransform: 'uppercase', marginTop: 1 }}>{info.role}</div>
             </div>
           </div>
         )}
@@ -306,36 +314,36 @@ export default function Layout({ user }) {
         }}>
           {(!collapsed || isMobile) && (
             <button className="btn btn-ghost btn-sm" onClick={() => signOut(auth)}
-              style={{ fontSize: 10, color: 'var(--red)', borderColor: 'rgba(248,113,113,0.2)', padding: '5px 9px' }}>
+              style={{ color: 'var(--text-3)', borderColor: 'var(--border)', padding: '5px 10px' }}>
               Sign out
             </button>
           )}
           <div style={{ display: 'flex', gap: 5 }}>
             <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
               style={{
-                background: 'rgba(201,168,76,0.08)',
-                border: '1px solid rgba(201,168,76,0.2)',
-                borderRadius: 7, color: 'var(--gold)', cursor: 'pointer',
+                background: 'transparent',
+                border: '1px solid var(--border-2)',
+                borderRadius: 0, color: 'var(--gold)', cursor: 'pointer',
                 width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, transition: 'all 0.2s', flexShrink: 0,
+                transition: 'border-color 0.12s linear', flexShrink: 0,
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.16)'; e.currentTarget.style.transform = 'rotate(20deg)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(201,168,76,0.08)'; e.currentTarget.style.transform = 'rotate(0)'; }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; }}
               title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-            >{theme === 'dark' ? '☀️' : '🌙'}</button>
+            ><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} /></button>
             {!isMobile && (
               <button onClick={() => setCollapsed(v => !v)}
                 style={{
-                  background: 'rgba(201,168,76,0.1)',
-                  border: '1px solid rgba(201,168,76,0.2)',
-                  borderRadius: 7, color: 'var(--gold)', cursor: 'pointer',
+                  background: 'transparent',
+                  border: '1px solid var(--border-2)',
+                  borderRadius: 0, color: 'var(--gold)', cursor: 'pointer',
                   width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0,
+                  transition: 'border-color 0.12s linear', flexShrink: 0,
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(201,168,76,0.18)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(201,168,76,0.1)'}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--gold)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; }}
                 title={collapsed ? 'Expand' : 'Collapse'}
-              >{collapsed ? '›' : '‹'}</button>
+              ><Icon name="chevron" size={13} style={{ transform: collapsed ? 'none' : 'rotate(180deg)' }} /></button>
             )}
           </div>
         </div>
@@ -354,8 +362,8 @@ export default function Layout({ user }) {
       {/* Brand image overlay shown briefly on each top-level route change */}
       <RouteTransition />
 
-      {/* Mobile radial menu — replaces the old slide-out drawer */}
-      <RadialMenu open={open} onClose={() => setOpen(false)} />
+      {/* Mobile navigation — full-screen editorial index */}
+      <NavIndex open={open} onClose={() => setOpen(false)} />
 
       {/* Mobile top bar */}
       <div
@@ -372,48 +380,43 @@ export default function Layout({ user }) {
           paddingLeft: 14, paddingRight: 14,
           paddingTop: 'env(safe-area-inset-top, 0px)',
           zIndex: 50,
-          boxShadow: '0 2px 14px rgba(0,0,0,0.35)',
           boxSizing: 'border-box',
         }}
       >
         <button
           onClick={() => setOpen(true)}
+          aria-label="Menu"
           style={{
             background: 'none', border: 'none',
-            color: 'var(--gold)', fontSize: 22, cursor: 'pointer', padding: 4,
-            transition: 'transform 0.18s',
+            color: 'var(--gold)', cursor: 'pointer', padding: 6,
+            display: 'flex', alignItems: 'center',
           }}
-          onTouchStart={e => e.currentTarget.style.transform = 'scale(0.9)'}
-          onTouchEnd={e => e.currentTarget.style.transform = ''}
-        >&#9776;</button>
+        ><Icon name="menu" size={18} /></button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 8, overflow: 'hidden',
-            border: '1px solid rgba(201,168,76,0.3)',
-            boxShadow: '0 2px 8px rgba(201,168,76,0.2)',
+            width: 26, height: 26, borderRadius: 0, overflow: 'hidden',
+            border: '1px solid var(--gold-dk)',
           }}>
             <img src="/logo.png" alt="Gold A&S" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <span style={{
-            fontFamily: 'Cormorant Garamond,serif',
-            fontSize: 18, fontWeight: 700,
-            background: 'linear-gradient(135deg, var(--gold-lt), var(--gold))',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-          }}>Gold A&S</span>
+            fontFamily: 'var(--font-display)',
+            fontSize: 12, fontWeight: 700,
+            letterSpacing: '0.16em', textTransform: 'uppercase',
+            color: 'var(--text-1)',
+          }}>Gold A&amp;S</span>
         </div>
         <button
           onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          aria-label="Toggle theme"
           style={{
-            background: 'rgba(201,168,76,0.10)',
-            border: '1px solid rgba(201,168,76,0.22)',
-            borderRadius: 8, color: 'var(--gold)', cursor: 'pointer',
+            background: 'transparent',
+            border: '1px solid var(--border-2)',
+            borderRadius: 0, color: 'var(--gold)', cursor: 'pointer',
             width: 32, height: 32, display: 'flex',
             alignItems: 'center', justifyContent: 'center',
-            fontSize: 15, transition: 'transform 0.25s',
           }}
-          onTouchStart={e => e.currentTarget.style.transform = 'scale(0.92) rotate(15deg)'}
-          onTouchEnd={e => e.currentTarget.style.transform = ''}
-        >{theme === 'dark' ? '☀️' : '🌙'}</button>
+        ><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} /></button>
       </div>
 
       {/* Desktop sidebar */}
@@ -422,9 +425,9 @@ export default function Layout({ user }) {
         style={{
           /* Slightly wider collapsed rail (62px instead of 54) so the
              theme + toggle buttons sit comfortably away from the edge. */
-          width: collapsed ? 62 : 210,
+          width: collapsed ? 62 : 214,
           background: 'var(--surface-1)',
-          borderRight: '1px solid var(--border)',
+          borderRight: '1px solid var(--border-2)',
           display: 'flex', flexDirection: 'column',
           position: 'sticky', top: 0, height: '100vh',
           flexShrink: 0, overflow: 'hidden',
@@ -437,7 +440,7 @@ export default function Layout({ user }) {
         <SidebarContent isMobile={false} />
       </aside>
 
-      {/* Mobile drawer removed — replaced by RadialMenu above */}
+      {/* Mobile drawer removed — replaced by NavIndex above */}
 
       {/* Main content. We deliberately do NOT set overflow:auto on <main>
           — that turns <main> into a scroll container that on mobile silently
@@ -466,7 +469,7 @@ export default function Layout({ user }) {
                 className={`bottom-nav-item${moreActive ? ' active' : ''}`}
                 style={{ background: 'none', border: 'none', cursor: 'pointer' }}
               >
-                <span className="icon">{item.icon}</span>
+                <span className="icon"><Icon name={item.icon} size={17} /></span>
                 <span>{item.label}</span>
               </button>
             );
@@ -479,7 +482,7 @@ export default function Layout({ user }) {
               to={item.path}
               className={`bottom-nav-item${isActive ? ' active' : ''}`}
             >
-              <span className="icon">{item.icon}</span>
+              <span className="icon"><Icon name={item.icon} size={17} /></span>
               <span>{item.label}</span>
             </NavLink>
           );
