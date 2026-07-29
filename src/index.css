@@ -649,38 +649,30 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   }
 }
 @media (max-width: 768px) {
-  /* Phones: the masthead freezes just beneath the fixed top bar — title,
-     actions and filters stay reachable while records scroll past.
-     It keeps the NATURAL width (no negative margins): every element on the
-     screen shares the same 14px inset, so the gutters are empty anyway and
-     nothing can overhang. */
+  /* The content pane is the scroll container on phones as well, so the
+     masthead has a real scrollport to stick to. `top: 0` then resolves to
+     the pane's padding edge — precisely beneath the fixed top bar — with no
+     dependence on the URL bar, the safe area or scroll restoration. */
+  html, body { height: 100%; overflow: hidden; }
+  .layout-root { height: 100dvh; min-height: 100dvh; }
+  .main-content {
+    height: 100dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
   .page-header {
     position: sticky;
-    top: calc(64px + env(safe-area-inset-top, 0px));
+    top: 0;
     z-index: 40;
     background: var(--bg);
-    margin-left: 0;
-    margin-right: 0;
-    margin-top: 0;
-    padding-left: 0;
-    padding-right: 0;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    margin-bottom: 14px;
+    margin: 0 0 14px;
+    padding: 10px 0;
     max-width: 100%;
   }
-  /* Opaque strip covering the gap between top bar and masthead, widened to
-     the gutters so no sliver of a passing record shows at the edges. */
-  .page-header::before {
-    display: block;
-    left: -16px; right: -16px;
-    height: 16px;
-    bottom: 100%;
-  }
-}
-@media (max-width: 480px) {
-  .page-header { top: calc(60px + env(safe-area-inset-top, 0px)); }
-  .page-header::before { left: -12px; right: -12px; }
+  /* Records scrolling up pass behind the opaque top bar, so the masthead
+     needs no shield of its own. */
+  .page-header::before { display: none; }
 }
 .page-title {
   color: var(--text-1);
