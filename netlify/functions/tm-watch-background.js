@@ -52,24 +52,60 @@ function getDb() {
 // ───────────────────── Fetch via ScraperAPI ─────────────────────
 // Transfermarkt is fully server-rendered — no JS render needed, which keeps
 // ScraperAPI usage at 1 credit per request.
+// Credit accounting: DIRECT_COUNT costs nothing, REQUEST_COUNT is the
+// number of ScraperAPI credits actually consumed.
 let REQUEST_COUNT = 0;
+let DIRECT_COUNT  = 0;
+// Once Transfermarkt starts refusing us outright, every later direct attempt
+// will fail too — so after a few refusals we stop wasting round trips and go
+// straight to the proxy for the rest of the run.
+let DIRECT_FAILURES = 0;
+const DIRECT_GIVE_UP_AFTER = 3;
+
+function tmHeaders(targetUrl) {
+  const isJson = targetUrl.includes('/ceapi/');
+  return {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+    'Accept': isJson ? 'application/json' : 'text/html,application/xhtml+xml',
+    ...(isJson ? { 'X-Requested-With': 'XMLHttpRequest', 'Referer': TM_BASE + '/' } : {}),
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+}
+
 async function fetchHtml(targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  const fetchUrl = apiKey
-    ? `https://api.scraperapi.com/?${new URLSearchParams({ api_key: apiKey, url: targetUrl }).toString()}`
-    : targetUrl;
+
+  // Try the plain request first — it is free. Only pay for a credit when
+  // this is actually blocked.
+  if (DIRECT_FAILURES < DIRECT_GIVE_UP_AFTER) {
+    try {
+      DIRECT_COUNT++;
+      const res = await fetch(targetUrl, { headers: tmHeaders(targetUrl) });
+      if (res.ok) { DIRECT_FAILURES = 0; return res.text(); }
+      DIRECT_FAILURES++;
+    } catch (e) { DIRECT_FAILURES++; }
+  }
+
+  if (!apiKey) throw new Error(`fetch ${targetUrl} → blocked and no proxy key`);
   REQUEST_COUNT++;
-  const isJson = targetUrl.includes('/ceapi/');
-  const res = await fetch(fetchUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-      'Accept': isJson ? 'application/json' : 'text/html,application/xhtml+xml',
-      ...(isJson ? { 'X-Requested-With': 'XMLHttpRequest', 'Referer': TM_BASE + '/' } : {}),
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-  });
+  const res = await fetch(
+    `https://api.scraperapi.com/?${new URLSearchParams({ api_key: apiKey, url: targetUrl }).toString()}`,
+    { headers: tmHeaders(targetUrl) });
   if (!res.ok) throw new Error(`fetch ${targetUrl} → ${res.status}`);
   return res.text();
+}
+
+// Remaining credits this cycle, or null when it can't be determined.
+async function creditsLeft() {
+  const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
+  if (!apiKey) return null;
+  try {
+    const r = await fetch(`https://api.scraperapi.com/account?api_key=${apiKey}`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (j.requestLimit == null) return null;
+    return Math.max(0, Number(j.requestLimit) - Number(j.requestCount || 0));
+  } catch (e) { return null; }
 }
 
 const tmIdFromHref = (href) => {
@@ -341,7 +377,20 @@ async function run() {
   // every run finishes its writes and clears the running flag.
   const t0 = Date.now();
   const RUN_BUDGET_MS = 11 * 60 * 1000;
-  const timeUp = () => Date.now() - t0 > RUN_BUDGET_MS;
+
+  // Credit budget. A run may spend at most `creditBudget` proxy credits
+  // (default 150) and never dips below `creditReserve` remaining for the
+  // month, so a single chained scan can no longer swallow the whole
+  // allowance and leave the daily citizenship check with nothing.
+  const remaining = await creditsLeft();
+  const creditBudget  = meta.creditBudget  ?? 150;
+  const creditReserve = meta.creditReserve ?? 40;
+  const spendCap = remaining == null
+    ? creditBudget
+    : Math.max(0, Math.min(creditBudget, remaining - creditReserve));
+  const budgetUp = () => REQUEST_COUNT >= spendCap;
+  const timeUp = () => Date.now() - t0 > RUN_BUDGET_MS || budgetUp();
+  log.push(`Budget: ${remaining == null ? 'unknown' : remaining} credits left, spending up to ${spendCap} this run`);
 
   try {
     const existingSnap = await db.collection('tmWatch').get();
@@ -510,7 +559,8 @@ async function run() {
     const totalQueries = buildQueries().length;
     const cycleProgress = (chainDepth === 0 ? 0 : (meta.cycleProgress || 0)) + processed;
     const historyRemaining = needHistory.length - histChecked;
-    const shouldChain = (cycleProgress < totalQueries || historyRemaining > 0) && chainDepth < 20;
+    const shouldChain = (cycleProgress < totalQueries || historyRemaining > 0)
+      && chainDepth < 20 && !budgetUp();
     log.push(`Cycle: ${cycleProgress}/${totalQueries} names, ${historyRemaining} history left → ${shouldChain ? `chaining (link ${chainDepth + 1})` : 'cycle complete'}`);
 
     await metaRef.set({
@@ -519,7 +569,7 @@ async function run() {
       cycleProgress: shouldChain ? cycleProgress : 0,
       lastCycleCompletedAt: shouldChain ? (meta.lastCycleCompletedAt || null) : now,
       lastRunAt: now, lastRunLog: log.slice(0, 40).join(' | '),
-      lastRunRequests: REQUEST_COUNT, lastRunNew: newOnes.length,
+      lastRunRequests: REQUEST_COUNT, lastRunDirect: DIRECT_COUNT, lastRunNew: newOnes.length,
       lastRunSeconds: Math.round((Date.now() - t0) / 1000),
       totalTracked: existingIds.size + newOnes.filter(p => !p.upgraded).length,
     }, { merge: true });
@@ -531,7 +581,7 @@ async function run() {
     }
 
     console.log(log.join('\n'));
-    return { statusCode: 200, body: `ok: ${newOnes.length} new, ${REQUEST_COUNT} requests, chain=${shouldChain}` };
+    return { statusCode: 200, body: `ok: ${newOnes.length} new, ${REQUEST_COUNT} credits (+${DIRECT_COUNT} free), chain=${shouldChain}` };
   } catch (e) {
     await metaRef.set({ running: false, lastError: String(e), lastRunAt: admin.firestore.Timestamp.now() }, { merge: true });
     console.error('tm-watch failed:', e);

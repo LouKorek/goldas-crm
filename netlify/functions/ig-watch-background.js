@@ -110,11 +110,13 @@ async function fetchProfileHtml(viaProxy) {
 }
 
 async function collect(log) {
+  // Free attempts first — a proxy credit is only spent if Instagram refuses
+  // the plain request.
   const attempts = [
-    () => fetchProfileJson(true),
-    () => fetchProfileHtml(true),
     () => fetchProfileJson(false),
     () => fetchProfileHtml(false),
+    () => fetchProfileJson(true),
+    () => fetchProfileHtml(true),
   ];
   for (const attempt of attempts) {
     try {
