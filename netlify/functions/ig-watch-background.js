@@ -47,11 +47,13 @@ function parseCount(s) {
   return Math.round(m[2].toUpperCase() === 'M' ? n * 1e6 : m[2].toUpperCase() === 'K' ? n * 1e3 : n);
 }
 
-async function fetchVia(url, { json = false, viaProxy = true } = {}) {
+async function fetchVia(url, { json = false, viaProxy = true, render = false } = {}) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  const finalUrl = viaProxy && apiKey
-    ? `https://api.scraperapi.com/?${new URLSearchParams({ api_key: apiKey, url }).toString()}`
-    : url;
+  if (viaProxy && !apiKey) throw new Error('no proxy key');
+  const params = viaProxy
+    ? new URLSearchParams({ api_key: apiKey, url, ...(render ? { render: 'true' } : {}) })
+    : null;
+  const finalUrl = viaProxy ? `https://api.scraperapi.com/?${params.toString()}` : url;
   const res = await fetch(finalUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
@@ -60,15 +62,15 @@ async function fetchVia(url, { json = false, viaProxy = true } = {}) {
       ...(json ? { 'x-ig-app-id': '936619743392459' } : {}),
     },
   });
-  if (!res.ok) throw new Error(`${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
 }
 
 // Strategy 1: Instagram's public web-profile JSON (counts + latest 12 posts).
-async function fetchProfileJson(viaProxy) {
+async function fetchProfileJson(viaProxy, render = false) {
   const raw = await fetchVia(
     `https://i.instagram.com/api/v1/users/web_profile_info/?username=${USERNAME}`,
-    { json: true, viaProxy });
+    { json: true, viaProxy, render });
   const j = JSON.parse(raw);
   const u = j?.data?.user;
   if (!u || u.edge_followed_by == null) throw new Error('unexpected shape');
@@ -87,14 +89,14 @@ async function fetchProfileJson(viaProxy) {
     following: u.edge_follow?.count ?? null,
     postCount: u.edge_owner_to_timeline_media?.count ?? null,
     posts,
-    source: `web_profile_info${viaProxy ? '+proxy' : ''}`,
+    source: `web_profile_info${viaProxy ? (render ? '+proxy(render)' : '+proxy') : '+direct'}`,
   };
 }
 
 // Strategy 2: the profile page's og:description meta — counts only.
 // e.g. "123 Followers, 45 Following, 67 Posts - ..."
-async function fetchProfileHtml(viaProxy) {
-  const html = await fetchVia(`https://www.instagram.com/${USERNAME}/`, { viaProxy });
+async function fetchProfileHtml(viaProxy, render = false) {
+  const html = await fetchVia(`https://www.instagram.com/${USERNAME}/`, { viaProxy, render });
   const og = /property="og:description"\s+content="([^"]+)"/.exec(html)
           || /content="([^"]+)"\s+property="og:description"/.exec(html);
   if (!og) throw new Error('no og:description');
@@ -105,26 +107,35 @@ async function fetchProfileHtml(viaProxy) {
     following: parseCount(m[2]),
     postCount: parseCount(m[3]),
     posts: [],
-    source: `og:description${viaProxy ? '+proxy' : ''}`,
+    source: `og:description${viaProxy ? (render ? '+proxy(render)' : '+proxy') : '+direct'}`,
   };
 }
 
 async function collect(log) {
   // Free attempts first — a proxy credit is only spent if Instagram refuses
-  // the plain request.
+  // the plain request. The rendered proxy is the last resort: it costs more
+  // credits, but it is the only thing that gets through when Instagram
+  // serves a JavaScript-only shell.
   const attempts = [
-    () => fetchProfileJson(false),
-    () => fetchProfileHtml(false),
-    () => fetchProfileJson(true),
-    () => fetchProfileHtml(true),
+    ['json direct',        () => fetchProfileJson(false)],
+    ['og direct',          () => fetchProfileHtml(false)],
+    ['json proxy',         () => fetchProfileJson(true)],
+    ['og proxy',           () => fetchProfileHtml(true)],
+    ['og proxy rendered',  () => fetchProfileHtml(true, true)],
   ];
-  for (const attempt of attempts) {
+  const failures = [];
+  for (const [name, attempt] of attempts) {
     try {
       const r = await attempt();
       if (r.followers != null) { log.push(`source: ${r.source}`); return r; }
-    } catch (e) { log.push(`attempt failed: ${e.message}`); }
+      failures.push(`${name}: no counts in response`);
+    } catch (e) {
+      failures.push(`${name}: ${e.message}`);
+    }
   }
-  throw new Error('all fetch strategies failed');
+  // Surface exactly which door was shut, so the screen shows something
+  // actionable instead of a blanket failure.
+  throw new Error(failures.join(' | '));
 }
 
 async function run() {
