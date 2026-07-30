@@ -47,19 +47,26 @@ function parseCount(s) {
   return Math.round(m[2].toUpperCase() === 'M' ? n * 1e6 : m[2].toUpperCase() === 'K' ? n * 1e3 : n);
 }
 
-async function fetchVia(url, { json = false, viaProxy = true, render = false } = {}) {
+async function fetchVia(url, { json = false, viaProxy = true, mode = {} } = {}) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
   if (viaProxy && !apiKey) throw new Error('no proxy key');
-  const params = viaProxy
-    ? new URLSearchParams({ api_key: apiKey, url, ...(render ? { render: 'true' } : {}) })
-    : null;
-  const finalUrl = viaProxy ? `https://api.scraperapi.com/?${params.toString()}` : url;
+  const finalUrl = viaProxy
+    ? `https://api.scraperapi.com/?${new URLSearchParams({ api_key: apiKey, url, ...mode }).toString()}`
+    : url;
+  // Full browser-shaped headers: Instagram serves the meta-tag version of the
+  // profile only to requests it believes come from a real browser.
   const res = await fetch(finalUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-      'Accept': json ? 'application/json' : 'text/html,application/xhtml+xml',
+      'Accept': json
+        ? 'application/json'
+        : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
-      ...(json ? { 'x-ig-app-id': '936619743392459' } : {}),
+      'Sec-Fetch-Dest': json ? 'empty' : 'document',
+      'Sec-Fetch-Mode': json ? 'cors' : 'navigate',
+      'Sec-Fetch-Site': json ? 'same-origin' : 'none',
+      'Upgrade-Insecure-Requests': '1',
+      ...(json ? { 'x-ig-app-id': '936619743392459', 'Referer': `https://www.instagram.com/${USERNAME}/` } : {}),
     },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -67,10 +74,10 @@ async function fetchVia(url, { json = false, viaProxy = true, render = false } =
 }
 
 // Strategy 1: Instagram's public web-profile JSON (counts + latest 12 posts).
-async function fetchProfileJson(viaProxy, render = false) {
+async function fetchProfileJson(viaProxy, mode = {}) {
   const raw = await fetchVia(
     `https://i.instagram.com/api/v1/users/web_profile_info/?username=${USERNAME}`,
-    { json: true, viaProxy, render });
+    { json: true, viaProxy, mode });
   const j = JSON.parse(raw);
   const u = j?.data?.user;
   if (!u || u.edge_followed_by == null) throw new Error('unexpected shape');
@@ -89,14 +96,14 @@ async function fetchProfileJson(viaProxy, render = false) {
     following: u.edge_follow?.count ?? null,
     postCount: u.edge_owner_to_timeline_media?.count ?? null,
     posts,
-    source: `web_profile_info${viaProxy ? (render ? '+proxy(render)' : '+proxy') : '+direct'}`,
+    source: `web_profile_info${viaProxy ? '+proxy' : '+direct'}`,
   };
 }
 
 // Strategy 2: the profile page's og:description meta — counts only.
 // e.g. "123 Followers, 45 Following, 67 Posts - ..."
-async function fetchProfileHtml(viaProxy, render = false) {
-  const html = await fetchVia(`https://www.instagram.com/${USERNAME}/`, { viaProxy, render });
+async function fetchProfileHtml(viaProxy, mode = {}) {
+  const html = await fetchVia(`https://www.instagram.com/${USERNAME}/`, { viaProxy, mode });
   const og = /property="og:description"\s+content="([^"]+)"/.exec(html)
           || /content="([^"]+)"\s+property="og:description"/.exec(html);
   if (!og) throw new Error('no og:description');
@@ -107,7 +114,7 @@ async function fetchProfileHtml(viaProxy, render = false) {
     following: parseCount(m[2]),
     postCount: parseCount(m[3]),
     posts: [],
-    source: `og:description${viaProxy ? (render ? '+proxy(render)' : '+proxy') : '+direct'}`,
+    source: `og:description${viaProxy ? '+proxy' : '+direct'}`,
   };
 }
 
@@ -116,12 +123,18 @@ async function collect(log) {
   // the plain request. The rendered proxy is the last resort: it costs more
   // credits, but it is the only thing that gets through when Instagram
   // serves a JavaScript-only shell.
+  // Ordered cheapest-first. The og:description route is preferred because a
+  // browser-shaped request to the profile page returns the counts in a meta
+  // tag; the JSON API is tried afterwards for the richer post data.
   const attempts = [
-    ['json direct',        () => fetchProfileJson(false)],
     ['og direct',          () => fetchProfileHtml(false)],
-    ['json proxy',         () => fetchProfileJson(true)],
     ['og proxy',           () => fetchProfileHtml(true)],
-    ['og proxy rendered',  () => fetchProfileHtml(true, true)],
+    ['og proxy US',        () => fetchProfileHtml(true, { country_code: 'us' })],
+    ['og proxy rendered',  () => fetchProfileHtml(true, { render: 'true', country_code: 'us' })],
+    ['og proxy premium',   () => fetchProfileHtml(true, { premium: 'true', country_code: 'us' })],
+    ['json direct',        () => fetchProfileJson(false)],
+    ['json proxy US',      () => fetchProfileJson(true, { country_code: 'us' })],
+    ['json proxy premium', () => fetchProfileJson(true, { premium: 'true', country_code: 'us' })],
   ];
   const failures = [];
   for (const [name, attempt] of attempts) {

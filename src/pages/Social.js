@@ -182,7 +182,11 @@ export default function Social() {
           {lastRun
             ? <>Last snapshot: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)} · {daily.length} days collected</>
             : 'No snapshot yet — the first daily run starts the history.'}
-          {meta?.lastError && <span style={{ color: 'var(--red)' }}> · Last error: {String(meta.lastError).slice(0, 90)}</span>}
+          {meta?.lastError && (
+            <div style={{ color: 'var(--red)', marginTop: 4, overflowWrap: 'anywhere' }}>
+              Last error: {String(meta.lastError)}
+            </div>
+          )}
           {' '}· <ScraperCredits />
         </div>
       </PageHeader>
