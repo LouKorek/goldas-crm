@@ -401,15 +401,38 @@ async function run() {
   log.push(`Budget: ${remaining == null ? 'unknown' : remaining} credits left, spending up to ${spendCap} this run`);
 
   try {
-    const existingSnap = await db.collection('tmWatch').get();
-    const existing = new Map(existingSnap.docs.map(d => [d.id, d.data()]));
-    const existingIds = new Set(existing.keys());
+    const chainDepth = meta.chainDepth || 0;
+
+    // Reading the whole collection costs one Firestore read per document, and
+    // a chain of twenty links was paying that bill twenty times over — the
+    // single biggest reason the project kept hitting its daily quota. Link 0
+    // reads everything (it has to: Track A diffs the full roster) and leaves
+    // behind an id index plus the queue of players still needing a history
+    // check. Continuation links read that one document instead, and then only
+    // the handful of player records they are about to work on.
+    const idxRef = db.collection('app_meta').doc('tmWatchIndex');
+    let existing, existingIds, queuedHistory = null, storedQueue = null;
+
+    if (chainDepth === 0) {
+      const snap = await db.collection('tmWatch').get();
+      existing = new Map(snap.docs.map(d => [d.id, d.data()]));
+      existingIds = new Set(existing.keys());
+    } else {
+      const idx = (await idxRef.get()).data() || {};
+      existingIds = new Set(idx.ids || []);
+      storedQueue = idx.historyQueue || [];
+      queuedHistory = storedQueue.slice(0, meta.historyChecksPerRun || 120);
+      const docs = queuedHistory.length
+        ? await db.getAll(...queuedHistory.map(id => db.collection('tmWatch').doc(id)))
+        : [];
+      existing = new Map(docs.filter(d => d.exists).map(d => [d.id, d.data()]));
+      log.push(`Chain link ${chainDepth}: index read (${existingIds.size} known), ${existing.size} records loaded`);
+    }
 
     // Track A — runs in full at every chain start (daily cron / manual
     // click). Chained continuation runs skip it: they exist purely to finish
     // the name cycle + history backfill, and citizenship was already fully
     // covered by link 0 of the chain.
-    const chainDepth = meta.chainDepth || 0;
     const { players: abroad, complete: abroadComplete } = chainDepth > 0
       ? { players: new Map(), complete: false }
       : await scanCitizenshipTrack(log, timeUp);
@@ -519,21 +542,28 @@ async function run() {
     // Backfill Israel career history for docs that don't have it yet
     // (existing + just-created), capped per run.
     const histCap = meta.historyChecksPerRun || 120;
-    const needHistory = [];
-    for (const [id, prev] of existing) {
-      // Anything checked by an older version of the checker is re-verified:
-      // the first one keyed off a markup class that TM no longer emits, so it
-      // labelled every player "never".
-      if (prev.israelHistory == null || (prev.historyVersion || 0) < HISTORY_VERSION) needHistory.push(id);
+    // On link 0 the whole roster is in hand, so the queue is recomputed from
+    // scratch; continuation links work through the slice they were handed.
+    const needHistory = queuedHistory ? [...queuedHistory] : [];
+    if (!queuedHistory) {
+      for (const [id, prev] of existing) {
+        // Anything checked by an older version of the checker is re-verified:
+        // the first two keyed off markup Transfermarkt no longer emits, which
+        // is what labelled every player "never".
+        if (prev.israelHistory == null || (prev.historyVersion || 0) < HISTORY_VERSION) needHistory.push(id);
+      }
     }
     for (const p of newOnes) {
       if (!p.upgraded && !existing.has(p.tmId)) needHistory.push(p.tmId);
     }
+    const fullHistoryQueue = [...needHistory];
     let histChecked = 0, histNever = 0, histPlayed = 0, histFailed = 0;
     const histWrites = [];
+    const processedIds = new Set();
     for (const id of needHistory) {
       if (histChecked >= histCap || timeUp()) break;
       histChecked++;
+      processedIds.add(id);
       const prev = existing.get(id);
       const h = await checkIsraelHistory(id, prev?.clubCountry);
       if (h) {
@@ -553,7 +583,19 @@ async function run() {
       } else histFailed++;
     }
     await Promise.all(histWrites);
-    log.push(`History: ${histChecked} checked (never ${histNever} / played ${histPlayed} / failed ${histFailed}), ${histWrites.length} written, ${needHistory.length - histChecked} remaining`);
+
+    // Hand the next link a queue and an id list so it never has to read the
+    // collection again. A failed check stays at the back of the queue rather
+    // than being dropped.
+    const remainingQueue = [...new Set([...(storedQueue || []), ...fullHistoryQueue])]
+      .filter(id => !processedIds.has(id));
+    for (const p of newOnes) if (!p.upgraded) existingIds.add(p.tmId);
+    await idxRef.set({
+      ids: [...existingIds],
+      historyQueue: remainingQueue,
+      updatedAt: now,
+    });
+    log.push(`History: ${histChecked} checked (never ${histNever} / played ${histPlayed} / failed ${histFailed}), ${histWrites.length} written, ${remainingQueue.length} queued`);
 
     // Email digest for genuinely new/upgraded candidates.
     if (newOnes.length && process.env.GMAIL_APP_PASSWORD) {
@@ -577,7 +619,7 @@ async function run() {
     // not a partial slice. Hard cap of 20 links as a safety brake.
     const totalQueries = buildQueries().length;
     const cycleProgress = (chainDepth === 0 ? 0 : (meta.cycleProgress || 0)) + processed;
-    const historyRemaining = needHistory.length - histChecked;
+    const historyRemaining = remainingQueue.length;
     // A chain of 20 links at 11 minutes each can run for most of a morning,
     // which reads as "stuck" long before it is. Cap the whole cycle by wall
     // clock as well as by link count; whatever is left resumes tomorrow.
