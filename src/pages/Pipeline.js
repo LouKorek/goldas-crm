@@ -117,14 +117,26 @@ function buildCard(player, category) {
 function PlayerCardModal({ player, category, onClose }) {
   const card = buildCard(player, category);
   const [copied, setCopied] = useState(false);
+  const [pdfing, setPdfing] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(card).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   };
+  const pdf = async () => {
+    setPdfing(true);
+    try {
+      const mod = await import('lib/playerCv');
+      await mod.exportPlayerCv(player, category);
+    } catch (e) { toast.error('Could not build the PDF.'); }
+    finally { setPdfing(false); }
+  };
 
   return (
-    <Modal title="Player Card" onClose={onClose} footer={
+    <Modal title="Player Card" onClose={onClose} footer={<>
+      <button className="btn btn-ghost" onClick={pdf} disabled={pdfing}>
+        {pdfing ? 'Building…' : 'Export PDF'}
+      </button>
       <button className="btn btn-primary" onClick={copy}>{copied ? 'Copied!' : 'Copy Card'}</button>
-    }>
+    </>}>
       <pre style={{
         background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0,
         color: 'var(--text-1)', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.7,

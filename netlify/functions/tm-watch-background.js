@@ -528,7 +528,7 @@ async function run() {
 
     // Backfill Israel career history for docs that don't have it yet
     // (existing + just-created), capped per run.
-    const histCap = meta.historyChecksPerRun || 40;
+    const histCap = meta.historyChecksPerRun || 120;
     const needHistory = [];
     for (const [id, prev] of existing) {
       // Anything checked by an older version of the checker is re-verified:
@@ -578,8 +578,16 @@ async function run() {
     const totalQueries = buildQueries().length;
     const cycleProgress = (chainDepth === 0 ? 0 : (meta.cycleProgress || 0)) + processed;
     const historyRemaining = needHistory.length - histChecked;
+    // A chain of 20 links at 11 minutes each can run for most of a morning,
+    // which reads as "stuck" long before it is. Cap the whole cycle by wall
+    // clock as well as by link count; whatever is left resumes tomorrow.
+    const cycleStartedAt = chainDepth === 0
+      ? Date.now()
+      : (meta.cycleStartedAt?.toDate?.().getTime() || Date.now());
+    const cycleHours = (Date.now() - cycleStartedAt) / 3600000;
     const shouldChain = (cycleProgress < totalQueries || historyRemaining > 0)
-      && chainDepth < 20 && !budgetUp();
+      && chainDepth < 20 && cycleHours < 2 && !budgetUp();
+    if (!shouldChain && cycleHours >= 2) log.push('Cycle stopped at the 2-hour ceiling — resumes next run');
     log.push(`Cycle: ${cycleProgress}/${totalQueries} names, ${historyRemaining} history left → ${shouldChain ? `chaining (link ${chainDepth + 1})` : 'cycle complete'}`);
 
     await metaRef.set({
@@ -587,6 +595,10 @@ async function run() {
       chainDepth: shouldChain ? chainDepth + 1 : 0,
       cycleProgress: shouldChain ? cycleProgress : 0,
       lastCycleCompletedAt: shouldChain ? (meta.lastCycleCompletedAt || null) : now,
+      cycleStartedAt: chainDepth === 0
+        ? admin.firestore.Timestamp.fromMillis(cycleStartedAt)
+        : (meta.cycleStartedAt || admin.firestore.Timestamp.fromMillis(cycleStartedAt)),
+      historyRemaining,
       lastRunAt: now, lastRunLog: log.slice(0, 40).join(' | '),
       lastRunRequests: REQUEST_COUNT, lastRunDirect: DIRECT_COUNT, lastRunNew: newOnes.length,
       lastRunSeconds: Math.round((Date.now() - t0) / 1000),

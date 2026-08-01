@@ -184,7 +184,12 @@ export default function TmWatch() {
         </div>
         {meta && (
           <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--text-3)' }}>
-            {lastRun ? <>Last scan: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
+            {running
+              ? <>Scanning \u2014 pass {(meta.chainDepth || 0) + 1}
+                  {meta.cycleProgress != null && <> \u00b7 {meta.cycleProgress} names swept</>}
+                  {meta.historyRemaining ? <> \u00b7 {meta.historyRemaining} career checks left</> : null}
+                  {' '}\u00b7 continues in the background, you can leave this screen</>
+              : lastRun ? <>Last scan: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
             {meta.lastRunNew != null && <> · {meta.lastRunNew} new last run</>}
             {items.length > 0 && <> · career history checked: {items.filter(p => p.israelHistory).length}/{items.length}</>}
             {' '}· <ScraperCredits />

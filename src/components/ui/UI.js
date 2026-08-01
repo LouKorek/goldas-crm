@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { COUNTRIES, formatPhone } from 'lib/constants';
 import { resolveFileUrl } from 'lib/db';
 import Icon from './Icons';
@@ -107,7 +108,11 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
     }
   };
 
-  return (
+  // Rendered into <body>, not in place. On phones .main-content carries
+  // `overflow-x: clip`, and a clip container clips fixed-position descendants
+  // as well — so a dialog left inside the page gets cropped to whatever slice
+  // of the scrolled content is on screen.
+  return createPortal(
     <div className="modal-overlay">
       <div
         ref={boxRef}
@@ -142,7 +147,8 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -161,7 +167,7 @@ export function useConfirm() {
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
   }, [state, handleCancel, handleConfirm]);
-  const dialog = state ? (
+  const dialog = state ? createPortal(
     <div className="modal-overlay" style={{ zIndex: 300 }}>
       <div className="modal-box" style={{ maxWidth: 400 }}>
         <div className="modal-header-frozen">
@@ -176,7 +182,8 @@ export function useConfirm() {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   ) : null;
   return { confirm, dialog };
 }
