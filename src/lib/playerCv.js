@@ -245,7 +245,7 @@ export async function exportPlayerCv(player, category = 'men') {
   const rows = [
     ['globe',    'Nationality',    (player.nationalities || []).filter(Boolean).join('   ·   ')],
     ['calendar', 'Date of birth',  player.dob
-      ? `${new Date(player.dob).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${age ? `      ${age} years old` : ''}`
+      ? `${new Date(player.dob).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${age ? `  (${age})` : ''}`
       : ''],
     ['shield',   'Current club',   player.currentClub ? `${player.currentClub}${league ? `   (${league})` : ''}` : 'Free Agent'],
     ['flag',     'National team',  nationalTeam(player)],
