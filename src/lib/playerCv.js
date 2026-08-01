@@ -102,22 +102,15 @@ const ICONS = {
     d.rect(x, y + s * 0.28, s, s * 0.44, 'S');
     [0.28, 0.5, 0.72].forEach(f => d.line(x + s * f, y + s * 0.28, x + s * f, y + s * 0.48));
   },
-  // A ball, for the foot that strikes it. The old boot outline was
-  // unreadable at 12pt.
-  ball(d, x, y, s) {
-    const r = s / 2, cx = x + r, cy = y + r;
-    d.circle(cx, cy, r, 'S');
-    const pr = r * 0.42;
-    const pts = [0, 1, 2, 3, 4].map(i => {
-      const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-      return [cx + pr * Math.cos(a), cy + pr * Math.sin(a)];
-    });
-    // jsPDF wants relative segments from the first point.
-    const rel = pts.slice(1).concat([pts[0]]).map((p, i) => {
-      const prev = pts[i];
-      return [p[0] - prev[0], p[1] - prev[1]];
-    });
-    d.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
+  // A footprint seen from above — forefoot, heel and four toes. Solid rather
+  // than outlined, because at 12pt an outline of this shape turns to mush.
+  foot(d, x, y, s) {
+    const cx = x + s * 0.46;
+    d.ellipse(cx, y + s * 0.48, s * 0.28, s * 0.24, 'F');   // ball of the foot
+    d.ellipse(cx, y + s * 0.85, s * 0.155, s * 0.13, 'F');  // heel
+    // Toes overlap the ball slightly so the print reads as one shape.
+    [[-0.22, 0.17, 0.088], [-0.03, 0.13, 0.070], [0.14, 0.15, 0.058], [0.27, 0.20, 0.046]]
+      .forEach(([dx, dy, r]) => d.circle(cx + s * dx, y + s * dy, s * r, 'F'));
   },
   play(d, x, y, s) {
     d.triangle(x + s * 0.28, y + s * 0.16, x + s * 0.28, y + s * 0.84, x + s * 0.84, y + s * 0.5, 'F');
@@ -264,7 +257,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
     ['pitch',    'Main position',  player.primaryPosition || ''],
     ['pitch',    'Other positions', secondary.join('   /   ')],
     ['ruler',    'Height',         player.height ? `${(Number(player.height) / 100).toFixed(2)} m` : ''],
-    ['ball',     'Preferred foot', FOOT_WORD[player.foot] || player.foot || ''],
+    ['foot',     'Preferred foot', FOOT_WORD[player.foot] || player.foot || ''],
   ].filter(([, , v]) => v);
 
   let y = STRIP_Y + STRIP_H + 44;
