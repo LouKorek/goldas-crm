@@ -534,16 +534,26 @@ async function run() {
     for (const id of needHistory) {
       if (histChecked >= histCap || timeUp()) break;
       histChecked++;
-      const h = await checkIsraelHistory(id, existing.get(id)?.clubCountry);
+      const prev = existing.get(id);
+      const h = await checkIsraelHistory(id, prev?.clubCountry);
       if (h) {
         if (h.israelHistory === 'never') histNever++; else histPlayed++;
-        histWrites.push(db.collection('tmWatch').doc(id).set({
-          ...h, historyCheckedAt: now,
-        }, { merge: true }));
+        // Firestore's daily write quota is finite and a re-verification pass
+        // touches every record, so only write when the verdict or the checker
+        // version actually moved. Re-running a scan then costs almost nothing.
+        const unchanged = prev
+          && prev.israelHistory === h.israelHistory
+          && prev.historyVersion === h.historyVersion
+          && (prev.israelClubs || []).join('|') === h.israelClubs.join('|');
+        if (!unchanged) {
+          histWrites.push(db.collection('tmWatch').doc(id).set({
+            ...h, historyCheckedAt: now,
+          }, { merge: true }));
+        }
       } else histFailed++;
     }
     await Promise.all(histWrites);
-    log.push(`History: ${histChecked} checked (never ${histNever} / played ${histPlayed} / failed ${histFailed}), ${needHistory.length - histChecked} remaining`);
+    log.push(`History: ${histChecked} checked (never ${histNever} / played ${histPlayed} / failed ${histFailed}), ${histWrites.length} written, ${needHistory.length - histChecked} remaining`);
 
     // Email digest for genuinely new/upgraded candidates.
     if (newOnes.length && process.env.GMAIL_APP_PASSWORD) {
