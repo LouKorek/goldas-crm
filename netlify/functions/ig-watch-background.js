@@ -1,26 +1,26 @@
-// Instagram tracking for @goldas_loukorek via Meta's OFFICIAL Graph API.
+// Instagram tracking for @goldas_loukorek via Meta's official Instagram API
+// with Instagram Login (graph.instagram.com).
 //
-// Why the API and not scraping: Instagram serves a login wall to every
-// datacenter IP (verified against direct requests, three proxy modes and an
-// external reader service — all returned 403 or the login page), and the
-// proxy provider blocks social domains outright. The Graph API is the
-// sanctioned route: free, stable, and it exposes reach/impressions/profile
-// views that scraping never could.
+// Why this route: scraping is a dead end — Instagram serves a login wall to
+// every datacenter IP. The Facebook-Login variant of the API would work too
+// but requires the Instagram account to be linked to a Facebook Page; this
+// one does not, so no Page had to be created.
 //
-// Required Netlify environment variables:
-//   IG_ACCESS_TOKEN  — long-lived Instagram/Facebook user access token
-//   IG_USER_ID       — the Instagram Business account id (numeric)
+// Required Netlify environment variable:
+//   IG_ACCESS_TOKEN  — long-lived Instagram user token (60 days, auto-renewed
+//                      here and cached in Firestore so it never lapses)
 //
 // Storage (unchanged, so the Social screen keeps working as-is):
 //   igDaily/{YYYY-MM-DD}  — daily snapshot of the account counters
 //   igPosts/{id}          — one doc per post, engagement refreshed daily
-//   app_meta/igWatch      — latest counters + run status
+//   app_meta/igWatch      — latest counters, run status, cached token
 
 const admin = require('firebase-admin');
 
 const USERNAME = 'goldas_loukorek';
 const TZ = 'Asia/Jerusalem';
-const GRAPH = 'https://graph.facebook.com/v21.0';
+const GRAPH = 'https://graph.instagram.com/v21.0';
+const REFRESH_AFTER_DAYS = 45;   // tokens live 60 days; renew well before
 
 let _db;
 function getDb() {
@@ -39,32 +39,50 @@ function localDate(now = new Date()) {
   }).format(now); // YYYY-MM-DD
 }
 
-async function graph(path, params = {}) {
-  const token = (process.env.IG_ACCESS_TOKEN || '').trim();
-  if (!token) throw new Error('IG_ACCESS_TOKEN is not set in Netlify');
+async function ig(path, token, params = {}) {
   const qs = new URLSearchParams({ ...params, access_token: token });
   const res = await fetch(`${GRAPH}${path}?${qs}`);
   const body = await res.json().catch(() => ({}));
   if (!res.ok || body.error) {
     const e = body.error || {};
-    throw new Error(`Graph ${path}: ${e.message || res.status}${e.code ? ` (code ${e.code})` : ''}`);
+    throw new Error(`IG ${path}: ${e.message || res.status}${e.code ? ` (code ${e.code})` : ''}`);
   }
   return body;
 }
 
-// Resolve the Instagram Business account id — from the env var when given,
-// otherwise by walking the Pages the token can see.
-async function resolveUserId(log) {
-  const explicit = (process.env.IG_USER_ID || '').trim();
-  if (explicit) return explicit;
-  const pages = await graph('/me/accounts', { fields: 'name,instagram_business_account' });
-  for (const page of pages.data || []) {
-    if (page.instagram_business_account?.id) {
-      log.push(`resolved IG account via page "${page.name}"`);
-      return page.instagram_business_account.id;
+// The env var is only the bootstrap token. Once refreshed, the newer token is
+// kept in Firestore — otherwise access would lapse after 60 days.
+async function getToken(metaRef, log) {
+  const snap = await metaRef.get();
+  const cached = snap.exists ? snap.data() : {};
+  const envToken = (process.env.IG_ACCESS_TOKEN || '').trim();
+  let token = cached.token || envToken;
+  if (!token) throw new Error('IG_ACCESS_TOKEN is not set in Netlify');
+
+  const refreshedAt = cached.tokenRefreshedAt?.toDate?.() || null;
+  const ageDays = refreshedAt ? (Date.now() - refreshedAt.getTime()) / 86400000 : Infinity;
+  if (ageDays < REFRESH_AFTER_DAYS) return token;
+
+  try {
+    const res = await fetch(
+      `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`
+    );
+    const body = await res.json();
+    if (body.access_token) {
+      token = body.access_token;
+      await metaRef.set({
+        token,
+        tokenRefreshedAt: admin.firestore.Timestamp.now(),
+        tokenExpiresInDays: Math.round((body.expires_in || 0) / 86400),
+      }, { merge: true });
+      log.push('token refreshed');
+    } else {
+      log.push(`token refresh skipped: ${body.error?.message || 'no token returned'}`);
     }
+  } catch (e) {
+    log.push(`token refresh failed: ${e.message}`);
   }
-  throw new Error('No Instagram Business account is linked to this token — connect the Instagram account to a Facebook Page.');
+  return token;
 }
 
 const TYPE_MAP = { IMAGE: 'image', CAROUSEL_ALBUM: 'carousel', VIDEO: 'video', REELS: 'video' };
@@ -74,15 +92,13 @@ async function run() {
   const metaRef = db.collection('app_meta').doc('igWatch');
   const log = [];
   try {
-    const userId = await resolveUserId(log);
+    const token = await getToken(metaRef, log);
 
-    // Account counters.
-    const acc = await graph(`/${userId}`, {
-      fields: 'username,followers_count,follows_count,media_count',
+    const acc = await ig('/me', token, {
+      fields: 'user_id,username,followers_count,follows_count,media_count',
     });
 
-    // Latest posts with their engagement.
-    const media = await graph(`/${userId}/media`, {
+    const media = await ig('/me/media', token, {
       fields: 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count',
       limit: '25',
     });
@@ -95,7 +111,7 @@ async function run() {
       followers: acc.followers_count ?? null,
       following: acc.follows_count ?? null,
       postCount: acc.media_count ?? null,
-      source: 'graph-api',
+      source: 'instagram-api',
       ts: now,
     }, { merge: true });
 
@@ -126,7 +142,7 @@ async function run() {
       following: acc.follows_count ?? null,
       postCount: acc.media_count ?? null,
       lastRunAt: now, lastError: null,
-      lastRunLog: [...log, `graph-api: ${posts.length} posts`].join(' | '),
+      lastRunLog: [...log, `instagram-api: ${posts.length} posts`].join(' | '),
     }, { merge: true });
 
     return { statusCode: 200, body: `ok: ${acc.followers_count} followers, ${posts.length} posts` };
