@@ -359,5 +359,25 @@ export async function exportPlayerCv(player, category = 'men') {
   label('gold-as.com  ·  Lou Korek  ·  FIFA Licensed Agent', M, H - 30, GOLD, 8);
 
   const safe = (player.playerName || 'player').replace(/[^\w\s-]/g, '').trim() || 'player';
-  doc.save(`${safe} - Gold A&S.pdf`);
+  const filename = `${safe} - Gold A&S.pdf`;
+
+  // On a phone, doc.save() downloads through a blob: URL, and the share sheet
+  // then offers that URL as text — which is why WhatsApp was attaching
+  // "blob:https://goldas-crm.netlify.app/..." alongside the document. Handing
+  // the file itself to the Web Share API shares the PDF and nothing else.
+  // No title or text is passed: either would come through as a message.
+  try {
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+  } catch (e) {
+    // AbortError means the user dismissed the sheet — that is a completed
+    // action, not a failure, so don't fall through to a download.
+    if (e && e.name === 'AbortError') return;
+  }
+
+  doc.save(filename);
 }
