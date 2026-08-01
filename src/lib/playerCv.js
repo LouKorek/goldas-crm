@@ -91,17 +91,33 @@ const ICONS = {
     d.line(x + s * 0.16, y, x + s * 0.16, y + s);
     d.lines([[s * 0.68, s * 0.18], [-s * 0.68, s * 0.18]], x + s * 0.16, y + s * 0.06, [1, 1], 'S', true);
   },
-  pin(d, x, y, s) {
-    d.circle(x + s / 2, y + s * 0.38, s * 0.30, 'S');
-    d.lines([[s * 0.28, s * 0.36], [-s * 0.28, 0]], x + s * 0.22, y + s * 0.62, [1, 1], 'S', true);
+  // A pitch seen from above — halfway line and centre circle. Reads as
+  // "where he plays" far more directly than a map pin.
+  pitch(d, x, y, s) {
+    d.rect(x, y + s * 0.13, s, s * 0.74, 'S');
+    d.line(x + s / 2, y + s * 0.13, x + s / 2, y + s * 0.87);
+    d.circle(x + s / 2, y + s * 0.5, s * 0.17, 'S');
   },
   ruler(d, x, y, s) {
     d.rect(x, y + s * 0.28, s, s * 0.44, 'S');
     [0.28, 0.5, 0.72].forEach(f => d.line(x + s * f, y + s * 0.28, x + s * f, y + s * 0.48));
   },
-  boot(d, x, y, s) {
-    d.lines([[0, s * 0.60], [s * 0.84, 0], [0, -s * 0.26], [-s * 0.42, -s * 0.34]],
-      x + s * 0.1, y + s * 0.24, [1, 1], 'S', true);
+  // A ball, for the foot that strikes it. The old boot outline was
+  // unreadable at 12pt.
+  ball(d, x, y, s) {
+    const r = s / 2, cx = x + r, cy = y + r;
+    d.circle(cx, cy, r, 'S');
+    const pr = r * 0.42;
+    const pts = [0, 1, 2, 3, 4].map(i => {
+      const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+      return [cx + pr * Math.cos(a), cy + pr * Math.sin(a)];
+    });
+    // jsPDF wants relative segments from the first point.
+    const rel = pts.slice(1).concat([pts[0]]).map((p, i) => {
+      const prev = pts[i];
+      return [p[0] - prev[0], p[1] - prev[1]];
+    });
+    d.lines(rel, pts[0][0], pts[0][1], [1, 1], 'F', true);
   },
   play(d, x, y, s) {
     d.triangle(x + s * 0.28, y + s * 0.16, x + s * 0.28, y + s * 0.84, x + s * 0.84, y + s * 0.5, 'F');
@@ -233,10 +249,10 @@ export async function exportPlayerCv(player, category = 'men') {
       : ''],
     ['shield',   'Current club',   player.currentClub ? `${player.currentClub}${league ? `   (${league})` : ''}` : 'Free Agent'],
     ['flag',     'National team',  nationalTeam(player)],
-    ['pin',      'Main position',  player.primaryPosition || ''],
-    ['pin',      'Other positions', secondary.join('   /   ')],
+    ['pitch',    'Main position',  player.primaryPosition || ''],
+    ['pitch',    'Other positions', secondary.join('   /   ')],
     ['ruler',    'Height',         player.height ? `${(Number(player.height) / 100).toFixed(2)} m` : ''],
-    ['boot',     'Preferred foot', FOOT_WORD[player.foot] || player.foot || ''],
+    ['ball',     'Preferred foot', FOOT_WORD[player.foot] || player.foot || ''],
   ].filter(([, , v]) => v);
 
   let y = STRIP_Y + STRIP_H + 44;
