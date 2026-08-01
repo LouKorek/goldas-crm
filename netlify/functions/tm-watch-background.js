@@ -303,73 +303,46 @@ async function verifyCandidate(cand, log) {
 // included) with a country flag URL per club — /flagge/.../74.png = Israel.
 // One request per player, cached forever on the doc as israelHistory:
 // 'never' | 'played'.
-const HISTORY_VERSION = 3;
+const HISTORY_VERSION = 4;
 
-// Israeli competitions on Transfermarkt all carry an ISR* code in their URL
-// (ISR1 Ligat ha'Al, ISR2 Liga Leumit, ISRP the cup, ISRL the Toto Cup, and
-// the youth leagues). Matching on the code is immune to markup changes; the
-// country flag (/74.png) inside a results table is the second signal.
-const ISR_COMP = /\/wettbewerb\/isr[a-z0-9]*/i;
+// Transfermarkt's country ids: Israel is 74, and every club in the transfer
+// history carries its flag URL. Country names never appear in the payload —
+// which is why searching the pages for "Israel" found nothing.
+const ISR_FLAG = /\/flagge\/[^"']*\/74\.png/i;
 
-// Scan one page for Israeli football. A competition code is the safe signal:
-// citizenship shows up as a flag, never as a /wettbewerb/ISR link, so a
-// competition match cannot be confused with "holds an Israeli passport".
-// Flags only count inside a results table, where they label a row.
-function israelSignals(html, tmId) {
-  if (!html || !html.includes(`/spieler/${tmId}`)) return null;   // challenge page
-  const $ = cheerio.load(html);
-  const found = new Set();
+async function checkIsraelHistory(tmId, clubCountry) {
+  // The career and profile pages are now client-rendered: they return 95KB of
+  // chrome with no results table and no competition links at all, which is
+  // what made every player look like he had never played in Israel. The
+  // transfer history the page itself loads is plain JSON, answers a direct
+  // request, and costs no proxy credit.
+  let payload = null;
+  try {
+    payload = JSON.parse(await fetchHtml(`${TM_BASE}/ceapi/transferHistory/list/${tmId}`));
+  } catch (e) {
+    return null;   // unread — retried next run rather than written off as "never"
+  }
+  if (!payload || !Array.isArray(payload.transfers)) return null;
 
-  $('a[href*="/wettbewerb/"]').each((_, a) => {
-    const href = $(a).attr('href') || '';
-    if (ISR_COMP.test(href)) found.add($(a).text().trim() || 'Israel');
-  });
-
-  const tables = $('table.items');
-  tables.find('img').each((_, f) => {
-    const src = $(f).attr('src') || $(f).attr('data-src') || '';
-    if (!/\/74\.png/.test(src)) return;
-    const row = $(f).closest('tr');
-    found.add(row.find('a[href*="/verein/"], a[href*="/wettbewerb/"]').first().text().trim()
-      || $(f).attr('title') || 'Israel');
-  });
-
-  return { found, rows: tables.find('tbody > tr').length };
-}
-
-async function checkIsraelHistory(tmId) {
-  // Two pages, because either one alone misses cases. The performance page
-  // must be asked for `saison=ges` — without it Transfermarkt renders only the
-  // current season, which is why the first two attempts at this labelled a
-  // whole squad of ex-Israeli-league players "never". The transfer history
-  // then catches anyone who was registered at an Israeli club without making
-  // a league appearance.
-  const pages = [
-    `${TM_BASE}/x/leistungsdaten/spieler/${tmId}/plus/1?saison=ges`,
-    `${TM_BASE}/x/transfers/spieler/${tmId}`,
-  ];
-
-  const israelComps = new Set();
-  let rowCount = 0, anyPageRead = false;
-
-  for (const url of pages) {
-    let sig = null;
-    try { sig = israelSignals(await fetchHtml(url), tmId); } catch (e) { /* try the next page */ }
-    if (!sig) continue;
-    anyPageRead = true;
-    rowCount += sig.rows;
-    sig.found.forEach(v => israelComps.add(v));
-    if (israelComps.size) break;   // one confirmation is enough; save the credit
+  const israelClubs = new Set();
+  for (const t of payload.transfers) {
+    for (const side of [t.from, t.to]) {
+      if (side && ISR_FLAG.test(side.countryFlag || '')) {
+        israelClubs.add((side.clubName || 'Israel').trim());
+      }
+    }
   }
 
-  // Never write a verdict off a page we could not read — "never" has to mean
-  // "we looked", not "we failed". Unread players are retried next run.
-  if (!anyPageRead) return null;
+  // A player still at his first club has no transfers to inspect; the club
+  // country already collected by the scan settles it.
+  if (!israelClubs.size && /^israel$/i.test((clubCountry || '').trim())) {
+    israelClubs.add('Israel');
+  }
 
   return {
-    israelHistory: israelComps.size ? 'played' : 'never',
-    israelClubs: [...israelComps].filter(Boolean).slice(0, 8),
-    transferCount: rowCount,
+    israelHistory: israelClubs.size ? 'played' : 'never',
+    israelClubs: [...israelClubs].filter(Boolean).slice(0, 8),
+    transferCount: payload.transfers.length,
     historyVersion: HISTORY_VERSION,
   };
 }
@@ -561,7 +534,7 @@ async function run() {
     for (const id of needHistory) {
       if (histChecked >= histCap || timeUp()) break;
       histChecked++;
-      const h = await checkIsraelHistory(id);
+      const h = await checkIsraelHistory(id, existing.get(id)?.clubCountry);
       if (h) {
         if (h.israelHistory === 'never') histNever++; else histPlayed++;
         histWrites.push(db.collection('tmWatch').doc(id).set({
