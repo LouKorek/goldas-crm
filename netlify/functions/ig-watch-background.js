@@ -142,13 +142,20 @@ async function run() {
       thumb: m.thumbnail_url || m.media_url || '',
     }));
 
+    // Only write a post whose engagement actually moved. Firestore's daily
+    // quota is shared with the Transfermarkt collector, and rewriting the
+    // whole archive every morning burns it for no gain.
+    let postWrites = 0;
     await Promise.all(posts.map(async (p) => {
       const ref = db.collection('igPosts').doc(p.shortcode);
-      const prev = await ref.get();
+      const snap = await ref.get();
+      const prev = snap.exists ? snap.data() : null;
+      if (prev && prev.likes === p.likes && prev.comments === p.comments && prev.caption === p.caption) return;
+      postWrites++;
       await ref.set({
         ...p,
         lastUpdated: now,
-        ...(prev.exists && prev.data().firstSeen ? {} : { firstSeen: now }),
+        ...(prev && prev.firstSeen ? {} : { firstSeen: now }),
       }, { merge: true });
     }));
 
@@ -190,7 +197,7 @@ async function run() {
       following: acc.follows_count ?? null,
       postCount: acc.media_count ?? null,
       lastRunAt: now, lastError: null,
-      lastRunLog: [...log, `instagram-api: ${posts.length} posts`].join(' | '),
+      lastRunLog: [...log, `instagram-api: ${posts.length} posts, ${postWrites} updated`].join(' | '),
     }, { merge: true });
 
     return { statusCode: 200, body: `ok: ${acc.followers_count} followers, ${posts.length} posts` };

@@ -206,7 +206,7 @@ export default function Social() {
       <PageHeader
         title="Social"
         subtitle={
-          <>Instagram — <a href={IG_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none' }}>@goldas_loukorek ↗</a> · public data, collected daily</>
+          <>Instagram — <a href={IG_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none' }}>@goldas_loukorek ↗</a> · collected daily from the account</>
         }
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -225,7 +225,7 @@ export default function Social() {
           {lastRun
             ? <>Last snapshot: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)} · {daily.length} days collected</>
             : 'No snapshot yet — the first daily run starts the history.'}
-          {' '}· Source: Meta Graph API
+          {' '}· Source: Instagram API
           {/* Shown only while the most recent run is actually failing —
               the collector clears this the moment a run succeeds. */}
           {meta?.lastError && (
