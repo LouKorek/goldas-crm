@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, updateDoc_, addDoc_, PATHS } from 'lib/db';
-import { fmtDate } from 'lib/constants';
+import { fmtDate, ISO2 } from 'lib/constants';
 import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
@@ -12,61 +12,8 @@ import { useRole } from 'lib/roleContext';
 // Israeli connection playing outside Israel, produced daily by the
 // tm-watch-background Netlify function.
 
-// Country name (as Transfermarkt writes it) → ISO alpha-2 for emoji flags.
-const ISO2 = {
-  // Europe
-  'Albania':'AL','Andorra':'AD','Armenia':'AM','Austria':'AT','Azerbaijan':'AZ','Belarus':'BY',
-  'Belgium':'BE','Bosnia-Herzegovina':'BA','Bulgaria':'BG','Croatia':'HR','Cyprus':'CY',
-  'Czech Republic':'CZ','Denmark':'DK','England':'GB-ENG','Estonia':'EE','Faroe Islands':'FO',
-  'Finland':'FI','France':'FR','Georgia':'GE','Germany':'DE','Gibraltar':'GI','Greece':'GR',
-  'Greenland':'GL','Guernsey':'GG','Hungary':'HU','Iceland':'IS','Ireland':'IE','Isle of Man':'IM',
-  'Israel':'IL','Italy':'IT','Jersey':'JE','Kosovo':'XK','Latvia':'LV','Liechtenstein':'LI',
-  'Lithuania':'LT','Luxembourg':'LU','Malta':'MT','Moldova':'MD','Monaco':'MC','Montenegro':'ME',
-  'Netherlands':'NL','North Macedonia':'MK','Macedonia':'MK','Northern Ireland':'GB-NIR','Norway':'NO',
-  'Poland':'PL','Portugal':'PT','Romania':'RO','Russia':'RU','San Marino':'SM','Scotland':'GB-SCT',
-  'Serbia':'RS','Slovakia':'SK','Slovenia':'SI','Spain':'ES','Sweden':'SE','Switzerland':'CH',
-  'Türkiye':'TR','Turkey':'TR','Ukraine':'UA','United Kingdom':'GB','Wales':'GB-WLS','Vatican':'VA',
-  // Americas
-  'Anguilla':'AI','Antigua and Barbuda':'AG','Argentina':'AR','Aruba':'AW','Bahamas':'BS',
-  'Barbados':'BB','Belize':'BZ','Bermuda':'BM','Bolivia':'BO','Bonaire':'BQ','Brazil':'BR',
-  'British Virgin Islands':'VG','Canada':'CA','Cayman Islands':'KY','Chile':'CL','Colombia':'CO',
-  'Costa Rica':'CR','Cuba':'CU','Curacao':'CW','Dominica':'DM','Dominican Republic':'DO',
-  'Ecuador':'EC','El Salvador':'SV','Falkland Islands':'FK','French Guiana':'GF','Grenada':'GD',
-  'Guadeloupe':'GP','Guatemala':'GT','Guyana':'GY','Haiti':'HT','Honduras':'HN','Jamaica':'JM',
-  'Martinique':'MQ','Mexico':'MX','Montserrat':'MS','Netherlands Antilles':'CW','Nicaragua':'NI',
-  'Panama':'PA','Paraguay':'PY','Peru':'PE','Puerto Rico':'PR','Saint-Martin':'MF','Sint Maarten':'SX',
-  'St. Kitts & Nevis':'KN','St. Lucia':'LC','St. Vincent & Grenadinen':'VC','Suriname':'SR',
-  'Trinidad and Tobago':'TT','Turks- and Caicosinseln':'TC','United States':'US','USA':'US',
-  'Uruguay':'UY','Venezuela':'VE','American Virgin Islands':'VI',
-  // Africa
-  'Algeria':'DZ','Angola':'AO','Benin':'BJ','Botswana':'BW','Burkina Faso':'BF','Burundi':'BI',
-  'Cameroon':'CM','Cape Verde':'CV','Central African Republic':'CF','Chad':'TD','Comoros':'KM',
-  'Congo':'CG',"People's republic of the Congo":'CG','DR Congo':'CD','Zaire':'CD',
-  "Cote d'Ivoire":'CI','Djibouti':'DJ','Egypt':'EG','Equatorial Guinea':'GQ','Eritrea':'ER',
-  'Eswatini':'SZ','Swaziland':'SZ','Ethiopia':'ET','Gabon':'GA','Ghana':'GH','Guinea':'GN',
-  'Guinea-Bissau':'GW','Kenya':'KE','Lesotho':'LS','Liberia':'LR','Libya':'LY','Madagascar':'MG',
-  'Malawi':'MW','Mali':'ML','Mauritania':'MR','Mauritius':'MU','Mayotte':'YT','Morocco':'MA',
-  'Mozambique':'MZ','Namibia':'NA','Niger':'NE','Nigeria':'NG','Réunion':'RE','Rwanda':'RW',
-  'Sao Tome and Principe':'ST','Senegal':'SN','Seychelles':'SC','Sierra Leone':'SL','Somalia':'SO',
-  'South Africa':'ZA','Southern Sudan':'SS','Sudan':'SD','Tanzania':'TZ','The Gambia':'GM',
-  'Togo':'TG','Tunisia':'TN','Uganda':'UG','Western Sahara':'EH','Zambia':'ZM','Zanzibar':'TZ',
-  'Zimbabwe':'ZW',
-  // Asia & Middle East
-  'Afghanistan':'AF','Bahrain':'BH','Bangladesh':'BD','Bhutan':'BT','Brunei Darussalam':'BN',
-  'Cambodia':'KH','China':'CN','Chinese Taipei':'TW','Hongkong':'HK','India':'IN','Indonesia':'ID',
-  'Iran':'IR','Iraq':'IQ','Japan':'JP','Jordan':'JO','Kazakhstan':'KZ','Korea, North':'KP',
-  'Korea, South':'KR','South Korea':'KR','Kuwait':'KW','Kyrgyzstan':'KG','Laos':'LA','Lebanon':'LB',
-  'Macao':'MO','Malaysia':'MY','Maldives':'MV','Mongolia':'MN','Myanmar':'MM','Nepal':'NP',
-  'Oman':'OM','Pakistan':'PK','Palestine':'PS','Philippines':'PH','Qatar':'QA','Saudi Arabia':'SA',
-  'Singapore':'SG','Sri Lanka':'LK','Syria':'SY','Tajikistan':'TJ','Thailand':'TH','Timor-Leste':'TL',
-  'Turkmenistan':'TM','United Arab Emirates':'AE','Uzbekistan':'UZ','Vietnam':'VN','Yemen':'YE',
-  // Oceania
-  'American Samoa':'AS','Australia':'AU','Cookinseln':'CK','Fiji':'FJ',
-  'Federated States of Micronesia':'FM','Guam':'GU','Kiribati':'KI','Marshall Islands':'MH',
-  'Nauru':'NR','New Caledonia':'NC','New Zealand':'NZ','Niue':'NU','Northern Mariana Islands':'MP',
-  'Palau':'PW','Papua New Guinea':'PG','Samoa':'WS','Solomon Islands':'SB','Tahiti':'PF','Tonga':'TO',
-  'Tuvalu':'TV','Vanuatu':'VU',
-};
+// Country → ISO alpha-2 now lives in lib/constants, shared with the
+// Player Card so the two never drift apart.
 // Windows ships no country-flag emoji glyphs at all, so flags are rendered
 // as tiny images (flagcdn serves every ISO code incl. gb-eng / xk) with a
 // text-chip fallback for anything unmapped.

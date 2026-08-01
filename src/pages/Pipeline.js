@@ -4,7 +4,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
-         COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone } from 'lib/constants';
+         COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone, flagEmoji } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, ExportMenu, useConfirm,
          PhoneActions, NumberInput, RowActions } from 'components/ui/UI';
@@ -38,42 +38,97 @@ const EMPTY = {
   primaryPosition:'', secondaryPositions:[], height:'', foot:'',
   currentClub:'', currentClubIsYouth:false, leagueCountry:'', leagueTier:'',
   leagueManual:'', leagueMode:'select',
-  natTeamStatus:'', transferFee:'', salary:'', notes:'',
+  natTeamStatus:'', natTeamCountry:'', transferFee:'', salary:'', notes:'',
 };
 
-function PlayerCardModal({ player, onClose }) {
-  const age    = calcAge(player.dob);
-  const league = player.leagueMode==='manual' ? player.leagueManual
-    : (player.leagueCountry&&player.leagueTier ? `${player.leagueCountry} ${player.leagueTier.replace('Tier ','')}` : '');
-  const card = [
-    `⚽ PLAYER PROFILE — GOLD A&S`,
-    ``,
-    `${player.playerName}`,
-    `🌍 ${(player.nationalities||[]).join(' / ') || '—'}`,
-    '📅 DOB: ' + fmtDate(player.dob) + (age ? ' (' + age + ' yrs)' : ''),
-    'Club: ' + (player.currentClub||'Free Agent') + (league ? ' | ' + league : ''),
-    'Position: ' + (player.primaryPosition||'—') + (player.secondaryPositions?.length ? ' / ' + player.secondaryPositions.join(', ') : ''),
-    `📏 Height: ${player.height||'—'}`,
-    `👟 Foot: ${player.foot||'—'}`,
-    player.profileLink ? `🔗 Profile: ${player.profileLink}` : '',
-    player.videoLink   ? `🎬 Video: ${player.videoLink}` : '',
-    ``,
-    `📧 gold-as.com`,
-  ].filter(l => l !== null && !(l===''&&false)).join('\n');
+// ── Player Card ──────────────────────────────────────────────────
+// The exact block Lou pastes into WhatsApp and email. Lines that have no
+// value are dropped entirely rather than printed with a dash, so a sparse
+// record still reads as a finished card.
+const FOOT_LETTER = { Right: 'R', Left: 'L', Both: 'B' };
 
+// youtu.be/ID and any watch URL carrying extra params both collapse to the
+// canonical form; the scheme is kept because messengers need it to linkify.
+function videoUrl(raw) {
+  const v = (raw || '').trim();
+  if (!v) return '';
+  const id = v.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/)([A-Za-z0-9_-]{6,})/);
+  if (id) return `https://youtube.com/watch?v=${id[1]}`;
+  return /^https?:\/\//.test(v) ? v : `https://${v}`;
+}
+
+// Transfermarkt goes in bare — no scheme, no www.
+const bareUrl = (raw) => (raw || '').trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+
+function nationalTeamLine(player) {
+  const country = player.natTeamCountry || (player.nationalities || [])[0] || '';
+  const st = player.natTeamStatus;
+  if (!country || !st || st === 'None') return '';
+  const former = st.startsWith('Former') ? 'Former ' : '';
+  const youth  = st.endsWith('Youth') ? ' Youth' : '';
+  return `${former}${country}${youth}`;
+}
+
+function buildCard(player, category) {
+  const runner = category === 'women' ? '\u{1F3C3}\u200D\u2640\uFE0F' : '\u{1F3C3}\u200D\u2642\uFE0F';
+
+  const nats = (player.nationalities || []).filter(Boolean)
+    .map(n => `${n}${flagEmoji(n) ? ` ${flagEmoji(n)}` : ''}`).join(' ');
+
+  const age = calcAge(player.dob);
+  const dob = player.dob
+    ? new Date(player.dob).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+
+  const league = player.leagueMode === 'manual'
+    ? (player.leagueManual || '')
+    : [player.leagueCountry, (player.leagueTier || '').replace('Tier ', '')].filter(Boolean).join(' ');
+  const club = player.currentClub
+    ? `${player.currentClub}${league ? ` (${league})` : ''}`
+    : 'Free Agent';
+
+  const positions = [player.primaryPosition, ...(player.secondaryPositions || [])]
+    .filter(Boolean).join(' / ');
+
+  const heightM = player.height ? `${(Number(player.height) / 100).toFixed(2)}m` : '';
+  const natTeam = nationalTeamLine(player);
+  const video   = videoUrl(player.videoLink);
+  const profile = bareUrl(player.profileLink);
+
+  const facts = [
+    nats       && `\u{1F30D} ${nats}`,
+    dob        && `\u{1F5D3}\uFE0F ${dob}${age ? ` (${age})` : ''}`,
+    `\u{1F530} ${club}`,
+    natTeam    && `\u{1F3DF}\uFE0F ${natTeam}`,
+    positions  && `\u{1F4CD} ${positions}`,
+    heightM    && `\u{1F4CF} ${heightM}`,
+    player.foot && `\u{1F9B5} ${FOOT_LETTER[player.foot] || player.foot}`,
+  ].filter(Boolean);
+
+  return [
+    `*${player.playerName || ''}* ${runner}`,
+    '',
+    ...facts,
+    ...(video   ? ['', `\u{1F4FC} ${video}`] : []),
+    ...(profile ? ['', `\u{1F464} ${profile}`] : []),
+  ].join('\n');
+}
+
+function PlayerCardModal({ player, category, onClose }) {
+  const card = buildCard(player, category);
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    navigator.clipboard.writeText(card).then(() => { setCopied(true); setTimeout(()=>setCopied(false),2000); });
+    navigator.clipboard.writeText(card).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   };
 
   return (
     <Modal title="Player Card" onClose={onClose} footer={
-      <button className="btn btn-primary" onClick={copy}>{copied?'Copied!':'Copy Card'}</button>
+      <button className="btn btn-primary" onClick={copy}>{copied ? 'Copied!' : 'Copy Card'}</button>
     }>
       <pre style={{
-        background:'var(--surface-3)', border:'1px solid var(--border)', borderRadius: 0,
-        color:'var(--text-1)', fontFamily:'monospace', fontSize:13, lineHeight:1.7,
-        padding:16, whiteSpace:'pre-wrap', wordBreak:'break-word',
+        background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0,
+        color: 'var(--text-1)', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.7,
+        padding: 16, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
       }}>{card}</pre>
     </Modal>
   );
@@ -779,6 +834,12 @@ export default function Pipeline({ category }) {
           </Field>
           <Field label="National Team Status">
             <ChipGroup options={NAT_TEAM_STATUS} value={f('natTeamStatus')} onChange={s('natTeamStatus')} />
+            {f('natTeamStatus') && f('natTeamStatus') !== 'None' && (
+              <div style={{ marginTop: 8 }}>
+                <CountrySelect value={f('natTeamCountry')} onChange={s('natTeamCountry')}
+                  placeholder="National team country (defaults to first nationality)" />
+              </div>
+            )}
           </Field>
 
           <hr className="divider" />
@@ -833,7 +894,7 @@ export default function Pipeline({ category }) {
       )}
 
       {/* Player Card Modal */}
-      {cardFor && <PlayerCardModal player={cardFor} onClose={()=>setCardFor(null)} />}
+      {cardFor && <PlayerCardModal player={cardFor} category={category} onClose={()=>setCardFor(null)} />}
 
       {dialog}
     </div>
