@@ -303,36 +303,54 @@ async function verifyCandidate(cand, log) {
 // included) with a country flag URL per club — /flagge/.../74.png = Israel.
 // One request per player, cached forever on the doc as israelHistory:
 // 'never' | 'played'.
+const HISTORY_VERSION = 2;
+
+// Israeli competitions on Transfermarkt all carry an ISR* code in their URL
+// (ISR1 Ligat ha'Al, ISR2 Liga Leumit, ISRP the cup, ISRL the Toto Cup, and
+// the youth leagues). Matching on the code is immune to markup changes; the
+// country flag (/74.png) inside a results table is the second signal.
+const ISR_COMP = /\/wettbewerb\/isr[a-z0-9]*/i;
+
 async function checkIsraelHistory(tmId) {
-  // TM's ceapi transfer API rejects proxied requests, but the career
-  // performance page is fully server-rendered: every competition the player
-  // ever appeared in is listed with its country flag (/flagge/.../74.png =
-  // Israel). Any Israeli competition in the table = played in Israel.
-  // The header citizenship flag is excluded by scoping to table rows.
+  // The full career page lists every season the player ever played, for every
+  // club and competition, and is fully server-rendered — unlike TM's ceapi
+  // transfer endpoint, which refuses proxied requests.
   try {
-    const html = await fetchHtml(`${TM_BASE}/x/leistungsdatendetails/spieler/${tmId}`);
-    // Sanity: must actually be this player's performance page, not a
-    // challenge/error page.
+    const html = await fetchHtml(`${TM_BASE}/x/leistungsdaten/spieler/${tmId}/plus/1`);
+    // Sanity: must actually be this player's page, not a challenge page.
     if (!html.includes(`/spieler/${tmId}`)) return null;
+
     const $ = cheerio.load(html);
     const tables = $('table.items');
     const rowCount = tables.find('tbody > tr').length;
+
     const israelComps = new Set();
-    tables.find('img.flaggenrahmen').each((_, f) => {
-      const src = $(f).attr('src') || $(f).attr('data-src') || '';
-      if (/\/74\.png/.test(src)) {
-        const row = $(f).closest('tr');
-        const comp = row.find('a[href*="/wettbewerb/"]').first().text().trim()
-          || $(f).attr('title') || 'Israel';
-        israelComps.add(comp);
-      }
+
+    // Signal 1 — a link to an Israeli competition anywhere in the career table.
+    tables.find('a[href*="/wettbewerb/"]').each((_, a) => {
+      const href = $(a).attr('href') || '';
+      if (ISR_COMP.test(href)) israelComps.add($(a).text().trim() || 'Israel');
     });
-    // No performance table at all (young college players etc.) — the page is
-    // valid and shows no Israeli football history.
+
+    // Signal 2 — an Israeli flag on a row (covers competitions whose link is
+    // rendered as an image only).
+    tables.find('img').each((_, f) => {
+      const src = $(f).attr('src') || $(f).attr('data-src') || '';
+      if (!/\/74\.png/.test(src)) return;
+      const row = $(f).closest('tr');
+      israelComps.add(
+        row.find('a[href*="/wettbewerb/"]').first().text().trim()
+        || $(f).attr('title') || 'Israel'
+      );
+    });
+
+    // A career page with no results table at all (youth players who never
+    // appeared) is still a valid answer: no Israeli football history.
     return {
       israelHistory: israelComps.size ? 'played' : 'never',
       israelClubs: [...israelComps].filter(Boolean),
       transferCount: rowCount,
+      historyVersion: HISTORY_VERSION,
     };
   } catch (e) {
     return null; // retried on a later run
@@ -513,9 +531,10 @@ async function run() {
     const histCap = meta.historyChecksPerRun || 40;
     const needHistory = [];
     for (const [id, prev] of existing) {
-      // transferCount was added with the hardened checker — entries written
-      // before it exists are re-verified once with the strict logic.
-      if (prev.israelHistory == null || prev.transferCount == null) needHistory.push(id);
+      // Anything checked by an older version of the checker is re-verified:
+      // the first one keyed off a markup class that TM no longer emits, so it
+      // labelled every player "never".
+      if (prev.israelHistory == null || (prev.historyVersion || 0) < HISTORY_VERSION) needHistory.push(id);
     }
     for (const p of newOnes) {
       if (!p.upgraded && !existing.has(p.tmId)) needHistory.push(p.tmId);
@@ -564,7 +583,7 @@ async function run() {
     log.push(`Cycle: ${cycleProgress}/${totalQueries} names, ${historyRemaining} history left → ${shouldChain ? `chaining (link ${chainDepth + 1})` : 'cycle complete'}`);
 
     await metaRef.set({
-      running: false, cursor: nextCursor,
+      running: false, cursor: nextCursor, lastError: null,
       chainDepth: shouldChain ? chainDepth + 1 : 0,
       cycleProgress: shouldChain ? cycleProgress : 0,
       lastCycleCompletedAt: shouldChain ? (meta.lastCycleCompletedAt || null) : now,

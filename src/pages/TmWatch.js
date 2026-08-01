@@ -241,7 +241,9 @@ export default function TmWatch() {
             {meta.lastRunNew != null && <> · {meta.lastRunNew} new last run</>}
             {items.length > 0 && <> · career history checked: {items.filter(p => p.israelHistory).length}/{items.length}</>}
             {' '}· <ScraperCredits />
-            {meta.lastError && <span style={{ color: 'var(--red)' }}> · Last error: {String(meta.lastError).slice(0, 120)}</span>}
+            {/* Shown only while the most recent run is actually failing —
+                the collector clears this the moment a run succeeds. */}
+            {meta.lastError && <span style={{ color: 'var(--red)' }}> · Error: {String(meta.lastError).slice(0, 120)}</span>}
           </div>
         )}
       </PageHeader>

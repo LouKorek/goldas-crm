@@ -183,9 +183,11 @@ export default function Social() {
             ? <>Last snapshot: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)} · {daily.length} days collected</>
             : 'No snapshot yet — the first daily run starts the history.'}
           {' '}· Source: Meta Graph API
+          {/* Shown only while the most recent run is actually failing —
+              the collector clears this the moment a run succeeds. */}
           {meta?.lastError && (
             <div style={{ color: 'var(--red)', marginTop: 4, overflowWrap: 'anywhere' }}>
-              Last error: {String(meta.lastError)}
+              Error: {String(meta.lastError)}
               {/^IG_ACCESS_TOKEN/.test(String(meta.lastError)) && (
                 <div style={{ color: 'var(--text-3)', marginTop: 3 }}>
                   Add IG_ACCESS_TOKEN (and IG_USER_ID) to the Netlify environment variables, then sync again.
