@@ -98,10 +98,26 @@ async function run() {
       fields: 'user_id,username,followers_count,follows_count,media_count',
     });
 
-    const media = await ig('/me/media', token, {
-      fields: 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count',
-      limit: '25',
-    });
+    // The post archive is fully retrievable, so pull all of it rather than a
+    // recent slice — every post the account ever published, with its current
+    // likes and comments.
+    const mediaItems = [];
+    {
+      let page = await ig('/me/media', token, {
+        fields: 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count',
+        limit: '100',
+      });
+      for (let guard = 0; guard < 20; guard++) {
+        mediaItems.push(...(page.data || []));
+        const next = page.paging?.cursors?.after;
+        if (!next || !(page.data || []).length) break;
+        page = await ig('/me/media', token, {
+          fields: 'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count',
+          limit: '100', after: next,
+        });
+      }
+    }
+    const media = { data: mediaItems };
 
     const now = admin.firestore.Timestamp.now();
     const today = localDate();
@@ -135,6 +151,38 @@ async function run() {
         ...(prev.exists && prev.data().firstSeen ? {} : { firstSeen: now }),
       }, { merge: true });
     }));
+
+    // Instagram keeps 30 days of daily insight values, so the first run can
+    // reach back a month instead of starting from zero. Absolute follower
+    // totals are not part of that history — only per-day movement — so those
+    // days are stored as their own series rather than faked into the curve.
+    let backfilled = 0;
+    try {
+      const until = Math.floor(Date.now() / 1000);
+      const since = until - 29 * 86400;
+      const res = await ig(`/${acc.user_id}/insights`, token, {
+        metric: 'follower_count,reach,profile_views',
+        period: 'day', since: String(since), until: String(until),
+      });
+      const byDate = new Map();
+      for (const m of res.data || []) {
+        const key = { follower_count: 'newFollowers', reach: 'reach', profile_views: 'profileViews' }[m.name];
+        if (!key) continue;
+        for (const v of m.values || []) {
+          const d = String(v.end_time || '').slice(0, 10);
+          if (!d) continue;
+          if (!byDate.has(d)) byDate.set(d, {});
+          byDate.get(d)[key] = v.value ?? null;
+        }
+      }
+      await Promise.all([...byDate].map(([d, vals]) =>
+        db.collection('igDaily').doc(d).set({ date: d, ...vals, insightsAt: now }, { merge: true })
+      ));
+      backfilled = byDate.size;
+      log.push(`insights: ${backfilled} days`);
+    } catch (e) {
+      log.push(`insights unavailable: ${e.message}`);
+    }
 
     await metaRef.set({
       username: acc.username || USERNAME,

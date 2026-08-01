@@ -77,6 +77,39 @@ function TrendChart({ days, postDays, height = 220 }) {
   );
 }
 
+// New followers per day. Instagram retains 30 days of this, so it exists for
+// dates that predate our own snapshots — which is why it gets its own strip
+// instead of being folded into the follower curve above.
+function DailyBars({ days, height = 92 }) {
+  const withData = days.filter(d => d.newFollowers != null);
+  if (withData.length < 2) return null;
+  const W = 900, H = height, PAD_X = 46, PAD_B = 18;
+  const max = Math.max(...withData.map(d => d.newFollowers), 1);
+  const bw = Math.max((W - PAD_X * 2) / days.length - 2, 2);
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-3)', padding: '0 2px 4px' }}>
+        New followers per day
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <line x1={PAD_X} x2={W - PAD_X} y1={H - PAD_B} y2={H - PAD_B} stroke="rgba(212,176,98,0.18)" strokeWidth="1" />
+        <text x={PAD_X - 8} y={14} textAnchor="end" fontSize="11" fill="var(--text-3)">{max}</text>
+        {days.map((d, i) => {
+          if (d.newFollowers == null) return null;
+          const h = (d.newFollowers / max) * (H - PAD_B - 12);
+          const cx = PAD_X + (i / Math.max(days.length - 1, 1)) * (W - PAD_X * 2);
+          return (
+            <rect key={d.date} x={cx - bw / 2} y={H - PAD_B - h} width={bw} height={h}
+              fill="rgba(107,174,245,0.55)">
+              <title>{`${fmtDate(d.date)} \u00b7 ${d.newFollowers} new`}</title>
+            </rect>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function Kpi({ label, value, delta, deltaLabel }) {
   const up = delta > 0, down = delta < 0;
   return (
@@ -105,10 +138,17 @@ export default function Social() {
   useEffect(() => onSnapshot(doc(db, 'app_meta', 'igWatch'),
     s => setMeta(s.exists() ? s.data() : null), () => setMeta(null)), []);
 
-  const { days, postDays, kpis, postList } = useMemo(() => {
-    const sorted = [...daily].filter(d => d.date && d.followers != null).sort((a, b) => a.date.localeCompare(b.date));
+  const { days, barDays, postDays, kpis, postList } = useMemo(() => {
+    // Two kinds of day exist: our own snapshots (absolute follower totals) and
+    // days backfilled from Instagram's 30-day insight history, which carry
+    // per-day movement but no total. Both belong on the timeline; each chart
+    // picks the rows it can actually plot.
+    const sorted = [...daily]
+      .filter(d => d.date && (d.followers != null || d.newFollowers != null))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const snaps = sorted.filter(d => d.followers != null);
     const limit = RANGE_DAYS[range];
-    const dayWindow = limit === Infinity ? sorted : sorted.slice(-limit);
+    const dayWindow = limit === Infinity ? snaps : snaps.slice(-limit);
 
     const allPosts = [...posts].sort((a, b) => (b.takenAt || '').localeCompare(a.takenAt || ''));
     const pDays = new Set(allPosts.map(p => (p.takenAt || '').slice(0, 10)).filter(Boolean));
@@ -127,7 +167,7 @@ export default function Social() {
     const engRate = avgEng != null && meta?.followers ? ((avgEng / meta.followers) * 100).toFixed(1) : null;
 
     // Post impact: follower change from the snapshot on post day to +3 days.
-    const byDate = new Map(sorted.map(d => [d.date, d]));
+    const byDate = new Map(snaps.map(d => [d.date, d]));
     const impact = (p) => {
       const d0s = (p.takenAt || '').slice(0, 10);
       if (!d0s || !byDate.size) return null;
@@ -139,8 +179,11 @@ export default function Social() {
     };
     const withImpact = allPosts.map(p => ({ ...p, impact: impact(p) }));
 
+    const barWindow = limit === Infinity ? sorted : sorted.slice(-limit);
+
     return {
       days: dayWindow,
+      barDays: barWindow,
       postDays: pDays,
       kpis: { deltaFollowers, deltaFollowing, deltaPosts, avgEng, engRate },
       postList: withImpact,
@@ -219,6 +262,7 @@ export default function Social() {
               Blue dots mark days a post went live — spikes right after them show what converts.
             </div>
             <TrendChart days={days} postDays={postDays} />
+            <DailyBars days={barDays} />
           </div>
 
           {/* Posts */}
