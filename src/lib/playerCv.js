@@ -6,16 +6,18 @@
 // the link buttons are drawn with jsPDF primitives rather than pasted as
 // images, so the sheet stays sharp at any zoom and the file stays small.
 //
-// Type is deliberately limited to the PDF base-14 faces. Times carries the
-// display and the values, Helvetica the letterspaced labels. Both are baked
-// into every reader, so the document looks identical in Acrobat, Preview,
-// Chrome and on a phone with nothing embedded and nothing to download.
+// Poppins is embedded (subset to Latin-1) rather than falling back on the
+// PDF base-14 faces, which look like a 1990s form. If registration ever
+// fails the document still builds, on Helvetica.
 //
 // Links are buttons with the whole shape as the hotspot — no raw URLs.
 
 import { calcAge } from './constants';
 
-const DARK      = [10, 20, 13];      // agency green-black
+const DARK      = [0x12, 0x2E, 0x21];   // masthead green — the logo's own family,
+                                        // lightened so the logo tile doesn't read
+                                        // as a dark patch on near-black
+const CREST     = [0x06, 0x1E, 0x14];   // matches the logo artwork's background
 const GOLD      = [0xC9, 0xA8, 0x4C];
 const GOLD_DARK = [0x8E, 0x6A, 0x24];
 const INK       = [0x14, 0x17, 0x1A];
@@ -93,14 +95,41 @@ const ICONS = {
     d.circle(x + s / 2, y + s * 0.38, s * 0.30, 'S');
     d.lines([[s * 0.28, s * 0.36], [-s * 0.28, 0]], x + s * 0.22, y + s * 0.62, [1, 1], 'S', true);
   },
+  ruler(d, x, y, s) {
+    d.rect(x, y + s * 0.28, s, s * 0.44, 'S');
+    [0.28, 0.5, 0.72].forEach(f => d.line(x + s * f, y + s * 0.28, x + s * f, y + s * 0.48));
+  },
+  boot(d, x, y, s) {
+    d.lines([[0, s * 0.60], [s * 0.84, 0], [0, -s * 0.26], [-s * 0.42, -s * 0.34]],
+      x + s * 0.1, y + s * 0.24, [1, 1], 'S', true);
+  },
   play(d, x, y, s) {
     d.triangle(x + s * 0.28, y + s * 0.16, x + s * 0.28, y + s * 0.84, x + s * 0.84, y + s * 0.5, 'F');
   },
 };
 
+// Register the embedded family once per document. Falls back silently to
+// Helvetica so a font problem can never cost Lou the export.
+function useFonts(doc, fonts) {
+  try {
+    doc.addFileToVFS('Poppins-Regular.ttf', fonts.POPPINS_REGULAR);
+    doc.addFileToVFS('Poppins-Medium.ttf',  fonts.POPPINS_MEDIUM);
+    doc.addFileToVFS('Poppins-Bold.ttf',    fonts.POPPINS_BOLD);
+    doc.addFont('Poppins-Regular.ttf', 'Poppins', 'normal');
+    doc.addFont('Poppins-Medium.ttf',  'Poppins', 'medium');
+    doc.addFont('Poppins-Bold.ttf',    'Poppins', 'bold');
+    return 'Poppins';
+  } catch { return 'helvetica'; }
+}
+
 export async function exportPlayerCv(player, category = 'men') {
-  const { default: jsPDF } = await import('jspdf');
+  const [{ default: jsPDF }, fonts] = await Promise.all([
+    import('jspdf'),
+    import('./pdfFonts'),
+  ]);
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const FAM = useFonts(doc, fonts);
+  const MED = FAM === 'Poppins' ? 'medium' : 'bold';   // Helvetica has no medium
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 48;
@@ -108,7 +137,7 @@ export async function exportPlayerCv(player, category = 'men') {
 
   // Small caps label, letterspaced — the recurring typographic motif.
   const label = (text, x, y, colour = GOLD_DARK, size = 7.6) => {
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(FAM, MED);
     doc.setFontSize(size);
     doc.setTextColor(...colour);
     doc.text(String(text).toUpperCase(), x, y, { charSpace: 1.15 });
@@ -125,27 +154,36 @@ export async function exportPlayerCv(player, category = 'men') {
   const logo = await loadLogo();
   if (logo) {
     try {
+      // The artwork ships with its own opaque dark background, so it is set
+      // in a crest tile of that exact colour with a gold hairline. Left bare
+      // on the band it reads as an accidental dark patch.
       const p = doc.getImageProperties(logo);
-      const h = 66;
-      const w = Math.min((p.width / p.height) * h, 132);
-      doc.addImage(logo, 'PNG', M, (BAND - h) / 2 - 6, w, h);
-      textX = M + w + 26;
+      const h = 64;
+      const w = Math.min((p.width / p.height) * h, 128);
+      const lx = M, ly = (BAND - h) / 2 - 4;
+      doc.setFillColor(...CREST);
+      doc.roundedRect(lx - 5, ly - 5, w + 10, h + 10, 3, 3, 'F');
+      doc.setDrawColor(...GOLD_DARK);
+      doc.setLineWidth(0.8);
+      doc.roundedRect(lx - 5, ly - 5, w + 10, h + 10, 3, 3, 'S');
+      doc.addImage(logo, 'PNG', lx, ly, w, h);
+      textX = lx + w + 30;
     } catch { /* the logo is decoration; never block the export */ }
   }
 
   label('Gold A&S  ·  Football Agency', textX, 52, GOLD, 8);
 
-  doc.setFont('times', 'bold');
-  doc.setFontSize(30);
+  doc.setFont(FAM, 'bold');
+  doc.setFontSize(28);
   doc.setTextColor(255, 255, 255);
   doc.text(latin1(player.playerName) || 'Player', textX, 88);
 
   const strap = [CAT_WORD[category], nationalTeam(player) || (player.nationalities || [])[0]]
     .filter(Boolean).join('  ·  ');
-  doc.setFont('times', 'italic');
-  doc.setFontSize(12);
+  doc.setFont(FAM, 'normal');
+  doc.setFontSize(11);
   doc.setTextColor(...GOLD);
-  doc.text(latin1(strap), textX, 108);
+  doc.text(latin1(strap), textX, 110, { charSpace: 0.5 });
 
   // ── Headline figures ───────────────────────────────────────────
   // The four things a sporting director checks first, given the space they
@@ -170,12 +208,12 @@ export async function exportPlayerCv(player, category = 'men') {
       doc.setLineWidth(0.7);
       doc.line(M + colW * i, STRIP_Y + 4, M + colW * i, STRIP_Y + STRIP_H - 6);
     }
-    doc.setFont('times', 'bold');
-    doc.setFontSize(23);
+    doc.setFont(FAM, 'bold');
+    doc.setFontSize(21);
     doc.setTextColor(...INK);
     doc.text(latin1(v), cx, STRIP_Y + 30, { align: 'center' });
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.6);
+    doc.setFont(FAM, MED);
+    doc.setFontSize(7.4);
     doc.setTextColor(...GOLD_DARK);
     doc.text(k.toUpperCase(), cx, STRIP_Y + 47, { align: 'center', charSpace: 1.15 });
   });
@@ -185,18 +223,20 @@ export async function exportPlayerCv(player, category = 'men') {
     ? (player.leagueManual || '')
     : [player.leagueCountry, (player.leagueTier || '').replace('Tier ', '')].filter(Boolean).join(' ');
 
-  // Age, height, foot and the primary position already sit in the headline
-  // strip, so the table carries what the strip cannot: the full nationality
-  // list, the club with its league, and the secondary positions.
+  // The strip is the headline; this is the record. Everything appears here in
+  // full — the strip abbreviates, the table states.
   const secondary = (player.secondaryPositions || []).filter(Boolean);
   const rows = [
     ['globe',    'Nationality',    (player.nationalities || []).filter(Boolean).join('   ·   ')],
     ['calendar', 'Date of birth',  player.dob
-      ? new Date(player.dob).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      ? `${new Date(player.dob).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${age ? `      ${age} years old` : ''}`
       : ''],
     ['shield',   'Current club',   player.currentClub ? `${player.currentClub}${league ? `   (${league})` : ''}` : 'Free Agent'],
     ['flag',     'National team',  nationalTeam(player)],
-    ['pin',      'Also plays',     secondary.join('   /   ')],
+    ['pin',      'Main position',  player.primaryPosition || ''],
+    ['pin',      'Other positions', secondary.join('   /   ')],
+    ['ruler',    'Height',         player.height ? `${(Number(player.height) / 100).toFixed(2)} m` : ''],
+    ['boot',     'Preferred foot', FOOT_WORD[player.foot] || player.foot || ''],
   ].filter(([, , v]) => v);
 
   let y = STRIP_Y + STRIP_H + 44;
@@ -215,17 +255,17 @@ export async function exportPlayerCv(player, category = 'men') {
 
     label(name, LABEL_X, y, MUTED, 7.4);
 
-    doc.setFont('times', 'normal');
-    doc.setFontSize(14);
+    doc.setFont(FAM, 'normal');
+    doc.setFontSize(12);
     doc.setTextColor(...INK);
     const fitted = doc.splitTextToSize(latin1(value), W - M - VALUE_X)[0] || '';
     doc.text(fitted, VALUE_X, y);
 
-    y += 12;
+    y += 11;
     doc.setDrawColor(...RULE);
     doc.setLineWidth(0.6);
     doc.line(M, y, W - M, y);
-    y += 26;
+    y += 21;
   }
 
   // ── Notes ──────────────────────────────────────────────────────
@@ -237,12 +277,15 @@ export async function exportPlayerCv(player, category = 'men') {
     doc.setLineWidth(1.2);
     doc.line(M, y + 6, W - M, y + 6);
     y += 26;
-    doc.setFont('times', 'normal');
-    doc.setFontSize(12);
+    doc.setFont(FAM, 'normal');
+    doc.setFontSize(10.5);
     doc.setTextColor(...INK);
-    const lines = doc.splitTextToSize(notes, W - M * 2).slice(0, 7);
+    // Take only as many lines as fit above the buttons; a CV that spills onto
+    // a second page stops being a one-pager.
+    const roomFor = Math.max(1, Math.floor(((H - 190) - y) / 15));
+    const lines = doc.splitTextToSize(notes, W - M * 2).slice(0, roomFor);
     doc.text(lines, M, y, { lineHeightFactor: 1.45 });
-    y += lines.length * 17 + 10;
+    y += lines.length * 15 + 10;
   }
 
   // ── Link buttons ───────────────────────────────────────────────
@@ -275,14 +318,14 @@ export async function exportPlayerCv(player, category = 'men') {
       } else {
         // A monogram tile rather than a reproduction of their mark.
         doc.roundedRect(gx, gy, 18, 16, 2, 2, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
+        doc.setFont(FAM, 'bold');
+        doc.setFontSize(8);
         doc.setTextColor(...TM_NAVY);
         doc.text('TM', gx + 9, gy + 11.4, { align: 'center' });
       }
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFont(FAM, MED);
+      doc.setFontSize(8.8);
       doc.setTextColor(255, 255, 255);
       doc.text(b.text.toUpperCase(), gx + 32, by + BH / 2 + 3.4, { charSpace: 0.9 });
 
@@ -295,11 +338,9 @@ export async function exportPlayerCv(player, category = 'men') {
   doc.rect(0, H - 54, W, 54, 'F');
   doc.setFillColor(...GOLD);
   doc.rect(0, H - 56, W, 2, 'F');
+  // No export date: the sheet is sent and forwarded for months, and a stamped
+  // date only makes a current profile look stale.
   label('gold-as.com  ·  Lou Korek  ·  FIFA Licensed Agent', M, H - 30, GOLD, 8);
-  doc.setFont('times', 'italic');
-  doc.setFontSize(9);
-  doc.setTextColor(...MUTED);
-  doc.text(new Date().toLocaleDateString('en-GB'), W - M, H - 30, { align: 'right' });
 
   const safe = (player.playerName || 'player').replace(/[^\w\s-]/g, '').trim() || 'player';
   doc.save(`${safe} - Gold A&S.pdf`);
