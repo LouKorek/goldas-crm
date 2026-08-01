@@ -118,21 +118,33 @@ function PlayerCardModal({ player, category, onClose }) {
   const card = buildCard(player, category);
   const [copied, setCopied] = useState(false);
   const [pdfing, setPdfing] = useState(false);
+  // Only offered where the OS can actually take a file — desktop browsers
+  // would otherwise show a button that silently downloads instead.
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    import('lib/playerCv').then(m => { if (alive) setCanShare(m.canSharePdf()); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   const copy = () => {
     navigator.clipboard.writeText(card).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   };
-  const pdf = async () => {
+  const pdf = async (share) => {
     setPdfing(true);
     try {
       const mod = await import('lib/playerCv');
-      await mod.exportPlayerCv(player, category);
+      await mod.exportPlayerCv(player, category, { share });
     } catch (e) { toast.error('Could not build the PDF.'); }
     finally { setPdfing(false); }
   };
 
   return (
     <Modal title="Player Card" onClose={onClose} footer={<>
-      <button className="btn btn-ghost" onClick={pdf} disabled={pdfing}>
+      {canShare && (
+        <button className="btn btn-ghost" onClick={() => pdf(true)} disabled={pdfing}>Share PDF</button>
+      )}
+      <button className="btn btn-ghost" onClick={() => pdf(false)} disabled={pdfing}>
         {pdfing ? 'Building…' : 'Export PDF'}
       </button>
       <button className="btn btn-primary" onClick={copy}>{copied ? 'Copied!' : 'Copy Card'}</button>

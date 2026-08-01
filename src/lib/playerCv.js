@@ -138,7 +138,19 @@ function useFonts(doc, fonts) {
   } catch { return 'helvetica'; }
 }
 
-export async function exportPlayerCv(player, category = 'men') {
+// True when the device can hand a PDF to the OS share sheet. Used to decide
+// whether the Share button is worth showing at all.
+export function canSharePdf() {
+  try {
+    return typeof navigator !== 'undefined'
+      && !!navigator.canShare?.({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] });
+  } catch { return false; }
+}
+
+// `share: true` opens the OS share sheet with the file. Left false, the PDF
+// simply downloads — which on a phone opens it in the viewer, so Lou can read
+// it first and share afterwards if he wants to.
+export async function exportPlayerCv(player, category = 'men', { share = false } = {}) {
   const [{ default: jsPDF }, fonts] = await Promise.all([
     import('jspdf'),
     import('./pdfFonts'),
@@ -361,22 +373,23 @@ export async function exportPlayerCv(player, category = 'men') {
   const safe = (player.playerName || 'player').replace(/[^\w\s-]/g, '').trim() || 'player';
   const filename = `${safe} - Gold A&S.pdf`;
 
-  // On a phone, doc.save() downloads through a blob: URL, and the share sheet
-  // then offers that URL as text — which is why WhatsApp was attaching
-  // "blob:https://goldas-crm.netlify.app/..." alongside the document. Handing
-  // the file itself to the Web Share API shares the PDF and nothing else.
-  // No title or text is passed: either would come through as a message.
-  try {
-    const blob = doc.output('blob');
-    const file = new File([blob], filename, { type: 'application/pdf' });
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file] });
-      return;
+  // Sharing hands over the file itself. The browser's own share of a
+  // downloaded PDF passes its blob: URL as text instead, which is what was
+  // arriving in WhatsApp beside the document; no title or text is passed
+  // here, so nothing but the PDF goes across.
+  if (share) {
+    try {
+      const blob = doc.output('blob');
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    } catch (e) {
+      // Dismissing the sheet is a completed action, not a failure — don't
+      // fall through and download a copy he didn't ask for.
+      if (e && e.name === 'AbortError') return;
     }
-  } catch (e) {
-    // AbortError means the user dismissed the sheet — that is a completed
-    // action, not a failure, so don't fall through to a download.
-    if (e && e.name === 'AbortError') return;
   }
 
   doc.save(filename);
