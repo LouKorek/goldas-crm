@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
@@ -53,6 +53,8 @@ function tsToDate(ts) {
   return new Date(ts);
 }
 
+const PAGE = 50;
+
 export default function TmWatch() {
   const { canEdit, isAdmin } = useRole();
   const [items, setItems]   = useState([]);
@@ -62,8 +64,19 @@ export default function TmWatch() {
   const [histFilter, setHistFilter] = useState('');
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
+  // "All" holds 650+ records. Painting every card at once locks the browser
+  // for seconds, so the list grows on demand instead.
+  const [shown, setShown] = useState(PAGE);
 
   useEffect(() => listenCollection(PATHS.TM_WATCH, setItems), []);
+  // Most days nothing is new. Opening on an empty "New" tab hides the whole
+  // watchlist, so the first load falls through to "All" when New is empty.
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || !items.length) return;
+    landed.current = true;
+    if (!items.some(p => p.status === 'new')) setTab('All');
+  }, [items]);
   useEffect(() => onSnapshot(doc(db, 'app_meta', 'tmWatch'),
     s => setMeta(s.exists() ? s.data() : null), () => setMeta(null)), []);
 
@@ -96,6 +109,9 @@ export default function TmWatch() {
       histCounts: Object.fromEntries(['', 'never', 'played'].map(h => [h, select(tab, tierFilter, h).length])),
     };
   }, [items, tab, tierFilter, histFilter, search]);
+
+  // Any change of filter starts the list over from the top.
+  useEffect(() => { setShown(PAGE); }, [tab, tierFilter, histFilter, search]);
 
   const newCount = items.filter(p => p.status === 'new').length;
 
@@ -207,7 +223,7 @@ export default function TmWatch() {
         <Empty message={`Nothing in "${tab}"${tierFilter !== '' ? ' with this match type' : ''}.`} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filtered.map(p => {
+          {filtered.slice(0, shown).map(p => {
             const badge = TIER_BADGE[p.tier] || TIER_BADGE[2];
             return (
               <div key={p.id} className="card card-body" style={{
@@ -279,6 +295,13 @@ export default function TmWatch() {
               </div>
             );
           })}
+
+          {filtered.length > shown && (
+            <button className="btn btn-ghost" onClick={() => setShown(s => s + PAGE)}
+              style={{ alignSelf: 'center', marginTop: 4 }}>
+              Show {Math.min(PAGE, filtered.length - shown)} more · {shown} of {filtered.length}
+            </button>
+          )}
         </div>
       )}
     </div>
