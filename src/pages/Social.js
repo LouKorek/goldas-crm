@@ -31,9 +31,13 @@ function TrendChart({ days, postDays, height = 220 }) {
       </div>
     );
   }
-  const W = 900, H = height, PAD_X = 46, PAD_Y = 22;
+  const W = 900, H = height, PAD_X = 52, PAD_Y = 26;
   const vals = days.map(d => d.followers);
-  const min = Math.min(...vals), max = Math.max(...vals);
+  let min = Math.min(...vals), max = Math.max(...vals);
+  // A flat run (every snapshot identical) would collapse the scale and pin the
+  // line to the floor, which reads as a broken chart rather than a steady
+  // count. Give it breathing room so it sits mid-height.
+  if (max - min < 2) { const c = (max + min) / 2; min = Math.floor(c - 2); max = Math.ceil(c + 2); }
   const span = Math.max(max - min, 1);
   const x = (i) => PAD_X + (i / (days.length - 1)) * (W - PAD_X * 2);
   const y = (v) => H - PAD_Y - ((v - min) / span) * (H - PAD_Y * 2);
@@ -80,32 +84,79 @@ function TrendChart({ days, postDays, height = 220 }) {
 // New followers per day. Instagram retains 30 days of this, so it exists for
 // dates that predate our own snapshots — which is why it gets its own strip
 // instead of being folded into the follower curve above.
-function DailyBars({ days, height = 92 }) {
+function DailyBars({ days, postDays, height = 150 }) {
   const withData = days.filter(d => d.newFollowers != null);
   if (withData.length < 2) return null;
-  const W = 900, H = height, PAD_X = 46, PAD_B = 18;
-  const max = Math.max(...withData.map(d => d.newFollowers), 1);
-  const bw = Math.max((W - PAD_X * 2) / days.length - 2, 2);
+
+  const W = 900, H = height, PAD_X = 52, PAD_T = 22, PAD_B = 34;
+  const max   = Math.max(...withData.map(d => d.newFollowers), 1);
+  const total = withData.reduce((s, d) => s + d.newFollowers, 0);
+  const best  = withData.reduce((a, b) => (b.newFollowers > a.newFollowers ? b : a));
+  const plot  = H - PAD_T - PAD_B;
+  const step  = (W - PAD_X * 2) / Math.max(days.length, 1);
+  const bw    = Math.max(Math.min(step - 3, 26), 3);
+  const cx    = (i) => PAD_X + step * i + step / 2;
+  const y     = (v) => PAD_T + plot - (v / max) * plot;
+
+  // Every bar gets its number only when the bars are wide enough to carry one;
+  // otherwise the peak is called out and the rest are read off the scale.
+  const labelAll = days.length <= 16;
+  const ticks = [...new Set([0, Math.round(max / 2), max])];
+  const xLabelAt = [...new Set([0, Math.floor((days.length - 1) / 2), days.length - 1])];
+
   return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-3)', padding: '0 2px 4px' }}>
-        New followers per day
+    <div style={{ marginTop: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', padding: '0 2px 2px' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-2)' }}>
+          New follows per day
+        </span>
+        <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+          {total.toLocaleString()} in this period \u00b7 best day {best.newFollowers} on {fmtDate(best.date)}
+        </span>
       </div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-3)', padding: '0 2px 8px', lineHeight: 1.5 }}>
+        One bar per day; its height is how many accounts started following that day.
+        These are arrivals only \u2014 the line above is the net total, after people who left.
+      </div>
+
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-        <line x1={PAD_X} x2={W - PAD_X} y1={H - PAD_B} y2={H - PAD_B} stroke="rgba(212,176,98,0.18)" strokeWidth="1" />
-        <text x={PAD_X - 8} y={14} textAnchor="end" fontSize="11" fill="var(--text-3)">{max}</text>
+        {ticks.map(v => (
+          <g key={v}>
+            <line x1={PAD_X} x2={W - PAD_X} y1={y(v)} y2={y(v)}
+              stroke={v === 0 ? 'rgba(212,176,98,0.35)' : 'rgba(212,176,98,0.12)'} strokeWidth="1" />
+            <text x={PAD_X - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-3)">{v}</text>
+          </g>
+        ))}
+
         {days.map((d, i) => {
           if (d.newFollowers == null) return null;
-          const h = (d.newFollowers / max) * (H - PAD_B - 12);
-          const cx = PAD_X + (i / Math.max(days.length - 1, 1)) * (W - PAD_X * 2);
+          const h = Math.max((d.newFollowers / max) * plot, d.newFollowers > 0 ? 2 : 0);
+          const isPost = postDays && postDays.has(d.date);
           return (
-            <rect key={d.date} x={cx - bw / 2} y={H - PAD_B - h} width={bw} height={h}
-              fill="rgba(107,174,245,0.55)">
-              <title>{`${fmtDate(d.date)} \u00b7 ${d.newFollowers} new`}</title>
-            </rect>
+            <g key={d.date}>
+              <rect x={cx(i) - bw / 2} y={PAD_T + plot - h} width={bw} height={h}
+                fill={isPost ? 'rgba(107,174,245,0.85)' : 'rgba(107,174,245,0.40)'}>
+                <title>{`${fmtDate(d.date)} \u00b7 ${d.newFollowers} new${isPost ? ' \u00b7 post published' : ''}`}</title>
+              </rect>
+              {(labelAll || d.date === best.date) && d.newFollowers > 0 && (
+                <text x={cx(i)} y={PAD_T + plot - h - 5} textAnchor="middle" fontSize="10.5"
+                  fill="var(--text-2)" fontWeight="600">{d.newFollowers}</text>
+              )}
+            </g>
           );
         })}
+
+        {xLabelAt.map(i => (
+          <text key={i} x={cx(i)} y={H - 12}
+            textAnchor={i === 0 ? 'start' : i === days.length - 1 ? 'end' : 'middle'}
+            fontSize="11" fill="var(--text-3)">{fmtDate(days[i].date)}</text>
+        ))}
       </svg>
+
+      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-3)', padding: '4px 2px 0' }}>
+        <span><span style={{ display: 'inline-block', width: 9, height: 9, background: 'rgba(107,174,245,0.85)', marginRight: 5, verticalAlign: 'middle' }} />Day a post went live</span>
+        <span><span style={{ display: 'inline-block', width: 9, height: 9, background: 'rgba(107,174,245,0.40)', marginRight: 5, verticalAlign: 'middle' }} />Ordinary day</span>
+      </div>
     </div>
   );
 }
@@ -257,12 +308,13 @@ export default function Social() {
 
           {/* Followers trend + post markers */}
           <div className="card" style={{ padding: '16px 18px', marginBottom: 16 }}>
-            <div className="section-label">Followers over time</div>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
-              Blue dots mark days a post went live — spikes right after them show what converts.
+            <div className="section-label">Follower growth</div>
+            <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginBottom: 8, lineHeight: 1.5 }}>
+              Total followers on each day we took a snapshot. Blue markers along the
+              bottom are days a post went live — a rise just after one is the post working.
             </div>
             <TrendChart days={days} postDays={postDays} />
-            <DailyBars days={barDays} />
+            <DailyBars days={barDays} postDays={postDays} />
           </div>
 
           {/* Posts */}
@@ -293,9 +345,11 @@ export default function Social() {
                             </span>
                           )}
                         </div>
+                        {/* Two bare numbers side by side told you nothing about
+                            which was which. */}
                         <div className="m-meta" style={{ marginTop: 6 }}>
-                          {p.likes != null && <span>{fmtNum(p.likes)}</span>}
-                          {p.comments != null && <span>{fmtNum(p.comments)}</span>}
+                          {p.likes != null && <span>{fmtNum(p.likes)} likes</span>}
+                          {p.comments != null && <span>{fmtNum(p.comments)} comments</span>}
                         </div>
                         {p.caption && (
                           <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
