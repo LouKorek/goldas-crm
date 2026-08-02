@@ -111,12 +111,12 @@ function DailyBars({ days, postDays, height = 150 }) {
           New follows per day
         </span>
         <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-          {total.toLocaleString()} in this period \u00b7 best day {best.newFollowers} on {fmtDate(best.date)}
+          {total.toLocaleString()} in this period · best day {best.newFollowers} on {fmtDate(best.date)}
         </span>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-3)', padding: '0 2px 8px', lineHeight: 1.5 }}>
         One bar per day; its height is how many accounts started following that day.
-        These are arrivals only \u2014 the line above is the net total, after people who left.
+        These are arrivals only — the line above is the net total, after people who left.
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
