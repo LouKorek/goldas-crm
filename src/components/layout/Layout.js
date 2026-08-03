@@ -24,7 +24,7 @@ const NAV = [
   { label: 'Youth',             path: '/pipeline/youth',  icon: 'youth' },
   { label: 'Jewish',            path: '/pipeline/jewish', icon: 'star' },
   { section: 'System',          num: '04' },
-  { label: 'Tasks',             path: '/tasks',           icon: 'tasks', ownerOnly: true },
+  { label: 'My Tasks',          path: '/tasks',           icon: 'tasks' },
   { label: 'Notifications',     path: '/notifications',   icon: 'bell' },
   { label: 'Team',              path: '/team',            icon: 'team', adminOnly: true },
 ];

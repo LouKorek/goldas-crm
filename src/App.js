@@ -189,9 +189,9 @@ export default function App() {
                 <Route path="pipeline/jewish"element={<Pipeline category="jewish" />} />
                 <Route path="pipeline/jewish/tm-watch" element={<TmWatch />} />
                 <Route path="notifications"  element={<Notifications />} />
-                <Route path="tasks" element={
-                  access.email === 'lou.korek@gmail.com' ? <Tasks /> : <Navigate to="/dashboard" replace />
-                } />
+                {/* Personal to-do board — every signed-in user gets their
+                    own, and only ever sees their own. */}
+                <Route path="tasks" element={<Tasks />} />
                 <Route path="team" element={
                   access.role === 'admin' ? <Team /> : <Navigate to="/dashboard" replace />
                 } />

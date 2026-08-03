@@ -6,34 +6,17 @@ import {
   Empty, Spinner, useConfirm, toast, RowActions,
 } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import { useRole } from 'lib/roleContext';
+import { OWNER_EMAIL } from 'lib/firebase';
 
-// ─── Starter tasks (auto-migrated on first owner visit) ──────────
-// The Tasks page itself wipes existing tasks and re-seeds these the
-// first time the owner opens it on each browser — gated by a
-// localStorage key so it can never re-run. This guarantees Lou's
-// initial agency to-do list ends up in Firestore without him having
-// to click anything.
-const STARTER_TASKS = [
-  { title: 'Pitch a Benfica Lisbon training camp to represented players',                       linkedNames: [] },
-  { title: 'Lock in training sessions for Abu Saleh at Hapoel Haifa',                            linkedNames: ['Abu Saleh', 'אבו סאלח', 'Saleh Abu'] },
-  { title: 'Find clubs for all represented players for next season',
-    notes: 'Review the full roster and shortlist potential clubs for every represented player.',
-    linkedNames: '__ALL__' },
-  { title: 'Welcome post for Noam Barzilay at Maccabi Petah Tikva',                              linkedNames: ['Noam Barzilay', 'נועם ברזילי', 'Noam Brazilay'] },
-  { title: 'Send Jewish players the list of documents they need to prepare',                     linkedNames: [] },
-  { title: 'Complete / renew representation agreements',
-    notes: 'Ezra Aaron, Jay Maltz, Kai Maor, Noam Barzilay, Alon Mahlev, Aviv Palaev, Eli Schnabel, Ran Hasphia',
-    linkedNames: ['Noam Barzilay', 'נועם ברזילי', 'Alon Mahlev', 'אלון מהלב', 'Aviv Palaev', 'אביב פלייב', 'Aviv Palayev'] },
-  { title: 'Connect Shaun Ukpeli and Alison Mumbere with clubs in Rwanda and the UAE',           linkedNames: ['Alison Mumbere'] },
-  { title: 'Meet with Hamed Roumald',                                                            linkedNames: [] },
-  { title: 'Find clubs for Joel Asiama and Eric Halfin',                                         linkedNames: [] },
-  { title: 'Verify Transfermarkt profile updates for Alon Milevitsky and Gavin Karam',
-    linkedNames: ['Alon Milevitsky', 'Alon Milebicki', 'אלון מילביצקי', 'Gavin Karam', 'גאווין כאראם'] },
-  { title: 'Find a youth club for Orian Nardimon and Adir Ozeri',                                linkedNames: [] },
-  { title: 'Complete courses on the FIFA agents platform',                                       linkedNames: [] },
-  { title: 'Reach out to the players from Ironi Bat Yam',                                        linkedNames: [] },
-];
-const STARTER_VERSION = 'v3-english-normal';
+// Personal task list. Every task belongs to exactly one signed-in user
+// (`owner` = their email) and is only ever shown to that user; nobody sees
+// anybody else's list. The screen is open to all users rather than the owner
+// alone, so each of them gets their own board.
+//
+// The starter-task seeder that used to live here has been removed: it wiped
+// the whole collection before re-seeding, which was harmless when Lou was the
+// only person with tasks and destructive the moment anyone else had some.
 
 // ─────────────────────────── Constants ───────────────────────────
 const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
@@ -191,7 +174,8 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
 
 // ─────────────────────────── Page ────────────────────────────────
 export default function Tasks() {
-  const [items, setItems]     = useState([]);
+  const { email, name, canEdit } = useRole();
+  const [allItems, setAllItems] = useState([]);
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal]     = useState(null);
@@ -202,77 +186,45 @@ export default function Tasks() {
   const [showDone, setShowDone] = useState(false);
   const { confirm, dialog }   = useConfirm();
 
-  useEffect(() => listenCollection(PATHS.TASKS, data => { setItems(data); setLoading(false); }), []);
+  useEffect(() => listenCollection(PATHS.TASKS, data => { setAllItems(data); setLoading(false); }), []);
   useEffect(() => listenCollection(PATHS.PLAYERS, setPlayers), []);
 
-  // ── One-shot starter-task installer ─────────────────────────────
-  // Runs the first time the owner opens this page on each browser.
-  // Wipes existing tasks and re-creates the canonical English list
-  // with priority=Normal. Guarded by a localStorage flag so it can
-  // never re-run after success.
-  const migratedRef = useRef(false);
-  const itemsRef    = useRef([]);
-  const playersRef  = useRef([]);
-  useEffect(() => { itemsRef.current   = items;   }, [items]);
-  useEffect(() => { playersRef.current = players; }, [players]);
+  // Only ever work with this user's own tasks. Documents written before the
+  // list became personal carry no `owner` — they are Lou's, and the effect
+  // below stamps them, so until that lands they stay visible to him alone.
+  const items = useMemo(
+    () => allItems.filter(t => (t.owner || OWNER_EMAIL) === email),
+    [allItems, email]);
+
+  // ── Ownership backfill ──────────────────────────────────────────
+  // Every task written before this screen became personal predates the
+  // `owner` field. They are all Lou's, so his next visit stamps them once and
+  // the question never comes up again. Runs by itself — no button, no console.
+  const claimedRef = useRef(false);
+  const allItemsRef = useRef([]);
+  useEffect(() => { allItemsRef.current = allItems; }, [allItems]);
 
   useEffect(() => {
-    if (loading) return;
-    if (migratedRef.current) return;
-    if (localStorage.getItem('starterTasksMigrated') === STARTER_VERSION) return;
-    migratedRef.current = true;
+    if (loading || claimedRef.current) return;
+    if (email !== OWNER_EMAIL || !canEdit) return;
+    claimedRef.current = true;
 
-    // Give Firestore listeners ~1.2s to settle so we wipe what's
-    // actually there and link to the freshly-loaded players.
+    // Let the listener settle first, so a partial first snapshot doesn't make
+    // this run twice over the same documents.
     const tid = setTimeout(async () => {
-      if (localStorage.getItem('starterTasksMigrated') === STARTER_VERSION) return;
-      localStorage.setItem('starterTasksMigrated', STARTER_VERSION);
-
-      const findId = (name) => {
-        const lc = (name || '').toLowerCase().trim();
-        if (!lc) return null;
-        const pool = playersRef.current;
-        let m = pool.find(p => (p.fullName || '').toLowerCase() === lc);
-        if (m) return m.id;
-        const toks = lc.split(/\s+/).filter(Boolean);
-        m = pool.find(p => {
-          const fn = (p.fullName || '').toLowerCase();
-          return toks.every(t => fn.includes(t));
-        });
-        return m ? m.id : null;
-      };
-      const resolveLinks = (names) => {
-        if (names === '__ALL__') return playersRef.current.map(p => p.id);
-        const ids = new Set();
-        (names || []).forEach(n => { const id = findId(n); if (id) ids.add(id); });
-        return Array.from(ids);
-      };
-
+      const orphans = allItemsRef.current.filter(t => !t.owner);
+      if (!orphans.length) return;
       try {
-        // Wipe any existing tasks first.
-        for (const t of itemsRef.current) {
-          await deleteDoc_(PATHS.TASKS, t.id);
+        for (const t of orphans) {
+          await updateDoc_(PATHS.TASKS, t.id, { owner: OWNER_EMAIL });
         }
-        // Seed the English starter list — all priority Normal.
-        for (const t of STARTER_TASKS) {
-          await addDoc_(PATHS.TASKS, {
-            title:         t.title,
-            notes:         t.notes || '',
-            dueDate:       '',
-            priority:      'Normal',
-            linkedPlayers: resolveLinks(t.linkedNames),
-            done:          false,
-          });
-        }
-        toast.success(`${STARTER_TASKS.length} tasks ready.`);
       } catch (e) {
-        localStorage.removeItem('starterTasksMigrated');
-        migratedRef.current = false;
-        toast.error(e.message || 'Could not install starter tasks.');
+        claimedRef.current = false;
+        toast.error(e.message || 'Could not assign existing tasks.');
       }
-    }, 1200);
+    }, 1500);
     return () => clearTimeout(tid);
-  }, [loading]);
+  }, [loading, email, canEdit]);
 
   const s = k => v => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
   const f = k => form[k] ?? '';
@@ -284,7 +236,9 @@ export default function Tasks() {
     if (!form.title.trim()) { toast.error('Title is required.'); return; }
     setSaving(true);
     try {
-      const data = { ...form, title: form.title.trim() };
+      // owner is set on create and never rewritten, so a task can't drift to
+      // another list by being edited.
+      const data = { ...form, title: form.title.trim(), owner: form.owner || email };
       if (modal === 'add') { await addDoc_(PATHS.TASKS, data); toast.success('Task added!'); }
       else { await updateDoc_(PATHS.TASKS, modal.edit.id, data); toast.success('Task updated.'); }
       setModal(null);
@@ -329,11 +283,13 @@ export default function Tasks() {
   return (
     <div className="tasks-page">
       <PageHeader
-        title="Tasks"
-        subtitle={`${open.length} open  ·  ${done.length} done`}
+        title="My Tasks"
+        subtitle={`${open.length} open  ·  ${done.length} done  ·  private to ${name || email}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Task</span></button>
+            {canEdit && (
+              <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Task</span></button>
+            )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
@@ -344,8 +300,8 @@ export default function Tasks() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
-        <Empty message="No tasks yet — add your first one."
-          action={<button className="btn btn-primary" onClick={openAdd}>+ Add Task</button>} />
+        <Empty message={canEdit ? 'No tasks yet — add your first one.' : 'No tasks yet.'}
+          action={canEdit ? <button className="btn btn-primary" onClick={openAdd}>+ Add Task</button> : null} />
       ) : (
         <>
           {/* Open tasks */}
@@ -353,7 +309,7 @@ export default function Tasks() {
             <Empty message={search ? 'No open tasks match your search.' : 'All caught up — no open tasks.'} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {open.map(t => <TaskCard key={t.id} t={t} players={players}
+              {open.map(t => <TaskCard key={t.id} t={t} players={players} canEdit={canEdit}
                 onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => del(t)} />)}
             </div>
           )}
@@ -374,7 +330,7 @@ export default function Tasks() {
               </button>
               {showDone && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10, opacity: 0.7 }}>
-                  {done.map(t => <TaskCard key={t.id} t={t} players={players}
+                  {done.map(t => <TaskCard key={t.id} t={t} players={players} canEdit={canEdit}
                     onToggle={() => toggleDone(t)} onEdit={() => openEdit(t)} onDelete={() => del(t)} />)}
                 </div>
               )}
@@ -425,7 +381,7 @@ export default function Tasks() {
 }
 
 // ─────────────────────────── Task Card ───────────────────────────
-function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
+function TaskCard({ t, players, canEdit, onToggle, onEdit, onDelete }) {
   const due       = dueLabel(t.dueDate);
   const linked    = (t.linkedPlayers || []).map(id => players.find(p => p.id === id)).filter(Boolean);
   const pri       = PRIORITY_COLOR[t.priority] || PRIORITY_COLOR.Normal;
@@ -439,13 +395,13 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       borderLeft: `3px solid ${pri.fg}`,
     }}>
       {/* Done checkbox */}
-      <button type="button" onClick={onToggle} className="task-check"
-        title={t.done ? 'Mark as open' : 'Mark as done'}
+      <button type="button" onClick={onToggle} className="task-check" disabled={!canEdit}
+        title={canEdit ? (t.done ? 'Mark as open' : 'Mark as done') : 'View-only access'}
         style={{
           width: 24, height: 24, borderRadius: 0, flexShrink: 0,
           border: `1.5px solid ${t.done ? 'var(--green-ok)' : 'var(--border-2)'}`,
           background: t.done ? 'var(--green-ok)' : 'transparent',
-          color: '#0A140D', cursor: 'pointer', marginTop: 2,
+          color: '#0A140D', cursor: canEdit ? 'pointer' : 'default', marginTop: 2,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 14, fontWeight: 700,
         }}>
@@ -519,7 +475,7 @@ function TaskCard({ t, players, onToggle, onEdit, onDelete }) {
       </div>
 
       {/* Edit + Delete actions */}
-      <RowActions onEdit={onEdit} onDelete={onDelete} />
+      {canEdit && <RowActions onEdit={onEdit} onDelete={onDelete} />}
     </div>
   );
 }
