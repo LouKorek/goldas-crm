@@ -599,9 +599,16 @@ export default function Players() {
               )}
               {league&&<div className="form-hint">League: <strong>{league}</strong></div>}
             </Field>
-            <Field label="IFA Link" hint="Optional — a football.org.il player profile or team page. Paste it once: the season in the link is ignored, so it keeps working every year, and a player link follows him to a new club or age group on its own. Drives match auto-sync for Israeli youth / women / lower leagues.">
+            <Field label="IFA Player Profile" hint="Optional — his football.org.il profile page. Paste it once and leave it: the season in the link is ignored, so it never needs replacing, and it follows him to a new club or age group by itself. Drives match auto-sync for Israeli youth / women / lower leagues.">
               <input value={f('ifaTeamUrl')} onChange={e=>s('ifaTeamUrl')(e.target.value)}
                 placeholder="https://www.football.org.il/players/player/?player_id=..." />
+              {/* Team links from before this field expected a profile still
+                  sync fine, but they track the club rather than the player. */}
+              {/team_id=/.test(f('ifaTeamUrl')) && (
+                <div className="form-hint" style={{ color: 'var(--amber)' }}>
+                  This is a team link. It works, but it stays with the club — swap it for his profile page and it will follow him if he moves.
+                </div>
+              )}
             </Field>
             <div className="form-grid-2">
               <Field label="Contract Start"><DateInput value={f('contractStart')} onChange={s('contractStart')} /></Field>
