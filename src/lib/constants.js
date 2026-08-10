@@ -5,9 +5,17 @@ export const POSITIONS = ['GK','CB','RB','LB','CDM','CM','CAM','RM','LM','RW','L
 export const FOOT_OPTIONS = ['Right','Left','Both'];
 
 // ── National Team Status ─────────────────────────────────────────
+// No "None" chip: either a player has a status or the field is left empty,
+// which says the same thing. Records written before this still hold the
+// literal string, so read it through natTeamLabel() rather than directly.
 export const NAT_TEAM_STATUS = [
-  'Current Senior','Former Senior','Current Youth','Former Youth','None'
+  'Current Senior','Former Senior','Current Youth','Former Youth'
 ];
+
+export const natTeamStatusOf = (v) => {
+  const s = (v || '').trim();
+  return s && s !== 'None' ? s : '';
+};
 
 // ── Contract Status ───────────────────────────────────────────────
 export const CONTRACT_STATUS = ['Free','Under Contract','Loan','Trial'];

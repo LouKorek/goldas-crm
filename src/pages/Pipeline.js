@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
-import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
+import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
          COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone, flagEmoji } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, ExportMenu, useConfirm,
@@ -62,8 +62,8 @@ const bareUrl = (raw) => (raw || '').trim().replace(/^https?:\/\//i, '').replace
 
 function nationalTeamLine(player) {
   const country = player.natTeamCountry || (player.nationalities || [])[0] || '';
-  const st = player.natTeamStatus;
-  if (!country || !st || st === 'None') return '';
+  const st = natTeamStatusOf(player.natTeamStatus);
+  if (!country || !st) return '';
   const former = st.startsWith('Former') ? 'Former ' : '';
   const youth  = st.endsWith('Youth') ? ' Youth' : '';
   return `${former}${country}${youth}`;
@@ -498,7 +498,9 @@ export default function Pipeline({ category }) {
     : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
   const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
-  const openEdit = (p) => { setForm({...EMPTY,...p}); setModal({edit:p}); setIsDirty(false); };
+  // Legacy 'None' is dropped on the way into the form, so simply
+  // re-saving a candidate clears it for good.
+  const openEdit = (p) => { setForm({...EMPTY,...p,natTeamStatus:natTeamStatusOf(p.natTeamStatus)}); setModal({edit:p}); setIsDirty(false); };
 
   const validate = () => {
     if (!form.playerName.trim()) return 'Player name is required.';
@@ -593,7 +595,8 @@ export default function Pipeline({ category }) {
                 { key: 'agentName',          label: '👤',     pdfLabel: 'Agent' },
                 { key: 'transferFee',        label: '💰',     pdfLabel: 'Fee' },
                 { key: 'salary',             label: '💵',     pdfLabel: 'Salary' },
-                { key: 'natTeamStatus',      label: '🏟️',     pdfLabel: 'National Team' },
+                { key: 'natTeamStatus',      label: '🏟️',     pdfLabel: 'National Team',
+                  format: (v) => natTeamStatusOf(v) },
                 { key: 'profileLink',        label: '🧑‍💼',   pdfLabel: 'Profile',
                   format: (v) => v ? { text: 'Profile', url: v.startsWith('http') ? v : 'https://' + v } : '' },
                 { key: 'videoLink',          label: '📹',     pdfLabel: 'Video',
@@ -789,7 +792,7 @@ export default function Pipeline({ category }) {
                       {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary||'—')}
                     </td>
                     {/* National team */}
-                    <td style={{fontSize:12,color:'var(--text-3)'}}>{p.natTeamStatus||'—'}</td>
+                    <td style={{fontSize:12,color:'var(--text-3)'}}>{natTeamStatusOf(p.natTeamStatus)||'—'}</td>
                   </tr>
                   );
                 })}
@@ -858,7 +861,7 @@ export default function Pipeline({ category }) {
           </Field>
           <Field label="National Team Status">
             <ChipGroup options={NAT_TEAM_STATUS} value={f('natTeamStatus')} onChange={s('natTeamStatus')} />
-            {f('natTeamStatus') && f('natTeamStatus') !== 'None' && (
+            {natTeamStatusOf(f('natTeamStatus')) && (
               <div style={{ marginTop: 8 }}>
                 <CountrySelect value={f('natTeamCountry')} onChange={s('natTeamCountry')}
                   placeholder="National team country (defaults to first nationality)" />

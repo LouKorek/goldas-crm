@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, resolveFileUrl, PATHS } from 'lib/db';
-import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, CONTRACT_STATUS, POSITION_ORDER,
+import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, CONTRACT_STATUS, POSITION_ORDER,
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          SortTh, SearchInput, FilterBar, PageHeader, Empty, Spinner,
@@ -110,7 +110,7 @@ function PlayerView({ player, onClose }) {
           <Row label="Position"      value={player.primaryPosition} />
           <Row label="Secondary"     value={(player.secondaryPositions||[]).join(', ')} />
           <Row label="Foot"          value={player.foot} />
-          <Row label="Nat. Team"     value={player.natTeamStatus} />
+          <Row label="Nat. Team"     value={natTeamStatusOf(player.natTeamStatus)} />
           {player.profileLink && <Row label="Profile Link" value={<a href={player.profileLink.startsWith('http')?player.profileLink:'https://'+player.profileLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>Open ↗</a>} />}
           {player.videoLink   && <Row label="Video Link"   value={<a href={player.videoLink.startsWith('http')?player.videoLink:'https://'+player.videoLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>Open ↗</a>} />}
         </div>
@@ -236,7 +236,9 @@ export default function Players() {
     : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
   const openAdd  = () => { setForm({...EMPTY_PLAYER}); setModal('add'); setIsDirty(false); };
-  const openEdit = (p) => { setForm({...EMPTY_PLAYER,...p}); setModal({edit:p}); setIsDirty(false); };
+  // Legacy 'None' is dropped on the way into the form, so simply
+  // re-saving a player clears it for good.
+  const openEdit = (p) => { setForm({...EMPTY_PLAYER,...p,natTeamStatus:natTeamStatusOf(p.natTeamStatus)}); setModal({edit:p}); setIsDirty(false); };
 
   const validate = () => {
     if (!form.fullName.trim()) return 'Player name is required.';
@@ -354,7 +356,8 @@ export default function Players() {
                 { key: 'contractEnd',      label: 'End 📑', pdfLabel: 'Contract End' },
                 { key: 'reprEnd',          label: 'End 🤝', pdfLabel: 'Repr. End' },
                 { key: 'passportExpiry',   label: 'End 🪪', pdfLabel: 'Passport Exp' },
-                { key: 'natTeamStatus',    label: '🏟️',     pdfLabel: 'National Team' },
+                { key: 'natTeamStatus',    label: '🏟️',     pdfLabel: 'National Team',
+                  format: (v) => natTeamStatusOf(v) },
                 { key: 'profileLink',      label: '🧑‍💼',   pdfLabel: 'Profile',
                   format: (v) => v ? { text: 'Profile', url: v.startsWith('http') ? v : 'https://' + v } : '' },
                 { key: 'videoLink',        label: '📹',     pdfLabel: 'Video',
@@ -417,12 +420,12 @@ export default function Players() {
                   {p.league&&<span className="m-sub">{p.league}</span>}
                   <span className="badge" style={{background:p.contractStatus==='Free'?'var(--amber-bg)':p.contractStatus==='Under Contract'?'var(--green-bg)':'var(--blue-bg)',color:p.contractStatus==='Free'?'var(--amber)':p.contractStatus==='Under Contract'?'var(--green-ok)':'var(--blue)',fontSize:9.5}}>{p.contractStatus||'—'}</span>
                 </div>
-                {(p.contractEnd||p.reprEnd||p.passportExpiry||p.natTeamStatus)&&(
+                {(p.contractEnd||p.reprEnd||p.passportExpiry||natTeamStatusOf(p.natTeamStatus))&&(
                   <div className="m-meta" style={{marginTop:5,fontSize:11}}>
                     {p.contractEnd&&<span style={{color:alertColor(contractDays)}}>{fmtDate(p.contractEnd)}</span>}
                     {p.reprEnd&&<span style={{color:alertColor(reprDays)}}>{fmtDate(p.reprEnd)}</span>}
                     {p.passportExpiry&&<span style={{color:alertColor(passportDays)}}>{fmtDate(p.passportExpiry)}</span>}
-                    {p.natTeamStatus&&<span className="m-sub">{p.natTeamStatus}</span>}
+                    {natTeamStatusOf(p.natTeamStatus)&&<span className="m-sub">{natTeamStatusOf(p.natTeamStatus)}</span>}
                   </div>
                 )}
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginTop:9}}>
@@ -519,7 +522,7 @@ export default function Players() {
                       <td style={{color:alertColor(contractDays),fontSize:11}}>{p.contractEnd?fmtDate(p.contractEnd):'—'}</td>
                       <td style={{color:alertColor(reprDays),fontSize:11}}>{p.reprEnd?fmtDate(p.reprEnd):'—'}</td>
                       <td style={{color:alertColor(passportDays),fontSize:11}}>{p.passportExpiry?fmtDate(p.passportExpiry):'—'}</td>
-                      <td style={{fontSize:11,color:'var(--text-3)'}}>{p.natTeamStatus||'—'}</td>
+                      <td style={{fontSize:11,color:'var(--text-3)'}}>{natTeamStatusOf(p.natTeamStatus)||'—'}</td>
                     </tr>
                   );
                 })}

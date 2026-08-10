@@ -12,7 +12,7 @@
 //
 // Links are buttons with the whole shape as the hotspot — no raw URLs.
 
-import { calcAge } from './constants';
+import { calcAge, natTeamStatusOf } from './constants';
 
 const DARK      = [0x12, 0x2E, 0x21];   // masthead green — the logo's own family,
                                         // lightened so the logo tile doesn't read
@@ -62,8 +62,8 @@ const absUrl = (raw) => {
 
 function nationalTeam(player) {
   const country = player.natTeamCountry || (player.nationalities || [])[0] || '';
-  const st = player.natTeamStatus;
-  if (!country || !st || st === 'None') return '';
+  const st = natTeamStatusOf(player.natTeamStatus);
+  if (!country || !st) return '';
   return `${st.startsWith('Former') ? 'Former ' : ''}${country}${st.endsWith('Youth') ? ' Youth' : ''}`;
 }
 
