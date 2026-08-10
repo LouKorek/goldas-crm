@@ -599,9 +599,9 @@ export default function Players() {
               )}
               {league&&<div className="form-hint">League: <strong>{league}</strong></div>}
             </Field>
-            <Field label="IFA Team URL" hint="Optional — paste the football.org.il team page URL for this player's current team (used to auto-sync matches for Israeli youth / women / lower leagues).">
+            <Field label="IFA Link" hint="Optional — a football.org.il player profile or team page. Paste it once: the season in the link is ignored, so it keeps working every year, and a player link follows him to a new club or age group on its own. Drives match auto-sync for Israeli youth / women / lower leagues.">
               <input value={f('ifaTeamUrl')} onChange={e=>s('ifaTeamUrl')(e.target.value)}
-                placeholder="https://www.football.org.il/team-details/?season_id=...&team_id=..." />
+                placeholder="https://www.football.org.il/players/player/?player_id=..." />
             </Field>
             <div className="form-grid-2">
               <Field label="Contract Start"><DateInput value={f('contractStart')} onChange={s('contractStart')} /></Field>

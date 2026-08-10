@@ -240,14 +240,247 @@ async function ifaFetchHtml(targetUrl) {
   return { ok: res.ok, status: res.status, html, via };
 }
 
+// ───────────────────── IFA entity resolution ─────────────────────
+// Every IFA URL carries a season_id, which used to mean re-pasting the link
+// each August. Two facts make that unnecessary, both verified against the
+// live site:
+//
+//   • Omitting season_id makes IFA serve the NEWEST season it holds for that
+//     entity. /players/player/?player_id=254006 alone returns 2025/26 and the
+//     team he plays for now; the same URL with &season_id=26 returns 2024/25
+//     and a different age group.
+//   • team_id is stable across seasons — only season_id moves. team-games for
+//     team_id=3142 returns 2025/26 fixtures bare, 2024/25 with &season_id=26.
+//
+// So we always strip season_id. That alone future-proofs a team URL. A player
+// URL needs one more step, because the player page carries no team link and
+// its "משחקים בעונה" table is past appearances, not fixtures. The club page
+// bridges the gap:
+//
+//   /players/player/?player_id=P   → club name + age-group label
+//   /clubs/                        → club_id for that club
+//   /clubs/club/?club_id=C         → team_id for each age group
+//   /team-details/team-games/?team_id=T  → the fixture list
+//
+// The resolved team_id is cached on the player document, so the chain only
+// runs when it is missing, a week old, or the player's club has changed.
+
+const IFA_RESOLVE_TTL_DAYS = 7;
+
+function ifaStripSeason(u) {
+  u.searchParams.delete('season_id');
+  return u;
+}
+
+// "נער.א" is how the player page abbreviates "נערים א"; the club page spells
+// it out. Expand before tokenising so the two can be compared.
+function ifaExpandAbbrev(s) {
+  return String(s || '')
+    .replace(/נערו['׳"]?\s*\.\s*/g, 'נערות ')
+    .replace(/נער['׳"]?\s*\.\s*/g,  'נערים ')
+    .replace(/ילדו['׳"]?\s*\.\s*/g, 'ילדות ')
+    .replace(/ילד['׳"]?\s*\.\s*/g,  'ילדים ')
+    .replace(/טרו['׳"]?\s*\.\s*/g,  'טרום ');
+}
+
+const IFA_STOPWORDS = new Set(['ליגה', 'ליגת', 'קבוצה', 'קבוצת', 'גיל', 'של']);
+
+function ifaTokens(s, { dropShort = true } = {}) {
+  return ifaExpandAbbrev(s)
+    .replace(/["'״׳()]/g, ' ')
+    .replace(/[.,\-–—]/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t && !IFA_STOPWORDS.has(t) && (!dropShort || t.length > 1 || /^[א-ת]$/.test(t)));
+}
+
+// Club names differ between the player page ("מכבי ע. בת ים") and the club
+// index ("מועדון כדורגל מכבי ..."), so compare on distinctive words only.
+const IFA_CLUB_NOISE = new Set(['מועדון', 'כדורגל', 'מכ', 'מס', 'אס', 'קפ', 'עמותת', 'ספורט']);
+function ifaClubTokens(s) {
+  return ifaTokens(s).filter(t => t.length > 1 && !IFA_CLUB_NOISE.has(t));
+}
+function ifaContainment(wanted, candidate) {
+  const w = ifaClubTokens(wanted), c = new Set(ifaClubTokens(candidate));
+  if (!w.length) return 0;
+  return w.filter(t => c.has(t)).length / w.length;
+}
+
+// Step 1 — the player page. Returns the current season and the team caption.
+async function ifaReadPlayer(origin, prefix, playerId) {
+  const url = `${origin}${prefix}players/player/?player_id=${encodeURIComponent(playerId)}`;
+  const { ok, html } = await ifaFetchHtml(url);
+  if (!ok || !html) return null;
+  const $ = cheerio.load(html);
+  const caption = $('h2.new-player-data_title').first().text().replace(/\s+/g, ' ').trim();
+  const m = /בקבוצה:\s*(.+)$/.exec(caption);
+  if (!m) return null;
+  const full = m[1].trim();
+  // "מכבי ע. בת ים "צו פיוס" (נער.א שפלה)" → club + parenthesised label.
+  const lm = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(full);
+  // The season list is ordered newest-first and carries no `selected`
+  // attribute, so the first option is the season the page is showing.
+  const firstOpt = $('select[id*="ddlSeason"] option').first();
+  return {
+    clubName:    (lm ? lm[1] : full).trim(),
+    teamLabel:   (lm ? lm[2] : '').trim(),
+    seasonId:    firstOpt.attr('value') || '',
+    seasonLabel: firstOpt.text().trim(),
+  };
+}
+
+// Step 2 — the club index. One page holds every club, so fetch it once per
+// run and share it across players.
+let _ifaClubIndex = null;
+async function ifaClubIndex(origin, prefix) {
+  if (_ifaClubIndex) return _ifaClubIndex;
+  const { ok, html } = await ifaFetchHtml(`${origin}${prefix}clubs/`);
+  if (!ok || !html) return (_ifaClubIndex = []);
+  const $ = cheerio.load(html);
+  const out = [];
+  $('a[href*="club_id="]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    const id = /club_id=(\d+)/.exec(href)?.[1];
+    if (!id) return;
+    const $h = $(a).find('.head h2').first();
+    const sector = $h.find('span').first().text().trim();   // גברים / נשים / …
+    const name = $h.clone().children('span').remove().end().text().replace(/\s+/g, ' ').trim();
+    if (name) out.push({ clubId: id, name, sector });
+  });
+  _ifaClubIndex = out;
+  return out;
+}
+
+// Step 3 — the club page lists one entry per active age-group team.
+async function ifaClubTeams(origin, prefix, clubId) {
+  const { ok, html } = await ifaFetchHtml(`${origin}${prefix}clubs/club/?club_id=${encodeURIComponent(clubId)}`);
+  if (!ok || !html) return [];
+  const $ = cheerio.load(html);
+  const out = [];
+  $('a[href*="team_id="]').each((_, a) => {
+    const $a = $(a);
+    const id = /team_id=(\d+)/.exec($a.attr('href') || '')?.[1];
+    const $head = $a.find('h3.head').first();
+    if (!id || !$head.length) return;   // skip the honours table, which has no h3.head
+    const ageGroup = $head.clone().children('span').remove().end().text().replace(/\s+/g, ' ').trim();
+    let league = '', teamName = '';
+    $a.find('.field_side > div').each((__, d) => {
+      const label = $(d).find('span').first().text().trim();
+      const value = $(d).clone().children('span').remove().end().text().replace(/\s+/g, ' ').trim();
+      if (/ליגה/.test(label)) league = value;
+      if (/קבוצה/.test(label)) teamName = value;
+    });
+    out.push({ teamId: id, ageGroup, league, teamName });
+  });
+  return out;
+}
+
+// The player page says "(נער.א שפלה)"; the club page says age group "נערים א"
+// and league "ליגת נערים א' שפלה". Score the overlap, weighting an exact
+// age-group match heavily so a sibling squad in the same region can't win.
+function ifaScoreTeam(teamLabel, clubName, cand) {
+  const want = new Set(ifaTokens(teamLabel));
+  const have = new Set([...ifaTokens(cand.ageGroup), ...ifaTokens(cand.league)]);
+  let score = 0;
+  for (const t of want) if (have.has(t)) score++;
+  const age = ifaTokens(cand.ageGroup);
+  if (age.length && age.every(t => want.has(t))) score += 3;
+  if (ifaContainment(clubName, cand.teamName) >= 0.5) score += 2;
+  return score;
+}
+
+// Full chain. Returns { teamId, … } or a { error } explaining where it broke,
+// so the reason lands in the sync-warnings list instead of vanishing.
+async function ifaResolveFromPlayerUrl(origin, prefix, playerId, gender) {
+  const info = await ifaReadPlayer(origin, prefix, playerId);
+  if (!info) return { error: 'ifa-player-page-unreadable' };
+
+  const index = await ifaClubIndex(origin, prefix);
+  if (!index.length) return { error: 'ifa-club-index-unreadable' };
+
+  const wantWomen = gender === 'Women';
+  const scored = index
+    .filter(c => (wantWomen ? c.sector === 'נשים' : c.sector !== 'נשים') || !c.sector)
+    .map(c => ({ ...c, s: ifaContainment(info.clubName, c.name) }))
+    // Deliberately loose. A team caption often carries a sponsor nickname the
+    // club register doesn't ("מכבי ע. בת ים \"צו פיוס\""), so a weak name match
+    // is worth following; the age-group gate below is what actually decides.
+    .filter(c => c.s >= 0.4)
+    .sort((a, b) => b.s - a.s);
+  if (!scored.length) return { error: 'ifa-club-not-found', clubName: info.clubName };
+
+  // Try the best-matching clubs in order — a club can appear more than once
+  // (separate men's / women's / futsal registrations).
+  for (const club of scored.slice(0, 4)) {
+    const teams = await ifaClubTeams(origin, prefix, club.clubId);
+    if (!teams.length) continue;
+    const best = teams
+      .map(t => ({ ...t, s: ifaScoreTeam(info.teamLabel, info.clubName, t) }))
+      .sort((a, b) => b.s - a.s)[0];
+    if (best && best.s >= 3) {
+      return {
+        teamId: best.teamId, clubId: club.clubId,
+        teamName: best.teamName, ageGroup: best.ageGroup, league: best.league,
+        seasonLabel: info.seasonLabel,
+      };
+    }
+  }
+  return { error: 'ifa-team-not-matched', clubName: info.clubName, teamLabel: info.teamLabel };
+}
+
+// Turns whatever Lou pasted into a team-games URL for the current season,
+// caching the player→team resolution on the player document.
+async function ifaTeamGamesUrl(db, player) {
+  const raw = player.ifaTeamUrl || '';
+  let u;
+  try { u = new URL(raw); } catch { return { error: 'ifa-url-invalid' }; }
+  if (!u.hostname.endsWith('football.org.il')) return { error: 'ifa-url-invalid' };
+
+  const origin = u.origin;
+  const prefix = u.pathname.match(/^\/[a-z]{2}\//)?.[0] || '/';   // keep an /en/ prefix
+  const build  = (teamId) => `${origin}${prefix}team-details/team-games/?team_id=${teamId}`;
+
+  const directTeamId = u.searchParams.get('team_id');
+  if (directTeamId) return { url: build(directTeamId), teamId: directTeamId };
+
+  const playerId = u.searchParams.get('player_id');
+  if (!playerId) return { error: 'ifa-url-has-no-id' };
+
+  const cache = player.autoFetch?.ifa;
+  const ageMs = cache?.resolvedAt ? Date.now() - new Date(cache.resolvedAt).getTime() : Infinity;
+  if (cache?.teamId && cache.playerId === playerId
+      && cache.forClub === (player.currentClub || '')
+      && ageMs < IFA_RESOLVE_TTL_DAYS * 86400000) {
+    return { url: build(cache.teamId), teamId: cache.teamId, cached: true };
+  }
+
+  const res = await ifaResolveFromPlayerUrl(origin, prefix, playerId, player.gender);
+  if (res.error) return res;
+
+  await db.collection('players').doc(player.id).set({
+    autoFetch: {
+      ifa: {
+        playerId, teamId: res.teamId, clubId: res.clubId,
+        teamName: res.teamName, ageGroup: res.ageGroup, league: res.league,
+        seasonLabel: res.seasonLabel, forClub: player.currentClub || '',
+        resolvedAt: new Date().toISOString(),
+      },
+    },
+  }, { merge: true });
+
+  return { url: build(res.teamId), teamId: res.teamId, resolved: res };
+}
+
 async function ifaFetchFixtures(rawUrl) {
   if (!rawUrl) return [];
   let parsed;
   try { parsed = new URL(rawUrl); } catch { return []; }
   if (!parsed.hostname.endsWith('football.org.il')) return [];
-  const teamId   = parsed.searchParams.get('team_id');
-  const seasonId = parsed.searchParams.get('season_id') || '';
+  const teamId = parsed.searchParams.get('team_id');
   if (!teamId) return [];
+  // Deliberately dropped: without season_id IFA serves the current season,
+  // which is the whole point — the stored link never goes stale.
+  ifaStripSeason(parsed);
   // Preserve the language path/host the user pasted (so an English URL —
   // /en/... or en.football.org.il — stays English and we get English labels
   // back). If the URL already points at the /team-games/ list, use it as-is;
@@ -268,7 +501,7 @@ async function ifaFetchFixtures(rawUrl) {
       gamesPath = `${prefix}team-details/team-games/`;
     }
   }
-  const fetchUrl = `${parsed.origin}${gamesPath}?team_id=${encodeURIComponent(teamId)}${seasonId ? `&season_id=${encodeURIComponent(seasonId)}` : ''}`;
+  const fetchUrl = `${parsed.origin}${gamesPath}?team_id=${encodeURIComponent(teamId)}`;
   const { ok, status, html, via } = await ifaFetchHtml(fetchUrl);
   if (!ok) {
     console.log(`IFA fetch ${fetchUrl} (via ${via}) → status=${status}`);
@@ -599,6 +832,7 @@ async function runSync() {
     error: null,
   }, { merge: true });
   console.log('[sync] STARTED');
+  _ifaClubIndex = null;   // shared within a run, never across runs
 
   const playersSnap = await db.collection('players').get();
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -636,8 +870,17 @@ async function runSync() {
             localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
             continue;
           }
-          console.log(`[sync] ${p.fullName} → IFA fetch start (${p.ifaTeamUrl})`);
-          fixtures = await ifaFetchFixtures(p.ifaTeamUrl);
+          const target = await ifaTeamGamesUrl(db, p);
+          if (target.error) {
+            localWarnings.push({
+              playerId: p.id, name: p.fullName, club: p.currentClub,
+              reason: target.error,
+              detail: [target.clubName, target.teamLabel].filter(Boolean).join(' · ') || undefined,
+            });
+            continue;
+          }
+          console.log(`[sync] ${p.fullName} → IFA team ${target.teamId}${target.cached ? ' (cached)' : ''}`);
+          fixtures = await ifaFetchFixtures(target.url);
           console.log(`[sync] ${p.fullName} → IFA fetch done, ${fixtures.length} fixtures`);
         } else {
           const teamId = await resolveTeamId(db, p, source);
@@ -694,6 +937,24 @@ async function runSync() {
   };
 }
 
+// Reads and destroys the cron's one-time nonce. Rejects anything older than
+// two minutes so a leaked value is worthless.
+async function consumeSyncNonce(nonce) {
+  const ref = getDb().collection('app_meta').doc('syncTrigger');
+  try {
+    const snap = await ref.get();
+    if (!snap.exists) return false;
+    const d = snap.data() || {};
+    await ref.delete().catch(() => {});
+    if (!d.nonce || d.nonce !== nonce) return false;
+    const issued = d.issuedAt?.toDate?.()?.getTime?.() || 0;
+    return Date.now() - issued < 2 * 60 * 1000;
+  } catch (e) {
+    console.error('nonce check failed:', e.message);
+    return false;
+  }
+}
+
 // ───────────────────── Handler (HTTP-only background) ─────────────────────
 // Background functions accept POST and return 202 immediately; the body
 // returned here is only seen in the function logs (the client already has
@@ -701,18 +962,28 @@ async function runSync() {
 exports.handler = async (event) => {
   getDb();
 
-  // Auth is REQUIRED — owner-only. Even though the caller doesn't wait for
-  // our response, we still validate the token before doing any work.
-  const auth = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
-  const token = auth.replace(/^Bearer /i, '').trim();
-  if (!token) return { statusCode: 401, body: JSON.stringify({ error: 'No auth token' }) };
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    if ((decoded.email || '').toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
-      return { statusCode: 403, body: JSON.stringify({ error: 'Forbidden' }) };
+  // Auth is REQUIRED. Two callers are legitimate:
+  //   • Lou pressing Sync Now — a Firebase ID token for the owner account.
+  //   • The nightly cron — a single-use nonce it wrote to Firestore moments
+  //     before calling. Only code holding the service-account key can put a
+  //     nonce there, so this needs no new secret and no manual setup.
+  const headers = event.headers || {};
+  const nonce = (headers['x-sync-nonce'] || headers['X-Sync-Nonce'] || '').trim();
+  if (nonce) {
+    const ok = await consumeSyncNonce(nonce);
+    if (!ok) return { statusCode: 401, body: JSON.stringify({ error: 'Invalid nonce' }) };
+  } else {
+    const auth = headers.authorization || headers.Authorization || '';
+    const token = auth.replace(/^Bearer /i, '').trim();
+    if (!token) return { statusCode: 401, body: JSON.stringify({ error: 'No auth token' }) };
+    try {
+      const decoded = await admin.auth().verifyIdToken(token);
+      if ((decoded.email || '').toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
+        return { statusCode: 403, body: JSON.stringify({ error: 'Forbidden' }) };
+      }
+    } catch (e) {
+      return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token' }) };
     }
-  } catch (e) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token' }) };
   }
 
   try {
