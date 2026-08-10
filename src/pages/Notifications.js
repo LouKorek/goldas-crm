@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, PATHS } from 'lib/db';
 import { fmtDate } from 'lib/constants';
-import { DEFAULT_SETTINGS, loadSettings, persistSettings, computeAlerts } from 'lib/alerts';
+import { DEFAULT_SETTINGS, loadSettings, persistSettings, computeAlerts, dayLabel } from 'lib/alerts';
 import { PageHeader, Modal } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
@@ -9,7 +9,7 @@ import { useRole } from 'lib/roleContext';
 
 const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
 
-function AlertCard({ icon, title, sub, urgency, extra }) {
+function AlertCard({ icon, title, sub, urgency, extra, overdue }) {
   const colors = {
     critical: 'var(--red)',
     warning:  'var(--amber)',
@@ -30,7 +30,14 @@ function AlertCard({ icon, title, sub, urgency, extra }) {
         color:c, flexShrink:0, width:26, paddingTop:2,
       }}>{icon}</span>}
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontWeight:500,fontSize:13.5,color:'var(--text-1)'}}>{title}</div>
+        <div style={{fontWeight:500,fontSize:13.5,color:'var(--text-1)',display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          {overdue && <span style={{
+            fontFamily:'var(--font-mono)', fontSize:9, fontWeight:700, letterSpacing:'0.08em',
+            background:'var(--red-bg, rgba(240,114,110,0.14))', color:'var(--red)',
+            border:'1px solid rgba(240,114,110,0.4)', padding:'1px 7px',
+          }}>OVERDUE</span>}
+          {title}
+        </div>
         {sub   && <div style={{fontSize:11.5,color:'var(--text-2)',marginTop:3}}>{sub}</div>}
         {extra && <div style={{fontSize:11,color:'var(--text-3)',marginTop:2}}>{extra}</div>}
       </div>
@@ -96,11 +103,17 @@ export default function Notifications() {
     return () => { u1(); u2(); };
   }, []);
 
-  const saveSettings = (s) => {
-    setSettings(s);
-    persistSettings(s);            // localStorage + Firestore (read by the email script)
-    setShowSettings(false);
-    toast.success('Notification settings saved.');
+  const saveSettings = async (s) => {
+    try {
+      await persistSettings(s);    // localStorage + Firestore (read by the email job)
+      setSettings(s);
+      setShowSettings(false);
+      toast.success('Notification settings saved.');
+    } catch (e) {
+      // Silently swallowing this used to mean the screen changed, the emails
+      // didn't, and nothing said so.
+      toast.error(e.message || 'Could not save settings.');
+    }
   };
 
   const now = new Date();
@@ -108,28 +121,35 @@ export default function Notifications() {
   // Single shared engine — identical to the Dashboard and the email script.
   const alerts = computeAlerts(players, matches, settings, now);
 
+  // "expired 3 days ago" / "expires today" / "expires in 30 days" — one
+  // phrasing, and overdue reads as overdue instead of quietly vanishing.
+  const expiryTitle = (name, what, a) =>
+    a.overdue ? `${name} — ${what} expired ${dayLabel(a.days)}`
+      : a.days === 0 ? `${name} — ${what} expires today!`
+        : `${name} — ${what} expires in ${dayLabel(a.days)}`;
+
   const contractAlerts = alerts.contract.map(a => ({
-    id: a.id+'c', icon:'📋', urgency: a.urgency,
-    title: `${a.player.fullName} — Contract expires in ${a.days===0?'today!':a.days+' days'}`,
+    id: a.id+'c', icon:'CON', urgency: a.overdue ? 'critical' : a.urgency, overdue: a.overdue,
+    title: expiryTitle(a.player.fullName, 'Contract', a),
     sub: `Expires: ${fmtDate(a.player.contractEnd)} · Club: ${a.player.currentClub||'—'}`,
   }));
 
   const reprAlerts = alerts.repr.map(a => ({
-    id: a.id+'r', icon:'🤝', urgency: a.urgency,
-    title: `${a.player.fullName} — Representation expires in ${a.days===0?'today!':a.days+' days'}`,
+    id: a.id+'r', icon:'REP', urgency: a.overdue ? 'critical' : a.urgency, overdue: a.overdue,
+    title: expiryTitle(a.player.fullName, 'Representation', a),
     sub: `Expires: ${fmtDate(a.player.reprEnd)}`,
   }));
 
   const passportAlerts = alerts.passport.map(a => ({
-    id: a.id+'p', icon:'🛂', urgency: a.urgency,
-    title: `${a.player.fullName} — Passport expires in ${a.days===0?'today!':a.days+' days'}`,
+    id: a.id+'p', icon:'PAS', urgency: a.overdue ? 'critical' : a.urgency, overdue: a.overdue,
+    title: expiryTitle(a.player.fullName, 'Passport', a),
     sub: `Expires: ${fmtDate(a.player.passportExpiry)}`,
   }));
 
   const birthdayAlerts = alerts.birthday.map(a => ({
-    id: a.id+'b', icon: a.turning18?'⭐':'🎂', urgency: a.urgency,
-    title: `${a.player.fullName}${a.turning18?' — Turning 18! 🌟':''}`,
-    sub: `Birthday ${a.days===0?'is today!':'in '+a.days+' days'} · Turning ${a.age}`,
+    id: a.id+'b', icon:'DOB', urgency: a.urgency,
+    title: `${a.player.fullName}${a.turning18?' — Turning 18!':''}`,
+    sub: `Birthday ${a.days===0?'is today!':'in '+dayLabel(a.days)} · Turning ${a.age}`,
     extra: `DOB: ${fmtDate(a.player.dob)}`,
   }));
 
@@ -183,17 +203,14 @@ export default function Notifications() {
             <div>
               <div className="section-label" style={{marginBottom:12}}>Upcoming Matches ({upcomingMatches.length})</div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                {upcomingMatches.map(m => {
-                  const days = Math.ceil((new Date(m.date)-now)/(1000*60*60*24));
-                  return (
-                    <AlertCard key={m.id} icon="FIX"
-                      title={`${m.homeTeam} vs ${m.awayTeam}`}
-                      sub={`${fmtDate(m.date)}${m.time?' · '+m.time:''} · ${days===0?'Today!':days+' day'+( days!==1?'s':'')}`}
-                      extra={m.stadiumName || undefined}
-                      urgency={days===0?'critical':days<=3?'warning':'info'}
-                    />
-                  );
-                })}
+                {upcomingMatches.map(m => (
+                  <AlertCard key={m.id} icon="FIX"
+                    title={`${m.homeTeam} vs ${m.awayTeam}`}
+                    sub={`${fmtDate(m.date)}${m.time?' · '+m.time:''} · ${m.daysAway===0?'Today!':'in '+dayLabel(m.daysAway)}`}
+                    extra={m.stadiumName || undefined}
+                    urgency={m.daysAway===0?'critical':m.daysAway<=3?'warning':'info'}
+                  />
+                ))}
               </div>
             </div>
           )}

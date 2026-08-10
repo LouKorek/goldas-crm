@@ -3,6 +3,7 @@ import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
+import { daysAway } from 'lib/alerts';
 import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
@@ -465,8 +466,11 @@ export default function Matches() {
 
   // Schedule view splits into upcoming / past; range views filter by date window.
   const range = getRange(view, anchorDate);
-  const upcoming = range ? [] : baseFiltered.filter(m => !m.date || new Date(m.date) >= now);
-  const past     = range ? [] : baseFiltered.filter(m => m.date && new Date(m.date) < now);
+  // daysAway counts whole local days, so a match today stays under Upcoming
+  // all day. Comparing Date objects made it jump to Past at 03:00, because
+  // 'YYYY-MM-DD' parses as UTC midnight.
+  const upcoming = range ? [] : baseFiltered.filter(m => !m.date || daysAway(m.date, now) >= 0);
+  const past     = range ? [] : baseFiltered.filter(m => m.date && daysAway(m.date, now) < 0);
   const inRange  = range
     ? baseFiltered.filter(m => {
         if (!m.date) return false;

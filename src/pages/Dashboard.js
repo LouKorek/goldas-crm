@@ -3,7 +3,7 @@ import { listenCollection, PATHS } from 'lib/db';
 import { collection, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { calcAge, fmtDate } from 'lib/constants';
-import { loadSettings, computeAlerts } from 'lib/alerts';
+import { loadSettings, computeAlerts, dayLabel } from 'lib/alerts';
 import { PageHeader } from 'components/ui/UI';
 import { Link } from 'react-router-dom';
 import { useRole } from 'lib/roleContext';
@@ -243,7 +243,7 @@ export default function Dashboard() {
                   <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>CON</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
-                    <div style={{fontSize:11,color:'var(--text-3)'}}>Contract expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.contractEnd)})</div>
+                    <div style={{fontSize:11,color:a.overdue?'var(--red)':'var(--text-3)'}}>{a.overdue?`Contract EXPIRED ${dayLabel(a.days)}`:`Contract expires ${a.days===0?'today':'in '+dayLabel(a.days)}`} ({fmtDate(a.player.contractEnd)})</div>
                   </div>
                 </div>
               ))}
@@ -252,7 +252,7 @@ export default function Dashboard() {
                   <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>REP</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
-                    <div style={{fontSize:11,color:'var(--text-3)'}}>Representation expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.reprEnd)})</div>
+                    <div style={{fontSize:11,color:a.overdue?'var(--red)':'var(--text-3)'}}>{a.overdue?`Representation EXPIRED ${dayLabel(a.days)}`:`Representation expires ${a.days===0?'today':'in '+dayLabel(a.days)}`} ({fmtDate(a.player.reprEnd)})</div>
                   </div>
                 </div>
               ))}
@@ -261,7 +261,7 @@ export default function Dashboard() {
                   <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>PAS</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName}</div>
-                    <div style={{fontSize:11,color:'var(--text-3)'}}>Passport expires in {a.days} day{a.days!==1?'s':''} ({fmtDate(a.player.passportExpiry)})</div>
+                    <div style={{fontSize:11,color:a.overdue?'var(--red)':'var(--text-3)'}}>{a.overdue?`Passport EXPIRED ${dayLabel(a.days)}`:`Passport expires ${a.days===0?'today':'in '+dayLabel(a.days)}`} ({fmtDate(a.player.passportExpiry)})</div>
                   </div>
                 </div>
               ))}
@@ -270,7 +270,7 @@ export default function Dashboard() {
                   <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:a.turning18?'var(--gold)':'var(--text-mute)',flexShrink:0,width:24}}>{a.turning18?'18':'DOB'}</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{a.player.fullName} {a.turning18?'— Turning 18!':''}</div>
-                    <div style={{fontSize:11,color:'var(--text-3)'}}>{a.days===0?'Birthday is today!':`Birthday in ${a.days} day${a.days!==1?'s':''}`} · Turning {a.age}</div>
+                    <div style={{fontSize:11,color:'var(--text-3)'}}>{a.days===0?'Birthday is today!':`Birthday in ${dayLabel(a.days)}`} · Turning {a.age}</div>
                   </div>
                 </div>
               ))}
@@ -290,7 +290,11 @@ export default function Dashboard() {
                   <span style={{fontFamily:'var(--font-mono)',fontSize:9,fontWeight:700,letterSpacing:'0.06em',color:'var(--text-mute)',flexShrink:0,width:24}}>FIX</span>
                   <div>
                     <div style={{fontSize:13,fontWeight:500}}>{m.homeTeam} vs {m.awayTeam}</div>
-                    <div style={{fontSize:11,color:'var(--text-3)'}}>{fmtDate(m.date)} · {m.time} · {m.stadium}</div>
+                    {/* The field is stadiumName; `m.stadium` never existed,
+                        so this line used to end in a dangling separator. */}
+                    <div style={{fontSize:11,color:'var(--text-3)'}}>
+                      {[fmtDate(m.date), m.time, m.stadiumName, m.daysAway===0?'Today!':null].filter(Boolean).join(' · ')}
+                    </div>
                   </div>
                 </div>
               ))}
