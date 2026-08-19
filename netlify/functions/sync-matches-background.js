@@ -75,9 +75,14 @@ function decideSources(p) {
   const tier     = (p.leagueTier || '').toLowerCase();
   const isTopTwo = ['tier 1', 'tier 2', '1st', '2nd'].includes(tier);
 
+  // Israel: IFA is the federation, so it carries every league including the
+  // top flight. 365 is listed first for the senior top two because it will
+  // eventually bring live scores, but it is still a stub — routing there
+  // alone meant a senior Ligat Winner player could never get a single
+  // fixture. IFA now always backs it up.
   if (isIsrael) {
     if (isWomen || isYouth || !isTopTwo) return ['ifa'];
-    return ['365'];
+    return ['365', 'ifa'];
   }
   if (isWomen) return ['sofascore'];
   return ['365', 'sofascore'];
