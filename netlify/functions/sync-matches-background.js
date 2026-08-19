@@ -3,13 +3,22 @@
 // This is a Netlify BACKGROUND function (filename ends in `-background.js`)
 // which gives us a 15-minute timeout instead of the synchronous 30-second
 // limit. Netlify returns 202 to the caller immediately, then the work
-// continues in the background. The Sync Now button on the Matches screen
-// invokes this directly; the daily 06:00 UTC cron is handled separately
-// (we used to mix schedule() + this file but background + schedule together
-// produced flaky behavior, so the cron now lives in its own tiny function).
+// continues in the background. Two callers: the Sync Now button on the
+// Matches screen, and sync-matches-cron nightly (background functions and
+// schedule() don't mix, so the cron lives in its own file and calls this one
+// over HTTP with a single-use nonce).
 //
-// SofaScore client is wired; 365 is a stub; IFA goes through ScraperAPI
-// to bypass football.org.il's IP block.
+// Sources, honestly stated:
+//   IFA        the only one that actually produces fixtures today. Reached
+//              through ScraperAPI because football.org.il blocks datacenter
+//              IPs at the edge — which makes the monthly credit budget a real
+//              constraint, see ifaFetchHtml.
+//   SofaScore  wired and working, but covers none of the leagues the agency's
+//              players abroad are in (NCAA, NAIA, MLS Next, DR Congo, Benin).
+//   365        a stub. Both of its client functions return an empty array.
+//
+// Whatever a run cannot do is written to app_meta/syncWarnings per player and
+// shown on the Matches screen. Nothing here should fail quietly.
 
 const admin   = require('firebase-admin');
 const cheerio = require('cheerio');
