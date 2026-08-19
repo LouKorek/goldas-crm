@@ -26,6 +26,38 @@ function NatFlags({ nats=[] }) {
   );
 }
 
+// ── Resolved IFA squad ────────────────────────────────────────────
+// A football.org.il profile page names the player's squad but never gives its
+// id, so the sync matches it by name once and caches the result. This makes
+// that result visible: which squad it settled on, in which league, when — with
+// a link to check it and a button to pin it so no lookup ever runs again.
+function IfaResolution({ ifa, onPin }) {
+  if (!ifa?.teamId) return null;
+  const teamUrl = `https://www.football.org.il/team-details/team-games/?team_id=${ifa.teamId}`;
+  const line = [ifa.teamName, ifa.ageGroup, ifa.league].filter(Boolean).join('  ·  ');
+  const when = ifa.resolvedAt ? new Date(ifa.resolvedAt) : null;
+  return (
+    <div className="form-hint" style={{
+      marginTop: 8, padding: '8px 10px', background: 'var(--surface-3)',
+      border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4,
+    }}>
+      <div style={{ color: 'var(--text-2)' }}>
+        Matched to <strong style={{ color: 'var(--text-1)' }}>{line || `team ${ifa.teamId}`}</strong>
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <a href={teamUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>
+          Open its fixture list ↗
+        </a>
+        <button type="button" onClick={() => onPin(teamUrl)}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--gold)', font: 'inherit' }}>
+          Wrong squad? Pin this exact team
+        </button>
+        {when && <span style={{ color: 'var(--text-3)' }}>checked {fmtDate(when.toISOString().slice(0, 10))}</span>}
+      </div>
+    </div>
+  );
+}
+
 // ── Document viewer ───────────────────────────────────────────────
 function DocViewer({ files, title, onClose }) {
   const [idx, setIdx] = useState(0);
@@ -111,6 +143,12 @@ function PlayerView({ player, onClose }) {
           <Row label="Secondary"     value={(player.secondaryPositions||[]).join(', ')} />
           <Row label="Foot"          value={player.foot} />
           <Row label="Nat. Team"     value={natTeamStatusOf(player.natTeamStatus)} />
+          <Row label="IFA Squad"     value={player.autoFetch?.ifa?.teamId
+            ? <a href={`https://www.football.org.il/team-details/team-games/?team_id=${player.autoFetch.ifa.teamId}`}
+                target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>
+                {[player.autoFetch.ifa.teamName, player.autoFetch.ifa.ageGroup].filter(Boolean).join(' · ') || `team ${player.autoFetch.ifa.teamId}`} ↗
+              </a>
+            : null} />
           {player.profileLink && <Row label="Profile Link" value={<a href={player.profileLink.startsWith('http')?player.profileLink:'https://'+player.profileLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>Open ↗</a>} />}
           {player.videoLink   && <Row label="Video Link"   value={<a href={player.videoLink.startsWith('http')?player.videoLink:'https://'+player.videoLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>Open ↗</a>} />}
         </div>
@@ -612,6 +650,11 @@ export default function Players() {
                   This is a team link. It works, but it stays with the club — swap it for his profile page and it will follow him if he moves.
                 </div>
               )}
+              {/* The profile page carries no team id, so the sync has to find
+                  the squad by name once. Showing what it landed on turns that
+                  from a silent guess into something you can check and correct. */}
+              <IfaResolution ifa={form.autoFetch?.ifa}
+                onPin={(url) => { s('ifaTeamUrl')(url); toast.success('Pinned to this team — no lookup from now on.'); }} />
             </Field>
             <div className="form-grid-2">
               <Field label="Contract Start"><DateInput value={f('contractStart')} onChange={s('contractStart')} /></Field>

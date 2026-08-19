@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
@@ -358,6 +358,64 @@ async function clearAll_matches() {
   window.location.reload();
 }
 
+// ── Sync report ───────────────────────────────────────────────────
+// Every player the last sync could not produce fixtures for, and why, in
+// words rather than error codes. Collapsed by default; the count is enough
+// on a good day.
+const SYNC_REASONS = {
+  'ifa-url-missing':            { label: 'No IFA link',              fix: 'Paste his football.org.il profile into the player record.' },
+  'ifa-url-invalid':            { label: 'IFA link not readable',    fix: 'The link should be a football.org.il address.' },
+  'ifa-url-has-no-id':          { label: 'IFA link has no player id',fix: 'Copy the link from his profile page, not a search result.' },
+  'ifa-player-page-unreadable': { label: 'IFA profile did not load', fix: 'Usually temporary — the next sync will retry.' },
+  'ifa-club-index-unreadable':  { label: 'IFA club list did not load', fix: 'Usually temporary — the next sync will retry.' },
+  'ifa-club-not-found':         { label: 'Club not found in the IFA register', fix: 'Open the player and pin his squad directly.' },
+  'ifa-team-not-matched':       { label: 'Squad not identified',     fix: 'Open the player and pin his squad directly.' },
+  'ifa-no-fixtures-published':  { label: 'No fixtures published yet',fix: 'The squad was found — the federation has not released its schedule.' },
+  'no-club':                    { label: 'No club on record',        fix: 'Set his current club.' },
+  'no-source':                  { label: 'No source for this league',fix: 'Add a country and tier so the sync knows where to look.' },
+  'no-fixtures-or-team-not-found': { label: 'Nothing found',         fix: 'His league may not be covered by the available sources.' },
+  'error':                      { label: 'Sync error',               fix: '' },
+};
+
+function SyncReport({ report }) {
+  const [open, setOpen] = useState(false);
+  const list = report?.list || [];
+  if (!report || !list.length) return null;
+  const ran = report.runAt?.toDate?.();
+  return (
+    <div className="card" style={{ marginBottom: 14, borderLeft: '3px solid var(--amber)' }}>
+      <button type="button" onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
+          padding: '10px 14px', display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', gap: 10, color: 'var(--text-2)', fontSize: 12.5,
+        }}>
+        <span>
+          <strong style={{ color: 'var(--amber)' }}>{list.length}</strong> player{list.length !== 1 ? 's' : ''} produced no fixtures in the last sync
+          {ran && <span style={{ color: 'var(--text-3)' }}> · {fmtDate(ran.toISOString().slice(0, 10))}</span>}
+        </span>
+        <span style={{ fontSize: 11 }}>{open ? '▲ hide' : '▼ details'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {list.map((w, i) => {
+            const r = SYNC_REASONS[w.reason] || { label: w.reason, fix: '' };
+            return (
+              <div key={`${w.playerId || i}-${w.reason}`} style={{ fontSize: 12, borderTop: '1px solid var(--border)', paddingTop: 7 }}>
+                <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>
+                  {w.name || w.playerId} <span style={{ fontWeight: 400, color: 'var(--amber)' }}>— {r.label}</span>
+                </div>
+                {(w.detail || w.club) && <div style={{ color: 'var(--text-3)' }}>{w.detail || w.club}</div>}
+                {r.fix && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{r.fix}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Matches() {
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
@@ -373,6 +431,13 @@ export default function Matches() {
   const { confirm, dialog }   = useConfirm();
   const { canEdit, isAdmin }  = useRole();
   const [syncing, setSyncing] = useState(false);
+  const [syncReport, setSyncReport] = useState(null);
+
+  // The sync has always recorded, per player, why it produced nothing —
+  // and nothing has ever displayed it. That is how players stayed missing
+  // from this screen for months without a visible symptom.
+  useEffect(() => onSnapshot(doc(db, 'app_meta', 'syncWarnings'),
+    s => setSyncReport(s.exists() ? s.data() : null), () => setSyncReport(null)), []);
 
   // Admin-only: trigger the Netlify sync function for all represented players.
   const syncNow = async () => {
@@ -705,6 +770,8 @@ export default function Matches() {
           <ScraperCredits />
         </div>
         </PageHeader>
+
+      {canEdit && <SyncReport report={syncReport} />}
 
       {/* List section — scrolls with the document so mobile users get
           a single vertical motion instead of fighting an inner scroll

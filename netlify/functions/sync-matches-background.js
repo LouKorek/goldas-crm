@@ -924,6 +924,19 @@ async function runSync() {
           console.log(`[sync] ${p.fullName} → IFA team ${target.teamId}${target.cached ? ' (cached)' : ''}`);
           fixtures = await ifaFetchFixtures(target.url);
           console.log(`[sync] ${p.fullName} → IFA fetch done, ${fixtures.length} fixtures`);
+          if (!fixtures.length) {
+            // The team was found; the federation simply has not published its
+            // schedule yet. Worth saying so, rather than lumping it in with a
+            // failed lookup.
+            const ifa = target.resolved || p.autoFetch?.ifa || {};
+            localWarnings.push({
+              playerId: p.id, name: p.fullName, club: p.currentClub,
+              reason: 'ifa-no-fixtures-published',
+              detail: [ifa.teamName, ifa.ageGroup, ifa.league].filter(Boolean).join(' · ') || `team ${target.teamId}`,
+              teamId: target.teamId,
+            });
+            continue;
+          }
         } else {
           const teamId = await resolveTeamId(db, p, source);
           if (!teamId) { console.log(`[sync] ${p.fullName} → ${source} team-id not resolved`); continue; }
