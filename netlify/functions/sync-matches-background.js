@@ -233,6 +233,10 @@ function ifaLooksReal(html) {
 //                 headless Chromium is only needed to clear the challenge
 //   render=true   10 credits — the fallback that always worked
 let _ifaStrategy = null;
+// ScraperAPI answers 403 to every request once the monthly credits are spent.
+// Read as a page error that looks identical to "this team has no fixtures",
+// which is how an exhausted quota turned into nineteen misleading warnings.
+let _ifaQuotaOut = false;
 
 async function ifaAttempt(strategy, targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
@@ -258,6 +262,7 @@ async function ifaAttempt(strategy, targetUrl) {
       return null;
     }
     if (res.status === 429) { await sleep(2000 * (attempt + 1)); continue; }
+    if (res.status === 403 && strategy !== 'direct') { _ifaQuotaOut = true; return { ok: false, status: 403, quota: true }; }
     if (!res.ok) return { ok: false, status: res.status };
     const html = await res.text();
     if (!ifaLooksReal(html)) return { ok: false, status: res.status, blocked: true };
@@ -267,7 +272,9 @@ async function ifaAttempt(strategy, targetUrl) {
 }
 
 async function ifaFetchHtml(targetUrl) {
-  const order = _ifaStrategy ? [_ifaStrategy] : ['direct', 'plain', 'render'];
+  // Once the quota is gone only the free direct attempt is worth making.
+  const all = _ifaQuotaOut ? ['direct'] : ['direct', 'plain', 'render'];
+  const order = _ifaStrategy ? [_ifaStrategy] : all;
   let last = { ok: false, status: 0 };
   for (const strategy of order) {
     const r = strategy === 'direct'
@@ -913,6 +920,7 @@ async function runSync() {
   console.log('[sync] STARTED');
   _ifaClubIndex = null;   // shared within a run, never across runs
   _ifaStrategy  = null;   // re-discover the cheapest working fetch each run
+  _ifaQuotaOut  = false;
 
   const playersSnap = await db.collection('players').get();
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1017,6 +1025,15 @@ async function runSync() {
     lastResult: stats,
     lastWarningCount: warnings.length,
   }, { merge: true });
+
+  // One cause, one line. When the scraper quota is gone every IFA player
+  // fails for the same reason, and listing them individually buries it.
+  if (_ifaQuotaOut) {
+    warnings.unshift({
+      playerId: '_scraper', name: 'ScraperAPI', reason: 'scraper-quota-exhausted',
+      detail: 'Every football.org.il lookup is blocked until the quota resets.',
+    });
+  }
 
   await db.collection('app_meta').doc('syncWarnings').set({
     list: warnings,
