@@ -201,48 +201,88 @@ function normalizeIfaTime(s) {
   return `${String(h).padStart(2, '0')}:${mn}`;
 }
 
-async function ifaFetchHtml(targetUrl) {
+const IFA_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml',
+  'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
+};
+
+// The ScraperAPI free plan allows ONE request at a time, and this sync fans
+// out over every player at once. Left unchecked the calls collide and come
+// back 429 — which is exactly what happened on the first full run: every
+// player failed at the same second. ScraperAPI calls now queue.
+let _ifaQueue = Promise.resolve();
+function ifaSerial(fn) {
+  const run = _ifaQueue.then(fn, fn);
+  _ifaQueue = run.then(() => {}, () => {});
+  return run;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Cloudflare's interstitial is short and carries none of the page's markup.
+function ifaLooksReal(html) {
+  return !!html && html.length > 20000 && !/Just a moment|cf-browser-verification|Attention Required/i.test(html);
+}
+
+// Strategies, cheapest first. Whichever one works is remembered for the rest
+// of the run so the failures are paid for once, not per player:
+//   direct        free, but football.org.il has historically blocked
+//                 Netlify's IP range at the edge
+//   render=false  1 credit — these pages are server-rendered, no XHR, so
+//                 headless Chromium is only needed to clear the challenge
+//   render=true   10 credits — the fallback that always worked
+let _ifaStrategy = null;
+
+async function ifaAttempt(strategy, targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  // render=true   — headless Chromium so Cloudflare's anti-bot challenge
-  //                 is cleared and the page's React/Vue chunks execute.
-  // country_code  — Israeli IP so the page is served the same content
-  //                 it shows to a real Israeli visitor.
-  // device_type   — force the desktop layout: the IFA page has rows
-  //                 marked `new-desktop-only`, and on mobile those are
-  //                 hidden, so without this flag we lose rows.
-  // wait          — additional seconds to wait after the initial render
-  //                 finishes, giving the fixtures table time to lazy-load
-  //                 the rest of the season. 6s = comfortable headroom.
-  // The cost is 10 credits per call (instead of 1) — at ~5 IFA players
-  // per Sync × 1 sync/day that's ~1.5K credits/month, well under the
-  // 5K free quota.
-  const params = new URLSearchParams({
-    api_key: apiKey,
-    url: targetUrl,
-    render: 'true',
-    country_code: 'il',
-    device_type: 'desktop',
-    wait: '6',
-  });
-  const fetchUrl = apiKey
-    ? `https://api.scraperapi.com/?${params.toString()}`
-    : targetUrl;
-  const via = apiKey ? 'ScraperAPI' : 'direct';
-  let res;
-  try {
-    res = await fetch(fetchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
-      },
-    });
-  } catch (e) {
-    console.error(`IFA fetch error (via ${via}):`, e.message);
-    return { ok: false, status: 0, html: '', via };
+  if (strategy !== 'direct' && !apiKey) return null;
+
+  const url = strategy === 'direct' ? targetUrl
+    : `https://api.scraperapi.com/?${new URLSearchParams({
+        api_key: apiKey,
+        url: targetUrl,
+        render: strategy === 'render' ? 'true' : 'false',
+        country_code: 'il',
+        device_type: 'desktop',
+        ...(strategy === 'render' ? { wait: '6' } : {}),
+      }).toString()}`;
+
+  // 429 means the single free thread is busy, not that the page is gone.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let res;
+    try {
+      res = await fetch(url, { headers: IFA_HEADERS });
+    } catch (e) {
+      console.error(`IFA fetch error (${strategy}):`, e.message);
+      return null;
+    }
+    if (res.status === 429) { await sleep(2000 * (attempt + 1)); continue; }
+    if (!res.ok) return { ok: false, status: res.status };
+    const html = await res.text();
+    if (!ifaLooksReal(html)) return { ok: false, status: res.status, blocked: true };
+    return { ok: true, status: res.status, html };
   }
-  const html = res.ok ? await res.text() : '';
-  return { ok: res.ok, status: res.status, html, via };
+  return { ok: false, status: 429 };
+}
+
+async function ifaFetchHtml(targetUrl) {
+  const order = _ifaStrategy ? [_ifaStrategy] : ['direct', 'plain', 'render'];
+  let last = { ok: false, status: 0 };
+  for (const strategy of order) {
+    const r = strategy === 'direct'
+      ? await ifaAttempt(strategy, targetUrl)          // no quota, no queue
+      : await ifaSerial(() => ifaAttempt(strategy, targetUrl));
+    if (r?.ok) {
+      if (!_ifaStrategy) { _ifaStrategy = strategy; console.log(`[sync] IFA via ${strategy}`); }
+      return { ok: true, status: r.status, html: r.html, via: strategy };
+    }
+    if (r) last = r;
+  }
+  // A pinned strategy that suddenly fails is worth un-pinning, so the next
+  // page can escalate again rather than inherit a bad choice.
+  if (_ifaStrategy && order.length === 1) _ifaStrategy = null;
+  return { ok: false, status: last.status, html: '', via: order.join('>') };
 }
 
 // ───────────────────── IFA entity resolution ─────────────────────
@@ -872,6 +912,7 @@ async function runSync() {
   }, { merge: true });
   console.log('[sync] STARTED');
   _ifaClubIndex = null;   // shared within a run, never across runs
+  _ifaStrategy  = null;   // re-discover the cheapest working fetch each run
 
   const playersSnap = await db.collection('players').get();
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
