@@ -299,16 +299,50 @@ function ifaTokens(s, { dropShort = true } = {}) {
     .filter(t => t && !IFA_STOPWORDS.has(t) && (!dropShort || t.length > 1 || /^[א-ת]$/.test(t)));
 }
 
-// Club names differ between the player page ("מכבי ע. בת ים") and the club
-// index ("מועדון כדורגל מכבי ..."), so compare on distinctive words only.
-const IFA_CLUB_NOISE = new Set(['מועדון', 'כדורגל', 'מכ', 'מס', 'אס', 'קפ', 'עמותת', 'ספורט']);
-function ifaClubTokens(s) {
-  return ifaTokens(s).filter(t => t.length > 1 && !IFA_CLUB_NOISE.has(t));
+// Club names are written differently in the two places we read them. The
+// player page shows the squad name — 'מכבי פ"ת עסיסי דוד', complete with a
+// city abbreviation and a sponsor tag — while the club register spells it
+// 'מכבי פתח-תקוה'. Expand the abbreviations and settle the spelling before
+// comparing, or the two never meet.
+const IFA_CITY_ABBREV = [
+  [/ראשל["'׳]?[\s-]*צ/g, 'ראשון לציון'],
+  [/רמה["'׳]?[\s-]*ש/g,  'רמת השרון'],
+  [/כפ["'׳]?[\s-]*ס/g,   'כפר סבא'],
+  [/פ["'׳]?[\s-]*ת(?![א-ת])/g, 'פתח תקוה'],
+  [/ת["'׳]?[\s-]*א(?![א-ת])/g, 'תל אביב'],
+  [/ר["'׳]?[\s-]*ג(?![א-ת])/g, 'רמת גן'],
+  [/ב["'׳]?[\s-]*ש(?![א-ת])/g, 'באר שבע'],
+  [/ק["'׳]?[\s-]*ש(?![א-ת])/g, 'קרית שמונה'],
+  [/נס["'׳]?[\s-]*צ(?![א-ת])/g, 'נס ציונה'],
+  [/י["'׳-]\s*ם(?![א-ת])/g,    'ירושלים'],
+  [/(?<![א-ת])הפ["'׳]/g,  'הפועל '],
+  [/(?<![א-ת])מ["'׳]?\.?\s*כ\.?(?=\s)/g, ' '],   // מ.כ. = מועדון כדורגל
+  [/(?<![א-ת])מ["'׳]?\.?\s*ס\.?(?=\s)/g, ' '],   // מ.ס. = מועדון ספורט
+];
+function ifaNormalizeName(s) {
+  let out = ` ${String(s || '')} `;
+  for (const [re, full] of IFA_CITY_ABBREV) out = out.replace(re, full);
+  return out
+    .replace(/וו/g, 'ו')          // תקווה → תקוה
+    .replace(/[־–—-]/g, ' ')
+    .replace(/["'״׳()]/g, ' ');
 }
+
+const IFA_CLUB_NOISE = new Set(['מועדון', 'כדורגל', 'מכ', 'מס', 'אס', 'קפ', 'עמותת', 'ספורט', 'עירוני']);
+function ifaClubTokens(s) {
+  return ifaTokens(ifaNormalizeName(s)).filter(t => t.length > 1 && !IFA_CLUB_NOISE.has(t));
+}
+
+// Scored against the SHORTER name, because the extra words are almost always
+// a sponsor tag on the squad side rather than a difference of club.
 function ifaContainment(wanted, candidate) {
-  const w = ifaClubTokens(wanted), c = new Set(ifaClubTokens(candidate));
-  if (!w.length) return 0;
-  return w.filter(t => c.has(t)).length / w.length;
+  const w = ifaClubTokens(wanted), c = ifaClubTokens(candidate);
+  if (!w.length || !c.length) return 0;
+  const cs = new Set(c);
+  const shared = w.filter(t => cs.has(t)).length;
+  // One word in common is a coincidence when both names have several.
+  if (shared < 2 && Math.min(w.length, c.length) > 1) return 0;
+  return shared / Math.min(w.length, c.length);
 }
 
 // Step 1 — the player page. Returns the current season and the team caption.
@@ -877,10 +911,13 @@ async function runSync() {
           }
           const target = await ifaTeamGamesUrl(db, p);
           if (target.error) {
+            const detail = [target.clubName, target.teamLabel].filter(Boolean).join(' · ');
+            // Logged as well as recorded: a resolution that fails silently is
+            // exactly how these players went missing for months.
+            console.log(`[sync] ${p.fullName} → IFA unresolved: ${target.error}${detail ? ` (${detail})` : ''}`);
             localWarnings.push({
               playerId: p.id, name: p.fullName, club: p.currentClub,
-              reason: target.error,
-              detail: [target.clubName, target.teamLabel].filter(Boolean).join(' · ') || undefined,
+              reason: target.error, detail: detail || undefined,
             });
             continue;
           }
