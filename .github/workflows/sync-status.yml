@@ -1,0 +1,14 @@
+# Reads the matches-sync health check from outside Netlify, so a run can be
+# verified without the Firebase console. Read-only: it calls the public
+# status endpoints and nothing that spends ScraperAPI credits.
+name: Sync status
+on:
+  workflow_dispatch:
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: sync-status
+        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=%D7%91%D7%A8%D7%96%D7%99%D7%9C%D7%99"
+      - name: ifa-probe
+        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/ifa-probe"
