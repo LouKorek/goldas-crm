@@ -15,7 +15,7 @@
 //
 // Stops at the first strategy that returns a real page, so pay=render only
 // spends the 10 credits when the cheaper two have already failed. A paid run
-// is refused within PAID_COOLDOWN_H of the last one, and whenever it would
+// is refused within PAID_COOLDOWN_H of the last one that was billed, and whenever it would
 // leave fewer than its own cost in the account — an open URL must not be a
 // way to drain the quota.
 //
@@ -69,7 +69,32 @@ async function defaultTarget(db, nameFragment) {
   return { error: `${p.fullName} has no IFA link` };
 }
 
-async function attempt(strategy, targetUrl, apiKey) {
+// ScraperAPI keeps retrying on its side for up to ~60s before it gives up,
+// and it never charges for a request it gave up on. A shorter client timeout
+// aborts a request that might still have worked and reports nothing useful,
+// which is what the first plain probe did. Override with &timeout=<seconds>.
+const TIMEOUT_S = { direct: 30, plain: 90, render: 150 };
+
+// Everything needed to tell "the server said no" from "we never got an
+// answer": which phase failed, the exception with its cause, and on any
+// non-page response the start of the body (ScraperAPI explains its errors in
+// plain text).
+// Never let the key ride along in an error message or a quoted body.
+function redact(text) {
+  const key = (process.env.SCRAPER_API_KEY || '').trim();
+  return key ? String(text).split(key).join('<key>') : String(text);
+}
+
+function describeError(e) {
+  const c = e?.cause;
+  return {
+    name: e?.name || null,
+    message: redact(String(e?.message || e).slice(0, 300)),
+    cause: c ? redact(String(c.code || c.name || '') + (c.message ? `: ${String(c.message).slice(0, 200)}` : '')) : null,
+  };
+}
+
+async function attempt(strategy, targetUrl, apiKey, timeoutOverrideS) {
   const url = strategy === 'direct' ? targetUrl
     : `https://api.scraperapi.com/?${new URLSearchParams({
         api_key: apiKey, url: targetUrl,
@@ -77,21 +102,36 @@ async function attempt(strategy, targetUrl, apiKey) {
         country_code: 'il', device_type: 'desktop',
         ...(strategy === 'render' ? { wait: '6' } : {}),
       }).toString()}`;
+  const timeoutS = timeoutOverrideS || TIMEOUT_S[strategy];
   const t0 = Date.now();
+  const out = { strategy, timeoutS, ok: false };
+  let res;
   try {
-    const res = await fetch(url, { headers: IFA_HEADERS, signal: AbortSignal.timeout(strategy === 'render' ? 90000 : 40000) });
-    const html = await res.text();
-    const blocked = /Just a moment|cf-browser-verification|Attention Required/i.test(html);
-    const $ = cheerio.load(html);
-    return {
-      strategy, status: res.status, ms: Date.now() - t0, htmlLength: html.length,
-      blocked, title: $('title').first().text().trim().slice(0, 120),
-      fixtureRows: $('a.table_row.link_url').length,
-      ok: res.ok && !blocked && html.length > 20000,
-    };
+    res = await fetch(url, { headers: IFA_HEADERS, signal: AbortSignal.timeout(timeoutS * 1000) });
   } catch (e) {
-    return { strategy, ms: Date.now() - t0, ok: false, error: String(e?.message || e).slice(0, 200) };
+    return { ...out, phase: 'request', ms: Date.now() - t0, error: describeError(e) };
   }
+  out.status = res.status;
+  out.contentType = res.headers.get('content-type');
+  let body;
+  try {
+    body = await res.text();
+  } catch (e) {
+    return { ...out, phase: 'body', ms: Date.now() - t0, error: describeError(e) };
+  }
+  out.ms = Date.now() - t0;
+  out.htmlLength = body.length;
+  out.blocked = /Just a moment|cf-browser-verification|Attention Required/i.test(body);
+  try {
+    const $ = cheerio.load(body);
+    out.title = $('title').first().text().trim().slice(0, 120);
+    out.fixtureRows = $('a.table_row.link_url').length;
+  } catch (e) {
+    out.parseError = describeError(e);
+  }
+  out.ok = res.ok && !out.blocked && body.length > 20000;
+  if (!out.ok) out.bodyStart = redact(body.slice(0, 1500));
+  return out;
 }
 
 exports.handler = async (event) => {
@@ -100,7 +140,7 @@ exports.handler = async (event) => {
   const q = event.queryStringParameters || {};
   const pay = LEVELS[q.pay] ? q.pay : 'none';
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  // merge, so a rejected request can't wipe lastPaidAt and reset the cooldown.
+  // merge, so a rejected request can't wipe lastChargedAt and reset the cooldown.
   const write = (doc) => ref.set({ ...doc, at: admin.firestore.Timestamp.now() }, { merge: true });
 
   let target;
@@ -118,7 +158,7 @@ exports.handler = async (event) => {
   const before = await creditsLeft(apiKey);
   let refusedPaid = null;
   if (pay !== 'none') {
-    const lastPaid = prev.lastPaidAt?.toDate?.()?.getTime?.() || 0;
+    const lastPaid = prev.lastChargedAt?.toDate?.()?.getTime?.() || 0;
     const maxCost = strategies.reduce((s, k) => s + COST[k], 0);
     if (!apiKey) refusedPaid = 'no SCRAPER_API_KEY';
     else if (Date.now() - lastPaid < PAID_COOLDOWN_H * 3600000) refusedPaid = `a paid probe already ran in the last ${PAID_COOLDOWN_H}h`;
@@ -128,17 +168,23 @@ exports.handler = async (event) => {
 
   const attempts = [];
   for (const s of strategies) {
-    const r = await attempt(s, target.url, apiKey);
+    const r = await attempt(s, target.url, apiKey, Math.min(Number(q.timeout) || 0, 600) || null);
     attempts.push(r);
     if (r.ok) break;
   }
   const winner = attempts.find(a => a.ok)?.strategy || null;
-  const spentPaid = attempts.some(a => a.strategy !== 'direct');
+  // The cooldown only counts runs that actually cost something. ScraperAPI
+  // doesn't bill a request it failed, so a failed paid attempt shouldn't lock
+  // out the retry that tells us why it failed.
+  const after = await creditsLeft(apiKey);
+  const triedPaid = attempts.some(a => a.strategy !== 'direct');
+  const charged = triedPaid && (before == null || after == null || after < before);
 
   await write({
     error: null, player: target.player || null, url: target.url, pay, refusedPaid,
-    attempts, winner, creditsBefore: before, creditsAfter: await creditsLeft(apiKey),
-    lastPaidAt: spentPaid ? admin.firestore.Timestamp.now() : (prev.lastPaidAt || null),
+    attempts, winner, creditsBefore: before, creditsAfter: after,
+    lastChargedAt: charged ? admin.firestore.Timestamp.now() : (prev.lastChargedAt || null),
+    lastPaidAt: admin.firestore.FieldValue.delete(),
   });
   console.log('[ifa-probe]', JSON.stringify({ url: target.url, winner, attempts }));
   return { statusCode: 200 };
