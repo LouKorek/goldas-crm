@@ -11,6 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: sync-status
-        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=%D7%91%D7%A8%D7%96%D7%99%D7%9C%D7%99"
-      - name: ifa-probe
-        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/ifa-probe"
+        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai"
+      - name: football.org.il reachable from here?
+        run: |
+          curl -sS --max-time 40 -o p.html -w "%{http_code} %{size_download}\n" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" \
+            -H "Accept-Language: he-IL,he;q=0.9" \
+            "https://www.football.org.il/players/player/?player_id=185403" || true
+          grep -o "<title>[^<]*" p.html | head -1 || true
+          grep -o 'new-player-data_title[^<]*<[^>]*>[^<]*' p.html | head -2 || true
