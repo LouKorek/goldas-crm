@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: wait for a sync that finished after AFTER, then print it
         env:
-          AFTER: '2026-10-09T16:40:00Z'
+          AFTER: '2026-10-09T16:31:00Z'
         run: |
           U="https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai"
           for i in $(seq 1 22); do
