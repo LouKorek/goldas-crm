@@ -12,15 +12,5 @@ jobs:
     steps:
       - name: sync-status
         run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai" | jq -c .
-      - name: free readers for football.org.il
-        run: |
-          T="https://www.football.org.il/team-details/team-games/?team_id=1146"
-          for R in "https://r.jina.ai/$T" ; do
-            echo "== $R"
-            curl -sS --max-time 90 -o out.txt -w "%{http_code} %{size_download}\n" "$R" || true
-            head -c 2500 out.txt; echo
-          done
-          echo "== jina html"
-          curl -sS --max-time 90 -H "X-Return-Format: html" -o out.html -w "%{http_code} %{size_download}\n" "https://r.jina.ai/$T" || true
-          grep -o 'table_row link_url' out.html | wc -l
-          grep -o '<title>[^<]*' out.html | head -1
+      - name: scraper-status (free account endpoint)
+        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/scraper-status" | jq -c .
