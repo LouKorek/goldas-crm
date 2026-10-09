@@ -374,6 +374,9 @@ const SYNC_REASONS = {
   'no-club':                    { label: 'No club on record',        fix: 'Set his current club.' },
   'no-source':                  { label: 'No source for this league',fix: 'Add a country and tier so the sync knows where to look.' },
   'no-fixtures-or-team-not-found': { label: 'Nothing found',         fix: 'His league may not be covered by the available sources.' },
+  'ifa-page-unreadable':        { label: 'IFA fixtures page did not load', fix: 'Usually temporary — the next sync will retry.' },
+  'not-reached-time':           { label: 'Not reached this run',     fix: 'The sync ran out of time before him; he is near the front of the queue next time.' },
+  'not-reached-credits':        { label: 'Not reached this run',     fix: "This run's ScraperAPI allowance was used up; he is near the front of the queue next time." },
   'scraper-quota-exhausted':    { label: 'ScraperAPI monthly quota spent', fix: 'Israeli fixtures cannot be fetched until it resets — the date is on the counter above.' },
   'error':                      { label: 'Sync error',               fix: '' },
 };

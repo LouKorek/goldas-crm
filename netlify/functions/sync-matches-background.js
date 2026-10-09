@@ -189,9 +189,8 @@ async function sofascoreFetchFixtures(teamId, fromDateMs) {
 //
 // football.org.il blocks Netlify's IPs at the edge (Cloudflare anti-bot →
 // 403 Forbidden on every request, regardless of headers). To get around the
-// IP block we route the fetch through ScraperAPI when SCRAPER_API_KEY is set.
-// Without the key we fall back to a direct fetch — useful for local dev from
-// an Israeli IP, but will return 403 on Netlify.
+// IP block we route the fetch through ScraperAPI (SCRAPER_API_KEY). Without
+// the key nothing from IFA can be read.
 // Normalises an IFA time string to "HH:MM" (24h). Handles:
 //   "17:30"      → "17:30"   (already 24h, Hebrew page)
 //   "5:00 PM"    → "17:00"   (US 12h with PM, English page)
@@ -216,38 +215,47 @@ const IFA_HEADERS = {
   'Accept-Language': 'he-IL,he;q=0.9,en;q=0.8',
 };
 
-// The ScraperAPI free plan allows ONE request at a time, and this sync fans
-// out over every player at once. Left unchecked the calls collide and come
-// back 429 — which is exactly what happened on the first full run: every
-// player failed at the same second. ScraperAPI calls now queue.
-let _ifaQueue = Promise.resolve();
-function ifaSerial(fn) {
-  const run = _ifaQueue.then(fn, fn);
-  _ifaQueue = run.then(() => {}, () => {});
-  return run;
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 // Cloudflare's interstitial is short and carries none of the page's markup.
 function ifaLooksReal(html) {
   return !!html && html.length > 20000 && !/Just a moment|cf-browser-verification|Attention Required/i.test(html);
 }
 
-// Strategies, cheapest first. Whichever one works is remembered for the rest
-// of the run so the failures are paid for once, not per player:
-//   direct        free, but football.org.il has historically blocked
-//                 Netlify's IP range at the edge
-//   render=false  1 credit — these pages are server-rendered, no XHR, so
-//                 headless Chromium is only needed to clear the challenge
-//   render=true   10 credits — the fallback that always worked
+// How football.org.il is reached. A direct request from Netlify is answered
+// by Cloudflare with 403 "Attention Required" every time (measured with
+// ifa-probe, 9 Oct 2026), so only ScraperAPI is tried:
+//   plain   render=false, 1 credit
+//   render  render=true, 10 credits
+// The one that works is pinned for the run and remembered in
+// app_meta/ifaStrategy for the next one, so discovery is paid for once.
+// A pinned strategy that fails escalates to the stronger one; it never
+// drops back to a cheaper one mid-run.
+const IFA_STRATEGIES = ['plain', 'render'];
+const IFA_COST       = { plain: 1, render: 10 };
+// ScraperAPI retries on its side for about a minute before it gives up, and
+// doesn't bill what it gave up on. Waiting less aborts requests that would
+// have worked.
+const IFA_TIMEOUT_S  = { plain: 90, render: 150 };
+const IFA_STRATEGY_TTL_DAYS = 14;
+
 let _ifaStrategy = null;
 // ScraperAPI answers 403 to every request once the monthly credits are spent.
 // Read as a page error that looks identical to "this team has no fixtures",
 // which is how an exhausted quota turned into nineteen misleading warnings.
 let _ifaQuotaOut = false;
+// Credits this run may spend, and what it has spent. ScraperAPI bills a
+// request it answered (200 or 404) and nothing else.
+let _ifaBudget = { cap: 0, spent: 0, hit: false };
+// The first few attempts, kept for the sync report: when IFA fails, this is
+// the only place that says how.
+let _ifaAttempts = [];
 
-const SYNC_CREDIT_FLOOR = 100;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function redactKey(text) {
+  const key = (process.env.SCRAPER_API_KEY || '').trim();
+  return key ? String(text).split(key).join('<key>') : String(text);
+}
+
 async function scraperCreditsLeft() {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
   if (!apiKey) return null;
@@ -260,58 +268,75 @@ async function scraperCreditsLeft() {
   } catch { return null; }
 }
 
+function ifaCanAfford(strategy) {
+  return _ifaBudget.spent + IFA_COST[strategy] <= _ifaBudget.cap;
+}
+
+function ifaNote(entry) {
+  if (_ifaAttempts.length < 8) _ifaAttempts.push(entry);
+}
+
 async function ifaAttempt(strategy, targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  if (strategy !== 'direct' && !apiKey) return null;
+  if (!apiKey) return { ok: false, error: 'no SCRAPER_API_KEY' };
+  if (!ifaCanAfford(strategy)) { _ifaBudget.hit = true; return { ok: false, budget: true }; }
 
-  const url = strategy === 'direct' ? targetUrl
-    : `https://api.scraperapi.com/?${new URLSearchParams({
-        api_key: apiKey,
-        url: targetUrl,
-        render: strategy === 'render' ? 'true' : 'false',
-        country_code: 'il',
-        device_type: 'desktop',
-        ...(strategy === 'render' ? { wait: '6' } : {}),
-      }).toString()}`;
+  const url = `https://api.scraperapi.com/?${new URLSearchParams({
+    api_key: apiKey,
+    url: targetUrl,
+    render: strategy === 'render' ? 'true' : 'false',
+    country_code: 'il',
+    device_type: 'desktop',
+    ...(strategy === 'render' ? { wait: '6' } : {}),
+  }).toString()}`;
 
-  // 429 means the single free thread is busy, not that the page is gone.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const t0 = Date.now();
     let res;
     try {
-      res = await fetch(url, { headers: IFA_HEADERS });
+      res = await fetch(url, { headers: IFA_HEADERS, signal: AbortSignal.timeout(IFA_TIMEOUT_S[strategy] * 1000) });
     } catch (e) {
-      console.error(`IFA fetch error (${strategy}):`, e.message);
-      return null;
+      const error = redactKey(`${e?.name || 'Error'}: ${e?.message || e}${e?.cause?.code ? ` (${e.cause.code})` : ''}`).slice(0, 200);
+      ifaNote({ strategy, ms: Date.now() - t0, error });
+      console.error(`IFA fetch error (${strategy}):`, error);
+      return { ok: false, error };
     }
-    if (res.status === 429) { await sleep(2000 * (attempt + 1)); continue; }
-    if (res.status === 403 && strategy !== 'direct') { _ifaQuotaOut = true; return { ok: false, status: 403, quota: true }; }
+    if (res.status === 200 || res.status === 404) _ifaBudget.spent += IFA_COST[strategy];
+    if (res.status === 429) { await sleep(3000 * (attempt + 1)); continue; }
+    if (res.status === 403) {
+      _ifaQuotaOut = true;
+      ifaNote({ strategy, status: 403, ms: Date.now() - t0, note: 'quota' });
+      return { ok: false, status: 403, quota: true };
+    }
+    let body = '';
+    try { body = await res.text(); } catch (e) { body = ''; }
+    const real = res.ok && ifaLooksReal(body);
+    ifaNote({
+      strategy, status: res.status, ms: Date.now() - t0, len: body.length, real,
+      ...(real ? {} : { bodyStart: redactKey(body.slice(0, 300)) }),
+    });
     if (!res.ok) return { ok: false, status: res.status };
-    const html = await res.text();
-    if (!ifaLooksReal(html)) return { ok: false, status: res.status, blocked: true };
-    return { ok: true, status: res.status, html };
+    if (!real) return { ok: false, status: res.status, blocked: true };
+    return { ok: true, status: res.status, html: body };
   }
   return { ok: false, status: 429 };
 }
 
 async function ifaFetchHtml(targetUrl) {
-  // Once the quota is gone only the free direct attempt is worth making.
-  const all = _ifaQuotaOut ? ['direct'] : ['direct', 'plain', 'render'];
-  const order = _ifaStrategy ? [_ifaStrategy] : all;
+  if (_ifaQuotaOut) return { ok: false, status: 403, html: '', via: 'none', quota: true };
+  const from = _ifaStrategy ? IFA_STRATEGIES.indexOf(_ifaStrategy) : 0;
+  const order = IFA_STRATEGIES.slice(Math.max(0, from));
   let last = { ok: false, status: 0 };
   for (const strategy of order) {
-    const r = strategy === 'direct'
-      ? await ifaAttempt(strategy, targetUrl)          // no quota, no queue
-      : await ifaSerial(() => ifaAttempt(strategy, targetUrl));
-    if (r?.ok) {
-      if (!_ifaStrategy) { _ifaStrategy = strategy; console.log(`[sync] IFA via ${strategy}`); }
+    const r = await ifaAttempt(strategy, targetUrl);
+    if (r.ok) {
+      if (_ifaStrategy !== strategy) { _ifaStrategy = strategy; console.log(`[sync] IFA via ${strategy}`); }
       return { ok: true, status: r.status, html: r.html, via: strategy };
     }
-    if (r) last = r;
+    last = r;
+    if (r.quota || r.budget) break;
   }
-  // A pinned strategy that suddenly fails is worth un-pinning, so the next
-  // page can escalate again rather than inherit a bad choice.
-  if (_ifaStrategy && order.length === 1) _ifaStrategy = null;
-  return { ok: false, status: last.status, html: '', via: order.join('>') };
+  return { ok: false, status: last.status || 0, html: '', via: order.join('>'), budget: !!last.budget, quota: !!last.quota };
 }
 
 // ───────────────────── IFA entity resolution ─────────────────────
@@ -336,10 +361,20 @@ async function ifaFetchHtml(targetUrl) {
 //   /clubs/club/?club_id=C         → team_id for each age group
 //   /team-details/team-games/?team_id=T  → the fixture list
 //
-// The resolved team_id is cached on the player document, so the chain only
-// runs when it is missing, a week old, or the player's club has changed.
+// The resolved team_id is cached on the player document and kept for the
+// whole season: team_id doesn't move between seasons, but the age group a
+// youth player belongs to does, and that changes in August. So the chain
+// runs again only when the cache is from an earlier season, or the player's
+// club has changed. A lookup that found no club or no matching squad is
+// cached too, for a week, so one hard case doesn't cost credits every night.
 
-const IFA_RESOLVE_TTL_DAYS = 7;
+const IFA_FAIL_TTL_DAYS = 7;
+const IFA_CACHEABLE_FAILURES = new Set(['ifa-club-not-found', 'ifa-team-not-matched']);
+
+function seasonStartMs(now = new Date()) {
+  const y = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(y, 7, 1).getTime();
+}
 
 function ifaStripSeason(u) {
   u.searchParams.delete('season_id');
@@ -437,13 +472,32 @@ async function ifaReadPlayer(origin, prefix, playerId) {
   };
 }
 
-// Step 2 — the club index. One page holds every club, so fetch it once per
-// run and share it across players.
+// Step 2 — the club index. One page holds every club. It barely changes, so
+// it is kept in app_meta/ifaClubIndex between runs and only re-read once it
+// is a month old. Within a run the lookup is shared as a promise, so players
+// asking at the same time can't each pay for it.
+const IFA_CLUB_INDEX_TTL_DAYS = 30;
 let _ifaClubIndex = null;
-async function ifaClubIndex(origin, prefix) {
-  if (_ifaClubIndex) return _ifaClubIndex;
+function ifaClubIndex(origin, prefix) {
+  if (!_ifaClubIndex) _ifaClubIndex = ifaLoadClubIndex(origin, prefix).catch((e) => {
+    console.error('IFA club index failed:', e.message);
+    return [];
+  });
+  return _ifaClubIndex;
+}
+async function ifaLoadClubIndex(origin, prefix) {
+  const key = `${origin}${prefix}`;
+  const ref = getDb().collection('app_meta').doc('ifaClubIndex');
+  const snap = await ref.get();
+  const stored = snap.exists ? snap.data() : null;
+  const ageMs = stored?.fetchedAt ? Date.now() - stored.fetchedAt.toDate().getTime() : Infinity;
+  if (stored?.key === key && stored.clubs?.length && ageMs < IFA_CLUB_INDEX_TTL_DAYS * 86400000) {
+    console.log(`[sync] IFA club index from Firestore (${stored.clubs.length} clubs)`);
+    return stored.clubs;
+  }
   const { ok, html } = await ifaFetchHtml(`${origin}${prefix}clubs/`);
-  if (!ok || !html) return (_ifaClubIndex = []);
+  // A stale index beats none when the fetch fails or the budget is spent.
+  if (!ok || !html) return stored?.key === key ? (stored.clubs || []) : [];
   const $ = cheerio.load(html);
   const out = [];
   $('a[href*="club_id="]').each((_, a) => {
@@ -455,7 +509,9 @@ async function ifaClubIndex(origin, prefix) {
     const name = $h.clone().children('span').remove().end().text().replace(/\s+/g, ' ').trim();
     if (name) out.push({ clubId: id, name, sector });
   });
-  _ifaClubIndex = out;
+  if (out.length) {
+    await ref.set({ key, clubs: out, fetchedAt: admin.firestore.Timestamp.now() });
+  }
   return out;
 }
 
@@ -554,25 +610,43 @@ async function ifaTeamGamesUrl(db, player) {
   const playerId = u.searchParams.get('player_id');
   if (!playerId) return { error: 'ifa-url-has-no-id' };
 
+  const club = player.currentClub || '';
   const cache = player.autoFetch?.ifa;
-  const ageMs = cache?.resolvedAt ? Date.now() - new Date(cache.resolvedAt).getTime() : Infinity;
-  if (cache?.teamId && cache.playerId === playerId
-      && cache.forClub === (player.currentClub || '')
-      && ageMs < IFA_RESOLVE_TTL_DAYS * 86400000) {
+  const resolvedMs = cache?.resolvedAt ? new Date(cache.resolvedAt).getTime() : 0;
+  if (cache?.teamId && cache.playerId === playerId && cache.forClub === club
+      && resolvedMs >= seasonStartMs()) {
     return { url: build(cache.teamId), teamId: cache.teamId, cached: true };
+  }
+  const fail = player.autoFetch?.ifaFail;
+  const failedMs = fail?.at ? new Date(fail.at).getTime() : 0;
+  if (fail?.error && fail.playerId === playerId && fail.forClub === club
+      && Date.now() - failedMs < IFA_FAIL_TTL_DAYS * 86400000) {
+    return { error: fail.error, clubName: fail.clubName, teamLabel: fail.teamLabel, cachedFailure: true };
   }
 
   const res = await ifaResolveFromPlayerUrl(origin, prefix, playerId, player.gender);
-  if (res.error) return res;
+  if (res.error) {
+    if (IFA_CACHEABLE_FAILURES.has(res.error) && !_ifaBudget.hit && !_ifaQuotaOut) {
+      await db.collection('players').doc(player.id).set({
+        autoFetch: { ifaFail: {
+          playerId, forClub: club, error: res.error,
+          clubName: res.clubName || '', teamLabel: res.teamLabel || '',
+          at: new Date().toISOString(),
+        } },
+      }, { merge: true });
+    }
+    return res;
+  }
 
   await db.collection('players').doc(player.id).set({
     autoFetch: {
       ifa: {
         playerId, teamId: res.teamId, clubId: res.clubId,
         teamName: res.teamName, ageGroup: res.ageGroup, league: res.league,
-        seasonLabel: res.seasonLabel, forClub: player.currentClub || '',
+        seasonLabel: res.seasonLabel, forClub: club,
         resolvedAt: new Date().toISOString(),
       },
+      ifaFail: admin.firestore.FieldValue.delete(),
     },
   }, { merge: true });
 
@@ -612,8 +686,10 @@ async function ifaFetchFixtures(rawUrl) {
   const fetchUrl = `${parsed.origin}${gamesPath}?team_id=${encodeURIComponent(teamId)}`;
   const { ok, status, html, via } = await ifaFetchHtml(fetchUrl);
   if (!ok) {
+    // null, not []: "could not read the page" must not be reported as "the
+    // federation has published no fixtures".
     console.log(`IFA fetch ${fetchUrl} (via ${via}) → status=${status}`);
-    return [];
+    return null;
   }
   const $ = cheerio.load(html);
   const rowCount = $('a.table_row.link_url').length;
@@ -927,12 +1003,119 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
 }
 
 // ───────────────────── Main routine ─────────────────────
-async function runSync() {
-  const db = getDb();
+// A run that Netlify kills at 15 minutes writes nothing — no report, no
+// "finished" — which is how the sync went silent after 19 Aug while still
+// starting every night. So a run now stops taking on players before the
+// limit, stops spending once its credit allowance is used, and always writes
+// its report, saying which players it did not get to. Those go first next
+// time, so a partial run still moves the whole list forward night by night.
+const RUN_BUDGET_MS      = 12 * 60 * 1000;
+const RUN_CREDIT_CAP     = 60;   // most one run may spend on IFA
+const RUN_CREDIT_RESERVE = 10;   // never spend the account below this
+const RUN_STALE_MS       = 16 * 60 * 1000;   // a "running" older than this was killed
 
-  // Status sentinel: write a "running" doc to Firestore so the UI / Lou
-  // can confirm the function actually started. Updated again at the end.
+function nameMatcher(fragment) {
+  const f = String(fragment || '').trim();
+  if (!f) return null;
+  return new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+}
+
+// One player, start to finish. Returns what the run needs to count and
+// report; never throws.
+async function syncOnePlayer(db, p, fromDateMs) {
+  const localWarnings = [];
+  try {
+    const sources = decideSources(p);
+    if (!sources.length) {
+      return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'no-source' }] };
+    }
+    if (!p.currentClub) {
+      return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'no-club' }] };
+    }
+
+    for (const source of sources) {
+      let fixtures = [];
+      if (source === 'ifa') {
+        if (!p.ifaTeamUrl) {
+          localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
+          continue;
+        }
+        const target = await ifaTeamGamesUrl(db, p);
+        if (target.error) {
+          const detail = [target.clubName, target.teamLabel].filter(Boolean).join(' · ');
+          // Logged as well as recorded: a resolution that fails silently is
+          // exactly how these players went missing for months.
+          console.log(`[sync] ${p.fullName} → IFA unresolved: ${target.error}${target.cachedFailure ? ' (cached)' : ''}${detail ? ` (${detail})` : ''}`);
+          localWarnings.push({
+            playerId: p.id, name: p.fullName, club: p.currentClub,
+            reason: target.error, detail: detail || undefined,
+          });
+          continue;
+        }
+        console.log(`[sync] ${p.fullName} → IFA team ${target.teamId}${target.cached ? ' (cached)' : ''}`);
+        const got = await ifaFetchFixtures(target.url);
+        if (got === null) {
+          localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-page-unreadable', teamId: target.teamId });
+          continue;
+        }
+        fixtures = got;
+        console.log(`[sync] ${p.fullName} → IFA fetch done, ${fixtures.length} fixtures`);
+        if (!fixtures.length) {
+          // The team was found; the federation simply has not published its
+          // schedule yet. Worth saying so, rather than lumping it in with a
+          // failed lookup.
+          const ifa = target.resolved || p.autoFetch?.ifa || {};
+          localWarnings.push({
+            playerId: p.id, name: p.fullName, club: p.currentClub,
+            reason: 'ifa-no-fixtures-published',
+            detail: [ifa.teamName, ifa.ageGroup, ifa.league].filter(Boolean).join(' · ') || `team ${target.teamId}`,
+            teamId: target.teamId,
+          });
+          continue;
+        }
+      } else {
+        const teamId = await resolveTeamId(db, p, source);
+        if (!teamId) { console.log(`[sync] ${p.fullName} → ${source} team-id not resolved`); continue; }
+        console.log(`[sync] ${p.fullName} → ${source} fetch start (teamId=${teamId})`);
+        fixtures = await SOURCE_CLIENTS[source].fetchFixtures(teamId, fromDateMs);
+        console.log(`[sync] ${p.fullName} → ${source} fetch done, ${fixtures.length} fixtures`);
+      }
+      if (!fixtures.length) continue;
+      const { upserts, removed } = await syncMatchesForPlayer(db, p, source, fixtures);
+      console.log(`[sync] ${p.fullName} → ${source} upsert ${upserts} / remove ${removed}`);
+      if (source === 'ifa') {
+        await db.collection('players').doc(p.id).set({
+          autoFetch: { ifa: { lastFixturesAt: new Date().toISOString() } },
+        }, { merge: true });
+      }
+      return { ok: true, source, upserts, removed, warnings: [] };
+    }
+    // No source produced fixtures.
+    if (!localWarnings.length) {
+      localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'no-fixtures-or-team-not-found', triedSources: sources });
+    }
+    return { ok: false, warnings: localWarnings };
+  } catch (e) {
+    console.error(`Sync error for ${p.fullName}:`, e);
+    return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'error', message: String(e?.message || e) }] };
+  }
+}
+
+// opts.only  — name fragment: sync just the matching players
+// opts.first — name fragment: put the matching players at the head of the queue
+async function runSync(opts = {}) {
+  const db = getDb();
+  const t0 = Date.now();
+
+  // Status sentinel: the UI and Lou can see the run started. A second run
+  // while one is genuinely alive would spend the same credits twice.
   const statusRef = db.collection('app_meta').doc('syncStatus');
+  const prevStatus = (await statusRef.get()).data() || {};
+  const prevStart = prevStatus.startedAt?.toDate?.()?.getTime?.() || 0;
+  if (prevStatus.state === 'running' && Date.now() - prevStart < RUN_STALE_MS) {
+    console.log('[sync] another run is still going — skipping');
+    return { ok: false, skipped: true, message: 'A sync is already running.' };
+  }
   await statusRef.set({
     state: 'running',
     startedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -940,141 +1123,131 @@ async function runSync() {
     error: null,
   }, { merge: true });
   console.log('[sync] STARTED');
-  _ifaClubIndex = null;   // shared within a run, never across runs
-  _ifaStrategy  = null;   // re-discover the cheapest working fetch each run
+
+  _ifaClubIndex = null;   // the in-run promise; the index itself lives in Firestore
+  _ifaStrategy  = null;
   _ifaQuotaOut  = false;
+  _ifaAttempts  = [];
 
-  // Until the run is time- and credit-budgeted, a nightly run with the
-  // account nearly empty spends the last credits and still never finishes.
-  // Below the floor, IFA is only tried the free way.
   const credits = await scraperCreditsLeft();
-  const lowCredits = credits != null && credits < SYNC_CREDIT_FLOOR;
-  if (lowCredits) _ifaQuotaOut = true;
-  console.log(`[sync] ScraperAPI credits left: ${credits ?? 'unknown'}${lowCredits ? ' (below floor, free fetches only)' : ''}`);
+  const cap = credits == null ? RUN_CREDIT_CAP : Math.max(0, Math.min(RUN_CREDIT_CAP, credits - RUN_CREDIT_RESERVE));
+  _ifaBudget = { cap, spent: 0, hit: false };
+  console.log(`[sync] ScraperAPI credits left: ${credits ?? 'unknown'}, this run may spend ${cap}`);
 
-  const playersSnap = await db.collection('players').get();
-  const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  console.log(`[sync] loaded ${players.length} players`);
+  const stratRef = db.collection('app_meta').doc('ifaStrategy');
+  try {
+    const remembered = (await stratRef.get()).data();
+    const age = remembered?.at ? Date.now() - remembered.at.toDate().getTime() : Infinity;
+    if (IFA_STRATEGIES.includes(remembered?.strategy) && age < IFA_STRATEGY_TTL_DAYS * 86400000) {
+      _ifaStrategy = remembered.strategy;
+      console.log(`[sync] IFA strategy remembered: ${_ifaStrategy}`);
+    }
+  } catch (e) { console.error('ifaStrategy read failed:', e.message); }
 
   // Retain window: from start of last season (~Aug last year) onwards.
   const now = new Date();
-  const fromDate = new Date(now.getFullYear() - 1, 7, 1); // Aug 1, prev year
-  const fromDateMs = fromDate.getTime();
+  const fromDateMs = new Date(now.getFullYear() - 1, 7, 1).getTime();
 
-  const stats = { totalPlayers: players.length, processed: 0, upserts: 0, removed: 0, perSource: {} };
+  const stats = { totalPlayers: 0, processed: 0, upserts: 0, removed: 0, perSource: {}, partial: false };
   const warnings = [];
+  const notReached = [];   // { player, reason }
+  let fatal = null;
 
-  // Run all players in parallel — each call is bounded by its own external
-  // API (ScraperAPI for IFA can take 10–25s with render=true). Sequentially
-  // this would blow past Netlify's 30s synchronous-function budget; in
-  // parallel the wall-clock time is governed by the slowest single player.
-  // Each player only touches its own player doc + own match docs so there
-  // are no Firestore write conflicts.
-  const perPlayer = await Promise.all(players.map(async (p) => {
-    const localWarnings = [];
-    try {
-      const sources = decideSources(p);
-      if (!sources.length) {
-        return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'no-source' }] };
-      }
-      if (!p.currentClub) {
-        return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'no-club' }] };
-      }
+  try {
+    const playersSnap = await db.collection('players').get();
+    let players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const only = nameMatcher(opts.only);
+    if (only) players = players.filter((p) => only.test(p.fullName || ''));
+    stats.totalPlayers = players.length;
+    console.log(`[sync] loaded ${players.length} players${only ? ` (only ${opts.only})` : ''}`);
 
-      for (const source of sources) {
-        let fixtures = [];
-        if (source === 'ifa') {
-          if (!p.ifaTeamUrl) {
-            localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'ifa-url-missing' });
-            continue;
-          }
-          const target = await ifaTeamGamesUrl(db, p);
-          if (target.error) {
-            const detail = [target.clubName, target.teamLabel].filter(Boolean).join(' · ');
-            // Logged as well as recorded: a resolution that fails silently is
-            // exactly how these players went missing for months.
-            console.log(`[sync] ${p.fullName} → IFA unresolved: ${target.error}${detail ? ` (${detail})` : ''}`);
-            localWarnings.push({
-              playerId: p.id, name: p.fullName, club: p.currentClub,
-              reason: target.error, detail: detail || undefined,
-            });
-            continue;
-          }
-          console.log(`[sync] ${p.fullName} → IFA team ${target.teamId}${target.cached ? ' (cached)' : ''}`);
-          fixtures = await ifaFetchFixtures(target.url);
-          console.log(`[sync] ${p.fullName} → IFA fetch done, ${fixtures.length} fixtures`);
-          if (!fixtures.length) {
-            // The team was found; the federation simply has not published its
-            // schedule yet. Worth saying so, rather than lumping it in with a
-            // failed lookup.
-            const ifa = target.resolved || p.autoFetch?.ifa || {};
-            localWarnings.push({
-              playerId: p.id, name: p.fullName, club: p.currentClub,
-              reason: 'ifa-no-fixtures-published',
-              detail: [ifa.teamName, ifa.ageGroup, ifa.league].filter(Boolean).join(' · ') || `team ${target.teamId}`,
-              teamId: target.teamId,
-            });
-            continue;
-          }
-        } else {
-          const teamId = await resolveTeamId(db, p, source);
-          if (!teamId) { console.log(`[sync] ${p.fullName} → ${source} team-id not resolved`); continue; }
-          console.log(`[sync] ${p.fullName} → ${source} fetch start (teamId=${teamId})`);
-          fixtures = await SOURCE_CLIENTS[source].fetchFixtures(teamId, fromDateMs);
-          console.log(`[sync] ${p.fullName} → ${source} fetch done, ${fixtures.length} fixtures`);
-        }
-        if (!fixtures.length) continue;
-        const { upserts, removed } = await syncMatchesForPlayer(db, p, source, fixtures);
-        console.log(`[sync] ${p.fullName} → ${source} upsert ${upserts} / remove ${removed}`);
-        return { ok: true, source, upserts, removed, warnings: [] };
-      }
-      // No source produced fixtures.
-      if (!localWarnings.length) {
-        localWarnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason: 'no-fixtures-or-team-not-found', triedSources: sources });
-      }
-      return { ok: false, warnings: localWarnings };
-    } catch (e) {
-      console.error(`Sync error for ${p.fullName}:`, e);
-      return { ok: false, warnings: [{ playerId: p.id, name: p.fullName, reason: 'error', message: String(e?.message || e) }] };
-    }
-  }));
-
-  for (const r of perPlayer) {
-    if (r.warnings.length) warnings.push(...r.warnings);
-    if (r.ok) {
-      stats.processed++;
-      stats.upserts += r.upserts;
-      stats.removed += r.removed;
-      stats.perSource[r.source] = (stats.perSource[r.source] || 0) + 1;
-    }
-  }
-  console.log(`[sync] FINISHED ${stats.processed}/${stats.totalPlayers} processed, ${stats.upserts} upserts, ${warnings.length} warnings`);
-  await statusRef.set({
-    state: 'idle',
-    finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-    lastResult: stats,
-    lastWarningCount: warnings.length,
-  }, { merge: true });
-
-  // One cause, one line. When the scraper quota is gone every IFA player
-  // fails for the same reason, and listing them individually buries it.
-  if (_ifaQuotaOut) {
-    warnings.unshift({
-      playerId: '_scraper', name: 'ScraperAPI', reason: 'scraper-quota-exhausted',
-      detail: 'Every football.org.il lookup is blocked until the quota resets.',
+    // Free sources first, then IFA players: the ones asked for, then those
+    // whose squad is already known (one page each), then whoever has waited
+    // longest since his fixtures were last read.
+    const first = nameMatcher(opts.first);
+    const usesIfa = (p) => decideSources(p).includes('ifa') && !!p.ifaTeamUrl && !!p.currentClub;
+    const key = (p) => [
+      usesIfa(p) ? 1 : 0,
+      first && first.test(p.fullName || '') ? 0 : 1,
+      p.autoFetch?.ifa?.teamId ? 0 : 1,
+      p.autoFetch?.ifa?.lastFixturesAt ? new Date(p.autoFetch.ifa.lastFixturesAt).getTime() : 0,
+    ];
+    players.sort((a, b) => {
+      const ka = key(a), kb = key(b);
+      for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] - kb[i];
+      return 0;
     });
+
+    for (const p of players) {
+      if (Date.now() - t0 > RUN_BUDGET_MS) { notReached.push({ p, reason: 'not-reached-time' }); continue; }
+      if (usesIfa(p) && _ifaQuotaOut) { notReached.push({ p, reason: 'scraper-quota-exhausted' }); continue; }
+      if (usesIfa(p) && (_ifaBudget.hit || !ifaCanAfford(_ifaStrategy || 'plain'))) {
+        notReached.push({ p, reason: 'not-reached-credits' }); continue;
+      }
+
+      const hitBefore = _ifaBudget.hit, quotaBefore = _ifaQuotaOut;
+      const r = await syncOnePlayer(db, p, fromDateMs);
+      // Whatever failed for him because the money ran out mid-way is not
+      // about him; he goes back in the queue.
+      if (!r.ok && !quotaBefore && _ifaQuotaOut) { notReached.push({ p, reason: 'scraper-quota-exhausted' }); continue; }
+      if (!r.ok && !hitBefore && _ifaBudget.hit) { notReached.push({ p, reason: 'not-reached-credits' }); continue; }
+
+      if (r.warnings.length) warnings.push(...r.warnings);
+      if (r.ok) {
+        stats.processed++;
+        stats.upserts += r.upserts;
+        stats.removed += r.removed;
+        stats.perSource[r.source] = (stats.perSource[r.source] || 0) + 1;
+      }
+    }
+  } catch (e) {
+    fatal = e;
+    console.error('[sync] run failed:', e);
+  } finally {
+    for (const { p, reason } of notReached) {
+      warnings.push({ playerId: p.id, name: p.fullName, club: p.currentClub, reason });
+    }
+    stats.partial = notReached.length > 0 || !!fatal;
+    stats.notReached = notReached.length;
+    stats.durationS = Math.round((Date.now() - t0) / 1000);
+    stats.ifa = {
+      strategy: _ifaStrategy, creditsAtStart: credits, creditCap: cap,
+      creditsSpent: _ifaBudget.spent, attempts: _ifaAttempts,
+    };
+
+    // One cause, one line. When the scraper quota is gone every IFA player
+    // fails for the same reason, and listing them individually buries it.
+    if (_ifaQuotaOut) {
+      warnings.unshift({
+        playerId: '_scraper', name: 'ScraperAPI', reason: 'scraper-quota-exhausted',
+        detail: 'Every football.org.il lookup is blocked until the quota resets.',
+      });
+    }
+
+    console.log(`[sync] FINISHED ${stats.processed}/${stats.totalPlayers} processed, ${stats.upserts} upserts, ${warnings.length} warnings, ${_ifaBudget.spent} credits, ${stats.durationS}s${stats.partial ? ' (partial)' : ''}`);
+    try {
+      if (_ifaStrategy) await stratRef.set({ strategy: _ifaStrategy, at: admin.firestore.Timestamp.now() });
+      await statusRef.set({
+        state: 'idle',
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastResult: stats,
+        lastWarningCount: warnings.length,
+        error: fatal ? String(fatal?.message || fatal) : null,
+      }, { merge: true });
+      await db.collection('app_meta').doc('syncWarnings').set({
+        list: warnings,
+        runAt: admin.firestore.FieldValue.serverTimestamp(),
+        stats,
+      });
+    } catch (e) {
+      console.error('[sync] could not write the report:', e);
+    }
   }
+  if (fatal) throw fatal;
 
-  await db.collection('app_meta').doc('syncWarnings').set({
-    list: warnings,
-    runAt: admin.firestore.FieldValue.serverTimestamp(),
-    stats,
-  });
-
-  console.log('Sync complete:', JSON.stringify(stats), 'warnings:', warnings.length);
   return {
     ok: true,
-    message: `Synced ${stats.processed}/${stats.totalPlayers} players · ${stats.upserts} match upserts · ${stats.removed} cleanups · ${warnings.length} warnings`,
+    message: `Synced ${stats.processed}/${stats.totalPlayers} players · ${stats.upserts} match upserts · ${stats.removed} cleanups · ${warnings.length} warnings${stats.partial ? ' · partial' : ''}`,
     stats,
     warnings,
   };
@@ -1129,8 +1302,15 @@ exports.handler = async (event) => {
     }
   }
 
+  // Optional targeting, from the query string or a JSON body: ?only=<name>
+  // syncs just that player, ?first=<name> puts him at the head of the queue.
+  let body = {};
+  try { body = event.body ? JSON.parse(event.body) : {}; } catch { body = {}; }
+  const q = event.queryStringParameters || {};
+  const opts = { only: q.only || body.only || '', first: q.first || body.first || '' };
+
   try {
-    const result = await runSync();
+    const result = await runSync(opts);
     console.log('Sync complete via HTTP:', JSON.stringify(result.stats));
     return {
       statusCode: 200,
