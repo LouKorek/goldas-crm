@@ -13,6 +13,6 @@ exports.handler = async () => {
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
-    body: JSON.stringify({ ...d, at: ts(d.at), lastPaidAt: ts(d.lastPaidAt) }, null, 2),
+    body: JSON.stringify({ ...d, at: ts(d.at), lastChargedAt: ts(d.lastChargedAt) }, null, 2),
   };
 };
