@@ -378,6 +378,11 @@ const SYNC_REASONS = {
   'not-reached-time':           { label: 'Not reached this run',     fix: 'The sync ran out of time before him; he is near the front of the queue next time.' },
   'not-reached-credits':        { label: 'Not reached this run',     fix: "This run's ScraperAPI allowance was used up; he is near the front of the queue next time." },
   'scraper-quota-exhausted':    { label: 'ScraperAPI monthly quota spent', fix: 'Israeli fixtures cannot be fetched until it resets — the date is on the counter above.' },
+  'ifa-browser-stale':          { label: 'Computer sync has not run', fix: 'Israeli fixtures come from the daily sync on Lou\'s computer (Chrome). Check that the computer was on and the Claude in Chrome extension is connected.' },
+  'ifa-blocked-datacenter':     { label: 'Not synced — IFA blocks the server', fix: 'Waiting for the next computer sync.' },
+  'ifa-kept-existing':          { label: 'Came back empty — kept his matches', fix: 'The federation page showed no fixtures, so the ones on file were left untouched.' },
+  'ifa-old-season':             { label: 'Only last season\'s fixtures', fix: 'The federation has not published this season for his squad yet; nothing was changed.' },
+  'ifa-not-scraped':            { label: 'Not read by the computer sync', fix: 'He was added after the sync started; the next run picks him up.' },
   'error':                      { label: 'Sync error',               fix: '' },
 };
 

@@ -9,10 +9,13 @@
 // over HTTP with a single-use nonce).
 //
 // Sources, honestly stated:
-//   IFA        the only one that actually produces fixtures today. Reached
-//              through ScraperAPI because football.org.il blocks datacenter
-//              IPs at the edge — which makes the monthly credit budget a real
-//              constraint, see ifaFetchHtml.
+//   IFA        the only one that actually produces fixtures today. football
+//              .org.il answers datacenter IPs (Netlify, GitHub) with a
+//              Cloudflare 403, so Israeli fixtures are read by the browser
+//              sync on Lou's computer (public/tools/ifa-browser-sync.js →
+//              ifa-import). This function only tries IFA directly when that
+//              sync has gone quiet, and reports the block instead of
+//              pretending. ScraperAPI is no longer used here.
 //   SofaScore  wired and working, but covers none of the leagues the agency's
 //              players abroad are in (NCAA, NAIA, MLS Next, DR Congo, Benin).
 //   365        a stub. Both of its client functions return an empty array.
@@ -23,6 +26,10 @@
 const admin   = require('firebase-admin');
 const cheerio = require('cheerio');
 const IFA_TEAM_PINS = require('./data/ifa-team-pins.js');
+const {
+  deriveSeason, normalizeIfaTime, ifaLooksReal, ifaTokens, ifaContainment,
+  ifaScoreTeam, ifaParseCaption, ifaRankClubs, ifaPickTeam, ifaFixtureFromCells,
+} = require('../../public/tools/ifa-text.js');
 
 const OWNER_EMAIL = 'lou.korek@gmail.com';
 const TZ          = 'Asia/Jerusalem';
@@ -54,14 +61,6 @@ function toLocalDateTime(utcSeconds) {
   const parts = fmt.formatToParts(new Date(utcSeconds * 1000));
   const get = (t) => parts.find((p) => p.type === t).value;
   return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
-}
-function deriveSeason(dateStr) {
-  // Football season runs Aug → Jul. "2025-26" means Aug 2025 → Jul 2026.
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  const y = d.getFullYear();
-  const startYear = d.getMonth() >= 7 ? y : y - 1;
-  return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
 }
 
 // ───────────────────── Routing ─────────────────────
@@ -198,17 +197,6 @@ async function sofascoreFetchFixtures(teamId, fromDateMs) {
 //   "11:00 AM"   → "11:00"
 //   "12:00 AM"   → "00:00"   (midnight edge case)
 //   "12:30 PM"   → "12:30"   (noon edge case)
-function normalizeIfaTime(s) {
-  if (!s) return '';
-  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)?\s*$/i.exec(s.trim());
-  if (!m) return s;
-  let h = parseInt(m[1], 10);
-  const mn = m[2];
-  const ampm = (m[3] || '').toUpperCase();
-  if (ampm === 'PM' && h < 12) h += 12;
-  if (ampm === 'AM' && h === 12) h = 0;
-  return `${String(h).padStart(2, '0')}:${mn}`;
-}
 
 const IFA_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
@@ -217,153 +205,39 @@ const IFA_HEADERS = {
 };
 
 // Cloudflare's interstitial is short and carries none of the page's markup.
-function ifaLooksReal(html) {
-  return !!html && html.length > 20000 && !/Just a moment|cf-browser-verification|Attention Required/i.test(html);
-}
 
-// How football.org.il is reached. A direct request from Netlify is answered
-// by Cloudflare with 403 "Attention Required" every time (measured with
-// ifa-probe, 9 Oct 2026), so only ScraperAPI is tried:
-//   plain   render=false, 1 credit
-//   render  render=true, 10 credits
-// The one that works is pinned for the run and remembered in
-// app_meta/ifaStrategy for the next one, so discovery is paid for once.
-// A pinned strategy that fails escalates to the stronger one; it never
-// drops back to a cheaper one mid-run.
-const IFA_STRATEGIES = ['plain', 'render'];
-// ScraperAPI's list price. football.org.il is billed higher (about 20 a
-// render page on 9 Oct 2026), so the first billed page of each strategy in a
-// run is measured against the account, and the observed price is charged from
-// then on and remembered in app_meta/ifaStrategy.
-const IFA_COST_LIST  = { plain: 1, render: 10 };
-let   IFA_COST       = { ...IFA_COST_LIST };
-let   _ifaCreditsSeen = null;   // account balance at the last measurement
-const _ifaCostMeasured = new Set();
-// ScraperAPI retries on its side for about a minute before it gives up, and
-// doesn't bill what it gave up on. Waiting less aborts requests that would
-// have worked.
-const IFA_TIMEOUT_S  = { plain: 90, render: 150 };
-const IFA_STRATEGY_TTL_DAYS = 14;
-
-let _ifaStrategy = null;
-// ScraperAPI answers 403 to every request once the monthly credits are spent.
-// Read as a page error that looks identical to "this team has no fixtures",
-// which is how an exhausted quota turned into nineteen misleading warnings.
-let _ifaQuotaOut = false;
-// Credits this run may spend, and what it has spent. ScraperAPI bills a
-// request it answered (200 or 404) and nothing else.
-let _ifaBudget = { cap: 0, spent: 0, hit: false };
-// The first few attempts, kept for the sync report: when IFA fails, this is
-// the only place that says how.
+// football.org.il from a datacenter IP: Cloudflare answers 403 "Attention
+// Required" (measured from Netlify and GitHub, 9 Oct 2026). Tried once per run,
+// and only when the browser sync has gone quiet; the first block stops every
+// other IFA lookup in the run and is reported as such.
+const IFA_TIMEOUT_MS = 30000;
+let _ifaBlocked = false;
 let _ifaAttempts = [];
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function redactKey(text) {
-  const key = (process.env.SCRAPER_API_KEY || '').trim();
-  return key ? String(text).split(key).join('<key>') : String(text);
-}
-
-async function scraperCreditsLeft() {
-  const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  if (!apiKey) return null;
-  try {
-    const r = await fetch(`https://api.scraperapi.com/account?api_key=${apiKey}`, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (j.requestLimit == null) return null;
-    return Math.max(0, Number(j.requestLimit) - Number(j.requestCount || 0));
-  } catch { return null; }
-}
-
-// The first billed page of each strategy in a run: compare the account
-// before and after, and charge the difference when it beats the list price.
-async function ifaMeasureCost(strategy) {
-  if (_ifaCostMeasured.has(strategy) || _ifaCreditsSeen == null) return;
-  _ifaCostMeasured.add(strategy);
-  const now = await scraperCreditsLeft();
-  if (now == null) return;
-  const observed = _ifaCreditsSeen - now;
-  _ifaCreditsSeen = now;
-  if (observed > IFA_COST[strategy]) {
-    console.log(`[sync] ${strategy} costs ${observed} credits a page here, not ${IFA_COST[strategy]}`);
-    _ifaBudget.spent += observed - IFA_COST[strategy];
-    IFA_COST[strategy] = observed;
-  }
-}
-
-function ifaCanAfford(strategy) {
-  return _ifaBudget.spent + IFA_COST[strategy] <= _ifaBudget.cap;
-}
 
 function ifaNote(entry) {
   if (_ifaAttempts.length < 8) _ifaAttempts.push(entry);
 }
 
-async function ifaAttempt(strategy, targetUrl) {
-  const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  if (!apiKey) return { ok: false, error: 'no SCRAPER_API_KEY' };
-  if (!ifaCanAfford(strategy)) { _ifaBudget.hit = true; return { ok: false, budget: true }; }
-
-  const url = `https://api.scraperapi.com/?${new URLSearchParams({
-    api_key: apiKey,
-    url: targetUrl,
-    render: strategy === 'render' ? 'true' : 'false',
-    country_code: 'il',
-    device_type: 'desktop',
-    ...(strategy === 'render' ? { wait: '6' } : {}),
-  }).toString()}`;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const t0 = Date.now();
-    let res;
-    try {
-      res = await fetch(url, { headers: IFA_HEADERS, signal: AbortSignal.timeout(IFA_TIMEOUT_S[strategy] * 1000) });
-    } catch (e) {
-      const error = redactKey(`${e?.name || 'Error'}: ${e?.message || e}${e?.cause?.code ? ` (${e.cause.code})` : ''}`).slice(0, 200);
-      ifaNote({ strategy, ms: Date.now() - t0, error });
-      console.error(`IFA fetch error (${strategy}):`, error);
-      return { ok: false, error };
-    }
-    if (res.status === 200 || res.status === 404) {
-      _ifaBudget.spent += IFA_COST[strategy];
-      await ifaMeasureCost(strategy);
-    }
-    if (res.status === 429) { await sleep(3000 * (attempt + 1)); continue; }
-    if (res.status === 403) {
-      _ifaQuotaOut = true;
-      ifaNote({ strategy, status: 403, ms: Date.now() - t0, note: 'quota' });
-      return { ok: false, status: 403, quota: true };
-    }
-    let body = '';
-    try { body = await res.text(); } catch (e) { body = ''; }
-    const real = res.ok && ifaLooksReal(body);
-    ifaNote({
-      strategy, status: res.status, ms: Date.now() - t0, len: body.length, real,
-      ...(real ? {} : { bodyStart: redactKey(body.slice(0, 300)) }),
-    });
-    if (!res.ok) return { ok: false, status: res.status };
-    if (!real) return { ok: false, status: res.status, blocked: true };
-    return { ok: true, status: res.status, html: body };
-  }
-  return { ok: false, status: 429 };
-}
-
 async function ifaFetchHtml(targetUrl) {
-  if (_ifaQuotaOut) return { ok: false, status: 403, html: '', via: 'none', quota: true };
-  const from = _ifaStrategy ? IFA_STRATEGIES.indexOf(_ifaStrategy) : 0;
-  const order = IFA_STRATEGIES.slice(Math.max(0, from));
-  let last = { ok: false, status: 0 };
-  for (const strategy of order) {
-    const r = await ifaAttempt(strategy, targetUrl);
-    if (r.ok) {
-      if (_ifaStrategy !== strategy) { _ifaStrategy = strategy; console.log(`[sync] IFA via ${strategy}`); }
-      return { ok: true, status: r.status, html: r.html, via: strategy };
-    }
-    last = r;
-    if (r.quota || r.budget) break;
+  if (_ifaBlocked) return { ok: false, status: 403, html: '', via: 'direct', blocked: true };
+  const t0 = Date.now();
+  let res, body = '';
+  try {
+    res = await fetch(targetUrl, { headers: IFA_HEADERS, signal: AbortSignal.timeout(IFA_TIMEOUT_MS) });
+    body = await res.text();
+  } catch (e) {
+    const error = `${e?.name || 'Error'}: ${e?.message || e}`.slice(0, 200);
+    ifaNote({ url: targetUrl, ms: Date.now() - t0, error });
+    return { ok: false, status: 0, html: '', via: 'direct' };
   }
-  return { ok: false, status: last.status || 0, html: '', via: order.join('>'), budget: !!last.budget, quota: !!last.quota };
+  const real = res.ok && ifaLooksReal(body);
+  ifaNote({ url: targetUrl, status: res.status, ms: Date.now() - t0, len: body.length, real });
+  if (!real && /Just a moment|cf-browser-verification|Attention Required/i.test(body)) {
+    _ifaBlocked = true;
+    return { ok: false, status: res.status, html: '', via: 'direct', blocked: true };
+  }
+  return real ? { ok: true, status: res.status, html: body, via: 'direct' }
+              : { ok: false, status: res.status, html: '', via: 'direct' };
 }
 
 // ───────────────────── IFA entity resolution ─────────────────────
@@ -393,7 +267,7 @@ async function ifaFetchHtml(targetUrl) {
 // youth player belongs to does, and that changes in August. So the chain
 // runs again only when the cache is from an earlier season, or the player's
 // club has changed. A lookup that found no club or no matching squad is
-// cached too, for a week, so one hard case doesn't cost credits every night.
+// cached too, for a week, so one hard case is not retried every night.
 
 const IFA_FAIL_TTL_DAYS = 7;
 const IFA_CACHEABLE_FAILURES = new Set(['ifa-club-not-found', 'ifa-team-not-matched']);
@@ -410,71 +284,18 @@ function ifaStripSeason(u) {
 
 // "נער.א" is how the player page abbreviates "נערים א"; the club page spells
 // it out. Expand before tokenising so the two can be compared.
-function ifaExpandAbbrev(s) {
-  return String(s || '')
-    .replace(/נערו['׳"]?\s*\.\s*/g, 'נערות ')
-    .replace(/נער['׳"]?\s*\.\s*/g,  'נערים ')
-    .replace(/ילדו['׳"]?\s*\.\s*/g, 'ילדות ')
-    .replace(/ילד['׳"]?\s*\.\s*/g,  'ילדים ')
-    .replace(/טרו['׳"]?\s*\.\s*/g,  'טרום ');
-}
 
-const IFA_STOPWORDS = new Set(['ליגה', 'ליגת', 'קבוצה', 'קבוצת', 'גיל', 'של']);
 
-function ifaTokens(s, { dropShort = true } = {}) {
-  return ifaExpandAbbrev(s)
-    .replace(/["'״׳()]/g, ' ')
-    .replace(/[.,\-–—]/g, ' ')
-    .split(/\s+/)
-    .map(t => t.trim())
-    .filter(t => t && !IFA_STOPWORDS.has(t) && (!dropShort || t.length > 1 || /^[א-ת]$/.test(t)));
-}
 
 // Club names are written differently in the two places we read them. The
 // player page shows the squad name — 'מכבי פ"ת עסיסי דוד', complete with a
 // city abbreviation and a sponsor tag — while the club register spells it
 // 'מכבי פתח-תקוה'. Expand the abbreviations and settle the spelling before
 // comparing, or the two never meet.
-const IFA_CITY_ABBREV = [
-  [/ראשל["'׳]?[\s-]*צ/g, 'ראשון לציון'],
-  [/רמה["'׳]?[\s-]*ש/g,  'רמת השרון'],
-  [/כפ["'׳]?[\s-]*ס/g,   'כפר סבא'],
-  [/פ["'׳]?[\s-]*ת(?![א-ת])/g, 'פתח תקוה'],
-  [/ת["'׳]?[\s-]*א(?![א-ת])/g, 'תל אביב'],
-  [/ר["'׳]?[\s-]*ג(?![א-ת])/g, 'רמת גן'],
-  [/ב["'׳]?[\s-]*ש(?![א-ת])/g, 'באר שבע'],
-  [/ק["'׳]?[\s-]*ש(?![א-ת])/g, 'קרית שמונה'],
-  [/נס["'׳]?[\s-]*צ(?![א-ת])/g, 'נס ציונה'],
-  [/י["'׳-]\s*ם(?![א-ת])/g,    'ירושלים'],
-  [/(?<![א-ת])הפ["'׳]/g,  'הפועל '],
-  [/(?<![א-ת])מ["'׳]?\.?\s*כ\.?(?=\s)/g, ' '],   // מ.כ. = מועדון כדורגל
-  [/(?<![א-ת])מ["'׳]?\.?\s*ס\.?(?=\s)/g, ' '],   // מ.ס. = מועדון ספורט
-];
-function ifaNormalizeName(s) {
-  let out = ` ${String(s || '')} `;
-  for (const [re, full] of IFA_CITY_ABBREV) out = out.replace(re, full);
-  return out
-    .replace(/וו/g, 'ו')          // תקווה → תקוה
-    .replace(/[־–—-]/g, ' ')
-    .replace(/["'״׳()]/g, ' ');
-}
 
-const IFA_CLUB_NOISE = new Set(['מועדון', 'כדורגל', 'מכ', 'מס', 'אס', 'קפ', 'עמותת', 'ספורט', 'עירוני']);
-function ifaClubTokens(s) {
-  return ifaTokens(ifaNormalizeName(s)).filter(t => t.length > 1 && !IFA_CLUB_NOISE.has(t));
-}
 
 // Scored against the SHORTER name, because the extra words are almost always
 // a sponsor tag on the squad side rather than a difference of club.
-function ifaContainment(wanted, candidate) {
-  const w = ifaClubTokens(wanted), c = ifaClubTokens(candidate);
-  if (!w.length || !c.length) return 0;
-  const cs = new Set(c);
-  const shared = w.filter(t => cs.has(t)).length;
-  // One word in common is a coincidence when both names have several.
-  if (shared < 2 && Math.min(w.length, c.length) > 1) return 0;
-  return shared / Math.min(w.length, c.length);
-}
 
 // Step 1 — the player page. Returns the current season and the team caption.
 async function ifaReadPlayer(origin, prefix, playerId) {
@@ -482,18 +303,14 @@ async function ifaReadPlayer(origin, prefix, playerId) {
   const { ok, html } = await ifaFetchHtml(url);
   if (!ok || !html) return null;
   const $ = cheerio.load(html);
-  const caption = $('h2.new-player-data_title').first().text().replace(/\s+/g, ' ').trim();
-  const m = /בקבוצה:\s*(.+)$/.exec(caption);
-  if (!m) return null;
-  const full = m[1].trim();
-  // "מכבי ע. בת ים "צו פיוס" (נער.א שפלה)" → club + parenthesised label.
-  const lm = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(full);
+  const cap = ifaParseCaption($('h2.new-player-data_title').first().text());
+  if (!cap) return null;
   // The season list is ordered newest-first and carries no `selected`
   // attribute, so the first option is the season the page is showing.
   const firstOpt = $('select[id*="ddlSeason"] option').first();
   return {
-    clubName:    (lm ? lm[1] : full).trim(),
-    teamLabel:   (lm ? lm[2] : '').trim(),
+    clubName:    cap.clubName,
+    teamLabel:   cap.teamLabel,
     seasonId:    firstOpt.attr('value') || '',
     seasonLabel: firstOpt.text().trim(),
   };
@@ -569,16 +386,6 @@ async function ifaClubTeams(origin, prefix, clubId) {
 // The player page says "(נער.א שפלה)"; the club page says age group "נערים א"
 // and league "ליגת נערים א' שפלה". Score the overlap, weighting an exact
 // age-group match heavily so a sibling squad in the same region can't win.
-function ifaScoreTeam(teamLabel, clubName, cand) {
-  const want = new Set(ifaTokens(teamLabel));
-  const have = new Set([...ifaTokens(cand.ageGroup), ...ifaTokens(cand.league)]);
-  let score = 0;
-  for (const t of want) if (have.has(t)) score++;
-  const age = ifaTokens(cand.ageGroup);
-  if (age.length && age.every(t => want.has(t))) score += 3;
-  if (ifaContainment(clubName, cand.teamName) >= 0.5) score += 2;
-  return score;
-}
 
 // Full chain. Returns { teamId, … } or a { error } explaining where it broke,
 // so the reason lands in the sync-warnings list instead of vanishing.
@@ -589,15 +396,7 @@ async function ifaResolveFromPlayerUrl(origin, prefix, playerId, gender) {
   const index = await ifaClubIndex(origin, prefix);
   if (!index.length) return { error: 'ifa-club-index-unreadable' };
 
-  const wantWomen = gender === 'Women';
-  const scored = index
-    .filter(c => (wantWomen ? c.sector === 'נשים' : c.sector !== 'נשים') || !c.sector)
-    .map(c => ({ ...c, s: ifaContainment(info.clubName, c.name) }))
-    // Deliberately loose. A team caption often carries a sponsor nickname the
-    // club register doesn't ("מכבי ע. בת ים \"צו פיוס\""), so a weak name match
-    // is worth following; the age-group gate below is what actually decides.
-    .filter(c => c.s >= 0.4)
-    .sort((a, b) => b.s - a.s);
+  const scored = ifaRankClubs(index, info.clubName, gender);
   if (!scored.length) return { error: 'ifa-club-not-found', clubName: info.clubName };
 
   // Try the best-matching clubs in order — a club can appear more than once
@@ -605,10 +404,8 @@ async function ifaResolveFromPlayerUrl(origin, prefix, playerId, gender) {
   for (const club of scored.slice(0, 4)) {
     const teams = await ifaClubTeams(origin, prefix, club.clubId);
     if (!teams.length) continue;
-    const best = teams
-      .map(t => ({ ...t, s: ifaScoreTeam(info.teamLabel, info.clubName, t) }))
-      .sort((a, b) => b.s - a.s)[0];
-    if (best && best.s >= 3) {
+    const best = ifaPickTeam(teams, info.teamLabel, info.clubName);
+    if (best) {
       return {
         teamId: best.teamId, clubId: club.clubId,
         teamName: best.teamName, ageGroup: best.ageGroup, league: best.league,
@@ -667,7 +464,7 @@ async function ifaTeamGamesUrl(db, player) {
 
   const res = await ifaResolveFromPlayerUrl(origin, prefix, playerId, player.gender);
   if (res.error) {
-    if (IFA_CACHEABLE_FAILURES.has(res.error) && !_ifaBudget.hit && !_ifaQuotaOut) {
+    if (IFA_CACHEABLE_FAILURES.has(res.error) && !_ifaBlocked) {
       await db.collection('players').doc(player.id).set({
         autoFetch: { ifaFail: {
           playerId, forClub: club, error: res.error,
@@ -779,11 +576,6 @@ async function ifaFetchFixtures(rawUrl) {
   //   </a>
   $('a.table_row.link_url').each((_, a) => {
     const $a = $(a);
-    const href = $a.attr('href') || '';
-    let sourceMatchId = '';
-    const gm = /game_id=(\d+)/.exec(href);
-    if (gm) sourceMatchId = gm[1];
-
     const cells = {};
     $a.find('div.table_col').each((__, col) => {
       const $col = $(col);
@@ -792,55 +584,8 @@ async function ifaFetchFixtures(rawUrl) {
       const value = $col.text().slice(labelText.length).replace(/\s+/g, ' ').trim();
       if (label) cells[label] = value;
     });
-
-    // Cell labels differ by language: Hebrew uses תאריך/משחק/אצטדיון/שעה,
-    // English uses Date/Game/Stadium/Time (note: "Game" — NOT "Match").
-    const cell = (...keys) => {
-      for (const k of keys) if (cells[k]) return cells[k];
-      return '';
-    };
-    const dateStr  = cell('תאריך', 'Date');
-    const matchStr = cell('משחק', 'Game', 'Match');
-    const stadium  = cell('אצטדיון', 'Stadium');
-    const timeStr  = cell('שעה', 'Time');
-
-    // Date format ALSO differs:
-    //   Hebrew page:   16/08/2025  → DD/MM/YYYY
-    //   English page:  5/23/2026   → M/D/YYYY  (US order)
-    // We accept 1 or 2 digits for each part, and pick the order based on
-    // the page language detected from the URL.
-    const dm = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateStr);
-    if (!dm) return;
-    const isEnglishPage = parsed.pathname.startsWith('/en/');
-    const day   = isEnglishPage ? dm[2] : dm[1];
-    const month = isEnglishPage ? dm[1] : dm[2];
-    const year  = dm[3];
-    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-
-    const sep = matchStr.lastIndexOf(' - ');
-    if (sep < 1) return;
-    const homeTeam = matchStr.slice(0, sep).trim();
-    const awayTeam = matchStr.slice(sep + 3).trim();
-    if (!homeTeam || !awayTeam) return;
-    // IFA marks a "bye" round (no opponent that week) as a match against
-    // "חופשית" in Hebrew or "Bye" / "Free" in English — skip either form.
-    const isPlaceholder = (t) => t === 'חופשית' || /^(bye|free)$/i.test(t);
-    if (isPlaceholder(homeTeam) || isPlaceholder(awayTeam)) return;
-    if (!sourceMatchId) sourceMatchId = `${date}|${homeTeam}|${awayTeam}`;
-
-    out.push({
-      source: 'ifa',
-      sourceMatchId,
-      sourceTeamId: rawUrl,
-      date,
-      // Hebrew page returns "17:30", English page returns "5:00 PM" — both
-      // get normalised to 24h HH:MM so the rest of the app sees one format.
-      time: normalizeIfaTime(timeStr),
-      homeTeam,
-      awayTeam,
-      stadiumName: stadium,
-      season: deriveSeason(date),
-    });
+    const fx = ifaFixtureFromCells(cells, $a.attr('href') || '', parsed.pathname.startsWith('/en/'));
+    if (fx) out.push({ ...fx, sourceTeamId: rawUrl });
   });
 
   // Older table-based fallback (in case some pages still render as <table>).
@@ -1051,8 +796,9 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
 // its report, saying which players it did not get to. Those go first next
 // time, so a partial run still moves the whole list forward night by night.
 const RUN_BUDGET_MS      = 12 * 60 * 1000;
-const RUN_CREDIT_CAP     = 60;   // most one run may spend on IFA
-const RUN_CREDIT_RESERVE = 0;    // TM Watch already stops at 200 left; the rest is the sync's
+// The browser sync owns Israeli fixtures. While its last good run is this
+// recent, this function leaves IFA players alone.
+const BROWSER_FRESH_MS   = 36 * 60 * 60 * 1000;
 const RUN_STALE_MS       = 16 * 60 * 1000;   // a "running" older than this was killed
 
 // "Barzilai|ברזילי" matches either spelling; nothing else is a pattern.
@@ -1150,7 +896,7 @@ async function runSync(opts = {}) {
   const t0 = Date.now();
 
   // Status sentinel: the UI and Lou can see the run started. A second run
-  // while one is genuinely alive would spend the same credits twice.
+  // while one is genuinely alive would write the same matches twice.
   const statusRef = db.collection('app_meta').doc('syncStatus');
   const prevStatus = (await statusRef.get()).data() || {};
   const prevStart = prevStatus.startedAt?.toDate?.()?.getTime?.() || 0;
@@ -1167,31 +913,16 @@ async function runSync(opts = {}) {
   console.log('[sync] STARTED');
 
   _ifaClubIndex = null;   // the in-run promise; the index itself lives in Firestore
-  _ifaStrategy  = null;
-  _ifaQuotaOut  = false;
+  _ifaBlocked   = false;
   _ifaAttempts  = [];
-  _ifaCostMeasured.clear();
-  IFA_COST = { ...IFA_COST_LIST };
 
-  const credits = await scraperCreditsLeft();
-  _ifaCreditsSeen = credits;
-  const cap = credits == null ? RUN_CREDIT_CAP : Math.max(0, Math.min(RUN_CREDIT_CAP, credits - RUN_CREDIT_RESERVE));
-  _ifaBudget = { cap, spent: 0, hit: false };
-  console.log(`[sync] ScraperAPI credits left: ${credits ?? 'unknown'}, this run may spend ${cap}`);
-
-  const stratRef = db.collection('app_meta').doc('ifaStrategy');
-  try {
-    const remembered = (await stratRef.get()).data();
-    const age = remembered?.at ? Date.now() - remembered.at.toDate().getTime() : Infinity;
-    if (IFA_STRATEGIES.includes(remembered?.strategy) && age < IFA_STRATEGY_TTL_DAYS * 86400000) {
-      _ifaStrategy = remembered.strategy;
-      console.log(`[sync] IFA strategy remembered: ${_ifaStrategy}`);
-    }
-    for (const k of IFA_STRATEGIES) {
-      const c = Number(remembered?.costs?.[k]);
-      if (c > IFA_COST[k]) IFA_COST[k] = c;
-    }
-  } catch (e) { console.error('ifaStrategy read failed:', e.message); }
+  // When did the browser sync last publish? Fresh → it owns IFA players.
+  let browser = null;
+  try { browser = (await db.collection('app_meta').doc('ifaBrowserSync').get()).data() || null; }
+  catch (e) { console.error('ifaBrowserSync read failed:', e.message); }
+  const browserAt = browser?.lastSuccessAt?.toDate?.()?.getTime?.() || 0;
+  const browserFresh = Date.now() - browserAt < BROWSER_FRESH_MS;
+  console.log(`[sync] browser sync last published ${browserAt ? new Date(browserAt).toISOString() : 'never'}${browserFresh ? ' — it owns IFA' : ' — stale, trying IFA directly'}`);
 
   // Retain window: from start of last season (~Aug last year) onwards.
   const now = new Date();
@@ -1229,17 +960,13 @@ async function runSync(opts = {}) {
 
     for (const p of players) {
       if (Date.now() - t0 > RUN_BUDGET_MS) { notReached.push({ p, reason: 'not-reached-time' }); continue; }
-      if (usesIfa(p) && _ifaQuotaOut) { notReached.push({ p, reason: 'scraper-quota-exhausted' }); continue; }
-      if (usesIfa(p) && (_ifaBudget.hit || !ifaCanAfford(_ifaStrategy || 'plain'))) {
-        notReached.push({ p, reason: 'not-reached-credits' }); continue;
-      }
+      if (usesIfa(p) && browserFresh) { stats.byBrowser = (stats.byBrowser || 0) + 1; continue; }
+      if (usesIfa(p) && _ifaBlocked) { notReached.push({ p, reason: 'ifa-blocked-datacenter' }); continue; }
 
-      const hitBefore = _ifaBudget.hit, quotaBefore = _ifaQuotaOut;
+      const blockedBefore = _ifaBlocked;
       const r = await syncOnePlayer(db, p, fromDateMs);
-      // Whatever failed for him because the money ran out mid-way is not
-      // about him; he goes back in the queue.
-      if (!r.ok && !quotaBefore && _ifaQuotaOut) { notReached.push({ p, reason: 'scraper-quota-exhausted' }); continue; }
-      if (!r.ok && !hitBefore && _ifaBudget.hit) { notReached.push({ p, reason: 'not-reached-credits' }); continue; }
+      // The block is about the server, not about him.
+      if (!r.ok && !blockedBefore && _ifaBlocked) { notReached.push({ p, reason: 'ifa-blocked-datacenter' }); continue; }
 
       if (r.warnings.length) warnings.push(...r.warnings);
       if (r.ok) {
@@ -1260,22 +987,24 @@ async function runSync(opts = {}) {
     stats.notReached = notReached.length;
     stats.durationS = Math.round((Date.now() - t0) / 1000);
     stats.ifa = {
-      strategy: _ifaStrategy, creditsAtStart: credits, creditCap: cap,
-      creditsSpent: _ifaBudget.spent, attempts: _ifaAttempts, costs: IFA_COST,
+      via: browserFresh ? 'browser' : 'direct', blocked: _ifaBlocked,
+      browserLastSuccessAt: browserAt ? new Date(browserAt).toISOString() : null,
+      attempts: _ifaAttempts,
     };
 
-    // One cause, one line. When the scraper quota is gone every IFA player
-    // fails for the same reason, and listing them individually buries it.
-    if (_ifaQuotaOut) {
+    // One cause, one line: the browser sync has gone quiet and the server
+    // cannot reach football.org.il itself.
+    if (!browserFresh) {
       warnings.unshift({
-        playerId: '_scraper', name: 'ScraperAPI', reason: 'scraper-quota-exhausted',
-        detail: 'Every football.org.il lookup is blocked until the quota resets.',
+        playerId: '_ifa', name: 'Israeli fixtures', reason: 'ifa-browser-stale',
+        detail: browserAt ? `Last computer sync: ${new Date(browserAt).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'The computer sync has never published.',
       });
     }
+    // Israeli players are reported by the browser sync; keep its warnings.
+    if (browserFresh && Array.isArray(browser?.warnings)) warnings.push(...browser.warnings);
 
-    console.log(`[sync] FINISHED ${stats.processed}/${stats.totalPlayers} processed, ${stats.upserts} upserts, ${warnings.length} warnings, ${_ifaBudget.spent} credits, ${stats.durationS}s${stats.partial ? ' (partial)' : ''}`);
+    console.log(`[sync] FINISHED ${stats.processed}/${stats.totalPlayers} processed, ${stats.upserts} upserts, ${warnings.length} warnings, ${stats.durationS}s${stats.partial ? ' (partial)' : ''}`);
     try {
-      if (_ifaStrategy) await stratRef.set({ strategy: _ifaStrategy, costs: IFA_COST, at: admin.firestore.Timestamp.now() });
       await statusRef.set({
         state: 'idle',
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1374,4 +1103,11 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: String(e?.message || e) }),
     };
   }
+};
+
+// Shared with ifa-targets and ifa-import, so the browser sync writes matches
+// exactly the way this function does.
+exports._lib = {
+  getDb, decideSources, seasonStartMs, syncMatchesForPlayer, nameMatcher,
+  IFA_TEAM_PINS, IFA_FAIL_TTL_DAYS,
 };
