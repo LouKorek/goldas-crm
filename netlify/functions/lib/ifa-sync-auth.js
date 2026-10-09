@@ -1,6 +1,8 @@
 // Shared secret for the browser sync (ifa-targets, ifa-import-background).
 // The scheduled task on Lou's computer sends it in x-sync-secret; the value
 // lives only in that task and in the CRM_SYNC_SECRET environment variable.
+// Netlify needs it set as a plain variable for "All" contexts with the
+// Functions scope; a "secret" variable for All contexts is not stored.
 const crypto = require('crypto');
 
 function checkSyncSecret(event) {
