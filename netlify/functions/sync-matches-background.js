@@ -231,7 +231,14 @@ function ifaLooksReal(html) {
 // A pinned strategy that fails escalates to the stronger one; it never
 // drops back to a cheaper one mid-run.
 const IFA_STRATEGIES = ['plain', 'render'];
-const IFA_COST       = { plain: 1, render: 10 };
+// ScraperAPI's list price. football.org.il is billed higher (about 20 a
+// render page on 9 Oct 2026), so the first billed page of each strategy in a
+// run is measured against the account, and the observed price is charged from
+// then on and remembered in app_meta/ifaStrategy.
+const IFA_COST_LIST  = { plain: 1, render: 10 };
+let   IFA_COST       = { ...IFA_COST_LIST };
+let   _ifaCreditsSeen = null;   // account balance at the last measurement
+const _ifaCostMeasured = new Set();
 // ScraperAPI retries on its side for about a minute before it gives up, and
 // doesn't bill what it gave up on. Waiting less aborts requests that would
 // have worked.
@@ -269,6 +276,22 @@ async function scraperCreditsLeft() {
   } catch { return null; }
 }
 
+// The first billed page of each strategy in a run: compare the account
+// before and after, and charge the difference when it beats the list price.
+async function ifaMeasureCost(strategy) {
+  if (_ifaCostMeasured.has(strategy) || _ifaCreditsSeen == null) return;
+  _ifaCostMeasured.add(strategy);
+  const now = await scraperCreditsLeft();
+  if (now == null) return;
+  const observed = _ifaCreditsSeen - now;
+  _ifaCreditsSeen = now;
+  if (observed > IFA_COST[strategy]) {
+    console.log(`[sync] ${strategy} costs ${observed} credits a page here, not ${IFA_COST[strategy]}`);
+    _ifaBudget.spent += observed - IFA_COST[strategy];
+    IFA_COST[strategy] = observed;
+  }
+}
+
 function ifaCanAfford(strategy) {
   return _ifaBudget.spent + IFA_COST[strategy] <= _ifaBudget.cap;
 }
@@ -302,7 +325,10 @@ async function ifaAttempt(strategy, targetUrl) {
       console.error(`IFA fetch error (${strategy}):`, error);
       return { ok: false, error };
     }
-    if (res.status === 200 || res.status === 404) _ifaBudget.spent += IFA_COST[strategy];
+    if (res.status === 200 || res.status === 404) {
+      _ifaBudget.spent += IFA_COST[strategy];
+      await ifaMeasureCost(strategy);
+    }
     if (res.status === 429) { await sleep(3000 * (attempt + 1)); continue; }
     if (res.status === 403) {
       _ifaQuotaOut = true;
@@ -1144,8 +1170,11 @@ async function runSync(opts = {}) {
   _ifaStrategy  = null;
   _ifaQuotaOut  = false;
   _ifaAttempts  = [];
+  _ifaCostMeasured.clear();
+  IFA_COST = { ...IFA_COST_LIST };
 
   const credits = await scraperCreditsLeft();
+  _ifaCreditsSeen = credits;
   const cap = credits == null ? RUN_CREDIT_CAP : Math.max(0, Math.min(RUN_CREDIT_CAP, credits - RUN_CREDIT_RESERVE));
   _ifaBudget = { cap, spent: 0, hit: false };
   console.log(`[sync] ScraperAPI credits left: ${credits ?? 'unknown'}, this run may spend ${cap}`);
@@ -1157,6 +1186,10 @@ async function runSync(opts = {}) {
     if (IFA_STRATEGIES.includes(remembered?.strategy) && age < IFA_STRATEGY_TTL_DAYS * 86400000) {
       _ifaStrategy = remembered.strategy;
       console.log(`[sync] IFA strategy remembered: ${_ifaStrategy}`);
+    }
+    for (const k of IFA_STRATEGIES) {
+      const c = Number(remembered?.costs?.[k]);
+      if (c > IFA_COST[k]) IFA_COST[k] = c;
     }
   } catch (e) { console.error('ifaStrategy read failed:', e.message); }
 
@@ -1228,7 +1261,7 @@ async function runSync(opts = {}) {
     stats.durationS = Math.round((Date.now() - t0) / 1000);
     stats.ifa = {
       strategy: _ifaStrategy, creditsAtStart: credits, creditCap: cap,
-      creditsSpent: _ifaBudget.spent, attempts: _ifaAttempts,
+      creditsSpent: _ifaBudget.spent, attempts: _ifaAttempts, costs: IFA_COST,
     };
 
     // One cause, one line. When the scraper quota is gone every IFA player
@@ -1242,7 +1275,7 @@ async function runSync(opts = {}) {
 
     console.log(`[sync] FINISHED ${stats.processed}/${stats.totalPlayers} processed, ${stats.upserts} upserts, ${warnings.length} warnings, ${_ifaBudget.spent} credits, ${stats.durationS}s${stats.partial ? ' (partial)' : ''}`);
     try {
-      if (_ifaStrategy) await stratRef.set({ strategy: _ifaStrategy, at: admin.firestore.Timestamp.now() });
+      if (_ifaStrategy) await stratRef.set({ strategy: _ifaStrategy, costs: IFA_COST, at: admin.firestore.Timestamp.now() });
       await statusRef.set({
         state: 'idle',
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
