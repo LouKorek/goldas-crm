@@ -392,7 +392,12 @@ async function run() {
   // allowance and leave the daily citizenship check with nothing.
   const remaining = await creditsLeft();
   const creditBudget  = meta.creditBudget  ?? 150;
-  const creditReserve = meta.creditReserve ?? 40;
+  // The key is shared with the matches sync, which cannot run at all without
+  // credits for football.org.il. TM Watch keeps its hands off the last
+  // MATCHES_RESERVE of every month, whatever tmWatchMeta says, so it stops on
+  // its own when the account runs low and starts again after the reset.
+  const MATCHES_RESERVE = 200;
+  const creditReserve = Math.max(meta.creditReserve ?? 40, MATCHES_RESERVE);
   const spendCap = remaining == null
     ? creditBudget
     : Math.max(0, Math.min(creditBudget, remaining - creditReserve));
