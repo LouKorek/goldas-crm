@@ -22,6 +22,7 @@
 
 const admin   = require('firebase-admin');
 const cheerio = require('cheerio');
+const IFA_TEAM_PINS = require('./data/ifa-team-pins.js');
 
 const OWNER_EMAIL = 'lou.korek@gmail.com';
 const TZ          = 'Asia/Jerusalem';
@@ -617,6 +618,20 @@ async function ifaTeamGamesUrl(db, player) {
       && resolvedMs >= seasonStartMs()) {
     return { url: build(cache.teamId), teamId: cache.teamId, cached: true };
   }
+  const pin = IFA_TEAM_PINS[playerId];
+  if (pin?.teamId && (!pin.forClub || pin.forClub === club)) {
+    await db.collection('players').doc(player.id).set({
+      autoFetch: {
+        ifa: {
+          playerId, teamId: String(pin.teamId), forClub: club,
+          teamName: pin.teamName || '', pinned: true,
+          resolvedAt: new Date().toISOString(),
+        },
+        ifaFail: admin.firestore.FieldValue.delete(),
+      },
+    }, { merge: true });
+    return { url: build(pin.teamId), teamId: String(pin.teamId), pinned: true };
+  }
   const fail = player.autoFetch?.ifaFail;
   const failedMs = fail?.at ? new Date(fail.at).getTime() : 0;
   if (fail?.error && fail.playerId === playerId && fail.forClub === club
@@ -1011,13 +1026,14 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
 // time, so a partial run still moves the whole list forward night by night.
 const RUN_BUDGET_MS      = 12 * 60 * 1000;
 const RUN_CREDIT_CAP     = 60;   // most one run may spend on IFA
-const RUN_CREDIT_RESERVE = 10;   // never spend the account below this
+const RUN_CREDIT_RESERVE = 0;    // TM Watch already stops at 200 left; the rest is the sync's
 const RUN_STALE_MS       = 16 * 60 * 1000;   // a "running" older than this was killed
 
+// "Barzilai|ברזילי" matches either spelling; nothing else is a pattern.
 function nameMatcher(fragment) {
-  const f = String(fragment || '').trim();
-  if (!f) return null;
-  return new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const parts = String(fragment || '').split('|').map((f) => f.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  return new RegExp(parts.map((f) => f.replace(/[.*+?^${}()[\]\\]/g, '\\$&')).join('|'), 'i');
 }
 
 // One player, start to finish. Returns what the run needs to count and
