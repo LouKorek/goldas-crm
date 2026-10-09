@@ -9,14 +9,18 @@ on:
 jobs:
   status:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
-      - name: sync-status
-        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai"
-      - name: football.org.il reachable from here?
+      - name: wait for a sync that finished after AFTER, then print it
+        env:
+          AFTER: '2026-10-09T16:40:00Z'
         run: |
-          curl -sS --max-time 40 -o p.html -w "%{http_code} %{size_download}\n" \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" \
-            -H "Accept-Language: he-IL,he;q=0.9" \
-            "https://www.football.org.il/players/player/?player_id=185403" || true
-          grep -o "<title>[^<]*" p.html | head -1 || true
-          grep -o 'new-player-data_title[^<]*<[^>]*>[^<]*' p.html | head -2 || true
+          U="https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai"
+          for i in $(seq 1 22); do
+            J=$(curl -sS --max-time 60 "$U" || echo '{}')
+            S=$(echo "$J" | jq -r '.status.state // "?"'); F=$(echo "$J" | jq -r '.status.finishedAt // ""')
+            echo "$(date -u +%T) state=$S finishedAt=$F startedAt=$(echo "$J" | jq -r '.status.startedAt // ""')"
+            if [ "$S" = "idle" ] && [[ "$F" > "$AFTER" ]]; then break; fi
+            sleep 60
+          done
+          echo "$J" | jq .
