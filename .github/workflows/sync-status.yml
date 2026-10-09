@@ -4,6 +4,8 @@
 name: Sync status
 on:
   workflow_dispatch:
+  push:
+    branches: ['claude/status-check']
 jobs:
   status:
     runs-on: ubuntu-latest
