@@ -9,18 +9,18 @@ on:
 jobs:
   status:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
-      - name: wait for a sync that finished after AFTER, then print it
-        env:
-          AFTER: '2026-10-09T16:31:00Z'
+      - name: sync-status
+        run: curl -sS --max-time 60 "https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai" | jq -c .
+      - name: free readers for football.org.il
         run: |
-          U="https://goldas-crm.netlify.app/.netlify/functions/sync-status?player=Barzilai"
-          for i in $(seq 1 22); do
-            J=$(curl -sS --max-time 60 "$U" || echo '{}')
-            S=$(echo "$J" | jq -r '.status.state // "?"'); F=$(echo "$J" | jq -r '.status.finishedAt // ""')
-            echo "$(date -u +%T) state=$S finishedAt=$F startedAt=$(echo "$J" | jq -r '.status.startedAt // ""')"
-            if [ "$S" = "idle" ] && [[ "$F" > "$AFTER" ]]; then break; fi
-            sleep 60
+          T="https://www.football.org.il/team-details/team-games/?team_id=1146"
+          for R in "https://r.jina.ai/$T" ; do
+            echo "== $R"
+            curl -sS --max-time 90 -o out.txt -w "%{http_code} %{size_download}\n" "$R" || true
+            head -c 2500 out.txt; echo
           done
-          echo "$J" | jq .
+          echo "== jina html"
+          curl -sS --max-time 90 -H "X-Return-Format: html" -o out.html -w "%{http_code} %{size_download}\n" "https://r.jina.ai/$T" || true
+          grep -o 'table_row link_url' out.html | wc -l
+          grep -o '<title>[^<]*' out.html | head -1
