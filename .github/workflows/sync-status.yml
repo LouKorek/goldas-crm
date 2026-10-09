@@ -16,7 +16,7 @@ jobs:
           P=https://deploy-preview-9--goldas-crm.netlify.app/.netlify/functions
           echo "preview: $(curl -s -o /dev/null -w "%{http_code}" -H "x-sync-secret: wrong" "$P/ifa-targets")"
           B=https://goldas-crm.netlify.app/.netlify/functions
-          for i in $(seq 1 2); do
+          for i in $(seq 1 20); do
             C=$(curl -s -o /dev/null -w "%{http_code}" -H "x-sync-secret: wrong" "$B/ifa-targets")
             echo "$(date -u +%T) ifa-targets with a wrong secret -> $C (403 = deployed and configured, 503 = secret missing, 404 = not deployed)"
             [ "$C" = "403" ] && break
