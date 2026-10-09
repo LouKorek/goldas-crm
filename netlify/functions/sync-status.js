@@ -1,7 +1,7 @@
 // Read-only health check for the matches sync, readable without signing in
 // so a run can be verified from anywhere (a script, a phone) without the
 // Firebase console. It shows timings, counts and reasons only: no player
-// names, no fixtures, no keys.
+// names, no fixtures, no keys. Includes the browser sync's last runs.
 //
 //   /.netlify/functions/sync-status
 //   &player=<name fragment>   also: how many upcoming auto-synced matches
@@ -22,8 +22,9 @@ const ts = (v) => v?.toDate?.()?.toISOString?.() || null;
 exports.handler = async (event) => {
   const db = getDb();
   const q = event.queryStringParameters || {};
-  const [status, warnings, strategy] = await Promise.all(
-    ['syncStatus', 'syncWarnings', 'ifaStrategy'].map((id) => db.collection('app_meta').doc(id).get()));
+  const [status, warnings, browser] = await Promise.all(
+    ['syncStatus', 'syncWarnings', 'ifaBrowserSync'].map((id) => db.collection('app_meta').doc(id).get()));
+  const b = browser.data() || {};
   const s = status.data() || {};
   const w = warnings.data() || {};
   const reasons = {};
@@ -40,13 +41,16 @@ exports.handler = async (event) => {
       partial: w.stats?.partial ?? null,
       durationS: w.stats?.durationS ?? null,
       reasons,
-      ifa: {
-        strategy: ifa.strategy ?? null, creditsAtStart: ifa.creditsAtStart ?? null,
-        creditCap: ifa.creditCap ?? null, creditsSpent: ifa.creditsSpent ?? null,
-        attempts: (ifa.attempts || []).map(({ bodyStart, ...a }) => a),
-      },
+      byBrowser: w.stats?.byBrowser ?? null,
+      ifa: { via: ifa.via ?? null, blocked: ifa.blocked ?? null, attempts: ifa.attempts || [] },
     },
-    rememberedStrategy: strategy.exists ? { strategy: strategy.data().strategy, at: ts(strategy.data().at) } : null,
+    // The daily sync on Lou's computer (public/tools/ifa-browser-sync.js).
+    browserSync: browser.exists ? {
+      lastRunAt: ts(b.lastRunAt), lastSuccessAt: ts(b.lastSuccessAt), lastDryRunAt: ts(b.lastDryRunAt),
+      stats: b.stats || null,
+      lastDryRun: b.lastDryRun?.summary || null,
+      lastRefused: b.lastRefused?.summary || null,
+    } : null,
   };
 
   if (q.player) {
