@@ -14,10 +14,10 @@ jobs:
       - name: wait for ifa-targets to be deployed, check the secret is configured
         run: |
           B=https://goldas-crm.netlify.app/.netlify/functions
-          for i in $(seq 1 20); do
+          for i in $(seq 1 24); do
             C=$(curl -s -o /dev/null -w "%{http_code}" -H "x-sync-secret: wrong" "$B/ifa-targets")
             echo "$(date -u +%T) ifa-targets with a wrong secret -> $C (403 = deployed and configured, 503 = secret missing, 404 = not deployed)"
-            [ "$C" = "403" ] || [ "$C" = "503" ] && break
+            [ "$C" = "403" ] && break
             sleep 30
           done
           curl -s -o /dev/null -w "tools/ifa-browser-sync.js -> %{http_code} %{content_type}\n" "https://goldas-crm.netlify.app/tools/ifa-browser-sync.js"
