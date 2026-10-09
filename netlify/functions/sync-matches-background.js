@@ -247,6 +247,19 @@ let _ifaStrategy = null;
 // which is how an exhausted quota turned into nineteen misleading warnings.
 let _ifaQuotaOut = false;
 
+const SYNC_CREDIT_FLOOR = 100;
+async function scraperCreditsLeft() {
+  const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
+  if (!apiKey) return null;
+  try {
+    const r = await fetch(`https://api.scraperapi.com/account?api_key=${apiKey}`, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (j.requestLimit == null) return null;
+    return Math.max(0, Number(j.requestLimit) - Number(j.requestCount || 0));
+  } catch { return null; }
+}
+
 async function ifaAttempt(strategy, targetUrl) {
   const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
   if (strategy !== 'direct' && !apiKey) return null;
@@ -930,6 +943,14 @@ async function runSync() {
   _ifaClubIndex = null;   // shared within a run, never across runs
   _ifaStrategy  = null;   // re-discover the cheapest working fetch each run
   _ifaQuotaOut  = false;
+
+  // Until the run is time- and credit-budgeted, a nightly run with the
+  // account nearly empty spends the last credits and still never finishes.
+  // Below the floor, IFA is only tried the free way.
+  const credits = await scraperCreditsLeft();
+  const lowCredits = credits != null && credits < SYNC_CREDIT_FLOOR;
+  if (lowCredits) _ifaQuotaOut = true;
+  console.log(`[sync] ScraperAPI credits left: ${credits ?? 'unknown'}${lowCredits ? ' (below floor, free fetches only)' : ''}`);
 
   const playersSnap = await db.collection('players').get();
   const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
