@@ -34,7 +34,9 @@ exports.handler = async (event) => {
   if (!msgs.length) return { statusCode: 200, body: 'ok' };   // delivery/read receipts
 
   const db = getDb();
-  const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  // Hand off to the background function of this same deploy (DEPLOY_URL), so a
+  // webhook pointed at a specific deploy never reaches an older one.
+  const base = process.env.DEPLOY_URL || process.env.URL || 'https://goldas-crm.netlify.app';
   for (const m of msgs) {
     if (!wa.isAllowed(m.from)) { console.warn('[wa] ignored sender not on allow list'); continue; }
     // Meta can deliver the same message more than once; create() fails on a repeat.
