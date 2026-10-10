@@ -141,6 +141,20 @@ export const loadFileData = async (fileId) => {
 
 // Resolve a file reference (new chunked shape OR legacy { url } shape) to a
 // usable data URL for viewing/downloading.
+// Rename a stored file in place: the reference kept on the record and the
+// files/{fileId} metadata. The bytes are untouched, so nothing is re-uploaded.
+// Returns the updated array of references.
+export const renameFile = async (path, id, field, files, index, newName) => {
+  assertCanEdit();
+  const name = String(newName || '').trim();
+  if (!name) throw new Error('Name cannot be empty.');
+  const updated = (files || []).map((f, i) => (i === index ? { ...f, name } : f));
+  await updateDoc_(path, id, { [field]: updated });
+  const fileId = files?.[index]?.fileId;
+  if (fileId) await updateDoc(doc(db, 'files', fileId), { name }).catch(() => {});
+  return updated;
+};
+
 export const resolveFileUrl = async (ref) => {
   if (!ref) return null;
   if (ref.url) return ref.url;            // legacy: base64 stored inline
