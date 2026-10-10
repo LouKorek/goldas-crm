@@ -90,17 +90,17 @@ function validate(col, data, isCreate) {
   }
 }
 
-function systemPrompt(name) {
-  return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. Lou, the agency owner, writes to you on WhatsApp and you carry out changes in the agency's CRM yourself, using the tools.
+function systemPrompt(name, sender = 'לו') {
+  return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you on WhatsApp (each in their own private chat) and you carry out changes in the agency's CRM yourself, using the tools. The person writing in this chat is ${sender}${sender === 'לו' ? ' (Lou, the agency owner)' : ', a member of Lou\'s team with full permissions'}.
 
-How you talk: always in Hebrew, in the feminine form about yourself ("הוספתי", "עדכנתי", "אני בודקת"), addressing Lou by name, friendly and to the point. WhatsApp formatting only: *bold*, short lines, no markdown headers or tables. After acting, say exactly what changed (record, fields, old → new values). Keep replies short.
+How you talk: always in Hebrew, in the feminine form about yourself ("הוספתי", "עדכנתי", "אני בודקת"), addressing ${sender} by name, friendly and to the point. WhatsApp formatting only: *bold*, short lines, no markdown headers or tables. After acting, say exactly what changed (record, fields, old → new values). Keep replies short.
 
 How you work:
 - Find records before changing them (search). Never guess an id. If several records match, list them briefly and ask which one. If nothing matches, say so and offer to create it.
 - If an instruction is missing something required, ask for it in one short question rather than inventing it. Don't ask about optional fields.
-- Deleting needs Lou's explicit yes: call delete without confirmed first, show Lou what will be deleted and ask; only after Lou answers yes in a later message call delete again with confirmed=true.
+- Deleting needs the writer's explicit yes: call delete without confirmed first, show what will be deleted and ask; only after they answer yes in a later message call delete again with confirmed=true.
 - "בטל"/"תבטל"/undo → call undo_last.
-- When Lou sends a file or photo, it is available to attach_file for this message only. If it's unclear to whom or as what (contract / passport / representation agreement), ask.
+- When they send a file or photo, it is available to attach_file for this message only. If it's unclear to whom or as what (contract / passport / representation agreement), ask.
 - Never claim you did something a tool didn't confirm. If a tool returns an error, explain it simply and say what you need.
 - You can only work on the CRM data below. You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked.
 
@@ -121,13 +121,13 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Name or words to look for; empty lists recent records' }, collection: { type: 'string', enum: Object.keys(COLLECTIONS) } }, required: ['query'], additionalProperties: false } },
   { name: 'get', description: 'Read one full record by collection and id.',
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' } }, required: ['collection', 'id'], additionalProperties: false } },
-  { name: 'create', description: 'Create a new record. Pass only the fields Lou gave (plus required ones). Returns the new id.',
+  { name: 'create', description: 'Create a new record. Pass only the fields the user gave (plus required ones). Returns the new id.',
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, data: { type: 'object' } }, required: ['collection', 'data'], additionalProperties: false } },
   { name: 'update', description: 'Change fields on an existing record (partial update; other fields stay). To clear a field set it to "". Returns before/after of the changed fields.',
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' }, data: { type: 'object' } }, required: ['collection', 'id', 'data'], additionalProperties: false } },
-  { name: 'delete', description: 'Delete a record. First call without confirmed (returns what would be deleted and arms the deletion); after Lou explicitly agrees in a later message, call again with confirmed=true.',
+  { name: 'delete', description: 'Delete a record. First call without confirmed (returns what would be deleted and arms the deletion); after the user explicitly agrees in a later message, call again with confirmed=true.',
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['collection', 'id'], additionalProperties: false } },
-  { name: 'attach_file', description: 'Attach the file or photo Lou sent with THIS message to a player, as a contract, passport or representation agreement document.',
+  { name: 'attach_file', description: 'Attach the file or photo sent with THIS message to a player, as a contract, passport or representation agreement document.',
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Display name for the document; defaults to the file name' }, mode: { type: 'string', enum: ['add', 'replace'], description: 'add (default) keeps existing documents; replace removes them from the player' } }, required: ['playerId', 'field'], additionalProperties: false } },
   { name: 'remove_file', description: 'Remove one document from a player by its display name.',
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string' } }, required: ['playerId', 'field', 'name'], additionalProperties: false } },
@@ -135,10 +135,10 @@ const TOOLS = [
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
 
-function createTools({ db, admin, phone, media, session, assistantName }) {
+function createTools({ db, admin, phone, media, session, assistantName, sender = 'לו' }) {
   const FieldValue = admin.firestore.FieldValue;
-  const who = { email: OWNER_EMAIL, name: `${assistantName} (WhatsApp)` };
-  const audit = (entry) => db.collection('wa_audit').add({ ...entry, phone, at: FieldValue.serverTimestamp(), undone: false });
+  const who = { email: OWNER_EMAIL, name: sender === 'לו' ? `${assistantName} (WhatsApp)` : `${assistantName} (WhatsApp, ${sender})` };
+  const audit = (entry) => db.collection('wa_audit').add({ ...entry, phone, sender, at: FieldValue.serverTimestamp(), undone: false });
   const colOk = (c) => { if (!COLLECTIONS[c]) throw new Error(`unknown collection ${c}`); return db.collection(c); };
   const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; return o; };
   const state = { pendingDelete: session.pendingDelete || null, changed: false };
@@ -297,9 +297,9 @@ function createTools({ db, admin, phone, media, session, assistantName }) {
 
 // One WhatsApp message in, one reply out. history is a list of prior
 // {role, text} turns (plain text only, so no thinking blocks are replayed).
-async function runAgent({ db, admin, phone, text, media, session, assistantName, client }) {
+async function runAgent({ db, admin, phone, text, media, session, assistantName, sender = 'לו', client }) {
   const anthropic = client || new Anthropic();
-  const tools = createTools({ db, admin, phone, media, session, assistantName });
+  const tools = createTools({ db, admin, phone, media, session, assistantName, sender });
   const history = (session.history || []).slice(-20);
   const messages = [];
   for (const h of history) {
@@ -307,7 +307,7 @@ async function runAgent({ db, admin, phone, text, media, session, assistantName,
     if (messages.length && messages[messages.length - 1].role === role) messages[messages.length - 1].content += `\n${h.text}`;
     else if (messages.length || role === 'user') messages.push({ role, content: h.text });
   }
-  const userText = (text || '').trim() || (media ? '(Lou sent a file without text)' : '');
+  const userText = (text || '').trim() || (media ? '(sent a file without text)' : '');
   const fileNote = media ? `\n[Attached file: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 1024)} KB) — available to attach_file in this message]` : '';
   const current = { role: 'user', content: userText + fileNote };
   if (messages.length && messages[messages.length - 1].role === 'user') messages[messages.length - 1].content += `\n${current.content}`;
@@ -321,11 +321,11 @@ async function runAgent({ db, admin, phone, text, media, session, assistantName,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'medium' },
-      system: systemPrompt(assistantName),
+      system: systemPrompt(assistantName, sender),
       tools: TOOLS,
       messages,
     });
-    if (res.stop_reason === 'refusal') { reply = 'מצטערת לו, את זה אני לא יכולה לבצע.'; break; }
+    if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
     messages.push({ role: 'assistant', content: res.content });
     const uses = res.content.filter((b) => b.type === 'tool_use');
     if (res.stop_reason !== 'tool_use' || !uses.length) {
@@ -343,7 +343,7 @@ async function runAgent({ db, admin, phone, text, media, session, assistantName,
     }
     messages.push({ role: 'user', content: results });
   }
-  if (!reply) reply = 'לו, משהו השתבש באמצע ולא סיימתי. תנסה לנסח שוב?';
+  if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
   return { reply, pendingDelete: tools.state.pendingDelete, changed: tools.state.changed, userText: current.content };
 }
 

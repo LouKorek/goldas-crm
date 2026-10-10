@@ -47,7 +47,7 @@ exports.handler = async (event) => {
     await sleep(2000);
   }
 
-  await wa.markRead(messageId);
+  await wa.markRead(messageId, msg.phoneId);
   try {
     const session = (await sessRef.get()).data() || {};
     session.turn = (session.turn || 0) + 1;
@@ -59,10 +59,10 @@ exports.handler = async (event) => {
       } catch (e) { console.error('[wa] media download failed:', e.message); }
     }
     let text = msg.text;
-    if (['audio', 'sticker', 'location', 'contacts'].includes(msg.type) && !text) text = `(Lou sent a ${msg.type} message, which you can't read; ask Lou to write it as text)`;
+    if (['audio', 'sticker', 'location', 'contacts'].includes(msg.type) && !text) text = `(sent a ${msg.type} message, which you can't read; ask them to write it as text)`;
 
-    const out = await runAgent({ db, admin, phone, text, media, session, assistantName: ASSISTANT_NAME });
-    await wa.sendText(phone, out.reply);
+    const out = await runAgent({ db, admin, phone, text, media, session, assistantName: ASSISTANT_NAME, sender: wa.senderName(phone) });
+    await wa.sendText(phone, out.reply, msg.phoneId);
 
     const history = [...(session.history || []), { role: 'user', text: out.userText, at: Date.now() }, { role: 'assistant', text: out.reply, at: Date.now() }].slice(-30);
     await sessRef.set({ history, turn: session.turn, pendingDelete: out.pendingDelete || null, lastAt: Date.now(), lockUntil: 0, lockedBy: null }, { merge: true });
@@ -71,7 +71,7 @@ exports.handler = async (event) => {
     console.error('[wa] agent failed:', e);
     await inboxRef.update({ state: 'error', error: String(e.message || e) }).catch(() => {});
     await sessRef.set({ lockUntil: 0, lockedBy: null }, { merge: true }).catch(() => {});
-    await wa.sendText(phone, 'לו, נתקלתי בתקלה ולא ביצעתי את הבקשה. תנסה שוב בעוד דקה.').catch(() => {});
+    await wa.sendText(phone, `${wa.senderName(phone)}, נתקלתי בתקלה ולא ביצעתי את הבקשה. אפשר לנסות שוב בעוד דקה.`, msg.phoneId).catch(() => {});
   }
   return { statusCode: 200, body: 'ok' };
 };
