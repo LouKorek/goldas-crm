@@ -1,0 +1,20 @@
+# Calls Golda's idempotent setup (subscribe app, register verified numbers)
+# on the deploy she runs on, and prints the statuses. No secrets involved.
+name: Golda register
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/golda-register']
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          U="https://deploy-preview-12--goldas-crm.netlify.app/.netlify/functions/whatsapp-setup?auto=1"
+          for i in $(seq 1 12); do
+            R=$(curl -sS --max-time 60 "$U")
+            if echo "$R" | jq -e '.accounts' >/dev/null 2>&1; then echo "$R" | jq .; exit 0; fi
+            echo "$(date -u +%T) not deployed yet: $(echo "$R" | head -c 120)"; sleep 20
+          done
+          exit 1
