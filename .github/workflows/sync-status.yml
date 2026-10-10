@@ -13,10 +13,6 @@ jobs:
     steps:
       - name: wait for ifa-targets to be deployed, check the secret is configured
         run: |
-          P=https://deploy-preview-10--goldas-crm.netlify.app/.netlify/functions
-          echo "golda GET: $(curl -s -o /dev/null -w "%{http_code}" "$P/whatsapp-webhook?hub.mode=subscribe&hub.verify_token=x&hub.challenge=1")"
-          echo "golda POST: $(curl -s -o /dev/null -w "%{http_code}" -X POST -d "{}" "$P/whatsapp-webhook")"
-          echo "golda bg: $(curl -s -o /dev/null -w "%{http_code}" -X POST -d "{}" "$P/whatsapp-agent-background")"
           B=https://goldas-crm.netlify.app/.netlify/functions
           for i in $(seq 1 1); do
             C=$(curl -s -o /dev/null -w "%{http_code}" -H "x-sync-secret: wrong" "$B/ifa-targets")
