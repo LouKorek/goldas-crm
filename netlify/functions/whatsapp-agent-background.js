@@ -5,7 +5,7 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const wa = require('./lib/wa-api.js');
-const { runAgent } = require('./lib/wa-agent.js');
+const { runAgent, MAIN_TOPIC, _internal: { norm } } = require('./lib/wa-agent.js');
 
 const ASSISTANT_NAME = process.env.WA_ASSISTANT_NAME || 'גולדה';
 const LOCK_MS = 5 * 60 * 1000;
@@ -23,6 +23,28 @@ function internalOk(event) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Topic commands, handled here so switching never depends on the model:
+//   "גולדה, נושא חדש: <name>. <what it's for>"  "גולדה, חזרה לנושא <name>"  "גולדה, חזרה למערכת"
+function topicCommand(text) {
+  const t = String(text || '').trim().replace(/^גולדה\s*[,:]?\s*/, '');
+  let m = /^נושא חדש\s*[:\-–]?\s*(.+)$/s.exec(t);
+  if (m) {
+    const rest = m[1].trim();
+    const name = rest.split(/[.\n!?]/)[0].replace(/[.$#[\]/]/g, '').trim().slice(0, 60);
+    return name ? { kind: 'new', name, purpose: rest } : null;
+  }
+  if (/^(חזרה|חזרי|תחזרי)\s+ל(נושא\s+)?(ה)?מערכת\s*[.!]?$/.test(t)) return { kind: 'main' };
+  m = /^(?:חזרה|חזרי|תחזרי)\s+לנושא\s+(.+?)\s*[.!]?$/s.exec(t);
+  if (m) return { kind: 'switch', name: m[1].trim() };
+  return null;
+}
+
+function findTopic(topics, name) {
+  const n = norm(name);
+  const names = Object.keys(topics || {});
+  return names.find((k) => norm(k) === n) || names.find((k) => norm(k).includes(n) || n.includes(norm(k))) || null;
+}
 
 exports.handler = async (event) => {
   if (!internalOk(event)) return { statusCode: 403, body: 'forbidden' };
@@ -47,7 +69,7 @@ exports.handler = async (event) => {
     await sleep(2000);
   }
 
-  await wa.markRead(messageId);
+  await wa.markRead(messageId, msg.phoneId);
   try {
     const session = (await sessRef.get()).data() || {};
     session.turn = (session.turn || 0) + 1;
@@ -59,19 +81,45 @@ exports.handler = async (event) => {
       } catch (e) { console.error('[wa] media download failed:', e.message); }
     }
     let text = msg.text;
-    if (['audio', 'sticker', 'location', 'contacts'].includes(msg.type) && !text) text = `(Lou sent a ${msg.type} message, which you can't read; ask Lou to write it as text)`;
+    if (['audio', 'sticker', 'location', 'contacts'].includes(msg.type) && !text) text = `(sent a ${msg.type} message, which you can't read; ask them to write it as text)`;
 
-    const out = await runAgent({ db, admin, phone, text, media, session, assistantName: ASSISTANT_NAME });
-    await wa.sendText(phone, out.reply);
+    const sender = wa.senderName(phone);
+    const topics = { ...(session.topics || {}) };
+    let current = session.topic && topics[session.topic] ? session.topic : MAIN_TOPIC;
+    const cmd = topicCommand(text);
+    let direct = null;   // a reply that needs no model call
+    if (cmd?.kind === 'main') { current = MAIN_TOPIC; direct = `חזרנו לנושא המערכת, ${sender}. במה לעזור?`; }
+    else if (cmd?.kind === 'switch') {
+      const found = findTopic(topics, cmd.name);
+      if (found) { current = found; direct = `חזרנו לנושא *${found}*. ממשיכות מאיפה שעצרנו.`; }
+      else direct = `לא מצאתי נושא בשם "${cmd.name}". הנושאים שיש: ${[MAIN_TOPIC, ...Object.keys(topics)].join(', ')}.`;
+    } else if (cmd?.kind === 'new') {
+      current = findTopic(topics, cmd.name) || cmd.name;
+      topics[current] = { purpose: cmd.purpose, history: topics[current]?.history || [], createdAt: topics[current]?.createdAt || Date.now() };
+    }
 
-    const history = [...(session.history || []), { role: 'user', text: out.userText, at: Date.now() }, { role: 'assistant', text: out.reply, at: Date.now() }].slice(-30);
-    await sessRef.set({ history, turn: session.turn, pendingDelete: out.pendingDelete || null, lastAt: Date.now(), lockUntil: 0, lockedBy: null }, { merge: true });
-    await inboxRef.update({ state: 'done', reply: out.reply, changed: out.changed, doneAt: admin.firestore.FieldValue.serverTimestamp() });
+    const topic = current === MAIN_TOPIC ? null : { name: current, ...topics[current] };
+    let reply, pendingDelete = session.pendingDelete || null, changed = false, userText = text || '';
+    if (direct) reply = direct;
+    else {
+      const out = await runAgent({ db, admin, phone, text, media, session, assistantName: ASSISTANT_NAME, sender, topic, topics: Object.keys(topics) });
+      ({ reply, pendingDelete, changed, userText } = out);
+    }
+    await wa.sendText(phone, reply, msg.phoneId);
+
+    const turn = [{ role: 'user', text: userText, at: Date.now() }, { role: 'assistant', text: reply, at: Date.now() }];
+    const patch = { topic: current, turn: session.turn, pendingDelete: pendingDelete || null, lastAt: Date.now(), lockUntil: 0, lockedBy: null };
+    if (direct) { /* switching is not part of any topic's history */ }
+    else if (topic) topics[current] = { ...topics[current], history: [...(topics[current].history || []), ...turn].slice(-30) };
+    else patch.history = [...(session.history || []), ...turn].slice(-30);
+    if (Object.keys(topics).length) patch.topics = topics;
+    await sessRef.set(patch, { merge: true });
+    await inboxRef.update({ state: 'done', reply, changed, topic: current, doneAt: admin.firestore.FieldValue.serverTimestamp() });
   } catch (e) {
     console.error('[wa] agent failed:', e);
     await inboxRef.update({ state: 'error', error: String(e.message || e) }).catch(() => {});
     await sessRef.set({ lockUntil: 0, lockedBy: null }, { merge: true }).catch(() => {});
-    await wa.sendText(phone, 'לו, נתקלתי בתקלה ולא ביצעתי את הבקשה. תנסה שוב בעוד דקה.').catch(() => {});
+    await wa.sendText(phone, `${wa.senderName(phone)}, נתקלתי בתקלה ולא ביצעתי את הבקשה. אפשר לנסות שוב בעוד דקה.`, msg.phoneId).catch(() => {});
   }
   return { statusCode: 200, body: 'ok' };
 };
