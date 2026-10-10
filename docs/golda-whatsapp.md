@@ -53,15 +53,21 @@ until set up.
 
 1. business.facebook.com → create a business portfolio (Gold A&S).
 2. developers.facebook.com → Create app → type Business → add the WhatsApp product.
-3. WhatsApp → API Setup → Add phone number → Golda's new SIM, display name
-   "Golda | Gold A&S", verify by SMS.
+3. Golda's number. Current setup (2026-10-10): Meta's free WhatsApp test
+   number (Use cases → Connect on WhatsApp → Try it out → claim a test
+   number), with Lou's own number added to the recipient list (up to 5).
+   No SIM or phone needed; Lou saves it as a contact named "גולדה".
+   `WA_PHONE_ID` = the test number's phone number id. To move to a real
+   number later: Add phone number → new SIM/eSIM, display name
+   "Golda | Gold A&S", verify by SMS, then update `WA_PHONE_ID`.
 4. Business settings → System users → add an admin system user → assign the
-   app → Generate token with `whatsapp_business_messaging` and
+   app and the WhatsApp account (full control) → Generate token with `whatsapp_business_messaging` and
    `whatsapp_business_management`, never expiring → `WA_TOKEN`.
 5. WhatsApp → Configuration → Webhook: callback
    `https://goldas-crm.netlify.app/.netlify/functions/whatsapp-webhook`,
    verify token = `WA_VERIFY_TOKEN`; subscribe to `messages`.
-6. App → Publish (live mode) so real numbers can write to Golda.
+6. App → Publish (live mode) so real numbers can write to Golda (only needed
+   with a real number; the test number talks to the recipient list).
 
 Cost: conversations Lou starts are free on Meta's side (service
 conversations); Claude API usage is billed per message.
