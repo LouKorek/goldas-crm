@@ -22,4 +22,10 @@ jobs:
           done
           curl -s -o /dev/null -w "tools/ifa-browser-sync.js -> %{http_code} %{content_type}\n" "https://goldas-crm.netlify.app/tools/ifa-browser-sync.js"
           curl -s -o /dev/null -w "tools/ifa-text.js -> %{http_code} %{content_type}\n" "https://goldas-crm.netlify.app/tools/ifa-text.js"
+          for i in $(seq 1 20); do
+            L=$(curl -sS --max-time 60 "$B/sync-status?player=Barzilai" | jq -r ".browserSync.lastRunAt")
+            echo "$(date -u +%T) browser lastRunAt=$L"
+            [ "$L" \> "2026-10-10" ] && break
+            sleep 30
+          done
           curl -sS --max-time 60 "$B/sync-status?player=Barzilai" | jq -c .
