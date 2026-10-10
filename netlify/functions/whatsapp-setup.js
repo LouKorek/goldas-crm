@@ -6,6 +6,10 @@
 //     &register=<phone_number_id>   register a newly verified number for the
 //                                   Cloud API; its two-step PIN is created here
 //                                   and kept only in Firestore (app_meta/whatsapp)
+//   ?auto=1 (no key)               for each WhatsApp account in WA_WABA_IDS: subscribe
+//                                   the app and register every verified number that
+//                                   isn't registered yet. Idempotent, returns statuses
+//                                   only, so it can be called from a public CI log.
 // Never returns the token or the PIN.
 const crypto = require('crypto');
 const admin = require('firebase-admin');
@@ -28,8 +32,39 @@ async function graph(path, method = 'GET', body) {
 
 const isId = (v) => /^\d+$/.test(v || '');
 
+const WABAS = () => (process.env.WA_WABA_IDS || '1564386882158483').split(',').map((x) => x.trim()).filter(isId);
+
+async function register(phoneId) {
+  const ref = getDb().collection('app_meta').doc('whatsapp');
+  const saved = (await ref.get()).data() || {};
+  const pin = saved.pins?.[phoneId] || String(crypto.randomInt(0, 1e6)).padStart(6, '0');
+  await ref.set({ pins: { [phoneId]: pin } }, { merge: true });
+  return graph(`${phoneId}/register`, 'POST', { messaging_product: 'whatsapp', pin });
+}
+
+const brief = (r) => ({ status: r.status, ...(r.body?.error ? { error: { code: r.body.error.code, message: r.body.error.message } } : { ok: true }) });
+
+async function auto() {
+  const out = [];
+  for (const waba of WABAS()) {
+    const row = { waba, subscribe: brief(await graph(`${waba}/subscribed_apps`, 'POST')) };
+    const phones = await graph(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,status,platform_type`);
+    row.phones = phones.body?.data || brief(phones);
+    if (Array.isArray(row.phones)) {
+      for (const p of row.phones) {
+        if (p.code_verification_status === 'VERIFIED' && p.status !== 'CONNECTED') p.register = brief(await register(p.id));
+      }
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 exports.handler = async (event) => {
   const q = event.queryStringParameters || {};
+  if (q.auto && process.env.WA_TOKEN) {
+    return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ at: new Date().toISOString(), accounts: await auto() }, null, 2) };
+  }
   if (!process.env.WA_VERIFY_TOKEN || q.key !== process.env.WA_VERIFY_TOKEN) return { statusCode: 403, body: 'forbidden' };
   const out = {
     env: {
@@ -43,13 +78,7 @@ exports.handler = async (event) => {
   if (isId(q.phones)) {
     out.phones = await graph(`${q.phones}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,status,platform_type,quality_rating`);
   }
-  if (isId(q.register)) {
-    const ref = getDb().collection('app_meta').doc('whatsapp');
-    const saved = (await ref.get()).data() || {};
-    const pin = saved.pins?.[q.register] || String(crypto.randomInt(0, 1e6)).padStart(6, '0');
-    await ref.set({ pins: { [q.register]: pin } }, { merge: true });
-    out.register = await graph(`${q.register}/register`, 'POST', { messaging_product: 'whatsapp', pin });
-  }
+  if (isId(q.register)) out.register = await register(q.register);
   if (isId(q.waba)) {
     out.subscribe = await graph(`${q.waba}/subscribed_apps`, 'POST');
     out.subscribedApps = await graph(`${q.waba}/subscribed_apps`);
