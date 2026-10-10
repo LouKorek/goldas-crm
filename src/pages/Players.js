@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, resolveFileUrl, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, resolveFileUrl, renameFile, PATHS } from 'lib/db';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, CONTRACT_STATUS, POSITION_ORDER,
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
@@ -59,8 +59,9 @@ function IfaResolution({ ifa, onPin }) {
 }
 
 // ── Document viewer ───────────────────────────────────────────────
-function DocViewer({ files, title, onClose }) {
+function DocViewer({ files, title, onClose, onRename }) {
   const [idx, setIdx] = useState(0);
+  const [renaming, setRenaming] = useState(null);   // draft name while editing
   const file = files?.[idx];
   const [url, setUrl] = useState(null);
   const [loadingFile, setLoadingFile] = useState(false);
@@ -82,6 +83,12 @@ function DocViewer({ files, title, onClose }) {
       .finally(() => { if (!cancelled) setLoadingFile(false); });
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [file]);
+  const saveName = async () => {
+    const name = (renaming || '').trim();
+    if (!name) return;
+    try { await onRename(idx, name); setRenaming(null); toast.success('File renamed.'); }
+    catch (e) { toast.error(e.message || 'Rename failed.'); }
+  };
   return (
     <Modal title={title} onClose={onClose} wide viewOnly>
       {!files?.length ? (
@@ -91,7 +98,7 @@ function DocViewer({ files, title, onClose }) {
           {files.length > 1 && (
             <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
               {files.map((f,i)=>(
-                <button key={i} className={`chip${i===idx?' active':''}`} onClick={()=>setIdx(i)}>
+                <button key={i} className={`chip${i===idx?' active':''}`} onClick={()=>{ setIdx(i); setRenaming(null); }}>
                   {f.name}
                 </button>
               ))}
@@ -100,8 +107,20 @@ function DocViewer({ files, title, onClose }) {
           {file && (
             <div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                <div style={{fontSize:12,color:'var(--text-3)'}}>{file.name} · {new Date(file.uploadedAt).toLocaleDateString('en-GB')} · {file.uploadedBy}</div>
-                {url && <a href={url} download={file.name} className="btn btn-primary btn-sm">⬇ Download</a>}
+                {renaming !== null ? (
+                  <div style={{display:'flex',gap:6,flex:1,marginRight:8}}>
+                    <input autoFocus value={renaming} onChange={e=>setRenaming(e.target.value)}
+                      onKeyDown={e=>{ if (e.key==='Enter') saveName(); if (e.key==='Escape') setRenaming(null); }} />
+                    <button className="btn btn-primary btn-sm" disabled={!renaming.trim()} onClick={saveName}>Save</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setRenaming(null)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div style={{fontSize:12,color:'var(--text-3)'}}>{file.name} · {new Date(file.uploadedAt).toLocaleDateString('en-GB')} · {file.uploadedBy}</div>
+                )}
+                <div style={{display:'flex',gap:6}}>
+                  {onRename && renaming === null && <button className="btn btn-secondary btn-sm" onClick={()=>setRenaming(file.name||'')}>✎ Rename</button>}
+                  {url && <a href={url} download={file.name} className="btn btn-primary btn-sm">⬇ Download</a>}
+                </div>
               </div>
               {loadingFile || !url ? (
                 <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>{loadingFile ? 'Loading file…' : 'File unavailable.'}</div>
@@ -121,6 +140,11 @@ function DocViewer({ files, title, onClose }) {
 // ── Player profile view ───────────────────────────────────────────
 function PlayerView({ player, onClose }) {
   const [docModal, setDocModal] = useState(null);
+  const { canEdit } = useRole();
+  const renameDoc = async (index, name) => {
+    const updated = await renameFile(PATHS.PLAYERS, player.id, docModal.field, docModal.files, index, name);
+    setDocModal(m => ({ ...m, files: updated }));
+  };
   const age  = calcAge(player.dob);
   const isEU = isEuropean(player.nationalities||[]);
   const Row = ({label,value}) => value && value!=='—' ? (
@@ -185,18 +209,18 @@ function PlayerView({ player, onClose }) {
         <div className="form-section-title" style={{marginBottom:10}}>Document History</div>
         <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
           {[
-            {label:'📋 Contract',        files:player.contractFiles},
-            {label:'Repr. Agreement', files:player.reprFiles},
-            {label:'Passport',        files:player.passportFiles},
-          ].map(({label,files})=>(
+            {label:'📋 Contract',        field:'contractFiles', files:player.contractFiles},
+            {label:'Repr. Agreement', field:'reprFiles',     files:player.reprFiles},
+            {label:'Passport',        field:'passportFiles', files:player.passportFiles},
+          ].map(({label,field,files})=>(
             <button key={label} className="btn btn-secondary btn-sm"
-              onClick={()=>setDocModal({files:files||[],title:label})}>
+              onClick={()=>setDocModal({files:files||[],title:label,field})}>
               {label} <span style={{opacity:.5,fontSize:10}}>({(files||[]).length})</span>
             </button>
           ))}
         </div>
       </div>
-      {docModal && <DocViewer files={docModal.files} title={docModal.title} onClose={()=>setDocModal(null)} />}
+      {docModal && <DocViewer files={docModal.files} title={docModal.title} onClose={()=>setDocModal(null)} onRename={canEdit && player.id ? renameDoc : null} />}
     </Modal>
   );
 }
