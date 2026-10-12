@@ -18,13 +18,36 @@ const seed = () => ({
   pipeline_jewish: {},
   club_requirements: { r1: { clubName: 'Maccabi Haifa', requiredPosition: 'CB' } },
   contacts: { k1: { clubName: 'Hapoel Tel-Aviv', contactName: 'Dani' } },
-  matches: { m1: { homeTeam: 'Maccabi Haifa', awayTeam: 'Hapoel Tel Aviv', date: '2026-10-20' } },
+  matches: { m1: { homeTeam: 'Maccabi Haifa', awayTeam: 'Hapoel Tel Aviv', date: '2026-10-20' }, ...cleanupMatches() },
 });
+
+// A matches collection that migration 006 accepts: the 74 player-less IFA
+// matches of the three squads, the 13 duplicates with their twins, and a few
+// live records it must leave alone.
+const clean = require('../migrations/006-clean-matches.js');
+function cleanupMatches() {
+  const out = {};
+  let n = 0;
+  for (const [team, count] of Object.entries(clean._internal.A_TEAMS)) {
+    for (let i = 0; i < count; i++) {
+      const d = new Date(Date.UTC(2026, 8, 19 + (n % 240)));
+      out[`a${n++}`] = { source: 'ifa', linkedPlayers: [], homeTeam: i % 2 ? team : 'יריבה', awayTeam: i % 2 ? 'יריבה' : team, date: d.toISOString().slice(0, 10), time: '00:00' };
+    }
+  }
+  for (const r of clean._internal.B_ROWS) {
+    const player = ['ueZUaMrbMeFdxmQFY5RF', 'RWOyZP8ngQ7sJDUV5Jgl', 'D428dQJjM7Mxlxmhad6v', 'RwDLZfvOEI0dzn3mk64j', '2PA2qBLbENTk2BpJ6jEN', 'cQXzhZZUo2rkyCrMNUmg'].includes(r.id) ? 'dNxtLA2YQj4nfgLOqwKo' : '7Cg7ARx3SXjzDYGlQ4NA';
+    out[r.id] = { source: 'ifa', linkedPlayers: [player], homeTeam: 'הפועל חדרה', awayTeam: 'הפ\' יריב', date: r.date, time: r.sameTime ? '17:15' : '00:00', stadiumName: '' };
+    out[`twin_${r.id}`] = { source: 'ifa', linkedPlayers: [player], homeTeam: 'הפועל חדרה', awayTeam: 'הפועל יריב', date: r.twinDate, time: '17:15', stadiumName: 'חדרה מתחם אימונים' };
+  }
+  out.keep1 = { source: 'ifa', linkedPlayers: ['7Cg7ARx3SXjzDYGlQ4NA'], homeTeam: 'הפועל חדרה', awayTeam: 'מכבי נתניה', date: '2026-11-01', time: '19:00' };
+  out.keep2 = { source: 'ifa', linkedPlayers: [], homeTeam: 'מ.כ. נהלל יזרעאל', awayTeam: 'x', date: '2026-10-01', deletedAt: '2026-10-01T00:00:00Z' };
+  return out;
+}
 
 test('001 tags represented players and copies candidates with stage/category', async () => {
   const store = memoryStore(seed());
   const { migrations: rows, ran } = await migrations.run(store);
-  assert.equal(ran.length, 5);
+  assert.equal(ran.length, 6);
   assert.ok(rows.every((m) => m.status === 'done'));
   const p = store.db.players;
   assert.equal(p.p1.stage, 'represented'); assert.equal(p.p1.category, 'men'); assert.equal(p.p1.name, 'Noam Barzilai');
@@ -85,7 +108,7 @@ test('dryRun writes nothing', async () => {
   const store = memoryStore(seed());
   const before = JSON.stringify(store.db);
   const rows = await migrations.dryRun(store);
-  assert.equal(rows.length, 5);
+  assert.equal(rows.length, 6);
   assert.ok(rows.every((m) => m.status === 'pending' && m.report && m.report.summary));
   assert.equal(JSON.stringify(store.db), before);
 });
@@ -103,4 +126,38 @@ test('ensureWebhookCallback reads first and only writes when the callback differ
   assert.equal(r2.updated, true); assert.deepEqual(calls, ['GET', 'POST']);
   assert.ok(!JSON.stringify(r2).includes('zq-secret-token-7781'), 'verify token is not in the result');
   delete process.env.WA_APP_SECRET; delete process.env.WA_VERIFY_TOKEN;
+});
+
+test('006 deletes exactly the ordered matches, into the recycle bin', async () => {
+  const store = memoryStore(seed());
+  const { ran } = await migrations.run(store);
+  const r = ran.find((x) => x.id === '006-clean-matches');
+  assert.equal(r.writes, 74 + 13);
+  const m = store.db.matches;
+  assert.ok(Object.keys(m).filter((k) => k.startsWith('a')).every((k) => m[k].deletedAt && m[k].deletedVia === '006-clean-matches'));
+  for (const row of clean._internal.B_ROWS) {
+    assert.ok(m[row.id].deletedAt, `${row.id} deleted`);
+    assert.ok(!m[`twin_${row.id}`].deletedAt, `twin of ${row.id} kept`);
+  }
+  assert.ok(!m.keep1.deletedAt && !m.m1.deletedAt);
+  const rec = store.db.migrations['006-clean-matches'];
+  assert.equal(rec.report.counts.partA, 74); assert.equal(rec.report.counts.partB, 13);
+  assert.equal(rec.report.counts.byTeam['מ.כ. נהלל יזרעאל'], 29);
+});
+
+test('006 refuses when the counts differ or a twin is missing', async () => {
+  const bad = seed(); delete bad.matches.a0;
+  await assert.rejects(migrations.run(memoryStore(bad), { only: ['006-clean-matches'] }), /73 .*74|נמצאו 73/);
+  const noTwin = seed(); delete noTwin.matches.twin_Ord3jUM7KOuTdgmQjp1L;
+  await assert.rejects(migrations.run(memoryStore(noTwin), { only: ['006-clean-matches'] }), /Ord3jUM7KOuTdgmQjp1L: לא נמצא תאום/);
+  for (const st of [memoryStore(bad), memoryStore(noTwin)]) {
+    try { await migrations.run(st, { only: ['006-clean-matches'] }); } catch {}
+    assert.ok(Object.values(st.db.matches).every((x) => !x.deletedVia), 'nothing deleted on refusal');
+  }
+  // An id that is already gone is skipped, not an error.
+  const gone = seed(); delete gone.matches['3lWpNI7i8aK6FWfqKO1t']; delete gone.matches.twin_3lWpNI7i8aK6FWfqKO1t;
+  const st = memoryStore(gone);
+  const { ran } = await migrations.run(st, { only: ['006-clean-matches'] });
+  assert.equal(ran[0].writes, 74 + 12);
+  assert.deepEqual(st.db.migrations['006-clean-matches'].report.skipped, [{ id: '3lWpNI7i8aK6FWfqKO1t', reason: 'כבר לא קיים' }]);
 });

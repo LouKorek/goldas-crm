@@ -146,11 +146,11 @@ async function processMessage(messageId) {
 
     const thread = await loadThread(sessRef, session, current);
     const topic = current === MAIN_TOPIC ? null : { name: current, ...topics[current], history: thread.history };
-    let pendingDelete = session.pendingDelete || null, changed = false, userText = text || '', agentUsage = null;
+    let pendingDeletes = Array.isArray(session.pendingDeletes) ? session.pendingDeletes : (session.pendingDelete ? [session.pendingDelete] : []), changed = false, userText = text || '', agentUsage = null;
     if (direct) reply = direct;
     else {
       const out = await runAgent({ db, admin, identity, text, media, session: { ...session, history: thread.history }, assistantName: ASSISTANT_NAME, topic, topics: Object.keys(topics), channel: msg.channel || 'whatsapp' });
-      ({ reply, pendingDelete, changed, userText } = out);
+      ({ reply, pendingDeletes, changed, userText } = out);
       agentUsage = out.usage;
     }
 
@@ -158,7 +158,7 @@ async function processMessage(messageId) {
     const now = Date.now();
     const turn = [{ role: 'user', text: userText, at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1 }];
     const patch = {
-      topic: current, turn: session.turn, pendingDelete: pendingDelete || null, lastAt: now, lockUntil: 0, lockedBy: null,
+      topic: current, turn: session.turn, pendingDeletes: pendingDeletes || [], pendingDelete: admin.firestore.FieldValue.delete(), lastAt: now, lockUntil: 0, lockedBy: null,
       email: identity.email || '', name: identity.name, phone: identity.phone || '',
       usage: { ...usage, inputTokens: usage.inputTokens + (agentUsage?.inputTokens || 0), outputTokens: usage.outputTokens + (agentUsage?.outputTokens || 0) },
       history: admin.firestore.FieldValue.delete(),

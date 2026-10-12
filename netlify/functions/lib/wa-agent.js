@@ -204,7 +204,7 @@ How you think:
 How you work:
 - Find records before changing them (search or list). Never guess an id. If several records match, list them briefly and ask which one. If nothing matches, say so and offer to create it.
 - If an instruction is missing something required, ask for it in one short question rather than inventing it. Don't ask about optional fields.
-- Deleting needs the writer's explicit yes: call delete without confirmed first, show what will be deleted and ask; only after they answer yes in a later message call delete again with confirmed=true.
+- Deleting needs the writer's explicit yes: call delete without confirmed first (one record, or several with items; you may arm more in the same turn), show the whole list of what will be deleted and ask once; only after they answer yes in a later message call delete once with confirmed=true, which deletes everything armed. Never ask for a separate yes per record.
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - "מי מתאים לדרישה…" / who fits a club's requirement → suggest_matches (live scores from the matching engine). "מה דורש פעולה" / "מה יש היום" → alerts_today. "סנכרני משחקים" → sync_fixtures (admin/manager).
 - Moving a deal: update its stage. The deal engine enforces the rules: "Mandate Received" needs a document on the deal or the writer's explicit confirmation (pass confirmed=true in data after they confirm), "Contract Signed" and "Not Relevant" close the deal (reopening a closed deal also needs confirmed=true), and "Not Relevant" frees the linked requirement. Tell the writer when a transition offers a follow-up (e.g. promote the candidate to a represented player: update the player's stage? No: say that the app offers it on the deal board).
@@ -251,8 +251,11 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, data: { type: 'object' } }, required: ['collection', 'data'], additionalProperties: false } },
   { name: 'update', description: 'Change fields on an existing record (partial update; other fields stay). To clear a field set it to "". Returns before/after of the changed fields.',
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' }, data: { type: 'object' } }, required: ['collection', 'id', 'data'], additionalProperties: false } },
-  { name: 'delete', description: 'Delete a record. First call without confirmed (returns what would be deleted and arms the deletion); after the user explicitly agrees in a later message, call again with confirmed=true.',
-    input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' }, confirmed: { type: 'boolean' } }, required: ['collection', 'id'], additionalProperties: false } },
+  { name: 'delete', description: 'Delete one record (collection + id) or several at once (items). First call without confirmed: it returns what would be deleted and arms those deletions; you may arm more in the same turn. After the user explicitly agrees in a later message, call once with confirmed=true (no items needed) and everything armed is deleted in one go.',
+    input_schema: { type: 'object', properties: {
+      collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' },
+      items: { type: 'array', description: 'Several records to delete together', items: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(COLLECTIONS) }, id: { type: 'string' } }, required: ['collection', 'id'], additionalProperties: false } },
+      confirmed: { type: 'boolean' } }, additionalProperties: false } },
   { name: 'attach_file', description: 'Attach the file or photo sent with THIS message to a player, as a contract, passport or representation agreement document.',
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Display name for the document; defaults to the file name' }, mode: { type: 'string', enum: ['add', 'replace'], description: 'add (default) keeps existing documents; replace removes them from the player' } }, required: ['playerId', 'field'], additionalProperties: false } },
   { name: 'remove_file', description: 'Remove one document from a player by its display name.',
@@ -276,6 +279,32 @@ const SERVER_TOOLS = [
   { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 8 },
 ];
 
+// Pending deletions: Golda arms what the writer asked to delete, and deletes
+// only what was armed in an EARLIER turn, so the yes always comes in its own
+// message. Several records can be armed and then confirmed with one yes.
+function normalizePending(session) {
+  if (Array.isArray(session.pendingDeletes)) return session.pendingDeletes.filter((p) => p && p.collection && p.id);
+  const one = session.pendingDelete;
+  return one && one.collection && one.id ? [one] : [];
+}
+const sameTarget = (a, b) => a.collection === b.collection && a.id === b.id;
+function armDeletes(pending, items, turn) {
+  const out = [...pending];
+  for (const it of items) {
+    const i = out.findIndex((p) => sameTarget(p, it));
+    if (i >= 0) { if (out[i].armedInTurn === undefined) out[i] = { ...out[i], armedInTurn: turn }; continue; }
+    out.push({ collection: it.collection, id: it.id, armedInTurn: turn });
+  }
+  return out;
+}
+// What a confirmed call may delete: the armed records from earlier turns —
+// those named in items, or all of them when items is empty.
+function armedFor(pending, items, turn) {
+  const ready = pending.filter((p) => p.armedInTurn !== turn);
+  if (!items.length) return ready;
+  return ready.filter((p) => items.some((it) => sameTarget(p, it)));
+}
+
 function createTools({ db, admin, identity, media, session, assistantName, channel = 'whatsapp' }) {
   const FieldValue = admin.firestore.FieldValue;
   const sender = identity.name || 'לו';
@@ -293,7 +322,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   // The documents of a (virtual) collection: live records that belong to it.
   const docsOf = async (c) => (await readOk(c).get()).docs.filter((d) => belongs(c, d.data()));
   const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; return o; };
-  const state = { pendingDelete: session.pendingDelete || null, changed: false };
+  const state = { pendingDeletes: normalizePending(session), changed: false };
 
   async function search({ query, collection }) {
     const cols = collection ? [collection] : Object.keys(ALL);
@@ -457,28 +486,46 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     return { updated: true, collection, id, before: prev, after: d, ...(effects ? { effects } : {}) };
   }
 
-  async function del({ collection, id, confirmed }) {
+  async function del({ collection, id, confirmed, items }) {
     need('delete');
-    const ref = colOk(collection).doc(id);
-    const s = await ref.get();
-    if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
-    const armed = state.pendingDelete && state.pendingDelete.collection === collection && state.pendingDelete.id === id
-      && state.pendingDelete.armedInTurn !== session.turn;
-    if (!confirmed || !armed) {
-      state.pendingDelete = { collection, id, armedInTurn: session.turn };
-      return { needsConfirmation: true, wouldDelete: summarize(collection, id, s.data()),
-        instruction: 'Ask the writer to confirm in a new message. Only after they say yes, call delete again with confirmed=true.' };
+    const wanted = Array.isArray(items) && items.length ? items : (collection && id ? [{ collection, id }] : []);
+    if (!confirmed) {
+      if (!wanted.length) throw new Error('nothing to delete: pass collection and id, or items');
+      const wouldDelete = [];
+      for (const it of wanted) {
+        const ref = colOk(it.collection).doc(it.id);
+        const snap = await ref.get();
+        if (!snap.exists || !belongs(it.collection, snap.data())) throw new Error(`not found: ${it.collection}/${it.id}`);
+        wouldDelete.push(summarize(it.collection, it.id, snap.data()));
+      }
+      state.pendingDeletes = armDeletes(state.pendingDeletes, wanted, session.turn);
+      return { needsConfirmation: true, wouldDelete, armed: state.pendingDeletes.length,
+        instruction: `${state.pendingDeletes.length} deletion(s) are armed. Show the writer the whole list and ask once; only after they say yes in a new message, call delete once with confirmed=true (no items needed) to delete all of them.` };
     }
-    const before = plain(s.data());
-    if (SOFT_DELETE.has(physical(collection))) {
-      await ref.update({ deletedAt: FieldValue.serverTimestamp(), deletedBy: who.email, updatedAt: FieldValue.serverTimestamp() });
-    } else {
-      await ref.delete();
+    const targets = armedFor(state.pendingDeletes, wanted, session.turn);
+    if (!targets.length) {
+      const fresh = wanted.filter((it) => !state.pendingDeletes.some((p) => p.collection === it.collection && p.id === it.id));
+      if (fresh.length) return del({ items: fresh, confirmed: false });
+      throw new Error('nothing armed from an earlier message; arm the deletion first and ask the writer');
     }
-    state.pendingDelete = null;
-    await audit({ action: 'delete', collection, docId: id, before, after: null });
-    state.changed = true;
-    return { deleted: true, collection, id, was: summarize(collection, id, before) };
+    const deleted = [], missing = [];
+    for (const t of targets) {
+      const ref = colOk(t.collection).doc(t.id);
+      const snap = await ref.get();
+      if (!snap.exists || !belongs(t.collection, snap.data())) { missing.push(t); continue; }
+      const before = plain(snap.data());
+      if (SOFT_DELETE.has(physical(t.collection))) {
+        await ref.update({ deletedAt: FieldValue.serverTimestamp(), deletedBy: who.email, updatedAt: FieldValue.serverTimestamp() });
+      } else {
+        await ref.delete();
+      }
+      await audit({ action: 'delete', collection: t.collection, docId: t.id, before, after: null });
+      deleted.push(summarize(t.collection, t.id, before));
+    }
+    state.pendingDeletes = state.pendingDeletes.filter((p) => !targets.some((t) => t.collection === p.collection && t.id === p.id));
+    state.changed = state.changed || deleted.length > 0;
+    if (deleted.length === 1 && !missing.length && wanted.length <= 1) return { deleted: true, collection: deleted[0].collection, id: deleted[0].id, was: deleted[0] };
+    return { deleted: deleted.length, was: deleted, ...(missing.length ? { missing } : {}) };
   }
 
   async function attachFile({ playerId, field, name, mode }) {
@@ -650,7 +697,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     messages.push({ role: 'user', content: results });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
-  return { reply, pendingDelete: tools.state.pendingDelete, changed: tools.state.changed, userText: current.content, usage };
+  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: current.content, usage };
 }
 
-module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks } };
+module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
