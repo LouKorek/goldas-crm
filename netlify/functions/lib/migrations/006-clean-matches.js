@@ -2,8 +2,11 @@
 // 12.10.2026 after the IFA sync left junk behind:
 //
 //   A. IFA matches with no linked player (squads that were read for a player
-//      who was then unlinked): expected exactly 74, from three squads, between
-//      2026-09-19 and 2027-05-22.
+//      who was then unlinked): Lou's order said 74, from three squads, between
+//      2026-09-19 and 2027-05-22. The first run (12.10 23:56) refused: it found
+//      51, because the sync run earlier that evening had already taken care of
+//      23 of Hevel Modi'in's. Lou then approved the 51 that are there now
+//      (29 / 1 / 21), and that is what this expects.
 //   B. 13 duplicate copies of Hapoel Hadera matches (the copy without a time
 //      or stadium), each kept only when its twin — same match, same linked
 //      players, on the twin's date, with a time — is there.
@@ -15,12 +18,12 @@
 const { OWNER_EMAIL } = require('../firestore.js');
 
 const id = '006-clean-matches';
-const title = 'ניקוי משחקי ההתאחדות: 74 בלי שחקן ו-13 עותקים כפולים';
+const title = 'ניקוי משחקי ההתאחדות: 51 בלי שחקן ו-13 עותקים כפולים';
 
 const tidy = (s) => String(s || '').replace(/\s+/g, ' ').replace(/["״]/g, '"').replace(/['׳]/g, "'").trim();
 
 // Part A, as ordered: team → expected count, and the date range.
-const A_TEAMS = { 'מ.כ. נהלל יזרעאל': 29, "הפ' מ.ס חבל מודיעין": 24, 'גדנע ת"א רוני': 21 };
+const A_TEAMS = { 'מ.כ. נהלל יזרעאל': 29, "הפ' מ.ס חבל מודיעין": 1, 'גדנע ת"א רוני': 21 };
 const A_FROM = '2026-09-19', A_TO = '2027-05-22';
 
 // Part B: the id to delete, its own date, and the date of the twin to keep.

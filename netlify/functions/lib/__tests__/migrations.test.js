@@ -21,7 +21,7 @@ const seed = () => ({
   matches: { m1: { homeTeam: 'Maccabi Haifa', awayTeam: 'Hapoel Tel Aviv', date: '2026-10-20' }, ...cleanupMatches() },
 });
 
-// A matches collection that migration 006 accepts: the 74 player-less IFA
+// A matches collection that migration 006 accepts: the 51 player-less IFA
 // matches of the three squads, the 13 duplicates with their twins, and a few
 // live records it must leave alone.
 const clean = require('../migrations/006-clean-matches.js');
@@ -132,7 +132,7 @@ test('006 deletes exactly the ordered matches, into the recycle bin', async () =
   const store = memoryStore(seed());
   const { ran } = await migrations.run(store);
   const r = ran.find((x) => x.id === '006-clean-matches');
-  assert.equal(r.writes, 74 + 13);
+  assert.equal(r.writes, 51 + 13);
   const m = store.db.matches;
   assert.ok(Object.keys(m).filter((k) => k.startsWith('a')).every((k) => m[k].deletedAt && m[k].deletedVia === '006-clean-matches'));
   for (const row of clean._internal.B_ROWS) {
@@ -141,13 +141,13 @@ test('006 deletes exactly the ordered matches, into the recycle bin', async () =
   }
   assert.ok(!m.keep1.deletedAt && !m.m1.deletedAt);
   const rec = store.db.migrations['006-clean-matches'];
-  assert.equal(rec.report.counts.partA, 74); assert.equal(rec.report.counts.partB, 13);
+  assert.equal(rec.report.counts.partA, 51); assert.equal(rec.report.counts.partB, 13);
   assert.equal(rec.report.counts.byTeam['מ.כ. נהלל יזרעאל'], 29);
 });
 
 test('006 refuses when the counts differ or a twin is missing', async () => {
   const bad = seed(); delete bad.matches.a0;
-  await assert.rejects(migrations.run(memoryStore(bad), { only: ['006-clean-matches'] }), /73 .*74|נמצאו 73/);
+  await assert.rejects(migrations.run(memoryStore(bad), { only: ['006-clean-matches'] }), /50 .*51|נמצאו 50/);
   const noTwin = seed(); delete noTwin.matches.twin_Ord3jUM7KOuTdgmQjp1L;
   await assert.rejects(migrations.run(memoryStore(noTwin), { only: ['006-clean-matches'] }), /Ord3jUM7KOuTdgmQjp1L: לא נמצא תאום/);
   for (const st of [memoryStore(bad), memoryStore(noTwin)]) {
@@ -158,6 +158,6 @@ test('006 refuses when the counts differ or a twin is missing', async () => {
   const gone = seed(); delete gone.matches['3lWpNI7i8aK6FWfqKO1t']; delete gone.matches.twin_3lWpNI7i8aK6FWfqKO1t;
   const st = memoryStore(gone);
   const { ran } = await migrations.run(st, { only: ['006-clean-matches'] });
-  assert.equal(ran[0].writes, 74 + 12);
+  assert.equal(ran[0].writes, 51 + 12);
   assert.deepEqual(st.db.migrations['006-clean-matches'].report.skipped, [{ id: '3lWpNI7i8aK6FWfqKO1t', reason: 'כבר לא קיים' }]);
 });
