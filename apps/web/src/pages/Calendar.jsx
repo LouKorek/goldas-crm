@@ -3,13 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { listenCollection, PATHS } from 'lib/db';
+import { callFunction } from 'lib/api';
 import { listenPlayers } from 'data/players';
 import { listenTrainings, addTraining, updateTraining, deleteTraining, restoreTraining, cancelTrainingOccurrence, moveTrainingOccurrence, resetTrainingOccurrence, trainingsInRange } from 'data/trainings';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { useRole } from 'lib/roleContext';
 import { t, getLang, fmtLongDate } from 'lib/i18n';
 import { israelDate, addDays, weekday, daysBetween, WEEKDAY_LABELS, describeRule, AGE_GROUPS, playerName } from '@goldas/domain';
-import { PageHeader, Modal, Field, ChipGroup, DateInput, Empty, Skeleton, useConfirm, toast, RowActions } from 'components/ui/UI';
+import { PageHeader, Modal, Field, ChipGroup, DateInput, Empty, Skeleton, useConfirm, toast, RowActions, Spinner, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { SyncReport } from './Matches';
 
@@ -123,9 +124,10 @@ function MoveModal({ occ, onClose }) {
 
 export default function Calendar() {
   const navigate = useNavigate();
-  const { canEdit } = useRole();
+  const { canEdit, isAdmin } = useRole();
   const { confirm, dialog } = useConfirm();
   const [matches, setMatches] = useState(null);
+  const [syncing, setSyncing] = useState(false);
   const [trainings, setTrainings] = useState([]);
   const [players, setPlayers] = useState([]);
   const [view, setView] = useState(localStorage.getItem('calendar-view') || 'week');
@@ -143,6 +145,17 @@ export default function Calendar() {
     return () => u.forEach((f) => f());
   }, []);
 
+  // Admin-only: pull fixtures for every represented player (background function).
+  const syncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await callFunction('sync-matches-background', { method: 'POST' });
+      if (res.status === 202 || res.ok) { toast.success(t("Sync started — matches will appear here as they're fetched (≈1–2 min).")); setTimeout(() => setSyncing(false), 90000); return; }
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Sync failed (${res.status})`);
+    } catch (e) { toast.error(e.message || t('Sync failed.')); setSyncing(false); }
+  };
   const [from, to] = rangeFor(view, anchor);
   const nameOf = (id) => playerName(players.find((p) => p.id === id) || {});
   const events = useMemo(() => {
@@ -215,6 +228,7 @@ export default function Calendar() {
         action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {canEdit && <button className="btn btn-primary" style={{ height: 36 }} onClick={() => setModal({ ...EMPTY, start: israelDate() })}><Icon name="plus" size={12} /><span className="btn-text">{t('Add training')}</span></button>}
           {canEdit && <button className="btn btn-secondary" style={{ height: 36 }} onClick={() => navigate('/matches', { state: { add: true } })}><Icon name="plus" size={12} /><span className="btn-text">{t('Add Match')}</span></button>}
+          {isAdmin && <button className="btn btn-ghost btn-sm" style={{ height: 36, whiteSpace: 'nowrap' }} onClick={syncNow} disabled={syncing} title={t('Pull match fixtures from IFA / 365 / SofaScore for every represented player')}>{syncing ? <><Spinner size={12} /><span className="btn-text">{t('Syncing…')}</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">{t('Sync Now')}</span></>}</button>}
         </div>}>
         <div className="filter-bar" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12, padding: '10px 12px', background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
           <ChipGroup options={VIEWS} labels={[t('List'), t('Week'), t('Month')]} value={view} onChange={setView} required />
@@ -230,6 +244,7 @@ export default function Calendar() {
             <option value="">{t('All players')}</option>
             {players.filter((p) => (p.stage || 'represented') === 'represented').sort((a, b) => playerName(a).localeCompare(playerName(b))).map((p) => <option key={p.id} value={p.id}>{playerName(p)}</option>)}
           </select>
+          <ScraperCredits />
         </div>
       </PageHeader>
 

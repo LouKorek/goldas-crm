@@ -75,7 +75,7 @@ export default function Contacts() {
     <div>
       <PageHeader
         title={t("Contacts")}
-        subtitle={`${items.length} contact${items.length !== 1 ? 's' : ''}`}
+        subtitle={`${items.length} ${items.length === 1 ? t('contact') : t('contacts')}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Contact")}</span></button>}

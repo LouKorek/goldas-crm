@@ -821,6 +821,12 @@ const HE = {
   "Expired club requirements": "דרישות מועדון שפגו",
   "Overdue tasks": "משימות באיחור",
   "Failed night jobs": "עבודות לילה שנכשלו",
+  "players": "שחקנים",
+  "contact": "איש קשר",
+  "contacts": "אנשי קשר",
+  "files": "קבצים",
+  "Hide": "הסתר",
+  "Sync failed.": "הסנכרון נכשל.",
 };
 
 export default HE;

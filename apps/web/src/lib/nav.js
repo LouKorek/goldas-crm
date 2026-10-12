@@ -39,10 +39,8 @@ export const AREAS = [
   },
   {
     key: 'calendar', label: t('Calendar'), icon: 'matches', path: '/calendar',
-    items: [
-      { label: t('Calendar'), path: '/calendar' },
-      { label: t('Matches'), path: '/matches' },
-    ],
+    // One screen: matches and trainings together, filtered inside it.
+    items: [{ label: t('Calendar'), path: '/calendar' }],
   },
   {
     key: 'scouting', label: t('Scouting'), icon: 'search', path: '/pipeline/jewish/tm-watch',

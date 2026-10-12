@@ -397,7 +397,7 @@ export function SyncReport({ report }) {
           alignItems: 'center', gap: 10, color: 'var(--text-2)', fontSize: 12.5,
         }}>
         <span>
-          <strong style={{ color: 'var(--amber)' }}>{list.length}</strong> {t("player")}{list.length !== 1 ? 's' : ''} {t("produced no fixtures in the last sync")}
+          <strong style={{ color: 'var(--amber)' }}>{list.length}</strong> {list.length === 1 ? t("player") : t("players")} {t("produced no fixtures in the last sync")}
           {ran && <span style={{ color: 'var(--text-3)' }}> · {fmtDate(ran.toISOString().slice(0, 10))}</span>}
         </span>
         <span style={{ fontSize: 11 }}>{open ? '▲ hide' : '▼ details'}</span>
@@ -675,7 +675,7 @@ export default function Matches() {
     <div className="page-matches">
         <PageHeader
           title={t("Matches")}
-          subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
+          subtitle={`${items.length} ${items.length === 1 ? t('match') : t('matches')}`}
           action={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Match")}</span></button>}
@@ -798,7 +798,7 @@ export default function Matches() {
               <div className="section-label" style={{ marginBottom: 10 }}>
                 {new Date(g.date).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
                 <span style={{ color: 'var(--text-3)', marginInlineStart: 8, fontWeight: 400 }}>
-                  ({g.items.length} {t("match")}{g.items.length !== 1 ? 'es' : ''})
+                  ({g.items.length} {g.items.length === 1 ? t("match") : t("matches")})
                 </span>
               </div>
               {g.items.map(m => <MatchCard key={m.id} m={m} />)}
