@@ -19,6 +19,8 @@ const GLYPHS = {
   dashboard: <><rect x="2" y="2" width="5" height="5" {...P} /><rect x="9" y="2" width="5" height="5" {...P} /><rect x="2" y="9" width="5" height="5" {...P} /><rect x="9" y="9" width="5" height="5" {...P} /></>,
   social:    <><rect x="2" y="2" width="12" height="12" {...P} /><circle cx="8" cy="8" r="3" {...P} /><path d="M11.5 4.5h.01" {...P} strokeWidth="2" /></>,
   // Players
+  // Speech bubble: Golda, the WhatsApp assistant.
+  chat:      <><path d="M2.5 3h11v7.5H7l-3.2 2.7V10.5H2.5z" {...P} /><path d="M5.5 6h5M5.5 8h3" {...P} /></>,
   players:   <><circle cx="8" cy="5" r="2.6" {...P} /><path d="M2.5 14v-1.2C2.5 10.7 5 9.4 8 9.4s5.5 1.3 5.5 3.4V14" {...P} /></>,
   matches:   <><rect x="2" y="3" width="12" height="11" {...P} /><path d="M2 6.5h12M5.5 2v2.5M10.5 2v2.5" {...P} /><path d="M7 9.5h2v2H7z" {...P} /></>,
   contacts:  <><rect x="2" y="3" width="12" height="10" {...P} /><path d="M2 6h12" {...P} /><path d="M5 9h3M5 11h5" {...P} /></>,

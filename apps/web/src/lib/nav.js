@@ -16,8 +16,8 @@ export const AREAS = [
     key: 'players', label: t('Players'), icon: 'players', path: '/players',
     items: [
       { label: t('Represented'), path: '/players' },
-      { label: t('Matches'), path: '/matches' },
-      { label: t('Contacts'), path: '/contacts' },
+      // The players' own Instagram accounts (follower impact of their posts).
+      { label: t('Instagram'), path: '/social', icon: 'social' },
     ],
   },
   {
@@ -32,7 +32,10 @@ export const AREAS = [
   },
   {
     key: 'clubs', label: t('Clubs'), icon: 'contacts', path: '/clubs',
-    items: [{ label: t('Clubs'), path: '/clubs' }],
+    items: [
+      { label: t('Clubs'), path: '/clubs' },
+      { label: t('Contacts'), path: '/contacts', icon: 'contacts' },
+    ],
   },
   {
     key: 'calendar', label: t('Calendar'), icon: 'matches', path: '/matches',
@@ -42,11 +45,10 @@ export const AREAS = [
     key: 'scouting', label: t('Scouting'), icon: 'search', path: '/pipeline/jewish/tm-watch',
     items: [
       { label: t('TM Watch'), path: '/pipeline/jewish/tm-watch', icon: 'star' },
-      { label: t('Instagram'), path: '/social', icon: 'social' },
     ],
   },
   {
-    key: 'golda', label: t('Golda'), icon: 'social', path: '/golda',
+    key: 'golda', label: t('Golda'), icon: 'chat', path: '/golda',
     items: [{ label: t('Golda'), path: '/golda' }],
   },
   {
@@ -66,7 +68,7 @@ export const BOTTOM = [
   { key: 'home', label: t('Home'), icon: 'dashboard', path: '/home' },
   { key: 'players', label: t('Players'), icon: 'players', path: '/players' },
   { key: 'market', label: t('Market'), icon: 'clipboard', path: '/pipeline/men' },
-  { key: 'golda', label: t('Golda'), icon: 'social', path: '/golda' },
+  { key: 'golda', label: t('Golda'), icon: 'chat', path: '/golda' },
   { key: 'more', label: t('More'), icon: 'menu', path: '__more__' },
 ];
 
@@ -76,11 +78,11 @@ export const DESTINATIONS = AREAS.flatMap((a) => a.items.map((i) => ({ ...i, are
 /** Which area a pathname belongs to. */
 export function areaOf(pathname) {
   if (pathname.startsWith('/home') || pathname === '/dashboard') return 'home';
-  if (pathname.startsWith('/pipeline/jewish/tm-watch') || pathname.startsWith('/social')) return 'scouting';
+  if (pathname.startsWith('/pipeline/jewish/tm-watch')) return 'scouting';
   if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/deals')) return 'market';
-  if (pathname.startsWith('/players')) return 'players';
-  if (pathname.startsWith('/matches') || pathname.startsWith('/contacts')) return pathname.startsWith('/contacts') ? 'players' : 'calendar';
-  if (pathname.startsWith('/clubs')) return 'clubs';
+  if (pathname.startsWith('/players') || pathname.startsWith('/social')) return 'players';
+  if (pathname.startsWith('/matches')) return 'calendar';
+  if (pathname.startsWith('/clubs') || pathname.startsWith('/contacts')) return 'clubs';
   if (pathname.startsWith('/golda')) return 'golda';
   return 'admin';
 }
