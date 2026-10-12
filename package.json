@@ -11,7 +11,7 @@
     "build": "npm run build -w @goldas/domain && npm run build -w @goldas/web",
     "dev": "npm run build -w @goldas/domain && npm run dev -w @goldas/web",
     "typecheck": "npm run typecheck -w @goldas/domain",
-    "test": "npm run test -w @goldas/domain && npm run test:functions",
+    "test": "npm run build -w @goldas/domain && npm run test -w @goldas/domain && npm run test:functions",
     "test:functions": "node --test netlify/functions/lib/__tests__/*.test.js",
     "lint": "eslint apps/web/src netlify/functions packages/domain/src"
   },
