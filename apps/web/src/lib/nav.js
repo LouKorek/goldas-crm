@@ -16,8 +16,6 @@ export const AREAS = [
     key: 'players', label: t('Players'), icon: 'players', path: '/players',
     items: [
       { label: t('Represented'), path: '/players' },
-      // The players' own Instagram accounts (follower impact of their posts).
-      { label: t('Instagram'), path: '/social', icon: 'social' },
     ],
   },
   {
@@ -56,6 +54,8 @@ export const AREAS = [
     items: [
       { label: t('My Tasks'), path: '/tasks', icon: 'tasks' },
       { label: t('Notifications'), path: '/notifications', icon: 'bell' },
+      // The agency's own Instagram account (followers, post impact).
+      { label: t('Agency Instagram'), path: '/social', icon: 'social' },
       { label: t('Recycle Bin'), path: '/recycle', icon: 'trash' },
       { label: t('Team'), path: '/team', icon: 'team', adminOnly: true },
       { label: t('Data Migrations'), path: '/admin/migrations', icon: 'refresh', adminOnly: true },
@@ -80,7 +80,7 @@ export function areaOf(pathname) {
   if (pathname.startsWith('/home') || pathname === '/dashboard') return 'home';
   if (pathname.startsWith('/pipeline/jewish/tm-watch')) return 'scouting';
   if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/deals')) return 'market';
-  if (pathname.startsWith('/players') || pathname.startsWith('/social')) return 'players';
+  if (pathname.startsWith('/players')) return 'players';
   if (pathname.startsWith('/matches')) return 'calendar';
   if (pathname.startsWith('/clubs') || pathname.startsWith('/contacts')) return 'clubs';
   if (pathname.startsWith('/golda')) return 'golda';
