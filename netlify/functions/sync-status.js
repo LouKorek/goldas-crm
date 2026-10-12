@@ -1,25 +1,18 @@
-// Read-only health check for the matches sync, readable without signing in
-// so a run can be verified from anywhere (a script, a phone) without the
-// Firebase console. It shows timings, counts and reasons only: no player
+// Read-only health check for the matches sync. Needs a signed-in CRM user
+// (Bearer ID token) or the browser sync's x-sync-secret, so it can still be
+// checked from a script without the Firebase console. It shows timings, counts and reasons only: no player
 // names, no fixtures, no keys. Includes the browser sync's last runs.
 //
 //   /.netlify/functions/sync-status
 //   &player=<name fragment>   also: how many upcoming auto-synced matches
 //                             are linked to the matching player(s)
 
-const admin = require('firebase-admin');
-
-function getDb() {
-  if (!admin.apps.length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-  }
-  return admin.firestore();
-}
+const { getDb } = require('./lib/firestore.js');
+const { withAuth } = require('./lib/auth.js');
 
 const ts = (v) => v?.toDate?.()?.toISOString?.() || null;
 
-exports.handler = async (event) => {
+exports.handler = withAuth({ action: 'read', secrets: [{ header: 'x-sync-secret', env: 'CRM_SYNC_SECRET' }] }, async (event) => {
   const db = getDb();
   const q = event.queryStringParameters || {};
   const [status, warnings, browser] = await Promise.all(
@@ -77,4 +70,4 @@ exports.handler = async (event) => {
     headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
     body: JSON.stringify(out, null, 2),
   };
-};
+});

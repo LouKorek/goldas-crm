@@ -3,13 +3,9 @@
 // POST = new messages: check Meta's signature, drop senders not on the allow
 // list and duplicate deliveries, then hand each message to the background
 // function and answer 200 at once (Meta retries anything slower).
-const admin = require('firebase-admin');
+const { admin, getDb } = require('./lib/firestore.js');
+const { internalHeaders } = require('./lib/auth.js');
 const wa = require('./lib/wa-api.js');
-
-function getDb() {
-  if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)) });
-  return admin.firestore();
-}
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'GET') {
@@ -34,7 +30,10 @@ exports.handler = async (event) => {
   if (!msgs.length) return { statusCode: 200, body: 'ok' };   // delivery/read receipts
 
   const db = getDb();
-  const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  // Hand off to the background function of the same deploy Meta called (its
+  // host), so a webhook pointed at a specific deploy never reaches an older one.
+  const host = h.host || h.Host;
+  const base = host ? `https://${host}` : (process.env.URL || 'https://goldas-crm.netlify.app');
   for (const m of msgs) {
     if (!wa.isAllowed(m.from)) { console.warn('[wa] ignored sender not on allow list'); continue; }
     // Meta can deliver the same message more than once; create() fails on a repeat.
@@ -46,9 +45,10 @@ exports.handler = async (event) => {
     }
     await fetch(`${base}/.netlify/functions/whatsapp-agent-background`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-wa-internal': process.env.WA_APP_SECRET },
+      headers: { 'content-type': 'application/json', ...(await internalHeaders('wa-handoff')) },
       body: JSON.stringify({ messageId: m.id }),
-    }).catch((e) => console.error('[wa] handoff failed:', e.message));
+    }).then((r) => { if (!r.ok) console.error('[wa] handoff failed:', r.status, base); })
+      .catch((e) => console.error('[wa] handoff failed:', e.message));
   }
   return { statusCode: 200, body: 'ok' };
 };

@@ -9,11 +9,13 @@
 // several times. A run that left players behind doesn't count: the next
 // deploy picks up where it stopped.
 //
-// Same hand-off as sync-matches-cron: a single-use nonce in Firestore, then
-// an HTTP call to the background worker.
+// Same hand-off as sync-matches-cron: a single-use internal nonce, then an
+// HTTP call to the background worker. When Netlify's WEBHOOK_SECRET is set,
+// the event's JWS signature is verified as well.
 
-const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { getDb } = require('./lib/firestore.js');
+const { internalHeaders } = require('./lib/auth.js');
 
 const MIN_GAP_H = 20;
 // Noam Barzilai is the player this pipeline was verified on; putting him
@@ -21,15 +23,28 @@ const MIN_GAP_H = 20;
 // record is in English, so both spellings.
 const FIRST = 'Barzilai|ברזילי';
 
-function getDb() {
-  if (!admin.apps.length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-  }
-  return admin.firestore();
+// Netlify signs event payloads with WEBHOOK_SECRET (HS256 JWS in
+// X-Webhook-Signature). Optional: when the variable is set, bad signatures
+// are refused; when it is not, Netlify itself keeps the function unreachable.
+function signatureOk(event) {
+  const secret = (process.env.WEBHOOK_SECRET || '').trim();
+  if (!secret) return true;
+  const h = event.headers || {};
+  const sig = h['x-webhook-signature'] || h['X-Webhook-Signature'] || '';
+  const [head, payload, mac] = sig.split('.');
+  if (!head || !payload || !mac) return false;
+  const expect = crypto.createHmac('sha256', secret).update(`${head}.${payload}`).digest('base64url');
+  const a = Buffer.from(mac), b = Buffer.from(expect);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const bodyHash = crypto.createHash('sha256').update(event.body || '').digest('hex');
+    return claims.iss === 'netlify' && (!claims.sha256 || claims.sha256 === bodyHash);
+  } catch { return false; }
 }
 
 exports.handler = async (event) => {
+  if (!signatureOk(event)) return { statusCode: 401, body: 'bad signature' };
   let payload = {};
   try { payload = JSON.parse(event.body || '{}').payload || {}; } catch { payload = {}; }
   if (payload.context && payload.context !== 'production') {
@@ -45,14 +60,9 @@ exports.handler = async (event) => {
   }
 
   const base = process.env.URL || 'https://goldas-crm.netlify.app';
-  const nonce = crypto.randomBytes(24).toString('hex');
-  await db.collection('app_meta').doc('syncTrigger').set({
-    nonce,
-    issuedAt: admin.firestore.Timestamp.now(),
-  });
   const res = await fetch(`${base}/.netlify/functions/sync-matches-background?first=${encodeURIComponent(FIRST)}`, {
     method: 'POST',
-    headers: { 'x-sync-nonce': nonce },
+    headers: await internalHeaders('deploy-succeeded'),
   });
   console.log(`[deploy-succeeded] sync triggered: ${res.status}`);
   return { statusCode: 200, body: `triggered: ${res.status}` };
