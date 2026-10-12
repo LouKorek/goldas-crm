@@ -37,10 +37,13 @@ const COLLECTIONS = {
   matches: { label: 'match', nameField: 'homeTeam' },
   contacts: { label: 'contact', nameField: 'contactName' },
   tasks: { label: 'task', nameField: 'title' },
+  trainings: { label: 'training (one-off or weekly)', nameField: 'title' },
+  deals: { label: 'deal (player ↔ club)', nameField: 'playerName' },
   tmWatch: { label: 'TM Watch find (Jewish player spotted on Transfermarkt)', nameField: 'name' },
 };
 // Readable but never written by Golda.
 const READ_ONLY = {
+  match_scores: { label: 'nightly match scores of an open requirement', nameField: 'clubName' },
   igDaily: { label: 'Instagram daily stats', nameField: 'date' },
   igPosts: { label: 'Instagram post', nameField: 'caption' },
 };
@@ -56,7 +59,7 @@ const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[֑
 function summarize(col, id, d) {
   const pick = ['fullName', 'playerName', 'name', 'title', 'clubName', 'contactName', 'homeTeam', 'awayTeam', 'date', 'time', 'status',
     'club', 'currentClub', 'primaryPosition', 'dob', 'gender', 'contractStatus', 'contractEnd', 'league', 'dueDate', 'priority', 'done',
-    'contactRole', 'requiredPosition', 'marketValue', 'followers', 'newFollowers'];
+    'contactRole', 'requiredPosition', 'marketValue', 'followers', 'newFollowers', 'place', 'rule', 'ageGroup', 'stage', 'clubName', 'validUntil'];
   const out = { collection: col, id };
   for (const k of pick) if (d[k] !== undefined && d[k] !== '') out[k] = d[k];
   for (const f of FILE_FIELDS) if (Array.isArray(d[f]) && d[f].length) out[f] = d[f].map((r) => r.name);
@@ -142,11 +145,21 @@ function validate(col, data, isCreate) {
   inList('requiredPosition', C.POSITIONS);
   if (col.startsWith('pipeline_')) inList('status', C.PIPELINE_STATUS);
   if (data.gender && !['Men', 'Women'].includes(data.gender)) bad('gender must be Men or Women');
+  if (col === 'trainings') {
+    if (data.rule) {
+      const r = data.rule;
+      if (r.freq !== 'weekly' || !Array.isArray(r.byWeekday) || !r.byWeekday.length || r.byWeekday.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) bad('rule must be { freq: "weekly", byWeekday: [0-6…], start: YYYY-MM-DD, until: YYYY-MM-DD|null }');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.start || ''))) bad('rule.start must be YYYY-MM-DD');
+      if (r.until && !/^\d{4}-\d{2}-\d{2}$/.test(String(r.until))) bad('rule.until must be YYYY-MM-DD or null');
+    } else if (isCreate && !data.date) bad('a training needs a date (one-off) or a rule (weekly)');
+    if (data.time && !/^\d{2}:\d{2}$/.test(data.time)) bad('time must be HH:MM');
+  }
+  if (col === 'deals' && data.stage && !C.PIPELINE_STATUS.includes(data.stage)) bad(`stage must be one of: ${C.PIPELINE_STATUS.join(', ')}`);
   for (const k of ['secondaryPositions']) if (data[k] && (!Array.isArray(data[k]) || data[k].some((p) => !C.POSITIONS.includes(p)))) bad(`${k} must be a list of: ${C.POSITIONS.join(', ')}`);
   for (const k of ['nationalities']) if (data[k] && (!Array.isArray(data[k]) || data[k].some((p) => !C.COUNTRIES.includes(p)))) bad(`${k} must be a list of country names exactly as in the CRM (e.g. "Israel", "United States")`);
   for (const k of Object.keys(data)) if (/(^dob$|Date$|Start$|End$|Expiry$|^date$)/.test(k) && data[k] && !/^\d{4}-\d{2}-\d{2}$/.test(data[k])) bad(`${k} must be YYYY-MM-DD`);
   if (isCreate) {
-    const req = { players: ['fullName', 'gender'], club_requirements: ['clubName', 'gender'], matches: ['date', 'homeTeam', 'awayTeam', 'linkedPlayers'], tasks: ['title'] };
+    const req = { players: ['fullName', 'gender'], club_requirements: ['clubName', 'gender'], matches: ['date', 'homeTeam', 'awayTeam', 'linkedPlayers'], tasks: ['title'], trainings: ['title'], deals: ['playerId', 'clubName'] };
     for (const k of req[col] || (col.startsWith('pipeline_') ? ['playerName'] : [])) {
       if (data[k] === undefined || data[k] === '' || (Array.isArray(data[k]) && !data[k].length)) bad(`${k} is required for a new ${COLLECTIONS[col].label}`);
     }
@@ -193,6 +206,9 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - tmWatch (read and update; Jewish players found on Transfermarkt): name, club, clubCountry, marketValue, status (new|seen|...), starred (bool), addedToPipeline (bool).
 - igDaily (read-only): date, followers, newFollowers. igPosts (read-only): Instagram posts and their stats.
 - matches: date*, time (HH:MM), homeTeam*, awayTeam*, homeTeamIsYouth, awayTeamIsYouth, stadiumName, notes, linkedPlayers* [player ids], source "manual". (Israeli league fixtures also arrive automatically every morning.)
+- trainings: title*, time (HH:MM), place, notes, linkedPlayers [player ids], ageGroup (noar|nearim_a|nearim_b|nearim_c|yeladim_a|yeladim_b|yeladim_c|trom_a|trom_b|trom_c, for youth groups), and EITHER date (one-off, YYYY-MM-DD) OR rule {freq:"weekly", byWeekday:[0=Sunday…6=Saturday], start: YYYY-MM-DD, until: YYYY-MM-DD or null}. To skip or move one session of a weekly training, update exceptions: [{date, cancelled:true}] or [{date, date2, time}] (date = the original session's date).
+- deals (a player or candidate against one club): playerId*, playerName, clubName*, stage (${C.PIPELINE_STATUS.join('|')}), requirementId, notes. To move a deal, update its stage; "Contract Signed" and "Not Relevant" close it. A deal that waits more than 14 days in a stage shows as an alert.
+- club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id).
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
 Free agents (contractStatus "Free") automatically lose club, contract dates and league.
 Today's date: ${new Date().toISOString().slice(0, 10)} (Israel time zone).`;
@@ -347,6 +363,8 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
     if (collection === 'matches') d = { source: 'manual', ...d };
     if (collection.startsWith('pipeline_')) d = { status: 'Not Contacted', ...d };
     if (collection === 'players') d = { contractStatus: 'Under Contract', ...d };
+    if (collection === 'trainings') d = { linkedPlayers: [], exceptions: [], source: 'golda', ...d };
+    if (collection === 'deals') d = { stage: 'Initial Talks', history: [], closedAt: null, source: 'golda', ...d, enteredStageAt: new Date().toISOString() };
     validate(collection, d, true);
     d = freeAgentRules(collection, withLeague(collection, d));
     if (collection === 'players') {

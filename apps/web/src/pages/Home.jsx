@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { listenCollection, PATHS } from 'lib/db';
 import { listenPlayers } from 'data/players';
-import { loadSettings, computeAlerts } from 'lib/alerts';
+import { loadSettings, unifiedAlerts, alertLink } from 'lib/alerts';
+import { listenTrainings, trainingsInRange } from 'data/trainings';
 import { fmtDate } from 'lib/constants';
 import { useRole } from 'lib/roleContext';
-import { t, relDays, fmtDateTime, getLang } from 'lib/i18n';
-import { DEAL_STALE_DAYS, playerName } from '@goldas/domain';
+import { t, fmtDateTime, getLang } from 'lib/i18n';
+import { playerName, israelDate, addDays, AGE_GROUPS } from '@goldas/domain';
 import { PageHeader, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import Dashboard from './Dashboard';
@@ -86,6 +87,8 @@ function Today() {
   const [tasks, setTasks] = useState([]);
   const [audit, setAudit] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [requirements, setRequirements] = useState([]);
+  const [trainings, setTrainings] = useState([]);
   const [settings, setSettings] = useState(null);
 
   useEffect(() => {
@@ -96,6 +99,8 @@ function Today() {
       listenCollection(PATHS.TASKS, (rows) => setTasks(rows.filter((x) => x.owner === email && !x.done))),
       listenCollection('wa_audit', setAudit),
       listenCollection('jobs', setJobs),
+      listenCollection(PATHS.CLUB_REQUIREMENTS, setRequirements),
+      listenTrainings(setTrainings),
     ];
     loadSettings().then(setSettings);
     return () => u.forEach((f) => f());
@@ -103,37 +108,24 @@ function Today() {
 
   const now = new Date();
   const dayMs = 86400000;
-  const today = now.toISOString().slice(0, 10);
-  const tomorrow = new Date(now.getTime() + dayMs).toISOString().slice(0, 10);
+  const today = israelDate(now);
+  const tomorrow = addDays(today, 1);
   const he = getLang() === 'he';
 
-  const alerts = useMemo(() => (players ? computeAlerts(players, matches, settings || undefined, now) : null), [players, matches, settings]); // eslint-disable-line
+  // One engine for everything that needs action (domain engines/alerts.ts).
+  const alerts = useMemo(() => (players ? unifiedAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now }) : null), [players, matches, deals, requirements, tasks, jobs, settings]); // eslint-disable-line
+  const TAG = { contract: 'CON', repr: 'REP', passport: 'PAS', birthday: 'DOB', deal_stale: t('Deal waiting'), requirement_expired: 'REQ', task_overdue: t('Task due'), job_failed: t('failed') };
+  const COLOR = { critical: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', gold: 'var(--gold)' };
+  const actions = useMemo(() => (alerts ? alerts.alerts.filter((a) => a.type !== 'match').map((a) => ({
+    tag: a.type === 'birthday' && a.age === 18 ? '18' : TAG[a.type], color: COLOR[a.severity], title: a.subject.name,
+    sub: `${a.proof[he ? 'he' : 'en']}${a.dueDate ? ` · ${fmtDate(a.dueDate)}` : ''}`, to: alertLink(a),
+  })) : []), [alerts, he]); // eslint-disable-line
 
-  const actions = useMemo(() => {
-    if (!alerts) return [];
-    const out = [];
-    const push = (tag, color, title, sub, to, order) => out.push({ tag, color, title, sub, to, order });
-    for (const a of alerts.contract) push(t('CON'), a.overdue || a.days <= 7 ? 'var(--red)' : 'var(--amber)', a.player.fullName, `${t('Contract ends')} ${fmtDate(a.player.contractEnd)} · ${a.overdue ? `${-a.days} ${t('days overdue')}` : relDays(a.days)}`, `/players/${a.id}`, a.days);
-    for (const a of alerts.repr) push(t('REP'), a.overdue || a.days <= 7 ? 'var(--red)' : 'var(--amber)', a.player.fullName, `${t('Representation ends')} ${fmtDate(a.player.reprEnd)} · ${relDays(a.days)}`, `/players/${a.id}`, a.days);
-    for (const a of alerts.passport) push(t('PAS'), a.overdue || a.days <= 30 ? 'var(--red)' : 'var(--amber)', a.player.fullName, `${t('Passport expires')} ${fmtDate(a.player.passportExpiry)} · ${relDays(a.days)}`, `/players/${a.id}`, a.days);
-    for (const a of alerts.birthday) push(a.turning18 ? '18' : 'DOB', 'var(--gold)', a.player.fullName, `${t('Birthday')} · ${relDays(a.days)} · ${a.age}`, `/players/${a.id}`, 1000 + a.days);
-    for (const d of deals) {
-      if (d.closedAt || d.deletedAt) continue;
-      const since = Math.floor((now - new Date(d.enteredStageAt || d.createdAt?.toDate?.() || now)) / dayMs);
-      if (since >= DEAL_STALE_DAYS) push(t('Deal waiting'), 'var(--amber)', `${d.playerName} ↔ ${d.clubName}`, `${t(d.stage)} · ${since} ${t('days')}`, `/pipeline/${d.category || 'men'}`, 500 - since);
-    }
-    for (const x of tasks) {
-      if (!x.dueDate || x.dueDate > today) continue;
-      const days = Math.round((new Date(x.dueDate) - new Date(today)) / dayMs);
-      push(t('Task due'), days < 0 ? 'var(--red)' : 'var(--gold)', x.title, days < 0 ? `${-days} ${t('days overdue')}` : t('Today'), '/tasks', days);
-    }
-    return out.sort((a, b) => a.order - b.order);
-  }, [alerts, deals, tasks, today]); // eslint-disable-line
-
-  const games = useMemo(() => matches
-    .filter((m) => m.date === today || m.date === tomorrow)
-    .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))), [matches, today, tomorrow]);
   const nameOf = (id) => playerName((players || []).find((p) => p.id === id) || {});
+  const games = useMemo(() => [
+    ...matches.filter((m) => !m.deletedAt && (m.date === today || m.date === tomorrow)).map((m) => ({ id: `m${m.id}`, date: m.date, time: m.time || '', title: `${m.homeTeam} ${t('vs')} ${m.awayTeam}`, sub: [m.time, m.stadiumName, (m.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · '), to: '/calendar', color: 'var(--blue)' })),
+    ...trainingsInRange(trainings, today, tomorrow).filter((o) => !o.cancelled).map((o) => ({ id: `t${o.trainingId}${o.sourceDate}`, date: o.date, time: o.time, title: `${t('Training')}: ${o.training?.title || ''}`, sub: [o.time, AGE_GROUPS.find((g) => g.id === o.training?.ageGroup)?.[he ? 'he' : 'en'], o.training?.place, (o.training?.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · '), to: '/calendar', color: 'var(--green-ok)' })),
+  ].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)), [matches, trainings, today, tomorrow, players]); // eslint-disable-line
 
   const golda = useMemo(() => audit
     .filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs)
@@ -156,15 +148,10 @@ function Today() {
         )}
       </Section>
 
-      <Section title={t('Games and trainings')} sub={t('Today and tomorrow')} to="/matches">
-        {games.length === 0 ? <Quiet>{t('No games today or tomorrow.')}</Quiet> : (
+      <Section title={t('Games and trainings')} sub={t('Today and tomorrow')} to="/calendar">
+        {games.length === 0 ? <Quiet>{t('No games or trainings today or tomorrow.')}</Quiet> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {games.map((m) => (
-              <Row key={m.id} tag={m.date === today ? t('Today') : t('Tomorrow')} color="var(--blue)"
-                title={`${m.homeTeam} ${t('vs')} ${m.awayTeam}`}
-                sub={[m.time, m.stadiumName, (m.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
-                to="/matches" />
-            ))}
+            {games.map((g) => <Row key={g.id} tag={g.date === today ? t('Today') : t('Tomorrow')} color={g.color} title={g.title} sub={g.sub} to={g.to} />)}
           </div>
         )}
       </Section>

@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
+import { listenPlayers } from 'data/players';
+import { topMatches, explainMatch, daysAway, STAGE_LABELS } from '@goldas/domain';
+import { getLang, relDays } from 'lib/i18n';
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader, ExportMenu,
-         Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
+         Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput, DateInput } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
@@ -603,8 +607,35 @@ export const U19 = () => (
   }}>U19</span>
 );
 
+// ── Status + matching ────────────────────────────────────────────
+export const REQ_STATUS = ['open', 'filled', 'closed'];
+const REQ_STATUS_LABEL = { open: { he: 'פתוחה', en: 'Open' }, filled: { he: 'מולאה', en: 'Filled' }, closed: { he: 'סגורה', en: 'Closed' } };
+const reqStatusLabel = (st) => REQ_STATUS_LABEL[st || 'open']?.[getLang() === 'he' ? 'he' : 'en'] || st;
+const isOpenReq = (r) => !r.status || r.status === 'open';
+
+/** The five best fits for a requirement, scored live by the domain engine. */
+export function MatchesPanel({ req, players, compact }) {
+  const he = getLang() === 'he';
+  const list = useMemo(() => topMatches(req, players || [], { n: 5, min: 35 }), [req, players]);
+  if (!players) return null;
+  if (!list.length) return <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No player fits this requirement yet.')}</p>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {list.map((m) => (
+        <Link key={m.playerId} to={`/players/${m.playerId}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 10, alignItems: 'flex-start', padding: '7px 10px', border: '1px solid var(--border)', borderInlineStart: `3px solid ${m.score >= 75 ? 'var(--green-ok)' : m.score >= 55 ? 'var(--gold)' : 'var(--text-3)'}`, background: 'var(--card)' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: m.score >= 75 ? 'var(--green-ok)' : 'var(--gold)', minWidth: 34 }}>{m.score}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{m.playerName} <span style={{ fontSize: 10.5, color: 'var(--text-3)', fontWeight: 400 }}>· {STAGE_LABELS[m.stage]?.[he ? 'he' : 'en'] || m.stage}</span></div>
+            {!compact && <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 2 }}>{explainMatch(m, he ? 'he' : 'en')}</div>}
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 // ── Requirement view card ────────────────────────────────────────
-function RequirementView({ req, onClose }) {
+function RequirementView({ req, players, onClose }) {
   const Row = ({ label, value }) => value && value !== '—' ? (
     <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
       <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
@@ -634,7 +665,14 @@ function RequirementView({ req, onClose }) {
             {req.tablePosition ? ` · #${req.tablePosition} in table` : ''}
           </div>
         </div>
-        {req.gender && <span className="badge" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>{req.gender}</span>}
+        {req.gender && <span className="badge" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>{t(req.gender)}</span>}
+        <span className="badge" style={{ background: isOpenReq(req) ? 'var(--gold-dim)' : 'var(--surface-3)', color: isOpenReq(req) ? 'var(--gold)' : 'var(--text-3)' }}>{reqStatusLabel(req.status)}</span>
+        {req.validUntil && <span style={{ fontSize: 11, color: daysAway(req.validUntil) < 0 ? 'var(--red)' : 'var(--text-3)' }}>{t('Valid until')} {fmtDate(req.validUntil)} · {relDays(daysAway(req.validUntil))}</span>}
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div className="form-section-title">{t('Best matches')}</div>
+        <MatchesPanel req={req} players={players} />
       </div>
 
       <div className="view-grid-2">
@@ -679,10 +717,13 @@ const EMPTY = {
   gender: '', leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '',
   clubName: '', clubIsYouth: false, tablePosition: '', contactName: '', contactRole: '',
   contactPhone: '', requiredPosition: '', ageMin: '', ageMax: '', ageNotSpecified: false,
-  transferFee: '', salary: '', notes: '',
+  transferFee: '', salary: '', notes: '', validUntil: '', status: 'open',
 };
 
 export default function Requirements() {
+  const [players, setPlayers] = useState(null);
+  const [params, setParams] = useSearchParams();
+  useEffect(() => listenPlayers({ notStage: 'not_relevant' }, setPlayers), []);
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal]     = useState(null);
@@ -701,6 +742,15 @@ export default function Requirements() {
       setItems(data); setLoading(false);
     }, 'clubName');
   }, []);
+  // Deep link from an alert: /market/requirements?req=<id>
+  useEffect(() => {
+    const id = params.get('req');
+    if (id && items.length) { const r = items.find((x) => x.id === id); if (r) { setViewReq(r); setParams({}, { replace: true }); } }
+  }, [params, items, setParams]);
+  const matchCount = useMemo(() => {
+    if (!players) return {};
+    const m = {}; for (const r of items) m[r.id] = topMatches(r, players, { n: 5, min: 35 }).length; return m;
+  }, [items, players]);
 
   const s = k => v => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
   const f = k => form[k] ?? '';
@@ -766,6 +816,7 @@ export default function Requirements() {
     if (filters.position && p.requiredPosition !== filters.position) return false;
     if (filters.youthScope === 'Youth'  && !p.clubIsYouth) return false;
     if (filters.youthScope === 'Senior' &&  p.clubIsYouth) return false;
+    if (filters.status ? (p.status || 'open') !== filters.status : !isOpenReq(p)) return false;
     return true;
   });
   data = data.sort((a, b) => {
@@ -777,7 +828,7 @@ export default function Requirements() {
     <div>
       <PageHeader
         title={t("Club Requirements")}
-        subtitle={`${items.length} active requirement${items.length !== 1 ? 's' : ''}`}
+        subtitle={`${items.filter(isOpenReq).length} ${t('open requirements')}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Requirement")}</span></button>}
@@ -816,6 +867,7 @@ export default function Requirements() {
             { key: 'gender',     label: t("Gender"),   values: ['Men', 'Women'] },
             { key: 'position',   label: t("Position"), values: POSITIONS },
             { key: 'youthScope', label: t("Group"), values: ['Youth', 'Senior'] },
+            { key: 'status',     label: t("Status"), values: REQ_STATUS },
           ]} />
         </div>
       </PageHeader>
@@ -846,6 +898,8 @@ export default function Requirements() {
                 {!p.ageNotSpecified && (p.ageMin || p.ageMax) && <span>{p.ageMin && p.ageMax ? `${p.ageMin}–${p.ageMax}` : p.ageMin || p.ageMax}</span>}
                 {(p.transferFee && p.transferFee !== 'Not specified') && <span>€{Number(p.transferFee).toLocaleString()}</span>}
                 {(p.salary && p.salary !== 'Not specified') && <span>€{Number(p.salary).toLocaleString()}/mo</span>}
+                {matchCount[p.id] > 0 && <span style={{ color: 'var(--green-ok)', fontWeight: 700 }}>{matchCount[p.id]} {t('matches')}</span>}
+                {!isOpenReq(p) && <span className="m-sub">{reqStatusLabel(p.status)}</span>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 }}>
                 {(p.contactName || p.contactPhone) ? (
@@ -878,6 +932,8 @@ export default function Requirements() {
                   <th>{t("Age")}</th>
                   <th>{t("Fee")}</th>
                   <th>{t("Salary")}</th>
+                  <th title={t("Best matches")}>{t("Matches")}</th>
+                  <th>{t("Status")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -955,6 +1011,11 @@ export default function Requirements() {
                         ? `€${Number(p.salary).toLocaleString()}/mo`
                         : (p.salary === 'Not specified' ? '—' : p.salary || '—')}
                     </td>
+                    <td style={{ textAlign: 'center' }}>{matchCount[p.id] ? <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--green-ok)', fontWeight: 700 }}>{matchCount[p.id]}</span> : <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
+                    <td style={{ fontSize: 11 }}>
+                      <span style={{ color: isOpenReq(p) ? 'var(--gold)' : 'var(--text-3)' }}>{reqStatusLabel(p.status)}</span>
+                      {p.validUntil && <div style={{ fontSize: 10, color: daysAway(p.validUntil) < 0 ? 'var(--red)' : 'var(--text-3)' }}>{fmtDate(p.validUntil)}</div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -965,7 +1026,7 @@ export default function Requirements() {
       )}
 
       {/* View modal — opened by row click */}
-      {viewReq && <RequirementView req={viewReq} onClose={() => setViewReq(null)} />}
+      {viewReq && <RequirementView req={items.find((x) => x.id === viewReq.id) || viewReq} players={players} onClose={() => setViewReq(null)} />}
 
       {/* Add/Edit modal */}
       {modal && (
@@ -1067,6 +1128,14 @@ export default function Requirements() {
             </Field>
             <Field label={t("Max Salary (€/month)")}>
               <NumberInput value={f('salary')} onChange={s('salary')} placeholder="e.g. 8,000" allowNotSpecified />
+            </Field>
+          </div>
+          <div className="form-grid-2">
+            <Field label={t("Valid until")} hint={t("An expired open requirement raises an alert")}>
+              <DateInput value={f('validUntil')} onChange={s('validUntil')} />
+            </Field>
+            <Field label={t("Status")}>
+              <ChipGroup options={REQ_STATUS} labels={REQ_STATUS.map(reqStatusLabel)} value={f('status') || 'open'} onChange={s('status')} required />
             </Field>
           </div>
           <Field label={t("Notes")}>

@@ -18,7 +18,7 @@ export const CATEGORY_LABELS: Record<Category, { he: string; en: string }> = {
   men:    { he: 'גברים',       en: 'Men' },
   women:  { he: 'נשים',        en: 'Women' },
   youth:  { he: 'נוער',        en: 'Youth' },
-  jewish: { he: 'יהודים בחו"ל', en: 'Jewish abroad' },
+  jewish: { he: 'יהודים', en: 'Jewish abroad' },
 };
 
 /** The legacy pipeline_* collection for each category. */

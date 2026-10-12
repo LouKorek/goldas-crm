@@ -12,6 +12,7 @@ import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
+import { AgeGroupChip } from './Prospects';
 
 // ── Nationality flags (matches the Represented screen) ────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Ivory Coast':'CIV','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -673,6 +674,7 @@ export default function Pipeline({ category }) {
                   {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
                   {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0&&<span className="m-sub">({p.secondaryPositions.join(', ')})</span>}
                   {dobDisplay&&<span>{dobDisplay}</span>}
+                  {category==='youth'&&<AgeGroupChip player={p} />}
                   {p.foot&&<span>{p.foot}</span>}
                   <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
@@ -756,7 +758,7 @@ export default function Pipeline({ category }) {
                       {p.height && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.height}{t("cm")}</div>}
                     </td>
                     {/* DOB + age */}
-                    <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}</td>
+                    <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}{category==='youth'&&<div style={{marginTop:2}}><AgeGroupChip player={p} /></div>}</td>
                     {/* Nationalities + EU */}
                     <td>
                       <NatFlags nats={p.nationalities} />

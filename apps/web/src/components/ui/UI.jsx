@@ -612,7 +612,7 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
       {history.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowH(!showH)}>
-            📎 {history.length} {t("file")}{history.length > 1 ? 's' : ''} — {showH ? 'Hide' : 'View'} {t("history")}
+            📎 {history.length} {history.length === 1 ? t("file") : t("files")} — {showH ? t('Hide') : t('View')} {t("history")}
           </button>
           {showH && (
             <div style={{
