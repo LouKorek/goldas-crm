@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { fmtDate } from 'lib/constants';
 import {
@@ -9,6 +9,7 @@ import {
 import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
 import { OWNER_EMAIL } from 'lib/firebase';
+import { t, t as tr } from 'lib/i18n';
 
 // Personal task list. Every task belongs to exactly one signed-in user
 // (`owner` = their email) and is only ever shown to that user; nobody sees
@@ -95,15 +96,15 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
           width: '100%', minHeight: 40, padding: '8px 12px',
           background: 'var(--input-bg)', border: '1.5px solid var(--border)',
           borderRadius: 0, color: 'var(--input-text)',
-          textAlign: 'left', cursor: 'pointer',
+          textAlign: 'start', cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
         }}>
-        {selected.length === 0 && <span style={{ color: 'var(--text-3)' }}>Link represented players…</span>}
+        {selected.length === 0 && <span style={{ color: 'var(--text-3)' }}>{t("Link represented players…")}</span>}
         {allChecked ? (
           <span style={{
             background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
             borderRadius: 0, padding: '2px 10px', color: 'var(--gold)', fontSize: 12, fontWeight: 600,
-          }}>All represented ({allPlayers.length})</span>
+          }}>{t("All represented (")}{allPlayers.length})</span>
         ) : (
           selected.map(p => (
             <span key={p.id} style={{
@@ -116,7 +117,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+          position: 'absolute', top: 'calc(100% + 6px)', insetInlineStart: 0, insetInlineEnd: 0,
           maxHeight: 320, overflowY: 'auto', zIndex: 80,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
           borderRadius: 0, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', padding: 8,
@@ -129,10 +130,10 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
             marginBottom: 6,
           }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search players…" autoFocus
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("Search players…")} autoFocus
                 style={{ flex: 1, minWidth: 0 }} />
               <button type="button" onClick={() => setOpen(false)}
-                title="Close"
+                title={t("Close")}
                 style={{
                   width: 32, height: 32, padding: 0, flexShrink: 0,
                   border: '1px solid var(--border-2)', borderRadius: 0,
@@ -156,7 +157,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
             </button>
           </div>
           {filtered.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: 8 }}>No matching players.</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', padding: 8 }}>{t("No matching players.")}</div>
           ) : filtered.map(p => (
             <label key={p.id} style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px',
@@ -234,23 +235,23 @@ export default function Tasks() {
   const openEdit = (t) => { setForm({ ...EMPTY, ...t }); setModal({ edit: t }); setIsDirty(false); };
 
   const save = async () => {
-    if (!form.title.trim()) { toast.error('Title is required.'); return; }
+    if (!form.title.trim()) { toast.error(t("Title is required.")); return; }
     setSaving(true);
     try {
       // owner is set on create and never rewritten, so a task can't drift to
       // another list by being edited.
       const data = { ...form, title: form.title.trim(), owner: form.owner || email };
-      if (modal === 'add') { await addDoc_(PATHS.TASKS, data); toast.success('Task added!'); }
-      else { await updateDoc_(PATHS.TASKS, modal.edit.id, data); toast.success('Task updated.'); }
+      if (modal === 'add') { await addDoc_(PATHS.TASKS, data); toast.success(t("Task added!")); }
+      else { await updateDoc_(PATHS.TASKS, modal.edit.id, data); toast.success(t("Task updated.")); }
       setModal(null);
     } catch (e) { toast.error(e.message || 'Save failed.'); }
     finally { setSaving(false); }
   };
 
-  const del = async (t) => {
-    const ok = await confirm(`Delete "${t.title}"?`);
+  const del = async (task) => {
+    const ok = await confirm(t('Delete "{name}"?', { name: task.title }));
     if (!ok) return;
-    try { await deleteDoc_(PATHS.TASKS, t.id); toast.success('Deleted.'); }
+    try { await deleteDoc_(PATHS.TASKS, task.id); toast.success(t("Deleted."), { undo: () => restoreDoc_(PATHS.TASKS, task.id) }); }
     catch (e) { toast.error(e.message || 'Delete failed.'); }
   };
 
@@ -284,15 +285,15 @@ export default function Tasks() {
   return (
     <div className="tasks-page">
       <PageHeader
-        title="My Tasks"
+        title={t("My Tasks")}
         subtitle={`${open.length} open  ·  ${done.length} done  ·  private to ${name || email}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {canEdit && (
-              <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Task</span></button>
+              <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Task")}</span></button>
             )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              <SearchInput value={search} onChange={setSearch} placeholder={t("Search...")} />
             </div>
           </div>
         }
@@ -302,7 +303,7 @@ export default function Tasks() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
         <Empty message={canEdit ? 'No tasks yet — add your first one.' : 'No tasks yet.'}
-          action={canEdit ? <button className="btn btn-primary" onClick={openAdd}>+ Add Task</button> : null} />
+          action={canEdit ? <button className="btn btn-primary" onClick={openAdd}>{t("+ Add Task")}</button> : null} />
       ) : (
         <>
           {/* Open tasks */}
@@ -326,7 +327,7 @@ export default function Tasks() {
                   color: 'var(--text-3)', fontSize: 13, fontStyle: 'italic',
                   borderTop: '1px solid var(--border)',
                 }}>
-                <span>Completed ({done.length})</span>
+                <span>{t("Completed (")}{done.length})</span>
                 <span style={{ fontSize: 11 }}>{showDone ? '▲ hide' : '▼ show'}</span>
               </button>
               {showDone && (
@@ -345,33 +346,33 @@ export default function Tasks() {
           title={modal === 'add' ? 'Add Task' : 'Edit Task'}
           onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Task'}
+              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> {t("Saving…")}</> : 'Save Task'}
             </button>
           </>}
         >
-          <Field label="Title" required>
-            <input value={f('title')} onChange={e => s('title')(e.target.value)} placeholder="What needs to happen?" autoFocus />
+          <Field label={t("Title")} required>
+            <input value={f('title')} onChange={e => s('title')(e.target.value)} placeholder={t("What needs to happen?")} autoFocus />
           </Field>
 
           <div className="form-grid-2">
-            <Field label="Due Date">
+            <Field label={t("Due Date")}>
               <DateInput value={f('dueDate')} onChange={s('dueDate')} />
             </Field>
-            <Field label="Priority">
+            <Field label={t("Priority")}>
               <ChipGroup options={PRIORITIES} value={f('priority')} onChange={s('priority')} required />
             </Field>
           </div>
 
-          <Field label="Linked Players" hint="Optional — attach one or more represented players to this task.">
+          <Field label={t("Linked Players")} hint={t("Optional — attach one or more represented players to this task.")}>
             <PlayersMultiSelect allPlayers={players} value={form.linkedPlayers || []}
               onChange={(v) => s('linkedPlayers')(v)} />
           </Field>
 
-          <Field label="Notes">
+          <Field label={t("Notes")}>
             <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)}
-              placeholder="Details, links, who to contact…" rows={4} />
+              placeholder={t("Details, links, who to contact…")} rows={4} />
           </Field>
         </Modal>
       )}
@@ -393,7 +394,7 @@ function TaskCard({ t, players, canEdit, onToggle, onEdit, onDelete }) {
   return (
     <div className="card card-body" style={{
       padding: '11px 14px', display: 'flex', gap: 10, alignItems: 'flex-start',
-      borderLeft: `3px solid ${pri.fg}`,
+      borderInlineStart: `3px solid ${pri.fg}`,
     }}>
       {/* Done checkbox */}
       <button type="button" onClick={onToggle} className="task-check" disabled={!canEdit}
@@ -449,7 +450,7 @@ function TaskCard({ t, players, canEdit, onToggle, onEdit, onDelete }) {
                   background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.35)',
                   borderRadius: 0, padding: '1px 8px', color: 'var(--gold)',
                   fontSize: 11, fontWeight: 600,
-                }}>All represented ({players.length})</span>
+                }}>{tr('All represented ({n})', { n: players.length })}</span>
               ) : (
                 linked.map(p => (
                   <span key={p.id} className="task-linked-chip" style={{

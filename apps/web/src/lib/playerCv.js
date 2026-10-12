@@ -13,6 +13,26 @@
 // Links are buttons with the whole shape as the hotspot — no raw URLs.
 
 import { calcAge, natTeamStatusOf } from './constants';
+import { installHebrew, pdfSafe } from './pdfHebrew';
+
+// Labels in the two languages the sheet is produced in. English is the
+// default: the CV is sent to clubs abroad. Hebrew is for Israeli clubs.
+const LABELS = {
+  en: {
+    agency: 'Gold A&S  ·  Football Agency', player: 'Player', age: 'Age', height: 'Height', foot: 'Foot', position: 'Position',
+    nationality: 'Nationality', dob: 'Date of birth', club: 'Current club', freeAgent: 'Free Agent', natTeam: 'National team',
+    mainPos: 'Main position', otherPos: 'Other positions', prefFoot: 'Preferred foot', profile: 'Profile', notes: 'Scouting notes',
+    video: 'Watch highlights', tm: 'Transfermarkt profile', footer: 'gold-as.com  ·  Lou Korek  ·  FIFA Licensed Agent',
+    foot_: { Right: 'Right', Left: 'Left', Both: 'Both' }, cat: { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish' },
+  },
+  he: {
+    agency: 'Gold A&S  ·  סוכנות כדורגל', player: 'שחקן', age: 'גיל', height: 'גובה', foot: 'רגל', position: 'עמדה',
+    nationality: 'אזרחות', dob: 'תאריך לידה', club: 'מועדון נוכחי', freeAgent: 'שחקן חופשי', natTeam: 'נבחרת',
+    mainPos: 'עמדה עיקרית', otherPos: 'עמדות נוספות', prefFoot: 'רגל חזקה', profile: 'פרופיל', notes: 'הערות סקאוטינג',
+    video: 'צפייה בקטעים', tm: 'פרופיל טרנספרמרקט', footer: 'gold-as.com  ·  לו קורק  ·  סוכן מורשה FIFA',
+    foot_: { Right: 'ימין', Left: 'שמאל', Both: 'שתיהן' }, cat: { men: 'גברים', women: 'נשים', youth: 'נוער', jewish: 'יהודים' },
+  },
+};
 
 const DARK      = [0x12, 0x2E, 0x21];   // masthead green — the logo's own family,
                                         // lightened so the logo tile doesn't read
@@ -31,7 +51,7 @@ const CAT_WORD  = { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish'
 
 // jsPDF's base-14 fonts are Latin-1 only; anything outside it prints as
 // garbage, so emoji and non-Latin characters are dropped rather than shown.
-const latin1 = (s) => String(s ?? '').replace(/[^\x20-\xFF]/g, '').replace(/\s+/g, ' ').trim();
+const latin1 = pdfSafe;
 
 async function loadLogo() {
   try {
@@ -143,13 +163,16 @@ export function canSharePdf() {
 // `share: true` opens the OS share sheet with the file. Left false, the PDF
 // simply downloads — which on a phone opens it in the viewer, so Lou can read
 // it first and share afterwards if he wants to.
-export async function exportPlayerCv(player, category = 'men', { share = false } = {}) {
+export async function exportPlayerCv(player, category = 'men', { share = false, lang = 'en' } = {}) {
   const [{ default: jsPDF }, fonts] = await Promise.all([
     import('jspdf'),
     import('./pdfFonts'),
   ]);
+  const L = LABELS[lang] || LABELS.en;
+  const footWord = (f) => L.foot_[FOOT_WORD[f] || f] || FOOT_WORD[f] || f || '';
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
   const FAM = useFonts(doc, fonts);
+  await installHebrew(doc);   // Hebrew names, clubs and notes print in Heebo
   const MED = FAM === 'Poppins' ? 'medium' : 'bold';   // Helvetica has no medium
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
@@ -192,14 +215,14 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
     } catch { /* the logo is decoration; never block the export */ }
   }
 
-  label('Gold A&S  ·  Football Agency', textX, 52, GOLD, 8);
+  label(L.agency, textX, 52, GOLD, 8);
 
   doc.setFont(FAM, 'bold');
   doc.setFontSize(28);
   doc.setTextColor(255, 255, 255);
-  doc.text(latin1(player.playerName) || 'Player', textX, 88);
+  doc.text(latin1(player.playerName) || L.player, textX, 88);
 
-  const strap = [CAT_WORD[category], nationalTeam(player) || (player.nationalities || [])[0]]
+  const strap = [L.cat[category] || CAT_WORD[category], nationalTeam(player) || (player.nationalities || [])[0]]
     .filter(Boolean).join('  ·  ');
   doc.setFont(FAM, 'normal');
   doc.setFontSize(11);
@@ -213,10 +236,10 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
   // dash reads as a gap in the record, four confident numbers read as a
   // profile. The strip disappears entirely for a very sparse entry.
   const stats = [
-    ['Age',      age ? String(age) : ''],
-    ['Height',   player.height ? `${(Number(player.height) / 100).toFixed(2)}m` : ''],
-    ['Foot',     FOOT_WORD[player.foot] || ''],
-    ['Position', player.primaryPosition || ''],
+    [L.age,      age ? String(age) : ''],
+    [L.height,   player.height ? `${(Number(player.height) / 100).toFixed(2)}m` : ''],
+    [L.foot,     footWord(player.foot)],
+    [L.position, player.primaryPosition || ''],
   ].filter(([, v]) => v);
 
   const STRIP_Y = BAND + 34;
@@ -248,20 +271,20 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
   // full — the strip abbreviates, the table states.
   const secondary = (player.secondaryPositions || []).filter(Boolean);
   const rows = [
-    ['globe',    'Nationality',    (player.nationalities || []).filter(Boolean).join('   ·   ')],
-    ['calendar', 'Date of birth',  player.dob
-      ? `${new Date(player.dob).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${age ? `  (${age})` : ''}`
+    ['globe',    L.nationality,    (player.nationalities || []).filter(Boolean).join('   ·   ')],
+    ['calendar', L.dob,  player.dob
+      ? `${new Date(player.dob).toLocaleDateString(lang === 'he' ? 'he-IL' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${age ? `  (${age})` : ''}`
       : ''],
-    ['shield',   'Current club',   player.currentClub ? `${player.currentClub}${league ? `   (${league})` : ''}` : 'Free Agent'],
-    ['flag',     'National team',  nationalTeam(player)],
-    ['pitch',    'Main position',  player.primaryPosition || ''],
-    ['pitch',    'Other positions', secondary.join('   /   ')],
-    ['ruler',    'Height',         player.height ? `${(Number(player.height) / 100).toFixed(2)} m` : ''],
-    ['foot',     'Preferred foot', FOOT_WORD[player.foot] || player.foot || ''],
+    ['shield',   L.club,   player.currentClub ? `${player.currentClub}${league ? `   (${league})` : ''}` : L.freeAgent],
+    ['flag',     L.natTeam,  nationalTeam(player)],
+    ['pitch',    L.mainPos,  player.primaryPosition || ''],
+    ['pitch',    L.otherPos, secondary.join('   /   ')],
+    ['ruler',    L.height,         player.height ? `${(Number(player.height) / 100).toFixed(2)} m` : ''],
+    ['foot',     L.prefFoot, footWord(player.foot)],
   ].filter(([, , v]) => v);
 
   let y = STRIP_Y + STRIP_H + 44;
-  label('Profile', M, y - 16);
+  label(L.profile, M, y - 16);
   doc.setDrawColor(...GOLD);
   doc.setLineWidth(1.2);
   doc.line(M, y - 10, W - M, y - 10);
@@ -293,7 +316,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
   const notes = latin1(player.notes);
   if (notes) {
     y += 8;
-    label('Scouting notes', M, y);
+    label(L.notes, M, y);
     doc.setDrawColor(...GOLD);
     doc.setLineWidth(1.2);
     doc.line(M, y + 6, W - M, y + 6);
@@ -311,8 +334,8 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
 
   // ── Link buttons ───────────────────────────────────────────────
   const buttons = [
-    { text: 'Watch highlights', url: videoUrl(player.videoLink),   kind: 'video' },
-    { text: 'Transfermarkt profile', url: absUrl(player.profileLink), kind: 'tm' },
+    { text: L.video, url: videoUrl(player.videoLink),   kind: 'video' },
+    { text: L.tm, url: absUrl(player.profileLink), kind: 'tm' },
   ].filter(b => b.url);
 
   if (buttons.length) {
@@ -361,7 +384,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false }
   doc.rect(0, H - 56, W, 2, 'F');
   // No export date: the sheet is sent and forwarded for months, and a stamped
   // date only makes a current profile look stale.
-  label('gold-as.com  ·  Lou Korek  ·  FIFA Licensed Agent', M, H - 30, GOLD, 8);
+  label(L.footer, M, H - 30, GOLD, 8);
 
   const safe = (player.playerName || 'player').replace(/[^\w\s-]/g, '').trim() || 'player';
   const filename = `${safe} - Gold A&S.pdf`;

@@ -1,7 +1,7 @@
 {
-  "name": "Gold A&S Football Agency",
+  "name": "Gold A&S — סוכנות כדורגל",
   "short_name": "Gold A&S",
-  "description": "Professional football agency management platform",
+  "description": "ניהול הסוכנות: שחקנים, שוק, מועדונים, יומן וגולדה",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -21,7 +21,11 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity"],
-  "lang": "en",
-  "scope": "/"
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "lang": "he",
+  "scope": "/",
+  "dir": "rtl"
 }

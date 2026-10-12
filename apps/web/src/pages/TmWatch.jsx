@@ -9,6 +9,7 @@ import { fmtDate, ISO2 } from 'lib/constants';
 import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 // Sub-screen of the Jewish pipeline: Transfermarkt candidates with a Jewish /
 // Israeli connection playing outside Israel, produced daily by the
@@ -43,9 +44,9 @@ const IL = () => (
 );
 
 const TIER_BADGE = {
-  0: { label: <><IL /> Citizenship</>, bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
-  1: { label: 'Strong name',  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
-  2: { label: 'Possible',     bg: 'rgba(177,156,245,0.12)', fg: 'var(--purple)', border: 'rgba(177,156,245,0.35)' },
+  0: { label: <><IL /> {t("Citizenship")}</>, bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
+  1: { label: t("Strong name"),  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
+  2: { label: t("Possible"),     bg: 'rgba(177,156,245,0.12)', fg: 'var(--purple)', border: 'rgba(177,156,245,0.35)' },
 };
 const TABS = ['New', 'All', 'Starred', 'Dismissed'];
 
@@ -154,7 +155,7 @@ export default function TmWatch() {
     try {
       const res = await callFunction('tm-watch-background', { method: 'POST' });
       if (!res.ok && res.status !== 202) throw new Error((await res.json().catch(() => ({}))).error || `Request failed (${res.status})`);
-      toast.success('Scan started — new candidates will appear here within a few minutes.');
+      toast.success(t("Scan started — new candidates will appear here within a few minutes."));
     } catch (e) { toast.error(e.message || 'Could not start scan.'); }
     setScanning(false);
   };
@@ -164,25 +165,25 @@ export default function TmWatch() {
   return (
     <div>
       <PageHeader
-        title="TM Watch"
+        title={t("TM Watch")}
         subtitle={`Transfermarkt scouting — Jewish & Israeli connections abroad · ${items.length} tracked${newCount ? ` · ${newCount} new` : ''}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to="/pipeline/jewish" className="btn btn-ghost btn-sm" style={{ height: 36, textDecoration: 'none' }}><Icon name="chevron" size={12} style={{ transform: 'rotate(180deg)' }} /><span className="btn-text">Jewish</span></Link>
+            <Link to="/pipeline/jewish" className="btn btn-ghost btn-sm" style={{ height: 36, textDecoration: 'none' }}><Icon name="chevron" size={12} style={{ transform: 'rotate(180deg)' }} /><span className="btn-text">{t("Jewish")}</span></Link>
             {isAdmin && (
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }}
                 onClick={scanNow} disabled={scanning || running}>
-                {running ? <><Spinner size={12} /><span className="btn-text">Scanning…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Scan now</span></>}
+                {running ? <><Spinner size={12} /><span className="btn-text">{t("Scanning…")}</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">{t("Scan now")}</span></>}
               </button>
             )}
             {canEdit && newCount > 0 && (
               <button className="btn btn-ghost btn-sm" style={{ height: 36 }} onClick={markAllSeen}
-                title="Mark every NEW candidate as seen">
-                <Icon name="tasks" size={12} /><span className="btn-text">Mark all seen ({newCount})</span>
+                title={t("Mark every NEW candidate as seen")}>
+                <Icon name="tasks" size={12} /><span className="btn-text">{t("Mark all seen (")}{newCount})</span>
               </button>
             )}
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search name, club..." />
+              <SearchInput value={search} onChange={setSearch} placeholder={t("Search name, club...")} />
             </div>
           </div>
         }
@@ -192,36 +193,36 @@ export default function TmWatch() {
           <span className="filter-div" style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', '0', '1', '2']}
-            labels={[`All types (${tierCounts['']})`, <><IL /> Citizenship ({tierCounts['0']})</>, `Strong name (${tierCounts['1']})`, `Possible (${tierCounts['2']})`]}
+            labels={[`All types (${tierCounts['']})`, <><IL /> {t("Citizenship (")}{tierCounts['0']})</>, `Strong name (${tierCounts['1']})`, `Possible (${tierCounts['2']})`]}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
           <span className="filter-div" style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', 'never', 'played']}
-            labels={[`Any history (${histCounts['']})`, `Never in Israel (${histCounts['never']})`, <><IL /> Played in Israel ({histCounts['played']})</>]}
+            labels={[`Any history (${histCounts['']})`, `Never in Israel (${histCounts['never']})`, <><IL /> {t("Played in Israel (")}{histCounts['played']})</>]}
             value={histFilter} onChange={(v) => setHistFilter(v ?? '')} required
           />
         </div>
         {meta && (
           <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--text-3)' }}>
             {running
-              ? <>Scanning \u2014 pass {(meta.chainDepth || 0) + 1}
-                  {meta.cycleProgress != null && <> \u00b7 {meta.cycleProgress} names swept</>}
-                  {meta.historyRemaining ? <> \u00b7 {meta.historyRemaining} career checks left</> : null}
-                  {' '}\u00b7 continues in the background, you can leave this screen</>
-              : lastRun ? <>Last scan: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
-            {meta.lastRunNew != null && <> · {meta.lastRunNew} new last run</>}
-            {items.length > 0 && <> · career history checked: {items.filter(p => p.israelHistory).length}/{items.length}</>}
+              ? <>{t("Scanning \\u2014 pass")} {(meta.chainDepth || 0) + 1}
+                  {meta.cycleProgress != null && <> \u00b7 {meta.cycleProgress} {t("names swept")}</>}
+                  {meta.historyRemaining ? <> \u00b7 {meta.historyRemaining} {t("career checks left")}</> : null}
+                  {' '}{t("\\u00b7 continues in the background, you can leave this screen")}</>
+              : lastRun ? <>{t("Last scan:")} {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
+            {meta.lastRunNew != null && <> · {meta.lastRunNew} {t("new last run")}</>}
+            {items.length > 0 && <> {t("· career history checked:")} {items.filter(p => p.israelHistory).length}/{items.length}</>}
             {' '}· <ScraperCredits />
             {/* Shown only while the most recent run is actually failing —
                 the collector clears this the moment a run succeeds. */}
-            {meta.lastError && <span style={{ color: 'var(--red)' }}> · Error: {String(meta.lastError).slice(0, 120)}</span>}
+            {meta.lastError && <span style={{ color: 'var(--red)' }}> {t("· Error:")} {String(meta.lastError).slice(0, 120)}</span>}
           </div>
         )}
       </PageHeader>
 
       {items.length === 0 ? (
-        <Empty message="No candidates yet — the first daily scan will populate this screen."
+        <Empty message={t("No candidates yet — the first daily scan will populate this screen.")}
           action={isAdmin ? <button className="btn btn-primary" onClick={scanNow} disabled={scanning || running}>{running ? 'Scanning…' : 'Run first scan'}</button> : null} />
       ) : filtered.length === 0 ? (
         <Empty message={`Nothing in "${tab}"${tierFilter !== '' ? ' with this match type' : ''}.`} />
@@ -232,7 +233,7 @@ export default function TmWatch() {
             return (
               <div key={p.id} className="card card-body" style={{
                 padding: '12px 16px',
-                borderLeft: `3px solid ${badge.fg}`,
+                borderInlineStart: `3px solid ${badge.fg}`,
                 opacity: p.status === 'dismissed' ? 0.55 : 1,
               }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
@@ -249,10 +250,10 @@ export default function TmWatch() {
                         borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
                       {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 0, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
-                      {p.israelHistory === 'never' && <span title="Career history has no Israeli club — youth or senior" style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>Never in Israel</span>}
-                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> Played in IL</span>}
-                      {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>in pipeline</span>}
-                      {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>no longer abroad</span>}
+                      {p.israelHistory === 'never' && <span title={t("Career history has no Israeli club — youth or senior")} style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>{t("Never in Israel")}</span>}
+                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> {t("Played in IL")}</span>}
+                      {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("in pipeline")}</span>}
+                      {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>{t("no longer abroad")}</span>}
                     </div>
                     <div className="m-meta" style={{ marginTop: 8, fontSize: 12 }}>
                       {(p.citizenships || []).length > 0 && (
@@ -279,18 +280,18 @@ export default function TmWatch() {
                         {p.starred ? '★' : '☆'}
                       </button>
                       {!p.addedToPipeline && p.status !== 'dismissed' && (
-                        <button title="Add to Jewish pipeline" onClick={() => addToPipeline(p)}
+                        <button title={t("Add to Jewish pipeline")} onClick={() => addToPipeline(p)}
                           style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 15 }}>＋</button>
                       )}
                       {p.status === 'new' && (
-                        <button title="Mark seen" onClick={() => setStatus(p, 'seen')}
+                        <button title={t("Mark seen")} onClick={() => setStatus(p, 'seen')}
                           style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(107,174,245,0.15)', color: 'var(--blue)', fontSize: 14 }}>✓</button>
                       )}
                       {p.status !== 'dismissed' ? (
-                        <button title="Not relevant" onClick={() => setStatus(p, 'dismissed')}
+                        <button title={t("Not relevant")} onClick={() => setStatus(p, 'dismissed')}
                           style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(240,114,110,0.14)', color: 'var(--red)', fontSize: 14 }}>⊘</button>
                       ) : (
-                        <button title="Restore" onClick={() => setStatus(p, 'seen')}
+                        <button title={t("Restore")} onClick={() => setStatus(p, 'seen')}
                           style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 14 }}>↩</button>
                       )}
                     </div>
@@ -303,7 +304,7 @@ export default function TmWatch() {
           {filtered.length > shown && (
             <button className="btn btn-ghost" onClick={() => setShown(s => s + PAGE)}
               style={{ alignSelf: 'center', marginTop: 4 }}>
-              Show {Math.min(PAGE, filtered.length - shown)} more · {shown} of {filtered.length}
+              {t("Show")} {Math.min(PAGE, filtered.length - shown)} {t("more ·")} {shown} {t("of")} {filtered.length}
             </button>
           )}
         </div>

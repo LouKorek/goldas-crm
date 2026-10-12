@@ -1,16 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <!-- Fixed scale: this is an application surface, not a document. Pinch
-       and double-tap zoom are disabled so the layout can never be knocked
-       out of its designed proportions. -->
-  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <!-- Zoom is allowed: text follows the device's accessibility settings. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
   <!-- PWA / Theme -->
   <meta name="theme-color" content="#0C1A0E" />
   <meta name="application-name" content="Gold A&S" />
-  <meta name="description" content="Gold A&S Football Agency Management" />
+  <meta name="description" content="Gold A&S — מערכת ניהול סוכנות הכדורגל" />
 
   <!-- PWA manifest -->
   <link rel="manifest" href="/manifest.json" />
@@ -27,7 +25,10 @@
   <!-- Favicon -->
   <link rel="icon" href="/logo.png" />
 
-  <title>Gold A&S — Football Agency</title>
+  <!-- Hebrew face, served from this site so the UI and the PDFs share one font -->
+  <link rel="preload" href="/fonts/Heebo-400.ttf" as="font" type="font/ttf" crossorigin />
+
+  <title>Gold A&S — סוכנות כדורגל</title>
 </head>
 <body>
   <div id="root"></div>
@@ -37,14 +38,9 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker
-          .register('/sw.js')
-          .then(function(reg) {
-            console.log('SW registered:', reg.scope);
-          })
-          .catch(function(err) {
-            console.log('SW registration failed:', err);
-          });
+        navigator.serviceWorker.register('/sw.js').catch(function(err) {
+          console.log('SW registration failed:', err);
+        });
       });
     }
   </script>

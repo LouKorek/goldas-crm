@@ -10,6 +10,8 @@ const STATIC_ASSETS = [
   '/index.html',
   '/logo.png',
   '/manifest.json',
+  '/fonts/Heebo-400.ttf',
+  '/fonts/Heebo-700.ttf',
 ];
 
 // Install — pre-cache the shell + immediately take over.

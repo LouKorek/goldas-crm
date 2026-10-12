@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { listenCollection, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { useSearchParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { listenCollection, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { listenPlayers, addPlayer, updatePlayer, promoteToRepresented } from 'data/players';
 import { openDeal, closeDeal, listenDeals } from 'data/deals';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
@@ -11,6 +11,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 // ── Nationality flags (matches the Represented screen) ────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Ivory Coast':'CIV','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -135,14 +136,14 @@ function PlayerCardModal({ player, category, onClose }) {
     try {
       const mod = await import('lib/playerCv');
       await mod.exportPlayerCv(player, category, { share });
-    } catch (e) { toast.error('Could not build the PDF.'); }
+    } catch (e) { toast.error(t("Could not build the PDF.")); }
     finally { setPdfing(false); }
   };
 
   return (
-    <Modal title="Player Card" onClose={onClose} footer={<>
+    <Modal title={t("Player Card")} onClose={onClose} footer={<>
       {canShare && (
-        <button className="btn btn-ghost" onClick={() => pdf(true)} disabled={pdfing}>Share PDF</button>
+        <button className="btn btn-ghost" onClick={() => pdf(true)} disabled={pdfing}>{t("Share PDF")}</button>
       )}
       <button className="btn btn-ghost" onClick={() => pdf(false)} disabled={pdfing}>
         {pdfing ? 'Building…' : 'Export PDF'}
@@ -176,7 +177,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
   const [showPrev, setShowPrev] = useState(false);
   const btnRef    = useRef(null);
   const popRef    = useRef(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, insetInlineStart: 0 });
 
   const linked   = Array.isArray(player.linkedClubs)   ? player.linkedClubs   : [];
   const previous = Array.isArray(player.previousClubs) ? player.previousClubs : [];
@@ -317,7 +318,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
           }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <strong style={{ fontSize: 12, color: 'var(--gold)' }}>Linked Clubs</strong>
+            <strong style={{ fontSize: 12, color: 'var(--gold)' }}>{t("Linked Clubs")}</strong>
             <button type="button" onClick={() => setOpen(false)}
               style={{ background: 'transparent', border: 'none', color: 'var(--text-2)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4 }}>×</button>
           </div>
@@ -328,7 +329,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
               <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                 <select value={adding} onChange={e => setAdding(e.target.value)}
                   style={{ flex: 1, minWidth: 0, fontSize: 11, height: 30, padding: '0 6px' }}>
-                  <option value="">— Select from contacts —</option>
+                  <option value="">{t("— Select from contacts —")}</option>
                   {suggestions.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <button type="button" onClick={() => addClub(adding)}
@@ -339,10 +340,10 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                     color: adding ? '#0A140D' : 'var(--text-3)',
                     border: 'none', cursor: adding ? 'pointer' : 'not-allowed',
                     fontSize: 11, fontWeight: 700,
-                  }}>Link</button>
+                  }}>{t("Link")}</button>
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                Not in the list? Add the club in Contacts first.
+                {t("Not in the list? Add the club in Contacts first.")}
               </div>
             </div>
           )}
@@ -350,7 +351,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
           {/* Currently linked clubs */}
           {linked.length === 0 ? (
             <div style={{ color: 'var(--text-3)', fontStyle: 'italic', padding: '4px 0' }}>
-              No clubs linked yet.
+              {t("No clubs linked yet.")}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
@@ -366,15 +367,15 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                   {canEdit && (
                     <>
                       <button type="button" onClick={() => markNotRelevant(i)}
-                        title="Move to Previous Clubs (no longer relevant)"
+                        title={t("Move to Previous Clubs (no longer relevant)")}
                         style={{
                           flexShrink: 0, padding: '2px 6px', fontSize: 10, fontWeight: 600,
                           background: 'rgba(229,181,71,0.15)', color: 'var(--amber)',
                           border: '1px solid rgba(229,181,71,0.3)', borderRadius: 0,
                           cursor: 'pointer', whiteSpace: 'nowrap',
-                        }}>Not relevant</button>
+                        }}>{t("Not relevant")}</button>
                       <button type="button" onClick={() => remove(i, 'linked')}
-                        title="Remove entirely"
+                        title={t("Remove entirely")}
                         style={{
                           flexShrink: 0, padding: '2px 6px', fontSize: 11,
                           background: 'transparent', color: 'var(--text-3)',
@@ -396,7 +397,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                   background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer',
                   padding: '4px 0', fontSize: 11, fontStyle: 'italic',
                 }}>
-                <span>Previous clubs ({previous.length})</span>
+                <span>{t("Previous clubs (")}{previous.length})</span>
                 <span>{showPrev ? '▲' : '▼'}</span>
               </button>
               {showPrev && (
@@ -413,15 +414,15 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                       {canEdit && (
                         <>
                           <button type="button" onClick={() => reactivate(i)}
-                            title="Move back to Linked"
+                            title={t("Move back to Linked")}
                             style={{
                               flexShrink: 0, padding: '2px 6px', fontSize: 10, fontWeight: 600,
                               background: 'rgba(74,222,128,0.12)', color: '#4ADE80',
                               border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0,
                               cursor: 'pointer', whiteSpace: 'nowrap',
-                            }}>Reactivate</button>
+                            }}>{t("Reactivate")}</button>
                           <button type="button" onClick={() => remove(i, 'previous')}
-                            title="Remove from history"
+                            title={t("Remove from history")}
                             style={{
                               flexShrink: 0, padding: '2px 6px', fontSize: 11,
                               background: 'transparent', color: 'var(--text-3)',
@@ -508,6 +509,21 @@ export default function Pipeline({ category }) {
   // re-saving a candidate clears it for good.
   const openEdit = (p) => { setForm({...EMPTY,...p,natTeamStatus:natTeamStatusOf(p.natTeamStatus)}); setModal({edit:p}); setIsDirty(false); };
 
+  // Router state from search / Player 360: { add }, { editId }, { focus }.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const st = location.state;
+    if (!st) return;
+    const clear = () => navigate(location.pathname + location.search, { replace: true, state: null });
+    if (st.add && canEdit) { openAdd(); clear(); }
+    else if ((st.editId || st.focus) && items.length) {
+      const p = items.find((x) => x.id === (st.editId || st.focus));
+      if (p) { if (st.editId && canEdit) openEdit(p); else setSearch(p.playerName || ''); clear(); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, items.length]);
+
   const validate = () => {
     if (!form.playerName.trim()) return 'Player name is required.';
     if (form.height) {
@@ -531,7 +547,7 @@ export default function Pipeline({ category }) {
         toast.success(`"${form.playerName}" added!`);
       } else {
         await updatePlayer(modal.edit.id, data, modal.edit);
-        toast.success('Updated.');
+        toast.success(t("Updated."));
       }
       setModal(null);
     } catch(e) {
@@ -545,12 +561,12 @@ export default function Pipeline({ category }) {
     const ok = await confirm(`Delete "${p.playerName}"?`);
     if (!ok) return;
     await deleteDoc_(path, p.id);
-    toast.success('Moved to the recycle bin.');
+    toast.success(t("Moved to the recycle bin."), { undo: () => restoreDoc_(path, p.id) });
   };
 
   // Candidate -> represented in one click; the record keeps everything.
   const promote = async (p) => {
-    const ok = await confirm(`Make "${p.playerName}" a represented player? The record moves to the Represented screen with all its details.`, { confirmLabel: 'Promote' });
+    const ok = await confirm(`Make "${p.playerName}" a represented player? The record moves to the Represented screen with all its details.`, { confirmLabel: t("Promote") });
     if (!ok) return;
     try { await promoteToRepresented(p); toast.success(`${p.playerName} is now represented.`); }
     catch (e) { toast.error(e.message || 'Could not promote.'); }
@@ -578,11 +594,11 @@ export default function Pipeline({ category }) {
             {category==='jewish'&&(
               <Link to="/pipeline/jewish/tm-watch" className="btn btn-secondary btn-sm"
                 style={{height:36,textDecoration:'none',position:'relative'}}>
-                <Icon name="social" size={12} /><span className="btn-text">TM Watch</span>
-                {tmNew>0&&<span style={{position:'absolute',top:-6,right:-6,background:'var(--red)',color:'#fff',borderRadius: 0,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
+                <Icon name="social" size={12} /><span className="btn-text">{t("TM Watch")}</span>
+                {tmNew>0&&<span style={{position:'absolute',top:-6,insetInlineEnd: -6,background:'var(--red)',color:'#fff',borderRadius: 0,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
               </Link>
             )}
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>}
             <ExportMenu
               filename={label}
               title={label}
@@ -612,22 +628,22 @@ export default function Pipeline({ category }) {
                 { key: 'natTeamStatus',      label: '🏟️',     pdfLabel: 'National Team',
                   format: (v) => natTeamStatusOf(v) },
                 { key: 'profileLink',        label: '🧑‍💼',   pdfLabel: 'Profile',
-                  format: (v) => v ? { text: 'Profile', url: v.startsWith('http') ? v : 'https://' + v } : '' },
+                  format: (v) => v ? { text: t("Profile"), url: v.startsWith('http') ? v : 'https://' + v } : '' },
                 { key: 'videoLink',          label: '📹',     pdfLabel: 'Video',
-                  format: (v) => v ? { text: 'Video',   url: v.startsWith('http') ? v : 'https://' + v } : '' },
+                  format: (v) => v ? { text: t("Video"),   url: v.startsWith('http') ? v : 'https://' + v } : '' },
               ]}
               rows={data}
             />
             <div style={{height:36,display:'flex',alignItems:'center'}}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              <SearchInput value={search} onChange={setSearch} placeholder={t("Search...")} />
             </div>
           </div>
         }
       >
         <div style={{marginTop:14}}>
           <FilterBar filters={filters} setFilters={setFilters} options={[
-            { key:'status', label:'Status', values:PIPELINE_STATUS },
-            { key:'position', label:'Position', values:POSITIONS },
+            { key:'status', label:t("Status"), values:PIPELINE_STATUS },
+            { key:'position', label:t("Position"), values:POSITIONS },
           ]} />
         </div>
       </PageHeader>
@@ -636,7 +652,7 @@ export default function Pipeline({ category }) {
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length === 0 ? (
         <Empty  message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
-          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">
@@ -649,7 +665,7 @@ export default function Pipeline({ category }) {
                 <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
                     <span style={{fontWeight:600,fontSize:14.5}}>{p.playerName}</span>
-                    {p.height&&<span className="m-sub" style={{marginLeft:6}}>{p.height}cm</span>}
+                    {p.height&&<span className="m-sub" style={{marginInlineStart:6}}>{p.height}{t("cm")}</span>}
                   </div>
                   {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius: 0,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{p.status}</span>}
                 </div>
@@ -685,7 +701,7 @@ export default function Pipeline({ category }) {
                       onDelete={canEdit?()=>del(p):undefined}
                       profileUrl={p.profileLink}
                       videoUrl={p.videoLink}
-                    >{canEdit && <ActionBtn icon="star" tone="gold" title="Promote to Represented" onClick={()=>promote(p)} />}</RowActions>
+                    >{canEdit && <ActionBtn icon="star" tone="gold" title={t("Promote to Represented")} onClick={()=>promote(p)} />}</RowActions>
                   </span>
                 </div>
               </div>
@@ -698,18 +714,18 @@ export default function Pipeline({ category }) {
               <thead>
                 <tr>
                   <th style={{width:66}}></th>
-                  <SortTh label="Name" field="playerName"      sort={sort} setSort={setSort} />
-                  <SortTh label="Born"  field="dob"             sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Nat</th>
-                  <SortTh label="Pos"  field="primaryPosition" sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>2nd</th>
-                  <SortTh label="Foot"  field="foot"            sort={sort} setSort={setSort} />
-                  <th>Club</th>
-                  <SortTh label="Status"  field="status"          sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}} title="Linked Clubs">Clubs</th>
-                  <th style={{textAlign:'center'}}>Agent</th>
-                  <th style={{textAlign:'center'}}>Fee</th>
-                  <th style={{textAlign:'center'}}>Salary</th>
+                  <SortTh label={t("Name")} field="playerName"      sort={sort} setSort={setSort} />
+                  <SortTh label={t("Born")}  field="dob"             sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>{t("Nat")}</th>
+                  <SortTh label={t("Pos")}  field="primaryPosition" sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>{t("2nd")}</th>
+                  <SortTh label={t("Foot")}  field="foot"            sort={sort} setSort={setSort} />
+                  <th>{t("Club")}</th>
+                  <SortTh label={t("Status")}  field="status"          sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}} title={t("Linked Clubs")}>{t("Clubs")}</th>
+                  <th style={{textAlign:'center'}}>{t("Agent")}</th>
+                  <th style={{textAlign:'center'}}>{t("Fee")}</th>
+                  <th style={{textAlign:'center'}}>{t("Salary")}</th>
                   <SortTh label="NT"  field="natTeamStatus"   sort={sort} setSort={setSort} />
                 </tr>
               </thead>
@@ -732,12 +748,12 @@ export default function Pipeline({ category }) {
                           onDelete={canEdit?()=>del(p):undefined}
                           profileUrl={p.profileLink}
                           videoUrl={p.videoLink}
-                        >{canEdit && <ActionBtn icon="star" tone="gold" title="Promote to Represented" onClick={()=>promote(p)} />}</RowActions>
+                        >{canEdit && <ActionBtn icon="star" tone="gold" title={t("Promote to Represented")} onClick={()=>promote(p)} />}</RowActions>
                     </td>
                     {/* Name */}
                     <td>
                       <span style={{fontWeight:600}}>{p.playerName}</span>
-                      {p.height && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.height}cm</div>}
+                      {p.height && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.height}{t("cm")}</div>}
                     </td>
                     {/* DOB + age */}
                     <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}</td>
@@ -817,113 +833,113 @@ export default function Pipeline({ category }) {
           title={modal==='add'?`Add — ${label}`:`Edit: ${form.playerName}`}
           onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={()=>setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}
               style={{background:color,color:'#0A1F12'}}>
-              {saving?<><span className="spinner" style={{width:14,height:14}}/> Saving...</>:'Save Player'}
+              {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
             </button>
           </>}
         >
-          <div className="form-section-title">Status & Basic Info</div>
-          <Field label="Status">
+          <div className="form-section-title">{t("Status & Basic Info")}</div>
+          <Field label={t("Status")}>
             <ChipGroup options={PIPELINE_STATUS} value={f('status')} onChange={s('status')} />
           </Field>
           <div className="form-grid-2">
-            <Field label="Player Name" required>
-              <input value={f('playerName')} onChange={e=>s('playerName')(e.target.value)} placeholder="Full name" />
+            <Field label={t("Player Name")} required>
+              <input value={f('playerName')} onChange={e=>s('playerName')(e.target.value)} placeholder={t("Full name")} />
             </Field>
-            <Field label="Height (cm)">
-              <input type="number" min={130} max={225} value={f('height')} onChange={e=>s('height')(e.target.value.replace(/[^0-9]/g,'').slice(0,3))} placeholder="130–225 cm" />
+            <Field label={t("Height (cm)")}>
+              <input type="number" min={130} max={225} value={f('height')} onChange={e=>s('height')(e.target.value.replace(/[^0-9]/g,'').slice(0,3))} placeholder={t("130–225 cm")} />
             </Field>
           </div>
           <div className="form-grid-2">
-            <Field label="Profile Link">
-              <input value={f('profileLink')} onChange={e=>s('profileLink')(e.target.value)} placeholder="Transfermarkt, Wyscout..." />
+            <Field label={t("Profile Link")}>
+              <input value={f('profileLink')} onChange={e=>s('profileLink')(e.target.value)} placeholder={t("Transfermarkt, Wyscout...")} />
             </Field>
-            <Field label="Video Link">
-              <input value={f('videoLink')} onChange={e=>s('videoLink')(e.target.value)} placeholder="YouTube, highlights..." />
+            <Field label={t("Video Link")}>
+              <input value={f('videoLink')} onChange={e=>s('videoLink')(e.target.value)} placeholder={t("YouTube, highlights...")} />
             </Field>
           </div>
 
           <hr className="divider" />
-          <div className="form-section-title">Player Details</div>
+          <div className="form-section-title">{t("Player Details")}</div>
           <div className="form-grid-3">
-            <Field label="Date of Birth">
+            <Field label={t("Date of Birth")}>
               <DateInput value={f('dob')} onChange={s('dob')} />
             </Field>
-            <Field label="Primary Position">
+            <Field label={t("Primary Position")}>
               <select value={f('primaryPosition')} onChange={e=>s('primaryPosition')(e.target.value)}>
-                <option value="">Select...</option>
+                <option value="">{t("Select...")}</option>
                 {POSITIONS.map(p=><option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Strong Foot">
+            <Field label={t("Strong Foot")}>
               <ChipGroup options={FOOT_OPTIONS} value={f('foot')} onChange={s('foot')} />
             </Field>
           </div>
-          <Field label="Secondary Positions">
+          <Field label={t("Secondary Positions")}>
             <ChipGroup options={POSITIONS} value={f('secondaryPositions')} onChange={s('secondaryPositions')} multi />
           </Field>
-          <Field label="Nationalities">
+          <Field label={t("Nationalities")}>
             <CountrySelect value={f('nationalities')} onChange={s('nationalities')} />
           </Field>
-          <Field label="National Team Status">
+          <Field label={t("National Team Status")}>
             <ChipGroup options={NAT_TEAM_STATUS} value={f('natTeamStatus')} onChange={s('natTeamStatus')} />
             {natTeamStatusOf(f('natTeamStatus')) && (
               <div style={{ marginTop: 8 }}>
                 <CountrySelect value={f('natTeamCountry')} onChange={s('natTeamCountry')}
-                  placeholder="National team country (defaults to first nationality)" />
+                  placeholder={t("National team country (defaults to first nationality)")} />
               </div>
             )}
           </Field>
 
           <hr className="divider" />
-          <div className="form-section-title">Club & League</div>
-          <Field label="Current Club">
-            <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name or Free Agent" />
+          <div className="form-section-title">{t("Club & League")}</div>
+          <Field label={t("Current Club")}>
+            <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder={t("Club name or Free Agent")} />
             <button type="button" className={`chip${form.currentClubIsYouth?' active':''}`}
               onClick={()=>s('currentClubIsYouth')(!form.currentClubIsYouth)}
-              style={{fontSize:11,padding:'4px 10px',marginTop:6}}>Youth Team</button>
+              style={{fontSize:11,padding:'4px 10px',marginTop:6}}>{t("Youth Team")}</button>
           </Field>
-          <Field label="League">
+          <Field label={t("League")}>
             <div style={{display:'flex',gap:8,marginBottom:8}}>
-              <button type="button" className={`chip${form.leagueMode==='select'?' active':''}`} onClick={()=>s('leagueMode')('select')}>By Country + Tier</button>
-              <button type="button" className={`chip${form.leagueMode==='manual'?' active':''}`} onClick={()=>s('leagueMode')('manual')}>Manual</button>
+              <button type="button" className={`chip${form.leagueMode==='select'?' active':''}`} onClick={()=>s('leagueMode')('select')}>{t("By Country + Tier")}</button>
+              <button type="button" className={`chip${form.leagueMode==='manual'?' active':''}`} onClick={()=>s('leagueMode')('manual')}>{t("Manual")}</button>
             </div>
             {form.leagueMode==='select' ? (
               <div className="form-grid-2">
                 <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
-                  <option value="">Country...</option>
+                  <option value="">{t("Country...")}</option>
                   {COUNTRIES.map(c=><option key={c}>{c}</option>)}
                 </select>
                 <ChipGroup options={['1st','2nd','3rd','4th','5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
               </div>
             ) : (
-              <input value={f('leagueManual')} onChange={e=>s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
+              <input value={f('leagueManual')} onChange={e=>s('leagueManual')(e.target.value)} placeholder={t("e.g. Premier League")} />
             )}
-            {league && <div className="form-hint">League: <strong>{league}</strong></div>}
+            {league && <div className="form-hint">{t("League:")} <strong>{league}</strong></div>}
           </Field>
 
           <hr className="divider" />
-          <div className="form-section-title">Agent & Transfer</div>
+          <div className="form-section-title">{t("Agent & Transfer")}</div>
           <div className="form-grid-2">
-            <Field label="Agent Name">
-              <input value={f('agentName')} onChange={e=>s('agentName')(e.target.value)} placeholder="Agent name" />
+            <Field label={t("Agent Name")}>
+              <input value={f('agentName')} onChange={e=>s('agentName')(e.target.value)} placeholder={t("Agent name")} />
             </Field>
-            <Field label="Agent Phone">
+            <Field label={t("Agent Phone")}>
               <input value={f('agentPhone')} onChange={e=>s('agentPhone')(e.target.value.replace(/[^0-9+]/g,''))} placeholder="+972..." />
             </Field>
           </div>
           <div className="form-grid-2">
-            <Field label="Transfer Fee Demand (€)">
+            <Field label={t("Transfer Fee Demand (€)")}>
               <NumberInput value={f('transferFee')} onChange={s('transferFee')} placeholder="e.g. 500,000" allowNotSpecified />
             </Field>
-            <Field label="Salary Demand (€/month)">
+            <Field label={t("Salary Demand (€/month)")}>
               <NumberInput value={f('salary')} onChange={s('salary')} placeholder="e.g. 8,000" allowNotSpecified />
             </Field>
           </div>
-          <Field label="Notes">
-            <textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
+          <Field label={t("Notes")}>
+            <textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder={t("Additional notes...")} rows={3} />
           </Field>
         </Modal>
       )}

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader, ExportMenu,
          Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 // ====================================================================
 // Club logo fetcher - layered strategy with Hebrew/abbreviation support
@@ -625,7 +626,7 @@ function RequirementView({ req, onClose }) {
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-1)' }}>{req.clubName}</span>
-            {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>Youth Team 🌱</span>}
+            {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>{t("Youth Team 🌱")}</span>}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
             {req.league || 'League not set'}
@@ -638,37 +639,37 @@ function RequirementView({ req, onClose }) {
 
       <div className="view-grid-2">
         <div>
-          <div className="form-section-title">Club</div>
-          <Row label="League"     value={req.league} />
-          <Row label="Table Pos." value={req.tablePosition ? `#${req.tablePosition}` : null} />
+          <div className="form-section-title">{t("Club")}</div>
+          <Row label={t("League")}     value={req.league} />
+          <Row label={t("Table Pos.")} value={req.tablePosition ? `#${req.tablePosition}` : null} />
 
-          <div className="form-section-title" style={{ marginTop: 16 }}>Contact</div>
-          <Row label="Name" value={req.contactName} />
-          <Row label="Role" value={req.contactRole} />
+          <div className="form-section-title" style={{ marginTop: 16 }}>{t("Contact")}</div>
+          <Row label={t("Name")} value={req.contactName} />
+          <Row label={t("Role")} value={req.contactRole} />
           {req.contactPhone && (
             <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-              <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Phone</div>
+              <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t("Phone")}</div>
               <PhoneDisplay phone={req.contactPhone} />
             </div>
           )}
         </div>
         <div>
-          <div className="form-section-title">Profile Needed</div>
-          <Row label="Position"     value={req.requiredPosition} />
-          <Row label="Age Range"    value={ageDisplay} />
-          <Row label="Max Transfer" value={feeDisplay} />
-          <Row label="Max Salary"   value={salDisplay} />
+          <div className="form-section-title">{t("Profile Needed")}</div>
+          <Row label={t("Position")}     value={req.requiredPosition} />
+          <Row label={t("Age Range")}    value={ageDisplay} />
+          <Row label={t("Max Transfer")} value={feeDisplay} />
+          <Row label={t("Max Salary")}   value={salDisplay} />
         </div>
       </div>
 
       {req.notes && (
         <div style={{ marginTop: 16 }}>
-          <div className="form-section-title">Notes</div>
+          <div className="form-section-title">{t("Notes")}</div>
           <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.7 }}>{req.notes}</p>
         </div>
       )}
       {req.lastEditedByName && (
-        <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-3)' }}>Last edited by {req.lastEditedByName}</div>
+        <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-3)' }}>{t("Last edited by")} {req.lastEditedByName}</div>
       )}
     </Modal>
   );
@@ -742,7 +743,7 @@ export default function Requirements() {
         toast.success(`Requirement for "${form.clubName}" added!`);
       } else {
         await updateDoc_(PATHS.CLUB_REQUIREMENTS, modal.edit.id, data);
-        toast.success('Updated.');
+        toast.success(t("Updated."));
       }
       setModal(null);
     } catch (e) {
@@ -756,7 +757,7 @@ export default function Requirements() {
     const ok = await confirm(`Delete requirement for "${p.clubName}"?`);
     if (!ok) return;
     await deleteDoc_(PATHS.CLUB_REQUIREMENTS, p.id);
-    toast.success('Deleted.');
+    toast.success(t("Deleted."), { undo: () => restoreDoc_(PATHS.CLUB_REQUIREMENTS, p.id) });
   };
 
   let data = items.filter(p => {
@@ -775,14 +776,14 @@ export default function Requirements() {
   return (
     <div>
       <PageHeader
-        title="Club Requirements"
+        title={t("Club Requirements")}
         subtitle={`${items.length} active requirement${items.length !== 1 ? 's' : ''}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Requirement</span></button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Requirement")}</span></button>}
             <ExportMenu
               filename="Club Requirements"
-              title="Club Requirements"
+              title={t("Club Requirements")}
               subtitle={[
                 search && `search: "${search}"`,
                 filters.gender && `gender: ${filters.gender}`,
@@ -798,23 +799,23 @@ export default function Requirements() {
                 { key: 'deadline',         label: '🗓️',   pdfLabel: 'Deadline' },
                 { key: 'transferFee',      label: '💰',   pdfLabel: 'Fee' },
                 { key: 'salary',           label: '💵',   pdfLabel: 'Salary' },
-                { key: 'contactRole',      label: 'Role',  pdfLabel: 'Role' },
+                { key: 'contactRole',      label: t("Role"),  pdfLabel: 'Role' },
                 { key: 'contactPhone',     label: '📞',   pdfLabel: 'Phone' },
-                { key: 'notes',            label: 'Notes', pdfLabel: 'Notes' },
+                { key: 'notes',            label: t("Notes"), pdfLabel: 'Notes' },
               ]}
               rows={data}
             />
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              <SearchInput value={search} onChange={setSearch} placeholder={t("Search...")} />
             </div>
           </div>
         }
       >
         <div style={{ marginTop: 14 }}>
           <FilterBar filters={filters} setFilters={setFilters} options={[
-            { key: 'gender',     label: 'Gender',   values: ['Men', 'Women'] },
-            { key: 'position',   label: 'Position', values: POSITIONS },
-            { key: 'youthScope', label: 'Group', values: ['Youth', 'Senior'] },
+            { key: 'gender',     label: t("Gender"),   values: ['Men', 'Women'] },
+            { key: 'position',   label: t("Position"), values: POSITIONS },
+            { key: 'youthScope', label: t("Group"), values: ['Youth', 'Senior'] },
           ]} />
         </div>
       </PageHeader>
@@ -824,7 +825,7 @@ export default function Requirements() {
       ) : data.length === 0 ? (
         <Empty
           message={search || Object.values(filters).some(Boolean) ? 'No club requirements match your search.' : 'No club requirements added yet.'}
-          action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Requirement</span></button>} />
+          action={canEdit && !search && !Object.values(filters).some(Boolean) && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Requirement")}</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">
@@ -870,13 +871,13 @@ export default function Requirements() {
                 <tr>
                   <th></th>{/* Actions — first */}
                   <th>G</th>
-                  <SortTh label="Club" field="clubName" sort={sort} setSort={setSort} />
+                  <SortTh label={t("Club")} field="clubName" sort={sort} setSort={setSort} />
                   <th>#</th>
-                  <th>Contact</th>
-                  <th>Pos</th>
-                  <th>Age</th>
-                  <th>Fee</th>
-                  <th>Salary</th>
+                  <th>{t("Contact")}</th>
+                  <th>{t("Pos")}</th>
+                  <th>{t("Age")}</th>
+                  <th>{t("Fee")}</th>
+                  <th>{t("Salary")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -972,104 +973,104 @@ export default function Requirements() {
           title={modal === 'add' ? 'Add Club Requirement' : `Edit: ${form.clubName}`}
           onClose={() => setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Requirement'}
+              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> {t("Saving…")}</> : 'Save Requirement'}
             </button>
           </>}
         >
-          <div className="form-section-title">Club Information</div>
+          <div className="form-section-title">{t("Club Information")}</div>
           <div className="form-grid-2">
-            <Field label="Gender" required>
+            <Field label={t("Gender")} required>
               <ChipGroup options={['Men', 'Women']} value={f('gender')} onChange={s('gender')} />
             </Field>
-            <Field label="Club Name" required>
-              <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder="Club name" />
+            <Field label={t("Club Name")} required>
+              <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder={t("Club name")} />
               <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
                 onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
-                style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>Youth Team</button>
+                style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>{t("Youth Team")}</button>
             </Field>
           </div>
-          <Field label="League">
+          <Field label={t("League")}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <button type="button" className={`chip${form.leagueMode === 'select' ? ' active' : ''}`} onClick={() => s('leagueMode')('select')}>By Country + Tier</button>
-              <button type="button" className={`chip${form.leagueMode === 'manual' ? ' active' : ''}`} onClick={() => s('leagueMode')('manual')}>Manual</button>
+              <button type="button" className={`chip${form.leagueMode === 'select' ? ' active' : ''}`} onClick={() => s('leagueMode')('select')}>{t("By Country + Tier")}</button>
+              <button type="button" className={`chip${form.leagueMode === 'manual' ? ' active' : ''}`} onClick={() => s('leagueMode')('manual')}>{t("Manual")}</button>
             </div>
             {form.leagueMode === 'select' ? (
               <div className="form-grid-2">
                 <select value={f('leagueCountry')} onChange={e => s('leagueCountry')(e.target.value)}>
-                  <option value="">Country...</option>
+                  <option value="">{t("Country...")}</option>
                   {COUNTRIES.map(c => <option key={c}>{c}</option>)}
                 </select>
                 <ChipGroup options={['1st', '2nd', '3rd', '4th', '5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
               </div>
             ) : (
-              <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
+              <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder={t("e.g. Premier League")} />
             )}
             {league && (
               <div className="form-hint">
-                League: <strong>{league}</strong>
-                {form.clubIsYouth && <span style={{ marginLeft: 8 }}>· <strong>Youth League</strong></span>}
+                {t("League:")} <strong>{league}</strong>
+                {form.clubIsYouth && <span style={{ marginInlineStart: 8 }}>· <strong>{t("Youth League")}</strong></span>}
               </div>
             )}
           </Field>
-          <Field label="Current Table Position">
+          <Field label={t("Current Table Position")}>
             <input type="number" min={1} max={45} value={f('tablePosition')}
               onChange={e => { const v = parseInt(e.target.value); if (!e.target.value) { s('tablePosition')(''); return; } if (v >= 1 && v <= 45) s('tablePosition')(String(v)); }}
               placeholder="1–45" style={{ maxWidth: 120 }} />
           </Field>
 
           <hr className="divider" />
-          <div className="form-section-title">Contact</div>
+          <div className="form-section-title">{t("Contact")}</div>
           <div className="form-grid-2">
-            <Field label="Contact Name">
-              <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder="Full name" />
+            <Field label={t("Contact Name")}>
+              <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder={t("Full name")} />
             </Field>
-            <Field label="Contact Role">
+            <Field label={t("Contact Role")}>
               <select value={f('contactRole')} onChange={e => s('contactRole')(e.target.value)}>
-                <option value="">Select role...</option>
+                <option value="">{t("Select role...")}</option>
                 {CONTACT_ROLES.map(r => <option key={r}>{r}</option>)}
               </select>
             </Field>
           </div>
-          <Field label="Contact Phone">
+          <Field label={t("Contact Phone")}>
             <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
 
           <hr className="divider" />
-          <div className="form-section-title">Profile Required</div>
-          <Field label="Required Position">
+          <div className="form-section-title">{t("Profile Required")}</div>
+          <Field label={t("Required Position")}>
             <select value={f('requiredPosition')} onChange={e => s('requiredPosition')(e.target.value)}>
-              <option value="">Select...</option>
+              <option value="">{t("Select...")}</option>
               {POSITIONS.map(p => <option key={p}>{p}</option>)}
             </select>
           </Field>
           <div className="form-grid-2">
-            <Field label="Min Age">
+            <Field label={t("Min Age")}>
               <input type="number" min={14} max={48} value={form.ageNotSpecified ? '' : f('ageMin')}
-                onChange={e => s('ageMin')(e.target.value)} disabled={form.ageNotSpecified} placeholder="Min" />
+                onChange={e => s('ageMin')(e.target.value)} disabled={form.ageNotSpecified} placeholder={t("Min")} />
             </Field>
-            <Field label="Max Age">
+            <Field label={t("Max Age")}>
               <input type="number" min={14} max={48} value={form.ageNotSpecified ? '' : f('ageMax')}
-                onChange={e => s('ageMax')(e.target.value)} disabled={form.ageNotSpecified} placeholder="Max" />
+                onChange={e => s('ageMax')(e.target.value)} disabled={form.ageNotSpecified} placeholder={t("Max")} />
             </Field>
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-2)' }}>
               <input type="checkbox" checked={!!form.ageNotSpecified} onChange={e => s('ageNotSpecified')(e.target.checked)} style={{ accentColor: 'var(--gold)' }} />
-              Age: Not specified
+              {t("Age: Not specified")}
             </label>
           </div>
           <div className="form-grid-2">
-            <Field label="Max Transfer Fee (€)">
+            <Field label={t("Max Transfer Fee (€)")}>
               <NumberInput value={f('transferFee')} onChange={s('transferFee')} placeholder="e.g. 500,000" allowNotSpecified />
             </Field>
-            <Field label="Max Salary (€/month)">
+            <Field label={t("Max Salary (€/month)")}>
               <NumberInput value={f('salary')} onChange={s('salary')} placeholder="e.g. 8,000" allowNotSpecified />
             </Field>
           </div>
-          <Field label="Notes">
-            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
+          <Field label={t("Notes")}>
+            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder={t("Additional notes...")} rows={3} />
           </Field>
         </Modal>
       )}

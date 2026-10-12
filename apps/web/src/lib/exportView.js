@@ -57,7 +57,7 @@ function cellText(v) {
 function stripEmoji(s) {
   if (s == null) return '';
   // eslint-disable-next-line no-control-regex
-  const cleaned = String(s).replace(/[^\x00-\xFF]/g, '').replace(/\s+/g, ' ').trim();
+  const cleaned = String(s).replace(/[^\x00-\xFF\u0590-\u05FF]/g, '').replace(/\s+/g, ' ').trim();
   return cleaned || '—';
 }
 
@@ -208,10 +208,16 @@ export async function exportToExcel({ filename, title, subtitle, columns, rows }
 
 // ─────────────────────────── PDF ────────────────────────────────
 export async function exportToPdf({ filename, title, subtitle, columns, rows }) {
-  const { default: jsPDF } = await import('jspdf');
+  const [{ default: jsPDF }, { installHebrew, hasHebrew }] = await Promise.all([import('jspdf'), import('./pdfHebrew')]);
   await import('jspdf-autotable');
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  // Hebrew titles and cells need an embedded font; Heebo is registered here
+  // and used for the whole table whenever any cell or header carries Hebrew.
+  const heebo = await installHebrew(doc);
+  const anyHebrew = heebo && (hasHebrew(title) || hasHebrew(subtitle)
+    || columns.some((c) => hasHebrew(c.pdfLabel || c.label))
+    || rows.some((r) => columns.some((c) => hasHebrew(cellText(r[c.key])))));
   const pageWidth  = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -276,7 +282,7 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
     startY: 110,
     margin: { left: 40, right: 40 },
     styles: {
-      font: 'helvetica',           // industry standard for tabular data
+      font: anyHebrew ? 'Heebo' : 'helvetica',   // Heebo whenever Hebrew appears
       fontSize: 9,                 // dense but legible — financial-press norm
       cellPadding: { top: 7, right: 6, bottom: 7, left: 6 },
       textColor: [42, 42, 42],
@@ -285,7 +291,7 @@ export async function exportToPdf({ filename, title, subtitle, columns, rows }) 
       valign: 'middle',
     },
     headStyles: {
-      font: 'helvetica',
+      font: anyHebrew ? 'Heebo' : 'helvetica',
       fontStyle: 'bold',
       fontSize: 9.5,
       fillColor: [10, 20, 13],

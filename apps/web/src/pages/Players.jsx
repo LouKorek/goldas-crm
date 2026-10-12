@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { deleteDoc_, uploadFile, resolveFileUrl, renameFile, PATHS } from 'lib/db';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { deleteDoc_, restoreDoc_, uploadFile, resolveFileUrl, renameFile, PATHS } from 'lib/db';
 import { listenPlayers, addPlayer, updatePlayer } from 'data/players';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, CONTRACT_STATUS, POSITION_ORDER,
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
@@ -9,6 +10,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 // ── Country code map ──────────────────────────────────────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Ivory Coast':'CIV','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -41,17 +43,17 @@ function IfaResolution({ ifa, onPin }) {
       border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4,
     }}>
       <div style={{ color: 'var(--text-2)' }}>
-        Matched to <strong style={{ color: 'var(--text-1)' }}>{line || `team ${ifa.teamId}`}</strong>
+        {t("Matched to")} <strong style={{ color: 'var(--text-1)' }}>{line || `team ${ifa.teamId}`}</strong>
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <a href={teamUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>
-          Open its fixture list ↗
+          {t("Open its fixture list ↗")}
         </a>
         <button type="button" onClick={() => onPin(teamUrl)}
           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--gold)', font: 'inherit' }}>
-          Wrong squad? Pin this exact team
+          {t("Wrong squad? Pin this exact team")}
         </button>
-        {when && <span style={{ color: 'var(--text-3)' }}>checked {fmtDate(when.toISOString().slice(0, 10))}</span>}
+        {when && <span style={{ color: 'var(--text-3)' }}>{t("checked")} {fmtDate(when.toISOString().slice(0, 10))}</span>}
       </div>
     </div>
   );
@@ -78,20 +80,20 @@ function DocViewer({ files, title, onClose, onRename }) {
         objectUrl = URL.createObjectURL(blob);
         if (!cancelled) setUrl(objectUrl); else URL.revokeObjectURL(objectUrl);
       })
-      .catch(() => { if (!cancelled) toast.error('Could not load this file.'); })
+      .catch(() => { if (!cancelled) toast.error(t("Could not load this file.")); })
       .finally(() => { if (!cancelled) setLoadingFile(false); });
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [file]);
   const saveName = async () => {
     const name = (renaming || '').trim();
     if (!name) return;
-    try { await onRename(idx, name); setRenaming(null); toast.success('File renamed.'); }
+    try { await onRename(idx, name); setRenaming(null); toast.success(t("File renamed.")); }
     catch (e) { toast.error(e.message || 'Rename failed.'); }
   };
   return (
     <Modal title={title} onClose={onClose} wide viewOnly>
       {!files?.length ? (
-        <p style={{color:'var(--text-3)'}}>No documents uploaded yet.</p>
+        <p style={{color:'var(--text-3)'}}>{t("No documents uploaded yet.")}</p>
       ) : (
         <>
           {files.length > 1 && (
@@ -107,18 +109,18 @@ function DocViewer({ files, title, onClose, onRename }) {
             <div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                 {renaming !== null ? (
-                  <div style={{display:'flex',gap:6,flex:1,marginRight:8}}>
+                  <div style={{display:'flex',gap:6,flex:1,marginInlineEnd:8}}>
                     <input autoFocus value={renaming} onChange={e=>setRenaming(e.target.value)}
                       onKeyDown={e=>{ if (e.key==='Enter') saveName(); if (e.key==='Escape') setRenaming(null); }} />
-                    <button className="btn btn-primary btn-sm" disabled={!renaming.trim()} onClick={saveName}>Save</button>
-                    <button className="btn btn-ghost btn-sm" onClick={()=>setRenaming(null)}>Cancel</button>
+                    <button className="btn btn-primary btn-sm" disabled={!renaming.trim()} onClick={saveName}>{t("Save")}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={()=>setRenaming(null)}>{t("Cancel")}</button>
                   </div>
                 ) : (
                   <div style={{fontSize:12,color:'var(--text-3)'}}>{file.name} · {new Date(file.uploadedAt).toLocaleDateString('en-GB')} · {file.uploadedBy}</div>
                 )}
                 <div style={{display:'flex',gap:6}}>
-                  {onRename && renaming === null && <button className="btn btn-secondary btn-sm" onClick={()=>setRenaming(file.name||'')}>✎ Rename</button>}
-                  {url && <a href={url} download={file.name} className="btn btn-primary btn-sm">⬇ Download</a>}
+                  {onRename && renaming === null && <button className="btn btn-secondary btn-sm" onClick={()=>setRenaming(file.name||'')}>{t("✎ Rename")}</button>}
+                  {url && <a href={url} download={file.name} className="btn btn-primary btn-sm">{t("⬇ Download")}</a>}
                 </div>
               </div>
               {loadingFile || !url ? (
@@ -156,61 +158,61 @@ function PlayerView({ player, onClose }) {
     <Modal title={player.fullName} onClose={onClose} wide viewOnly>
       <div className="view-grid-2">
         <div>
-          <div className="form-section-title">Personal</div>
-          <Row label="Full Name"     value={player.fullName} />
-          <Row label="Gender"        value={player.gender} />
-          <Row label="Date of Birth" value={player.dob?`${fmtDate(player.dob)} (${age} yrs)`:null} />
-          <Row label="Nationalities" value={(player.nationalities||[]).join(', ')} />
-          <Row label="EU Status"     value={isEU?'🇪🇺 European':'Non-EU'} />
-          <Row label="Position"      value={player.primaryPosition} />
-          <Row label="Secondary"     value={(player.secondaryPositions||[]).join(', ')} />
-          <Row label="Foot"          value={player.foot} />
-          <Row label="Nat. Team"     value={natTeamStatusOf(player.natTeamStatus)} />
-          <Row label="IFA Squad"     value={player.autoFetch?.ifa?.teamId
+          <div className="form-section-title">{t("Personal")}</div>
+          <Row label={t("Full Name")}     value={player.fullName} />
+          <Row label={t("Gender")}        value={player.gender} />
+          <Row label={t("Date of Birth")} value={player.dob?`${fmtDate(player.dob)} (${age} yrs)`:null} />
+          <Row label={t("Nationalities")} value={(player.nationalities||[]).join(', ')} />
+          <Row label={t("EU Status")}     value={isEU?'🇪🇺 European':'Non-EU'} />
+          <Row label={t("Position")}      value={player.primaryPosition} />
+          <Row label={t("Secondary")}     value={(player.secondaryPositions||[]).join(', ')} />
+          <Row label={t("Foot")}          value={player.foot} />
+          <Row label={t("Nat. Team")}     value={natTeamStatusOf(player.natTeamStatus)} />
+          <Row label={t("IFA Squad")}     value={player.autoFetch?.ifa?.teamId
             ? <a href={`https://www.football.org.il/team-details/team-games/?team_id=${player.autoFetch.ifa.teamId}`}
                 target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>
                 {[player.autoFetch.ifa.teamName, player.autoFetch.ifa.ageGroup].filter(Boolean).join(' · ') || `team ${player.autoFetch.ifa.teamId}`} ↗
               </a>
             : null} />
-          {player.profileLink && <Row label="Profile Link" value={<a href={player.profileLink.startsWith('http')?player.profileLink:'https://'+player.profileLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>Open ↗</a>} />}
-          {player.videoLink   && <Row label="Video Link"   value={<a href={player.videoLink.startsWith('http')?player.videoLink:'https://'+player.videoLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>Open ↗</a>} />}
+          {player.profileLink && <Row label={t("Profile Link")} value={<a href={player.profileLink.startsWith('http')?player.profileLink:'https://'+player.profileLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>{t("Open ↗")}</a>} />}
+          {player.videoLink   && <Row label={t("Video Link")}   value={<a href={player.videoLink.startsWith('http')?player.videoLink:'https://'+player.videoLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)'}}>{t("Open ↗")}</a>} />}
         </div>
         <div>
-          <div className="form-section-title">Club & Contract</div>
-          <Row label="Contract Status" value={player.contractStatus} />
-          <Row label="Club"            value={player.contractStatus==='Free'?'Free Agent':(player.currentClub ? `${player.currentClub}${player.currentClubIsYouth?' 🌱':'' }` : null)} />
-          {player.contractStatus==='Loan' && <Row label="Loan From" value={player.loanFrom} />}
-          <Row label="League"          value={player.league} />
-          <Row label="Contract Start"  value={fmtDate(player.contractStart)} />
-          <Row label="Contract End"    value={fmtDate(player.contractEnd)} />
-          {player.contractStatus==='Loan' && <Row label="Parent Contract End" value={fmtDate(player.loanParentEnd)} />}
-          <div className="form-section-title" style={{marginTop:16}}>Representation</div>
-          <Row label="Repr. Start"  value={fmtDate(player.reprStart)} />
-          <Row label="Repr. End"    value={fmtDate(player.reprEnd)} />
-          <div className="form-section-title" style={{marginTop:16}}>Passport</div>
-          <Row label="Passport No." value={player.passportNumber} />
-          <Row label="Expiry"       value={fmtDate(player.passportExpiry)} />
+          <div className="form-section-title">{t("Club & Contract")}</div>
+          <Row label={t("Contract Status")} value={player.contractStatus} />
+          <Row label={t("Club")}            value={player.contractStatus==='Free'?'Free Agent':(player.currentClub ? `${player.currentClub}${player.currentClubIsYouth?' 🌱':'' }` : null)} />
+          {player.contractStatus==='Loan' && <Row label={t("Loan From")} value={player.loanFrom} />}
+          <Row label={t("League")}          value={player.league} />
+          <Row label={t("Contract Start")}  value={fmtDate(player.contractStart)} />
+          <Row label={t("Contract End")}    value={fmtDate(player.contractEnd)} />
+          {player.contractStatus==='Loan' && <Row label={t("Parent Contract End")} value={fmtDate(player.loanParentEnd)} />}
+          <div className="form-section-title" style={{marginTop:16}}>{t("Representation")}</div>
+          <Row label={t("Repr. Start")}  value={fmtDate(player.reprStart)} />
+          <Row label={t("Repr. End")}    value={fmtDate(player.reprEnd)} />
+          <div className="form-section-title" style={{marginTop:16}}>{t("Passport")}</div>
+          <Row label={t("Passport No.")} value={player.passportNumber} />
+          <Row label={t("Expiry")}       value={fmtDate(player.passportExpiry)} />
         </div>
       </div>
       {player.notes && (
         <div style={{marginTop:16}}>
-          <div className="form-section-title">Notes</div>
+          <div className="form-section-title">{t("Notes")}</div>
           <p style={{color:'var(--text-2)',fontSize:13,lineHeight:1.7}}>{player.notes}</p>
         </div>
       )}
       {/* Last edit info */}
       {player.lastEditedByName && (
         <div style={{marginTop:12,fontSize:11,color:'var(--text-3)'}}>
-          Last edited by {player.lastEditedByName}
+          {t("Last edited by")} {player.lastEditedByName}
         </div>
       )}
       <div style={{marginTop:20,paddingTop:14,borderTop:'1px solid var(--border)'}}>
-        <div className="form-section-title" style={{marginBottom:10}}>Document History</div>
+        <div className="form-section-title" style={{marginBottom:10}}>{t("Document History")}</div>
         <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
           {[
-            {label:'📋 Contract',        field:'contractFiles', files:player.contractFiles},
-            {label:'Repr. Agreement', field:'reprFiles',     files:player.reprFiles},
-            {label:'Passport',        field:'passportFiles', files:player.passportFiles},
+            {label:t("📋 Contract"),        field:'contractFiles', files:player.contractFiles},
+            {label:t("Repr. Agreement"), field:'reprFiles',     files:player.reprFiles},
+            {label:t("Passport"),        field:'passportFiles', files:player.passportFiles},
           ].map(({label,field,files})=>(
             <button key={label} className="btn btn-secondary btn-sm"
               onClick={()=>setDocModal({files:files||[],title:label,field})}>
@@ -294,6 +296,21 @@ export default function Players() {
   // re-saving a player clears it for good.
   const openEdit = (p) => { setForm({...EMPTY_PLAYER,...p,natTeamStatus:natTeamStatusOf(p.natTeamStatus)}); setModal({edit:p}); setIsDirty(false); };
 
+  // Arrivals from search / Player 360 carry an intent in the router state:
+  // { add: true } opens the form, { editId } opens that player for editing.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const st = location.state;
+    if (!st || !canEdit) return;
+    if (st.add) { openAdd(); navigate(location.pathname, { replace: true, state: null }); }
+    else if (st.editId && players.length) {
+      const p = players.find((x) => x.id === st.editId);
+      if (p) { openEdit(p); navigate(location.pathname, { replace: true, state: null }); }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, players.length]);
+
   const validate = () => {
     if (!form.fullName.trim()) return 'Player name is required.';
     if (!form.gender)          return 'Gender is required.';
@@ -324,7 +341,7 @@ export default function Players() {
         data.leagueManual = '';
       }
       if (modal==='add') { await addPlayer(data, { stage: 'represented' }); toast.success(`"${form.fullName}" added!`); }
-      else { await updatePlayer(modal.edit.id, data, modal.edit); toast.success('Player updated.'); }
+      else { await updatePlayer(modal.edit.id, data, modal.edit); toast.success(t("Player updated.")); }
       setModal(null);
     } catch(e) { toast.error(e.message||'Save failed.'); }
     finally { setSaving(false); }
@@ -334,7 +351,7 @@ export default function Players() {
     e.stopPropagation();
     const ok = await confirm(`Delete "${p.fullName}"?`);
     if (!ok) return;
-    try { await deleteDoc_(PATHS.PLAYERS,p.id); toast.success('Deleted.'); }
+    try { await deleteDoc_(PATHS.PLAYERS,p.id); toast.success(t("Deleted."), { undo: () => restoreDoc_(PATHS.PLAYERS, p.id) }); }
     catch(e) { toast.error(e.message||'Delete failed.'); }
   };
 
@@ -345,7 +362,7 @@ export default function Players() {
       const updated  = mode==='replace'?[fileData]:[...current,fileData];
       setForm(p=>({...p,[field]:updated}));
       if (modal?.edit?.id) await updatePlayer(modal.edit.id,{[field]:updated});
-      toast.success('File uploaded.');
+      toast.success(t("File uploaded."));
     } catch(e) { toast.error(e.message||'Upload failed.'); }
   };
 
@@ -379,14 +396,14 @@ export default function Players() {
   return (
     <div>
       <PageHeader
-        title="Represented Players"
+        title={t("Represented Players")}
         subtitle={`${players.length} player${players.length!==1?'s':''} under representation`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>}
             <ExportMenu
               filename="Represented Players"
-              title="Represented Players"
+              title={t("Represented Players")}
               subtitle={[
                 search && `search: "${search}"`,
                 filters.gender && `gender: ${filters.gender}`,
@@ -399,7 +416,7 @@ export default function Players() {
                 { key: 'dob',              label: '🗓️',     pdfLabel: 'DOB' },
                 { key: 'nationalities',    label: '🌎',     pdfLabel: 'Nationalities' },
                 { key: 'primaryPosition',  label: '📍',     pdfLabel: 'Position' },
-                { key: 'secondaryPositions', label: 'Sec 📍', pdfLabel: 'Secondary',
+                { key: 'secondaryPositions', label: t("Sec 📍"), pdfLabel: 'Secondary',
                   format: (v) => Array.isArray(v) ? v.join(', ') : (v || '') },
                 { key: 'foot',             label: '🦵',     pdfLabel: 'Foot' },
                 { key: 'currentClub',      label: '🔰',     pdfLabel: 'Club',
@@ -407,30 +424,30 @@ export default function Players() {
                     ? 'Free Agent'
                     : (v ? `${v}${r.currentClubIsYouth ? ' (U19)' : ''}${r.league ? `  ·  ${r.league}` : ''}` : '') },
                 { key: 'contractStatus',   label: '📑',     pdfLabel: 'Contract' },
-                { key: 'contractEnd',      label: 'End 📑', pdfLabel: 'Contract End' },
-                { key: 'reprEnd',          label: 'End 🤝', pdfLabel: 'Repr. End' },
-                { key: 'passportExpiry',   label: 'End 🪪', pdfLabel: 'Passport Exp' },
+                { key: 'contractEnd',      label: t("End 📑"), pdfLabel: 'Contract End' },
+                { key: 'reprEnd',          label: t("End 🤝"), pdfLabel: 'Repr. End' },
+                { key: 'passportExpiry',   label: t("End 🪪"), pdfLabel: 'Passport Exp' },
                 { key: 'natTeamStatus',    label: '🏟️',     pdfLabel: 'National Team',
                   format: (v) => natTeamStatusOf(v) },
                 { key: 'profileLink',      label: '🧑‍💼',   pdfLabel: 'Profile',
-                  format: (v) => v ? { text: 'Profile', url: v.startsWith('http') ? v : 'https://' + v } : '' },
+                  format: (v) => v ? { text: t("Profile"), url: v.startsWith('http') ? v : 'https://' + v } : '' },
                 { key: 'videoLink',        label: '📹',     pdfLabel: 'Video',
-                  format: (v) => v ? { text: 'Video',   url: v.startsWith('http') ? v : 'https://' + v } : '' },
+                  format: (v) => v ? { text: t("Video"),   url: v.startsWith('http') ? v : 'https://' + v } : '' },
               ]}
               rows={data}
             />
             <div style={{height:36,display:'flex',alignItems:'center'}}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              <SearchInput value={search} onChange={setSearch} placeholder={t("Search...")} />
             </div>
           </div>
         }
       >
         <div style={{marginTop:14}}>
           <FilterBar filters={filters} setFilters={setFilters} options={[
-            {key:'gender',label:'Gender',values:['Men','Women']},
-            {key:'position',label:'Position',values:POSITIONS},
-            {key:'contractStatus',label:'Contract',values:CONTRACT_STATUS},
-            {key:'youthScope',label:'Group',values:['Youth','Senior']},
+            {key:'gender',label:t("Gender"),values:['Men','Women']},
+            {key:'position',label:t("Position"),values:POSITIONS},
+            {key:'contractStatus',label:t("Contract"),values:CONTRACT_STATUS},
+            {key:'youthScope',label:t("Group"),values:['Youth','Senior']},
           ]} />
         </div>
       </PageHeader>
@@ -440,7 +457,7 @@ export default function Players() {
       ) : data.length===0 ? (
         <Empty
           message={search||Object.values(filters).some(Boolean)?'No represented players match your search.':'No players yet.'}
-          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Player</span></button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">
@@ -453,7 +470,7 @@ export default function Players() {
             return (
               <div key={p.id} className="m-card" onClick={()=>setViewPlayer(p)}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <span style={{fontWeight:600,fontSize:14.5,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.fullName}</span>
+                  <Link to={`/players/${p.id}`} style={{fontWeight:600,fontSize:14.5,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'inherit',textDecoration:'none'}}>{p.fullName}</Link>
                   <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5,flexShrink:0}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
@@ -496,19 +513,19 @@ export default function Players() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{width:70}}>Actions</th>
-                  <SortTh label="Name" field="fullName" sort={sort} setSort={setSort} />
+                  <th style={{width:70}}>{t("Actions")}</th>
+                  <SortTh label={t("Name")} field="fullName" sort={sort} setSort={setSort} />
                   <SortTh label='G' field='gender' sort={sort} setSort={setSort} />
-                  <SortTh label='Born' field='dob' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>Nat</th>
-                  <SortTh label='Pos' field='primaryPosition' sort={sort} setSort={setSort} />
-                  <th style={{textAlign:'center'}}>2nd</th>
-                  <SortTh label='Foot' field='foot' sort={sort} setSort={setSort} />
-                  <th>Club</th>
-                  <SortTh label='Contract' field='contractStatus' sort={sort} setSort={setSort} />
-                  <SortTh label='Con. End' field='contractEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='Rep. End' field='reprEnd' sort={sort} setSort={setSort} />
-                  <SortTh label='Passport' field='passportExpiry' sort={sort} setSort={setSort} />
+                  <SortTh label={t("Born")} field='dob' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>{t("Nat")}</th>
+                  <SortTh label={t("Pos")} field='primaryPosition' sort={sort} setSort={setSort} />
+                  <th style={{textAlign:'center'}}>{t("2nd")}</th>
+                  <SortTh label={t("Foot")} field='foot' sort={sort} setSort={setSort} />
+                  <th>{t("Club")}</th>
+                  <SortTh label={t("Contract")} field='contractStatus' sort={sort} setSort={setSort} />
+                  <SortTh label={t("Con. End")} field='contractEnd' sort={sort} setSort={setSort} />
+                  <SortTh label={t("Rep. End")} field='reprEnd' sort={sort} setSort={setSort} />
+                  <SortTh label={t("Passport")} field='passportExpiry' sort={sort} setSort={setSort} />
                   <SortTh label='NT' field='natTeamStatus' sort={sort} setSort={setSort} />
                 </tr>
               </thead>
@@ -538,7 +555,7 @@ export default function Players() {
                           videoUrl={p.videoLink}
                         />
                       </td>
-                      <td style={{fontWeight:600}}>{p.fullName}</td>
+                      <td style={{fontWeight:600}}><Link to={`/players/${p.id}`} style={{color:'inherit',textDecoration:'none'}}>{p.fullName}</Link></td>
                       <td style={{textAlign:'center',color:'var(--text-2)'}}>{genderShort}</td>
                       <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}</td>
                       <td>
@@ -586,116 +603,116 @@ export default function Players() {
         <Modal title={modal==='add'?'Add Represented Player':`Edit: ${form.fullName}`}
           onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={()=>setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving?<><span className="spinner" style={{width:14,height:14}}/> Saving...</>:'Save Player'}
+              {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
             </button>
           </>}
         >
-          <div className="form-section-title">Basic Information</div>
+          <div className="form-section-title">{t("Basic Information")}</div>
           <div className="form-grid-2">
-            <Field label="Full Name" required><input value={f('fullName')} onChange={e=>s('fullName')(e.target.value)} placeholder="Full name" /></Field>
-            <Field label="Gender" required><ChipGroup options={['Men','Women']} value={f('gender')} onChange={s('gender')} /></Field>
+            <Field label={t("Full Name")} required><input value={f('fullName')} onChange={e=>s('fullName')(e.target.value)} placeholder={t("Full name")} /></Field>
+            <Field label={t("Gender")} required><ChipGroup options={['Men','Women']} value={f('gender')} onChange={s('gender')} /></Field>
           </div>
           <div className="form-grid-3">
-            <Field label="Date of Birth">
+            <Field label={t("Date of Birth")}>
               <DateInput value={f('dob')} onChange={s('dob')} />
-              {age!==null&&<div className="form-hint">Age: {age}</div>}
+              {age!==null&&<div className="form-hint">{t("Age:")} {age}</div>}
             </Field>
-            <Field label="Primary Position">
+            <Field label={t("Primary Position")}>
               <select value={f('primaryPosition')} onChange={e=>s('primaryPosition')(e.target.value)}>
-                <option value="">Select...</option>
+                <option value="">{t("Select...")}</option>
                 {POSITIONS.map(p=><option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Strong Foot"><ChipGroup options={FOOT_OPTIONS} value={f('foot')} onChange={s('foot')} /></Field>
+            <Field label={t("Strong Foot")}><ChipGroup options={FOOT_OPTIONS} value={f('foot')} onChange={s('foot')} /></Field>
           </div>
-          <Field label="Secondary Positions"><ChipGroup options={POSITIONS} value={f('secondaryPositions')} onChange={s('secondaryPositions')} multi /></Field>
-          <Field label="Nationalities">
+          <Field label={t("Secondary Positions")}><ChipGroup options={POSITIONS} value={f('secondaryPositions')} onChange={s('secondaryPositions')} multi /></Field>
+          <Field label={t("Nationalities")}>
             <CountrySelect value={f('nationalities')} onChange={s('nationalities')} />
             <div style={{marginTop:6,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
               <span className="badge" style={{background:isEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:isEU?'var(--blue)':'var(--red)'}}>{isEU?'🇪🇺 EU Player':'Non-EU'}</span>
             </div>
           </Field>
-          <Field label="National Team Status"><ChipGroup options={NAT_TEAM_STATUS} value={f('natTeamStatus')} onChange={s('natTeamStatus')} /></Field>
+          <Field label={t("National Team Status")}><ChipGroup options={NAT_TEAM_STATUS} value={f('natTeamStatus')} onChange={s('natTeamStatus')} /></Field>
 
           <hr className="divider" />
-          <div className="form-section-title">Club & Contract</div>
-          <Field label="Contract Status"><ChipGroup options={CONTRACT_STATUS} value={f('contractStatus')} onChange={setContractStatus} /></Field>
+          <div className="form-section-title">{t("Club & Contract")}</div>
+          <Field label={t("Contract Status")}><ChipGroup options={CONTRACT_STATUS} value={f('contractStatus')} onChange={setContractStatus} /></Field>
           {!isFree&&(<>
             <div className="form-grid-2">
-              <Field label="Current Club">
-                <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder="Club name" />
+              <Field label={t("Current Club")}>
+                <input value={f('currentClub')} onChange={e=>s('currentClub')(e.target.value)} placeholder={t("Club name")} />
                 <button type="button" className={`chip${form.currentClubIsYouth?' active':''}`}
                   onClick={()=>s('currentClubIsYouth')(!form.currentClubIsYouth)}
-                  style={{fontSize:11,padding:'4px 10px',marginTop:6}}>Youth Team</button>
+                  style={{fontSize:11,padding:'4px 10px',marginTop:6}}>{t("Youth Team")}</button>
               </Field>
-              {isLoan&&<Field label="Loan From"><input value={f('loanFrom')} onChange={e=>s('loanFrom')(e.target.value)} placeholder="Parent club" /></Field>}
+              {isLoan&&<Field label={t("Loan From")}><input value={f('loanFrom')} onChange={e=>s('loanFrom')(e.target.value)} placeholder={t("Parent club")} /></Field>}
             </div>
-            <Field label="League">
+            <Field label={t("League")}>
               <div style={{display:'flex',gap:8,marginBottom:8}}>
-                <button type="button" className={`chip${form.leagueMode==='select'?' active':''}`} onClick={()=>s('leagueMode')('select')}>By Country + Tier</button>
-                <button type="button" className={`chip${form.leagueMode==='manual'?' active':''}`} onClick={()=>s('leagueMode')('manual')}>Manual</button>
+                <button type="button" className={`chip${form.leagueMode==='select'?' active':''}`} onClick={()=>s('leagueMode')('select')}>{t("By Country + Tier")}</button>
+                <button type="button" className={`chip${form.leagueMode==='manual'?' active':''}`} onClick={()=>s('leagueMode')('manual')}>{t("Manual")}</button>
               </div>
               {form.leagueMode==='select'?(
                 <div className="form-grid-2">
                   <select value={f('leagueCountry')} onChange={e=>s('leagueCountry')(e.target.value)}>
-                    <option value="">Country...</option>
+                    <option value="">{t("Country...")}</option>
                     {COUNTRIES.map(c=><option key={c}>{c}</option>)}
                   </select>
                   <ChipGroup options={['1st','2nd','3rd','4th','5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
                 </div>
               ):(
-                <input value={f('leagueManual')} onChange={e=>s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
+                <input value={f('leagueManual')} onChange={e=>s('leagueManual')(e.target.value)} placeholder={t("e.g. Premier League")} />
               )}
-              {league&&<div className="form-hint">League: <strong>{league}</strong></div>}
+              {league&&<div className="form-hint">{t("League:")} <strong>{league}</strong></div>}
             </Field>
-            <Field label="IFA Player Profile" hint="Optional — his football.org.il profile page. Paste it once and leave it: the season in the link is ignored, so it never needs replacing, and it follows him to a new club or age group by itself. Drives match auto-sync for Israeli youth / women / lower leagues.">
+            <Field label={t("IFA Player Profile")} hint={t("Optional — his football.org.il profile page. Paste it once and leave it: the season in the link is ignored, so it never needs replacing, and it follows him to a new club or age group by itself. Drives match auto-sync for Israeli youth / women / lower leagues.")}>
               <input value={f('ifaTeamUrl')} onChange={e=>s('ifaTeamUrl')(e.target.value)}
                 placeholder="https://www.football.org.il/players/player/?player_id=..." />
               {/* Team links from before this field expected a profile still
                   sync fine, but they track the club rather than the player. */}
               {/team_id=/.test(f('ifaTeamUrl')) && (
                 <div className="form-hint" style={{ color: 'var(--amber)' }}>
-                  This is a team link. It works, but it stays with the club — swap it for his profile page and it will follow him if he moves.
+                  {t("This is a team link. It works, but it stays with the club — swap it for his profile page and it will follow him if he moves.")}
                 </div>
               )}
               {/* The profile page carries no team id, so the sync has to find
                   the squad by name once. Showing what it landed on turns that
                   from a silent guess into something you can check and correct. */}
               <IfaResolution ifa={form.autoFetch?.ifa}
-                onPin={(url) => { s('ifaTeamUrl')(url); toast.success('Pinned to this team — no lookup from now on.'); }} />
+                onPin={(url) => { s('ifaTeamUrl')(url); toast.success(t("Pinned to this team — no lookup from now on.")); }} />
             </Field>
             <div className="form-grid-2">
-              <Field label="Contract Start"><DateInput value={f('contractStart')} onChange={s('contractStart')} /></Field>
-              <Field label="Contract End"><DateInput value={f('contractEnd')} onChange={s('contractEnd')} /></Field>
+              <Field label={t("Contract Start")}><DateInput value={f('contractStart')} onChange={s('contractStart')} /></Field>
+              <Field label={t("Contract End")}><DateInput value={f('contractEnd')} onChange={s('contractEnd')} /></Field>
             </div>
-            {isLoan&&<Field label="Parent Club Contract End"><DateInput value={f('loanParentEnd')} onChange={s('loanParentEnd')} /></Field>}
-            <Field label="Contract File"><FileUpload label="contract" onUpload={(file,name,mode)=>handleFileUpload('contractFiles',file,name,mode)} history={form.contractFiles||[]} /></Field>
+            {isLoan&&<Field label={t("Parent Club Contract End")}><DateInput value={f('loanParentEnd')} onChange={s('loanParentEnd')} /></Field>}
+            <Field label={t("Contract File")}><FileUpload label={t("contract")} onUpload={(file,name,mode)=>handleFileUpload('contractFiles',file,name,mode)} history={form.contractFiles||[]} /></Field>
           </>)}
 
           <hr className="divider" />
-          <div className="form-section-title">Passport</div>
+          <div className="form-section-title">{t("Passport")}</div>
           <div className="form-grid-2">
-            <Field label="Passport Number"><input value={f('passportNumber')} onChange={e=>s('passportNumber')(e.target.value)} placeholder="Passport number" /></Field>
-            <Field label="Passport Expiry"><DateInput value={f('passportExpiry')} onChange={s('passportExpiry')} /></Field>
+            <Field label={t("Passport Number")}><input value={f('passportNumber')} onChange={e=>s('passportNumber')(e.target.value)} placeholder={t("Passport number")} /></Field>
+            <Field label={t("Passport Expiry")}><DateInput value={f('passportExpiry')} onChange={s('passportExpiry')} /></Field>
           </div>
-          <Field label="Passport File"><FileUpload label="passport" onUpload={(file,name,mode)=>handleFileUpload('passportFiles',file,name,mode)} history={form.passportFiles||[]} /></Field>
+          <Field label={t("Passport File")}><FileUpload label={t("passport")} onUpload={(file,name,mode)=>handleFileUpload('passportFiles',file,name,mode)} history={form.passportFiles||[]} /></Field>
 
           <hr className="divider" />
-          <div className="form-section-title">Representation Agreement</div>
+          <div className="form-section-title">{t("Representation Agreement")}</div>
           <div className="form-grid-2">
-            <Field label="Repr. Start"><DateInput value={f('reprStart')} onChange={s('reprStart')} /></Field>
-            <Field label="Repr. End"><DateInput value={f('reprEnd')} onChange={s('reprEnd')} /></Field>
+            <Field label={t("Repr. Start")}><DateInput value={f('reprStart')} onChange={s('reprStart')} /></Field>
+            <Field label={t("Repr. End")}><DateInput value={f('reprEnd')} onChange={s('reprEnd')} /></Field>
           </div>
-          <Field label="Repr. Agreement File"><FileUpload label="agreement" onUpload={(file,name,mode)=>handleFileUpload('reprFiles',file,name,mode)} history={form.reprFiles||[]} /></Field>
+          <Field label={t("Repr. Agreement File")}><FileUpload label={t("agreement")} onUpload={(file,name,mode)=>handleFileUpload('reprFiles',file,name,mode)} history={form.reprFiles||[]} /></Field>
 
           <hr className="divider" />
           <div className="form-grid-2">
-            <Field label="Profile Link" hint="Transfermarkt, Wyscout..."><input value={f('profileLink')} onChange={e=>s('profileLink')(e.target.value)} placeholder="https://..." /></Field>
-            <Field label="Video Link" hint="YouTube, highlights..."><input value={f('videoLink')} onChange={e=>s('videoLink')(e.target.value)} placeholder="https://..." /></Field>
+            <Field label={t("Profile Link")} hint={t("Transfermarkt, Wyscout...")}><input value={f('profileLink')} onChange={e=>s('profileLink')(e.target.value)} placeholder="https://..." /></Field>
+            <Field label={t("Video Link")} hint={t("YouTube, highlights...")}><input value={f('videoLink')} onChange={e=>s('videoLink')(e.target.value)} placeholder="https://..." /></Field>
           </div>
-          <Field label="Notes"><textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} /></Field>
+          <Field label={t("Notes")}><textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder={t("Additional notes...")} rows={3} /></Field>
         </Modal>
       )}
 

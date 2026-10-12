@@ -22,7 +22,11 @@ import Social        from 'pages/Social';
 import Clubs         from 'pages/Clubs';
 import RecycleBin    from 'pages/RecycleBin';
 import Migrations    from 'pages/Migrations';
+import Home          from 'pages/Home';
+import Player360     from 'pages/Player360';
+import Golda         from 'pages/Golda';
 import { ToastProvider } from 'components/ui/UI';
+import { t } from 'lib/i18n';
 
 // Animated splash screen shown on app open
 function Splash({ fading }) {
@@ -30,7 +34,7 @@ function Splash({ fading }) {
     <div style={{
       position: 'fixed', inset: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      backgroundImage: 'linear-gradient(rgba(10,21,12,0.78), rgba(10,21,12,0.92)), url("/photos/Hero.png")',
+      backgroundImage: 'linear-gradient(rgba(10,21,12,0.78), rgba(10,21,12,0.92)), url("/photos/Hero.jpg")',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundColor: '#0E1B11',
@@ -69,13 +73,13 @@ function Splash({ fading }) {
       <div style={{ textAlign: 'center', position: 'relative' }}>
         {/* Orbiting ring around the logo */}
         <div style={{
-          position: 'absolute', top: 55, left: '50%',
+          position: 'absolute', top: 55, insetInlineStart: '50%',
           width: 150, height: 150,
-          marginLeft: -75,
+          marginInlineStart: -75,
           borderRadius: '50%',
           border: '1px solid transparent',
           borderTopColor: 'rgba(201,168,76,0.55)',
-          borderRightColor: 'rgba(201,168,76,0.15)',
+          borderInlineEndColor: 'rgba(201,168,76,0.15)',
           animation: 'splash-ring 2.6s linear infinite',
           pointerEvents: 'none',
         }} />
@@ -94,7 +98,7 @@ function Splash({ fading }) {
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           {/* Shimmer sweep */}
           <div style={{
-            position: 'absolute', top: 0, left: 0,
+            position: 'absolute', top: 0, insetInlineStart: 0,
             width: '40%', height: '100%',
             background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)',
             animation: 'splash-shimmer 2.2s ease-in-out 1s infinite',
@@ -111,7 +115,7 @@ function Splash({ fading }) {
           animation: 'splash-text-in 0.9s cubic-bezier(0.16,1,0.3,1) 0.25s both',
           lineHeight: 1,
         }}>
-          Gold A&amp;S
+          {t("Gold A&S")}
         </div>
 
         {/* Tagline */}
@@ -122,7 +126,7 @@ function Splash({ fading }) {
           textTransform: 'uppercase',
           animation: 'splash-tagline-in 1.4s ease 0.4s both',
         }}>
-          Football Agency
+          {t("Football Agency")}
         </div>
       </div>
     </div>
@@ -179,10 +183,14 @@ export default function App() {
             <ToastProvider />
             <Routes>
               <Route path="/" element={<Layout user={user} />}>
-                <Route index element={<Navigate to="/dashboard" replace />} />
-                <Route path="dashboard"      element={<Dashboard />} />
+                <Route index element={<Navigate to="/home" replace />} />
+                <Route path="home"           element={<Home />} />
+                <Route path="home/:tab"      element={<Home />} />
+                <Route path="dashboard"      element={<Navigate to="/home/snapshot" replace />} />
+                <Route path="golda"          element={<Golda />} />
                 <Route path="social"         element={<Social />} />
                 <Route path="players"        element={<Players />} />
+                <Route path="players/:id"    element={<Player360 />} />
                 <Route path="matches"        element={<Matches />} />
                 <Route path="requirements"   element={<Requirements />} />
                 <Route path="clubs"          element={<Clubs />} />
