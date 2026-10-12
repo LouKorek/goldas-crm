@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { callFunction } from 'lib/api';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS, clearCollection } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenPlayers } from 'data/players';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
 import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
@@ -352,12 +353,6 @@ function PlayersFilter({ allPlayers, value, onChange }) {
   );
 }
 
-async function clearAll_matches() {
-  if (!window.confirm('Delete ALL matches? This cannot be undone.')) return;
-  try { await clearCollection(PATHS.MATCHES); window.location.reload(); }
-  catch (e) { toast.error(e.message || 'Not allowed.'); }
-}
-
 // ── Sync report ───────────────────────────────────────────────────
 // Every player the last sync could not produce fixtures for, and why, in
 // words rather than error codes. Collapsed by default; the count is enough
@@ -479,7 +474,7 @@ export default function Matches() {
   };
 
   const [allPlayers, setAllPlayers] = useState([]);
-  useEffect(() => { return listenCollection(PATHS.PLAYERS, setAllPlayers); }, []);
+  useEffect(() => { return listenPlayers({ stage: 'represented' }, setAllPlayers); }, []);
   useEffect(() => {
     return listenCollection(PATHS.MATCHES, data => {
       setItems(data.sort((a, b) => (a.date || '') > (b.date || '') ? 1 : -1));
@@ -706,12 +701,6 @@ export default function Matches() {
               <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
                 <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
               </div>
-              {isAdmin && <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
-                style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
-                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-                <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
-              </button>}
             </div>
           }
         >

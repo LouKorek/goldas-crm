@@ -7,7 +7,7 @@
 //   &player=<name fragment>   also: how many upcoming auto-synced matches
 //                             are linked to the matching player(s)
 
-const { getDb } = require('./lib/firestore.js');
+const { getDb, listRepresented } = require('./lib/firestore.js');
 const { withAuth } = require('./lib/auth.js');
 
 const ts = (v) => v?.toDate?.()?.toISOString?.() || null;
@@ -48,7 +48,7 @@ exports.handler = withAuth({ action: 'read', secrets: [{ header: 'x-sync-secret'
 
   if (q.player) {
     const re = new RegExp(String(q.player).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    const players = (await db.collection('players').get()).docs.filter((d) => re.test(d.data().fullName || ''));
+    const players = (await listRepresented(db)).filter((p) => re.test(p.fullName || p.name || ''));
     const today = new Date().toISOString().slice(0, 10);
     out.player = [];
     for (const d of players) {
@@ -59,8 +59,8 @@ exports.handler = withAuth({ action: 'read', secrets: [{ header: 'x-sync-secret'
         autoMatches: auto.length,
         upcoming: auto.filter((m) => (m.date || '') >= today).length,
         lastFetchedAt: auto.map((m) => ts(m.lastFetchedAt)).filter(Boolean).sort().pop() || null,
-        ifaTeamKnown: !!d.data().autoFetch?.ifa?.teamId,
-        ifaLastFixturesAt: d.data().autoFetch?.ifa?.lastFixturesAt || null,
+        ifaTeamKnown: !!d.autoFetch?.ifa?.teamId,
+        ifaLastFixturesAt: d.autoFetch?.ifa?.lastFixturesAt || null,
       });
     }
   }

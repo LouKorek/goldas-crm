@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { listenCollection, PATHS } from 'lib/db';
+import { listenPlayers } from 'data/players';
 import { calcAge, fmtDate } from 'lib/constants';
 import { loadSettings, computeAlerts, dayLabel } from 'lib/alerts';
 import { PageHeader } from 'components/ui/UI';
@@ -158,17 +159,16 @@ export default function Dashboard() {
   const [drillDown, setDrillDown] = useState(null); // null | 'transfer' | 'mandates' | 'contracts'
 
   useEffect(() => {
-    const u1 = listenCollection(PATHS.PLAYERS,          setPlayers,  'createdAt');
+    const u1 = listenPlayers({ stage: 'represented' }, setPlayers);
     const u2 = listenCollection(PATHS.CLUB_REQUIREMENTS,setReq,      'createdAt');
     const u3 = listenCollection(PATHS.MATCHES,          setMatches,  'date');
     loadSettings().then(setSettings);   // same settings the Notifications page + email script use
-    const cats = ['men','women','youth','jewish'];
-    const unsubs = cats.map(c =>
-      listenCollection(PATHS[`PIPELINE_${c.toUpperCase()}`], (d) => {
-        setPipeByCat(prev => ({ ...prev, [c]: d }));
-      }, 'createdAt')
-    );
-    return () => { u1(); u2(); u3(); unsubs.forEach(u=>u()); };
+    const u4 = listenPlayers({ notStage: 'represented' }, (d) => {
+      const by = { men: [], women: [], youth: [], jewish: [] };
+      d.forEach((p) => { (by[p.category] || by.men).push(p); });
+      setPipeByCat(by);
+    });
+    return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
   const pipeAll = useMemo(() => Object.values(pipeByCat).flat(), [pipeByCat]);

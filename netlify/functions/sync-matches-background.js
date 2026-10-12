@@ -22,7 +22,7 @@
 // Whatever a run cannot do is written to app_meta/syncWarnings per player and
 // shown on the Matches screen. Nothing here should fail quietly.
 
-const { admin, getDb } = require('./lib/firestore.js');
+const { admin, getDb, listRepresented } = require('./lib/firestore.js');
 const { withAuth } = require('./lib/auth.js');
 const { runJob } = require('./lib/jobs.js');
 const cheerio = require('cheerio');
@@ -908,8 +908,7 @@ async function runSync(opts = {}) {
   let fatal = null;
 
   try {
-    const playersSnap = await db.collection('players').get();
-    let players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let players = await listRepresented(db);
     const only = nameMatcher(opts.only);
     if (only) players = players.filter((p) => only.test(p.fullName || ''));
     stats.totalPlayers = players.length;

@@ -11,6 +11,10 @@ const { admin, getDb } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
 
 const KEEP = 8;
+// Soft-deleted records (the recycle bin) are purged for good this many days
+// after deletion — after they have been in at least one weekly backup.
+const RECYCLE_DAYS = 30;
+const RECYCLE_COLLECTIONS = ['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings'];
 const CHUNK_CHARS = 800_000;
 const SKIP = new Set(['backups', 'internal_nonces', 'jobs', 'wa_inbox']);
 const MAX_TOTAL_CHARS = 150_000_000; // ~150 MB of JSON; beyond that the backup is marked partial
@@ -75,9 +79,33 @@ async function runBackup(job) {
   return { id: ref.id, docs: state.docs, chunks: n, chars: text.length, partial: state.partial, pruned: Math.max(0, all.size - KEEP) };
 }
 
+// Recycle-bin items deleted more than RECYCLE_DAYS ago are removed, now that
+// the backup just taken holds them.
+async function purgeRecycleBin(job) {
+  const db = getDb();
+  const cutoff = Date.now() - RECYCLE_DAYS * 86400000;
+  let purged = 0;
+  for (const col of RECYCLE_COLLECTIONS) {
+    const snap = await db.collection(col).where('deletedAt', '!=', null).get().catch(() => null);
+    if (!snap) continue;
+    const old = snap.docs.filter((d) => { const t = d.data().deletedAt; const ms = t?.toMillis?.() || Date.parse(t) || 0; return ms && ms < cutoff; });
+    for (let i = 0; i < old.length; i += 400) {
+      const batch = db.batch();
+      old.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+    purged += old.length;
+    if (old.length) job.note(`${col}: purged ${old.length} from the recycle bin`);
+  }
+  return purged;
+}
+
 exports.handler = schedule('30 1 * * 0', async () => {
   try {
-    const r = await runJob('backup-weekly', runBackup);
+    const r = await runJob('backup-weekly', async (job) => {
+      const b = await runBackup(job);
+      return { ...b, recyclePurged: await purgeRecycleBin(job) };
+    });
     return { statusCode: 200, body: JSON.stringify(r) };
   } catch (e) {
     console.error('backup failed:', e);

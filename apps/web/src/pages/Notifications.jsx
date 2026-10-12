@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { listenCollection, PATHS } from 'lib/db';
+import { listenPlayers } from 'data/players';
 import { fmtDate } from 'lib/constants';
 import { DEFAULT_SETTINGS, loadSettings, persistSettings, computeAlerts, dayLabel } from 'lib/alerts';
 import { PageHeader, Modal } from 'components/ui/UI';
@@ -97,7 +98,7 @@ export default function Notifications() {
   const { canEdit } = useRole();
 
   useEffect(() => {
-    const u1 = listenCollection(PATHS.PLAYERS, setPlayers);
+    const u1 = listenPlayers({ stage: 'represented' }, setPlayers);
     const u2 = listenCollection(PATHS.MATCHES,  setMatches);
     loadSettings().then(setSettings);   // Firestore source of truth (shared with email script)
     return () => { u1(); u2(); };

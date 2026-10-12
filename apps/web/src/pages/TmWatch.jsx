@@ -4,6 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { callFunction } from 'lib/api';
 import { listenCollection, updateDoc_, addDoc_, PATHS } from 'lib/db';
+import { addPlayer } from 'data/players';
 import { fmtDate, ISO2 } from 'lib/constants';
 import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
@@ -126,7 +127,7 @@ export default function TmWatch() {
   };
   const addToPipeline = async (p) => {
     try {
-      await addDoc_(PATHS.PIPELINE_JEWISH, {
+      await addPlayer({
         playerName: p.name,
         currentClub: p.club || '',
         league: p.clubCountry ? `${p.clubCountry}${p.league ? ' · ' + p.league : ''}` : (p.league || ''),
@@ -134,7 +135,8 @@ export default function TmWatch() {
         status: 'Not Contacted',
         profileLink: p.tmUrl || '',
         notes: `From TM Watch — ${p.matchedOn || ''}`,
-      });
+        source: 'tm_watch',
+      }, { category: 'jewish', stage: 'tracking' });
       await updateDoc_(PATHS.TM_WATCH, p.id, { addedToPipeline: true, status: p.status === 'new' ? 'seen' : p.status });
       toast.success(`${p.name} added to the Jewish pipeline.`);
     } catch (e) { toast.error(e.message); }

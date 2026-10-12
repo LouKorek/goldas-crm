@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenPlayers } from 'data/players';
 import { fmtDate } from 'lib/constants';
 import {
   Modal, Field, ChipGroup, DateInput, SearchInput, PageHeader,
@@ -187,7 +188,7 @@ export default function Tasks() {
   const { confirm, dialog }   = useConfirm();
 
   useEffect(() => listenCollection(PATHS.TASKS, data => { setAllItems(data); setLoading(false); }), []);
-  useEffect(() => listenCollection(PATHS.PLAYERS, setPlayers), []);
+  useEffect(() => listenPlayers({ stage: 'represented' }, setPlayers), []);
 
   // Only ever work with this user's own tasks. Documents written before the
   // list became personal carry no `owner` — they are Lou's, and the effect

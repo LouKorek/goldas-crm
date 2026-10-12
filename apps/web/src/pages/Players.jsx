@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, uploadFile, resolveFileUrl, renameFile, PATHS, clearCollection } from 'lib/db';
+import { deleteDoc_, uploadFile, resolveFileUrl, renameFile, PATHS } from 'lib/db';
+import { listenPlayers, addPlayer, updatePlayer } from 'data/players';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, CONTRACT_STATUS, POSITION_ORDER,
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
@@ -223,12 +224,6 @@ function PlayerView({ player, onClose }) {
   );
 }
 
-async function clearAllPlayers() {
-  if (!window.confirm('Delete ALL represented players? This cannot be undone.')) return;
-  try { await clearCollection(PATHS.PLAYERS); window.location.reload(); }
-  catch (e) { toast.error(e.message || 'Not allowed.'); }
-}
-
 const EMPTY_PLAYER = {
   gender:'', fullName:'', nationalities:[], contractStatus:'Under Contract',
   currentClub:'', currentClubIsYouth:false, loanFrom:'', leagueMode:'select',
@@ -258,7 +253,7 @@ export default function Players() {
   const { canEdit, isAdmin }        = useRole();
 
   useEffect(() => {
-    return listenCollection(PATHS.PLAYERS, (data) => { setPlayers(data); setLoading(false); });
+    return listenPlayers({ stage: 'represented' }, (data) => { setPlayers(data); setLoading(false); });
   }, []);
 
   const s = (k) => (v) => { setForm(p=>({...p,[k]:v})); setIsDirty(true); };
@@ -328,8 +323,8 @@ export default function Players() {
         data.leagueTier = '';
         data.leagueManual = '';
       }
-      if (modal==='add') { await addDoc_(PATHS.PLAYERS,data); toast.success(`"${form.fullName}" added!`); }
-      else { await updateDoc_(PATHS.PLAYERS,modal.edit.id,data); toast.success('Player updated.'); }
+      if (modal==='add') { await addPlayer(data, { stage: 'represented' }); toast.success(`"${form.fullName}" added!`); }
+      else { await updatePlayer(modal.edit.id, data, modal.edit); toast.success('Player updated.'); }
       setModal(null);
     } catch(e) { toast.error(e.message||'Save failed.'); }
     finally { setSaving(false); }
@@ -349,7 +344,7 @@ export default function Players() {
       const current  = Array.isArray(form[field])?form[field]:[];
       const updated  = mode==='replace'?[fileData]:[...current,fileData];
       setForm(p=>({...p,[field]:updated}));
-      if (modal?.edit?.id) await updateDoc_(PATHS.PLAYERS,modal.edit.id,{[field]:updated});
+      if (modal?.edit?.id) await updatePlayer(modal.edit.id,{[field]:updated});
       toast.success('File uploaded.');
     } catch(e) { toast.error(e.message||'Upload failed.'); }
   };
@@ -427,12 +422,6 @@ export default function Players() {
             <div style={{height:36,display:'flex',alignItems:'center'}}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            {isAdmin && <button className="btn btn-danger btn-sm" onClick={clearAllPlayers}
-              style={{height:36,opacity:0.45,whiteSpace:'nowrap'}}
-              onMouseEnter={e=>e.currentTarget.style.opacity='1'}
-              onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
-              <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
-            </button>}
           </div>
         }
       >

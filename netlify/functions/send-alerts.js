@@ -13,7 +13,7 @@
 //                                   Verification → App passwords).
 
 const { schedule } = require('@netlify/functions');
-const { admin, getDb, OWNER_EMAIL } = require('./lib/firestore.js');
+const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
 const nodemailer   = require('nodemailer');
 
@@ -266,15 +266,14 @@ async function saveSent(db, keys, matchDates, now) {
 // ────────────────── Main routine ──────────────────
 async function sendDigest() {
   const db = getDb();
-  const [playersSnap, matchesSnap, settings, recipients, sent] = await Promise.all([
-    db.collection('players').get(),
+  const [players, matchesSnap, settings, recipients, sent] = await Promise.all([
+    listRepresented(db),
     db.collection('matches').get(),
     fetchSettings(db),
     fetchRecipients(db),
     loadSent(db),
   ]);
-  const players = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  const matches = matchesSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const matches = matchesSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
 
   const now = new Date();
   const r = computeNewAlerts(players, matches, settings, sent, now);
