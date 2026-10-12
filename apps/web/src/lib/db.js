@@ -28,20 +28,39 @@ const assertCanEdit = () => {
   }
 };
 
-export const listenCollection = (path, callback) => {
+// Soft delete: deleting a record stamps `deletedAt` and hides it; the recycle
+// bin (data/recycle.js) can restore it for 30 days. Collections not listed
+// here (system/meta data) are deleted for real.
+export const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings']);
+
+export const listenCollection = (path, callback, { includeDeleted = false } = {}) => {
   const q = query(collection(db, path));
   return onSnapshot(q,
-    snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    snap => {
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      callback(includeDeleted ? rows : rows.filter(r => !r.deletedAt));
+    },
     err  => { console.error('Firestore error:', path, err); callback([]); }
   );
+};
+
+// Every write leaves a line in `audit` (who, what, which fields). Best effort:
+// a failed audit write never blocks the change itself.
+const writeAudit = (action, path, docId, extra = {}) => {
+  const { email, name } = currentUserMeta();
+  return addDoc(collection(db, 'audit'), {
+    action, collection: path, docId, by: email, byName: name, via: 'web',
+    at: serverTimestamp(), ...extra,
+  }).catch((e) => console.warn('audit write failed:', e?.message));
 };
 
 export const addDoc_ = async (path, data) => {
   assertCanEdit();
   const { email, name } = currentUserMeta();
   const { id: _id, ...cleanData } = data; // strip any stray id field
-  return addDoc(collection(db, path), {
+  const ref = await addDoc(collection(db, path), {
     ...cleanData,
+    deletedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: email,
@@ -49,21 +68,47 @@ export const addDoc_ = async (path, data) => {
     lastEditedByName: name,
     lastEditedAt: serverTimestamp(),
   });
+  writeAudit('create', path, ref.id, { fields: Object.keys(cleanData).slice(0, 50) });
+  return ref;
 };
 
 export const updateDoc_ = async (path, id, data) => {
   assertCanEdit();
   const { email, name } = currentUserMeta();
-  return updateDoc(doc(db, path, id), {
+  await updateDoc(doc(db, path, id), {
     ...data,
     updatedAt: serverTimestamp(),
     lastEditedBy: email,
     lastEditedByName: name,
     lastEditedAt: serverTimestamp(),
   });
+  writeAudit('update', path, id, { fields: Object.keys(data).slice(0, 50) });
 };
 
-export const deleteDoc_ = (path, id) => { assertCanEdit(); return deleteDoc(doc(db, path, id)); };
+export const deleteDoc_ = async (path, id) => {
+  assertCanEdit();
+  if (SOFT_DELETE.has(path)) {
+    const { email } = currentUserMeta();
+    await updateDoc(doc(db, path, id), { deletedAt: serverTimestamp(), deletedBy: email });
+    writeAudit('delete', path, id);
+    return;
+  }
+  await deleteDoc(doc(db, path, id));
+  writeAudit('purge', path, id);
+};
+
+export const restoreDoc_ = async (path, id) => {
+  assertCanEdit();
+  await updateDoc(doc(db, path, id), { deletedAt: null, deletedBy: null, restoredAt: serverTimestamp() });
+  writeAudit('restore', path, id);
+};
+
+// Permanent removal, admin only, and only from the recycle bin.
+export const purgeDoc_ = async (path, id) => {
+  if (SESSION.role !== 'admin') throw new Error('Only an admin can delete permanently.');
+  await deleteDoc(doc(db, path, id));
+  writeAudit('purge', path, id);
+};
 
 // ── File storage (free, Firestore-only) ───────────────────────────
 // Files are stored as base64 in their OWN documents, split into chunks, so we
@@ -163,11 +208,11 @@ export const resolveFileUrl = async (ref) => {
 };
 
 export const PATHS = {
-  PLAYERS:           'players',
-  PIPELINE_MEN:      'pipeline_men',
-  PIPELINE_WOMEN:    'pipeline_women',
-  PIPELINE_YOUTH:    'pipeline_youth',
-  PIPELINE_JEWISH:   'pipeline_jewish',
+  PLAYERS:           'players',      // one collection: stage + category (see data/players.js)
+  CLUBS:             'clubs',
+  DEALS:             'deals',
+  INTERACTIONS:      'interactions',
+  TRAININGS:         'trainings',
   CLUB_REQUIREMENTS: 'club_requirements',
   MATCHES:           'matches',
   CONTACTS:          'contacts',

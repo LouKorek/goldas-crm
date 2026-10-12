@@ -18,6 +18,7 @@ const NAV = [
   { label: 'Matches',           path: '/matches',         icon: 'matches' },
   { label: 'Contacts',          path: '/contacts',        icon: 'contacts' },
   { section: 'Transfer Window', num: '03' },
+  { label: 'Clubs',             path: '/clubs',           icon: 'clipboard' },
   { label: 'Club Requirements', path: '/requirements',    icon: 'clipboard' },
   { label: 'Men',               path: '/pipeline/men',    icon: 'men' },
   { label: 'Women',             path: '/pipeline/women',  icon: 'women' },
@@ -26,7 +27,9 @@ const NAV = [
   { section: 'System',          num: '04' },
   { label: 'My Tasks',          path: '/tasks',           icon: 'tasks' },
   { label: 'Notifications',     path: '/notifications',   icon: 'bell' },
+  { label: 'Recycle Bin',       path: '/recycle',         icon: 'trash' },
   { label: 'Team',              path: '/team',            icon: 'team', adminOnly: true },
+  { label: 'Data Migrations',   path: '/admin/migrations', icon: 'refresh', adminOnly: true },
 ];
 
 // Bottom nav for mobile - 5 most important destinations
@@ -34,7 +37,7 @@ const BOTTOM_NAV = [
   { label: 'Home',     path: '/dashboard',     icon: 'dashboard' },
   { label: 'Players',  path: '/players',       icon: 'players' },
   { label: 'Matches',  path: '/matches',       icon: 'matches' },
-  { label: 'Clubs',    path: '/requirements',  icon: 'clipboard' },
+  { label: 'Clubs',    path: '/clubs',         icon: 'clipboard' },
   { label: 'More',     path: '__more__',       icon: 'menu' },
 ];
 

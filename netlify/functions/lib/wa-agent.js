@@ -8,6 +8,20 @@ const C = require('../data/crm-constants.js');
 
 const MODEL = 'claude-opus-5-5';
 const { OWNER_EMAIL } = require('./firestore.js');
+const { stageFromStatus, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS } = require('@goldas/domain');
+
+// Since the model unification every person lives in `players` with a stage
+// and a category. Golda keeps speaking in the old collection names (the
+// prompt, the tools and Lou's habits all use them), and these map each name
+// onto the physical collection plus the filter that selects its records.
+const VIRTUAL = { players: { col: 'players', match: (d) => !d.stage || d.stage === 'represented' } };
+for (const [category, legacy] of Object.entries(LEGACY_PIPELINE_COLLECTIONS)) {
+  VIRTUAL[legacy] = { col: 'players', category, match: (d) => d.category === category && d.stage && d.stage !== 'represented' };
+}
+const physical = (c) => (VIRTUAL[c] ? VIRTUAL[c].col : c);
+const belongs = (c, d) => !d.deletedAt && (!VIRTUAL[c] || VIRTUAL[c].match(d));
+// Records deleted by Golda go to the recycle bin, like the app's deletes.
+const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings']);
 const FILE_CHUNK = 600 * 1024;
 const FILE_MAX = 15 * 1024 * 1024;
 const MAX_STEPS = 25;
@@ -225,8 +239,10 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   const FieldValue = admin.firestore.FieldValue;
   const who = { email: OWNER_EMAIL, name: sender === 'לו' ? `${assistantName} (WhatsApp)` : `${assistantName} (WhatsApp, ${sender})` };
   const audit = (entry) => db.collection('wa_audit').add({ ...entry, phone, sender, at: FieldValue.serverTimestamp(), undone: false });
-  const colOk = (c) => { if (!COLLECTIONS[c]) throw new Error(READ_ONLY[c] ? `${c} is read-only` : `unknown collection ${c}`); return db.collection(c); };
-  const readOk = (c) => { if (!ALL[c]) throw new Error(`unknown collection ${c}`); return db.collection(c); };
+  const colOk = (c) => { if (!COLLECTIONS[c]) throw new Error(READ_ONLY[c] ? `${c} is read-only` : `unknown collection ${c}`); return db.collection(physical(c)); };
+  const readOk = (c) => { if (!ALL[c]) throw new Error(`unknown collection ${c}`); return db.collection(physical(c)); };
+  // The documents of a (virtual) collection: live records that belong to it.
+  const docsOf = async (c) => (await readOk(c).get()).docs.filter((d) => belongs(c, d.data()));
   const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; return o; };
   const state = { pendingDelete: session.pendingDelete || null, changed: false };
 
@@ -236,8 +252,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
     const words = q.split(' ').filter(Boolean);
     const out = [];
     for (const c of cols) {
-      const snap = await readOk(c).get();
-      for (const d of snap.docs) {
+      for (const d of await docsOf(c)) {
         const data = d.data();
         const hay = norm([data.fullName, data.playerName, data.name, data.title, data.clubName, data.contactName, data.homeTeam, data.awayTeam,
           data.currentClub, data.club, data.notes, data.agentName, data.nameHe, data.hebrewName, data.caption].filter(Boolean).join(' '));
@@ -250,8 +265,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function list({ collection, where = [], fields, sortBy, desc, limit }) {
-    const snap = await readOk(collection).get();
-    let rows = snap.docs.map((d) => ({ id: d.id, ...plain(d.data()) }));
+    let rows = (await docsOf(collection)).map((d) => ({ id: d.id, ...plain(d.data()) }));
     for (const w of where || []) rows = rows.filter((r) => matches(r[w.field], w.op, w.value));
     if (sortBy) {
       rows.sort((a, b) => {
@@ -320,7 +334,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
 
   async function get({ collection, id }) {
     const s = await readOk(collection).doc(id).get();
-    if (!s.exists) throw new Error('not found');
+    if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
     const d = plain(s.data());
     for (const f of FILE_FIELDS) if (Array.isArray(d[f])) d[f] = d[f].map((r) => ({ name: r.name, uploadedAt: r.uploadedAt, type: r.type }));
     return { collection, id, ...d };
@@ -336,11 +350,14 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
     validate(collection, d, true);
     d = freeAgentRules(collection, withLeague(collection, d));
     if (collection === 'players') {
-      const dup = (await db.collection('players').get()).docs.find((x) => norm(x.data().fullName) === norm(d.fullName)
+      const dup = (await docsOf('players')).find((x) => norm(x.data().fullName) === norm(d.fullName)
         && x.data().gender === d.gender && (x.data().dob || '') === (d.dob || ''));
       if (dup) throw new Error(`a player with the same name, gender and date of birth already exists (id ${dup.id})`);
+      d = { ...d, stage: 'represented', category: categoryFromPlayer(d), name: playerName(d) };
+    } else if (VIRTUAL[collection]) {
+      d = { ...d, stage: stageFromStatus(d.status), category: VIRTUAL[collection].category, name: playerName(d), source: 'golda' };
     }
-    const ref = await colOk(collection).add({ ...d, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    const ref = await colOk(collection).add({ ...d, deletedAt: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       lastEditedAt: FieldValue.serverTimestamp(), createdBy: who.email, lastEditedBy: who.email, lastEditedByName: who.name });
     await audit({ action: 'create', collection, docId: ref.id, before: null, after: d });
     state.changed = true;
@@ -350,13 +367,17 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   async function update({ collection, id, data }) {
     const ref = colOk(collection).doc(id);
     const s = await ref.get();
-    if (!s.exists) throw new Error('not found');
+    if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
     const before = s.data();
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
+    for (const k of ['stage', 'category', 'legacy', 'migratedAt', 'deletedAt', 'deletedBy']) delete d[k];
     validate(collection, d, false);
     d = freeAgentRules(collection, withLeague(collection, d, before), before);
     if (!Object.keys(d).length) throw new Error('nothing to change');
+    // Keep the unified fields in step with what Golda changed.
+    if (VIRTUAL[collection] && collection !== 'players' && 'status' in d && d.status !== before.status) d.stage = stageFromStatus(d.status);
+    if (VIRTUAL[collection] && ('fullName' in d || 'playerName' in d)) d.name = playerName({ ...before, ...d });
     const prev = {};
     for (const k of Object.keys(d)) prev[k] = before[k] === undefined ? null : plain(before[k]);
     await ref.update({ ...d, updatedAt: FieldValue.serverTimestamp(), lastEditedAt: FieldValue.serverTimestamp(),
@@ -369,7 +390,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   async function del({ collection, id, confirmed }) {
     const ref = colOk(collection).doc(id);
     const s = await ref.get();
-    if (!s.exists) throw new Error('not found');
+    if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
     const armed = state.pendingDelete && state.pendingDelete.collection === collection && state.pendingDelete.id === id
       && state.pendingDelete.armedInTurn !== session.turn;
     if (!confirmed || !armed) {
@@ -378,7 +399,11 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
         instruction: 'Ask the writer to confirm in a new message. Only after they say yes, call delete again with confirmed=true.' };
     }
     const before = plain(s.data());
-    await ref.delete();
+    if (SOFT_DELETE.has(physical(collection))) {
+      await ref.update({ deletedAt: FieldValue.serverTimestamp(), deletedBy: who.email, updatedAt: FieldValue.serverTimestamp() });
+    } else {
+      await ref.delete();
+    }
     state.pendingDelete = null;
     await audit({ action: 'delete', collection, docId: id, before, after: null });
     state.changed = true;
@@ -432,8 +457,13 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
     const e = last.data();
     const ref = colOk(e.collection).doc(e.docId);
     const stamp = { updatedAt: FieldValue.serverTimestamp(), lastEditedAt: FieldValue.serverTimestamp(), lastEditedBy: who.email, lastEditedByName: who.name };
-    if (e.action === 'create') await ref.delete();
-    else if (e.action === 'delete') await ref.set({ ...e.before, ...stamp });
+    if (e.action === 'create') {
+      if (SOFT_DELETE.has(physical(e.collection))) await ref.update({ deletedAt: FieldValue.serverTimestamp(), deletedBy: who.email, ...stamp });
+      else await ref.delete();
+    } else if (e.action === 'delete') {
+      const { deletedAt: _a, deletedBy: _b, ...was } = e.before || {};
+      await ref.set({ ...was, deletedAt: null, deletedBy: FieldValue.delete(), ...stamp }, { merge: true });
+    }
     else {
       const restore = {};
       for (const [k, v] of Object.entries(e.before || {})) restore[k] = v === null ? FieldValue.delete() : v;

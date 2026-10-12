@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS, clearCollection } from 'lib/db';
+import { listenCollection, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenPlayers, addPlayer, updatePlayer, promoteToRepresented } from 'data/players';
+import { openDeal, closeDeal, listenDeals } from 'data/deals';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, PIPELINE_STATUS, PIPELINE_STATUS_COLORS,
          COUNTRIES, calcAge, fmtDate, isEuropean, formatPhone, flagEmoji } from 'lib/constants';
 import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
          FilterBar, PageHeader, Empty, Spinner, ExportMenu, useConfirm,
-         PhoneActions, NumberInput, RowActions } from 'components/ui/UI';
+         PhoneActions, NumberInput, RowActions, ActionBtn } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
@@ -157,12 +159,6 @@ function PlayerCardModal({ player, category, onClose }) {
 }
 
 
-async function clearAllCategory(path) {
-  if (!window.confirm('Delete ALL players in this category? This cannot be undone.')) return;
-  try { await clearCollection(path); window.location.reload(); }
-  catch (e) { toast.error(e.message || 'Not allowed.'); }
-}
-
 // ─── Linked clubs ────────────────────────────────────────────────
 // Inline cell shown for the four club-related pipeline statuses
 // (Offered, Negotiation, Draft Signed, Contract Signed). Lets the
@@ -223,6 +219,13 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
     try { await updateDoc_(path, player.id, next); }
     catch (e) { toast.error(e.message || 'Could not save linked clubs.'); }
   };
+  // A linked club is a deal: linking opens one, marking it not relevant closes it.
+  const dealOpen  = (clubName) => openDeal(player, { clubName }, player.status).catch(() => {});
+  const dealClose = (clubName) => new Promise((resolve) => {
+    const un = listenDeals({ playerId: player.id, clubName, open: true }, async (ds) => {
+      un(); await Promise.all(ds.map((d) => closeDeal(d, 'המועדון סומן כלא רלוונטי').catch(() => {}))); resolve();
+    });
+  });
 
   const addClub = async (name) => {
     const trimmed = (name || '').trim();
@@ -239,10 +242,12 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
         linkedClubs:   [...linked, moved],
         previousClubs: previous.filter((_, i) => i !== prevIdx),
       });
+      dealOpen(moved.clubName);
     } else {
       await persist({
         linkedClubs: [...linked, { clubName: trimmed, linkedAt: new Date().toISOString() }],
       });
+      dealOpen(trimmed);
     }
     setAdding('');
   };
@@ -254,6 +259,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
       linkedClubs:   linked.filter((_, i) => i !== idx),
       previousClubs: [...previous, { ...c, markedAt: new Date().toISOString() }],
     });
+    dealClose(c.clubName);
   };
 
   const reactivate = async (idx) => {
@@ -266,11 +272,14 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
       linkedClubs:   [...linked, { clubName: c.clubName, linkedAt: new Date().toISOString() }],
       previousClubs: previous.filter((_, i) => i !== idx),
     });
+    dealOpen(c.clubName);
   };
 
   const remove = async (idx, which) => {
     if (which === 'linked') {
+      const c = linked[idx];
       await persist({ linkedClubs: linked.filter((_, i) => i !== idx) });
+      if (c) dealClose(c.clubName);
     } else {
       await persist({ previousClubs: previous.filter((_, i) => i !== idx) });
     }
@@ -433,7 +442,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
 }
 
 export default function Pipeline({ category }) {
-  const path     = PATHS[`PIPELINE_${category.toUpperCase()}`];
+  const path     = PATHS.PLAYERS;   // one collection; this screen shows the category's candidates
 
   // TM Watch badge (Jewish screen only) — count of new Transfermarkt candidates.
   const [tmNew, setTmNew] = useState(0);
@@ -464,14 +473,14 @@ export default function Pipeline({ category }) {
   useEffect(() => {
     const s = searchParams.get('status');
     if (s) setFilters(f => ({ ...f, status: s }));
-  }, [path, searchParams]);
+  }, [category, searchParams]);
 
   useEffect(() => {
     setLoading(true);
-    return listenCollection(path, (data) => {
+    return listenPlayers({ category, notStage: 'represented' }, (data) => {
       setItems(data); setLoading(false);
-    }, 'playerName');
-  }, [path]);
+    });
+  }, [category]);
 
   // Contacts feed the LinkedClubsCell dropdown — deduplicated by clubName
   // (case-insensitive, trimmed) and sorted alphabetically.
@@ -518,10 +527,10 @@ export default function Pipeline({ category }) {
     try {
       const data = {...form, league};
       if (modal==='add') {
-        await addDoc_(path, data);
+        await addPlayer(data, { category, stage: 'tracking' });
         toast.success(`"${form.playerName}" added!`);
       } else {
-        await updateDoc_(path, modal.edit.id, data);
+        await updatePlayer(modal.edit.id, data, modal.edit);
         toast.success('Updated.');
       }
       setModal(null);
@@ -536,7 +545,15 @@ export default function Pipeline({ category }) {
     const ok = await confirm(`Delete "${p.playerName}"?`);
     if (!ok) return;
     await deleteDoc_(path, p.id);
-    toast.success('Deleted.');
+    toast.success('Moved to the recycle bin.');
+  };
+
+  // Candidate -> represented in one click; the record keeps everything.
+  const promote = async (p) => {
+    const ok = await confirm(`Make "${p.playerName}" a represented player? The record moves to the Represented screen with all its details.`, { confirmLabel: 'Promote' });
+    if (!ok) return;
+    try { await promoteToRepresented(p); toast.success(`${p.playerName} is now represented.`); }
+    catch (e) { toast.error(e.message || 'Could not promote.'); }
   };
 
   // Sort order: Position → Name
@@ -604,12 +621,6 @@ export default function Pipeline({ category }) {
             <div style={{height:36,display:'flex',alignItems:'center'}}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            {isAdmin && <button className="btn btn-danger btn-sm" onClick={()=>clearAllCategory(path)}
-              style={{height:36,opacity:0.45,whiteSpace:'nowrap'}} title="Clear all"
-              onMouseEnter={e=>e.currentTarget.style.opacity='1'}
-              onMouseLeave={e=>e.currentTarget.style.opacity='0.45'}>
-              <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
-            </button>}
           </div>
         }
       >
@@ -674,7 +685,7 @@ export default function Pipeline({ category }) {
                       onDelete={canEdit?()=>del(p):undefined}
                       profileUrl={p.profileLink}
                       videoUrl={p.videoLink}
-                    />
+                    >{canEdit && <ActionBtn icon="star" tone="gold" title="Promote to Represented" onClick={()=>promote(p)} />}</RowActions>
                   </span>
                 </div>
               </div>
@@ -721,7 +732,7 @@ export default function Pipeline({ category }) {
                           onDelete={canEdit?()=>del(p):undefined}
                           profileUrl={p.profileLink}
                           videoUrl={p.videoLink}
-                        />
+                        >{canEdit && <ActionBtn icon="star" tone="gold" title="Promote to Represented" onClick={()=>promote(p)} />}</RowActions>
                     </td>
                     {/* Name */}
                     <td>

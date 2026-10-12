@@ -17,7 +17,7 @@
 // And per player: someone who has upcoming matches on file and came back
 // with none is left alone and reported, never wiped.
 
-const { admin } = require('./lib/firestore.js');
+const { admin, listRepresented } = require('./lib/firestore.js');
 const { _lib } = require('./sync-matches-background.js');
 const { checkSyncSecret } = require('./lib/ifa-sync-auth.js');
 
@@ -56,8 +56,7 @@ async function plan(db, payload) {
   }
   if (!scrapedAt || Date.now() - scrapedAt > MAX_PAYLOAD_AGE_MS) refuse.push('payload is older than 6 hours');
 
-  const snap = await db.collection('players').get();
-  const players = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+  const players = new Map((await listRepresented(db)).map((p) => [p.id, p]));
   const isTarget = (p) => decideSources(p).includes('ifa') && !!p.ifaTeamUrl && !!p.currentClub;
   const targets = [...players.values()].filter(isTarget);
 

@@ -12,6 +12,7 @@
 
 const { _lib } = require('./sync-matches-background.js');
 const { checkSyncSecret } = require('./lib/ifa-sync-auth.js');
+const { listRepresented } = require('./lib/firestore.js');
 
 const { getDb, decideSources, seasonStartMs, IFA_TEAM_PINS } = _lib;
 const CLUB_INDEX_TTL_DAYS = 30;
@@ -66,8 +67,7 @@ exports.handler = async (event) => {
     } : null);
   }
 
-  const snap = await db.collection('players').get();
-  const targets = snap.docs.map((d) => targetFor({ id: d.id, ...d.data() })).filter(Boolean);
+  const targets = (await listRepresented(db)).map(targetFor).filter(Boolean);
 
   // The club register barely changes; hand over the stored copy when it is
   // fresh so the browser can skip that page.

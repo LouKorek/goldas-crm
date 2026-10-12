@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS, clearCollection } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
 import { POSITIONS, CONTACT_ROLES, COUNTRIES, fmtDate } from 'lib/constants';
 import { Modal, Field, ChipGroup, SortTh, SearchInput, FilterBar, PageHeader, ExportMenu,
          Empty, Spinner, useConfirm, PhoneDisplay, PhoneActions, RowActions, NumberInput } from 'components/ui/UI';
@@ -550,18 +550,23 @@ async function _doFetchClubLogo(name, cacheKey) {
   return store(null);
 }
 
-export function ClubLogoOrAvatar({ name, size = 28 }) {
+// `src` is a logo already saved on the club record (skips every lookup);
+// `onResolved(url)` fires once a lookup finds one, so the caller can save it.
+export function ClubLogoOrAvatar({ name, size = 28, src, onResolved }) {
   const [url, setUrl] = useState(() => {
+    if (src) return src;
     const k = (name || '').trim().toLowerCase();
     return k in _logoCache ? _logoCache[k] : undefined;
   });
 
   useEffect(() => {
+    if (src) { setUrl(src); return; }
     if (!name || name.trim().length < 2) { setUrl(null); return; }
     const k = name.trim().toLowerCase();
-    if (k in _logoCache) { setUrl(_logoCache[k]); return; }
-    fetchClubLogo(name).then(logo => setUrl(logo));
-  }, [name]);
+    if (k in _logoCache) { setUrl(_logoCache[k]); if (_logoCache[k] && onResolved) onResolved(_logoCache[k]); return; }
+    fetchClubLogo(name).then(logo => { setUrl(logo); if (logo && onResolved) onResolved(logo); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, src]);
 
   if (url) {
     return (
@@ -675,12 +680,6 @@ const EMPTY = {
   contactPhone: '', requiredPosition: '', ageMin: '', ageMax: '', ageNotSpecified: false,
   transferFee: '', salary: '', notes: '',
 };
-
-async function clearAll_clubrequirements() {
-  if (!window.confirm('Delete ALL requirements? This cannot be undone.')) return;
-  try { await clearCollection(PATHS.CLUB_REQUIREMENTS); window.location.reload(); }
-  catch (e) { toast.error(e.message || 'Not allowed.'); }
-}
 
 export default function Requirements() {
   const [items, setItems]     = useState([]);
@@ -808,12 +807,6 @@ export default function Requirements() {
             <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
               <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
             </div>
-            {isAdmin && <button className="btn btn-danger btn-sm" onClick={clearAll_clubrequirements}
-              style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
-              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
-              <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
-            </button>}
           </div>
         }
       >

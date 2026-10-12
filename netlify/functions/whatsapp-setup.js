@@ -6,6 +6,9 @@
 //     &register=<phone_number_id>   register a newly verified number for the
 //                                   Cloud API; its two-step PIN is created here
 //                                   and kept only in Firestore (app_meta/whatsapp)
+//   &callback=1                    point Meta's webhook callback at this site
+//                                   (lib/wa-subscription.js; also done on every
+//                                   production deploy)
 //   &auto=1                        for each WhatsApp account in WA_WABA_IDS: subscribe
 //                                   the app and register every verified number that
 //                                   isn't registered yet. Idempotent, returns statuses
@@ -13,6 +16,7 @@
 // Never returns the token or the PIN.
 const crypto = require('crypto');
 const { getDb } = require('./lib/firestore.js');
+const { ensureWebhookCallback } = require('./lib/wa-subscription.js');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 
@@ -59,6 +63,10 @@ async function auto() {
 exports.handler = async (event) => {
   const q = event.queryStringParameters || {};
   if (!process.env.WA_VERIFY_TOKEN || q.key !== process.env.WA_VERIFY_TOKEN) return { statusCode: 403, body: 'forbidden' };
+  if (q.callback) {
+    const r = await ensureWebhookCallback(process.env.URL || 'https://goldas-crm.netlify.app');
+    return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(r, null, 2) };
+  }
   if (q.auto && process.env.WA_TOKEN) {
     return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ at: new Date().toISOString(), accounts: await auto() }, null, 2) };
   }

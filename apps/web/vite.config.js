@@ -13,6 +13,7 @@ export default defineConfig({
       lib: r('./src/lib'),
       components: r('./src/components'),
       pages: r('./src/pages'),
+      data: r('./src/data'),
     },
   },
   // Keep the old CRA variable names working alongside Vite's own.

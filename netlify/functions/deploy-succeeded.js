@@ -9,6 +9,11 @@
 // several times. A run that left players behind doesn't count: the next
 // deploy picks up where it stopped.
 //
+// Two more things happen on a production deploy, before the sync:
+//   1. pending data migrations start in the background (backup first), so a
+//      model change ships with its data in one step and nobody presses anything;
+//   2. Meta's webhook callback for Golda is pointed at production.
+//
 // Same hand-off as sync-matches-cron: a single-use internal nonce, then an
 // HTTP call to the background worker. When Netlify's WEBHOOK_SECRET is set,
 // the event's JWS signature is verified as well.
@@ -16,6 +21,8 @@
 const crypto = require('crypto');
 const { getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
+const { ensureWebhookCallback } = require('./lib/wa-subscription.js');
+const { _startBackground: startMigrations } = require('./migrate.js');
 
 const MIN_GAP_H = 20;
 // Noam Barzilai is the player this pipeline was verified on; putting him
@@ -51,19 +58,36 @@ exports.handler = async (event) => {
     return { statusCode: 200, body: `skipped: ${payload.context}` };
   }
 
+  const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  const notes = [];
+  try {
+    const m = await startMigrations('deploy-succeeded');
+    notes.push(`migrations: ${m.ok ? 'started' : `not started (${m.status})`}`);
+  } catch (e) {
+    console.error('[deploy-succeeded] migrations failed:', e);
+    notes.push(`migrations failed: ${e.message}`);
+  }
+  try {
+    const w = await ensureWebhookCallback(base);
+    notes.push(`webhook: ${w.updated ? 'updated' : w.unchanged ? 'unchanged' : w.skipped ? `skipped (${w.skipped})` : `error (${w.error})`}`);
+  } catch (e) {
+    console.error('[deploy-succeeded] webhook update failed:', e);
+    notes.push(`webhook failed: ${e.message}`);
+  }
+  console.log(`[deploy-succeeded] ${notes.join('; ')}`);
+
   const db = getDb();
   const status = (await db.collection('app_meta').doc('syncStatus').get()).data() || {};
   const finished = status.finishedAt?.toDate?.()?.getTime?.() || 0;
   const complete = status.lastResult && !status.lastResult.partial;
   if (complete && Date.now() - finished < MIN_GAP_H * 3600000) {
-    return { statusCode: 200, body: 'skipped: a sync finished recently' };
+    return { statusCode: 200, body: `${notes.join('; ')}; sync skipped: finished recently` };
   }
 
-  const base = process.env.URL || 'https://goldas-crm.netlify.app';
   const res = await fetch(`${base}/.netlify/functions/sync-matches-background?first=${encodeURIComponent(FIRST)}`, {
     method: 'POST',
     headers: await internalHeaders('deploy-succeeded'),
   });
   console.log(`[deploy-succeeded] sync triggered: ${res.status}`);
-  return { statusCode: 200, body: `triggered: ${res.status}` };
+  return { statusCode: 200, body: `${notes.join('; ')}; sync triggered: ${res.status}` };
 };

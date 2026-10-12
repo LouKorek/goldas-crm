@@ -19,6 +19,9 @@ import Team          from 'pages/Team';
 import Tasks         from 'pages/Tasks';
 import TmWatch       from 'pages/TmWatch';
 import Social        from 'pages/Social';
+import Clubs         from 'pages/Clubs';
+import RecycleBin    from 'pages/RecycleBin';
+import Migrations    from 'pages/Migrations';
 import { ToastProvider } from 'components/ui/UI';
 
 // Animated splash screen shown on app open
@@ -182,6 +185,12 @@ export default function App() {
                 <Route path="players"        element={<Players />} />
                 <Route path="matches"        element={<Matches />} />
                 <Route path="requirements"   element={<Requirements />} />
+                <Route path="clubs"          element={<Clubs />} />
+                <Route path="clubs/:id"      element={<Clubs />} />
+                <Route path="recycle"        element={<RecycleBin />} />
+                <Route path="admin/migrations" element={
+                  access.role === 'admin' ? <Migrations /> : <Navigate to="/dashboard" replace />
+                } />
                 <Route path="contacts"       element={<Contacts />} />
                 <Route path="pipeline/men"   element={<Pipeline category="men" />} />
                 <Route path="pipeline/women" element={<Pipeline category="women" />} />
