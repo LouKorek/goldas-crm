@@ -19,7 +19,7 @@ const PHYSICAL = { pipeline_men: 'players', pipeline_women: 'players', pipeline_
 const COLLECTION_LABEL = {
   he: {
     players: 'שחקנים', pipeline_men: 'מועמדים (גברים)', pipeline_women: 'מועמדות (נשים)', pipeline_youth: 'מועמדים (נוער)',
-    pipeline_jewish: 'יהודים בחו"ל', club_requirements: 'דרישות מועדונים', contacts: 'אנשי קשר', matches: 'משחקים',
+    pipeline_jewish: 'יהודים', club_requirements: 'דרישות מועדונים', contacts: 'אנשי קשר', matches: 'משחקים',
     tasks: 'משימות', clubs: 'מועדונים', deals: 'עסקאות', trainings: 'אימונים', tmWatch: 'מעקב TM',
   },
   en: {
