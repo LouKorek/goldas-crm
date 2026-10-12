@@ -4,14 +4,18 @@
 //      today's games and trainings, what needs action, what Golda did;
 //   2. urgent alerts the moment they appear (a contract ending within a week,
 //      a night job that failed), each sent once per threshold
-//      (lib/alert-keys.js, state in app_meta/goldaSent).
+//      (lib/alert-keys.js, state in app_meta/goldaSent);
+//   3. for admins, operations alerts (lib/golda-briefing.js opsAlerts): a job
+//      that failed twice in a row, a quota past 80%, the IFA browser sync
+//      silent for 36 hours. Once a day each.
 // All of it comes from the alerts engine the app uses; nothing is computed here.
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
 const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS } = require('@goldas/domain');
 const { dedupeKey } = require('./lib/alert-keys.js');
-const { buildBriefing, urgentAlerts, buildUrgent } = require('./lib/golda-briefing.js');
+const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
+const { scraperAccount } = require('./lib/scraper-account.js');
 const { whatsappRecipients } = require('./lib/golda-identity.js');
 const wa = require('./lib/wa-api.js');
 
@@ -20,7 +24,7 @@ const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 
 
 async function loadAll(db) {
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
-  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit] = await Promise.all([
+  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper] = await Promise.all([
     listRepresented(db),
     db.collection('matches').get().then(rows),
     db.collection('deals').get().then(rows),
@@ -32,10 +36,12 @@ async function loadAll(db) {
     db.collection('settings').doc('notifications').get(),
     db.collection('app_meta').doc('goldaSent').get(),
     db.collection('audit').where('via', '==', 'golda').get().then((s) => s.docs.map((d) => d.data())),
+    db.collection('app_meta').doc('ifaBrowserSync').get().then((s) => (s.exists ? s.data() : null)),
+    scraperAccount().catch(() => null),
   ]);
   return { players, matches, deals, requirements, tasks, jobs, trainings, users,
     settings: mergeSettings({ ...(settingsSnap.exists ? settingsSnap.data() : {}), matchDays: [0] }),
-    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit };
+    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper };
 }
 
 function todaysGames({ matches, trainings, players }, today) {
@@ -61,7 +67,7 @@ function pruneSent(keys, today) {
   return out;
 }
 
-async function run(job, now = new Date()) {
+async function run(job, now = new Date(), { force = false } = {}) {
   const db = getDb();
   const data = await loadAll(db);
   const today = israelDate(now);
@@ -69,7 +75,8 @@ async function run(job, now = new Date()) {
   const recipients = whatsappRecipients(data.users);
   if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
 
-  const sent = { briefings: { ...(data.sent.briefings || {}) }, alerts: pruneSent(data.sent.alerts, today) };
+  const sent = { briefings: { ...(data.sent.briefings || {}) }, alerts: pruneSent(data.sent.alerts, today), ops: pruneSent(data.sent.ops, today) };
+  const ops = opsAlerts({ jobs: data.jobs, ifaSync: data.ifaSync, scraper: data.scraper, now });
   const dayMs = 86400000;
   const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
   let count = 0;
@@ -79,7 +86,7 @@ async function run(job, now = new Date()) {
     const r = computeAlerts({ ...data, tasks: mine, settings: data.settings, now });
     const first = (u.name || '').split(' ')[0] || u.name;
     try {
-      if (hour === u.briefingHour && sent.briefings[u.email] !== today) {
+      if ((force || hour === u.briefingHour) && sent.briefings[u.email] !== today) {
         await wa.sendText(u.phone, buildBriefing({ name: first, alerts: r.alerts, games: todaysGames(data, today), goldaActions, now }));
         sent.briefings[u.email] = today; count++;
         job.note(`briefing → ${u.email}`);
@@ -90,6 +97,13 @@ async function run(job, now = new Date()) {
         urgent.forEach((a) => { sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`] = today; });
         count++;
         job.note(`${urgent.length} urgent → ${u.email}`);
+      }
+      const mineOps = u.role === 'admin' ? ops.filter((o) => !sent.ops[`${u.email}|${o.key}`]) : [];
+      if (mineOps.length) {
+        await wa.sendText(u.phone, buildOps(first, mineOps));
+        mineOps.forEach((o) => { sent.ops[`${u.email}|${o.key}`] = today; });
+        count++;
+        job.note(`${mineOps.length} ops → ${u.email}`);
       }
     } catch (e) {
       job.note(`${u.email}: ${e.message}`);
@@ -111,4 +125,4 @@ exports.handler = schedule('30 * * * *', async () => {
     return { statusCode: 500, body: String(e.message || e) };
   }
 });
-exports._internal = { todaysGames, pruneSent, israelHour };
+exports._internal = { todaysGames, pruneSent, israelHour, run };

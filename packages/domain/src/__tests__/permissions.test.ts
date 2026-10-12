@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { can, normalizeRole, roleLabel } from '../permissions';
+import { can, normalizeRole, roleLabel, FUTURE_ROLES, ROLES } from '../permissions';
 import { POSITIONS, COUNTRIES, ISO2, flagEmoji, isEuropean } from '../constants';
 
 describe('can()', () => {
@@ -18,6 +18,15 @@ describe('can()', () => {
     expect(can(undefined, 'read')).toBe(true);
     expect(can('owner', 'edit')).toBe(false);
     expect(normalizeRole('nonsense')).toBe('viewer');
+  });
+  it('future roles exist in the model only and grant nothing yet', () => {
+    expect(FUTURE_ROLES).toEqual(['scout', 'player']);
+    for (const r of FUTURE_ROLES) {
+      expect((ROLES as readonly string[]).includes(r)).toBe(false);
+      expect(normalizeRole(r)).toBe('viewer');
+      expect(can(r, 'edit')).toBe(false);
+      expect(can(r, 'read')).toBe(true);
+    }
   });
   it('labels', () => {
     expect(roleLabel('admin')).toBe('מנהל מערכת');

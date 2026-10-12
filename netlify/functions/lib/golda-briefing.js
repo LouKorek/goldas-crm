@@ -64,4 +64,39 @@ function buildUrgent(name, alerts) {
   return [head, ...alerts.map(line), '', `פרטים: ${APP}/notifications`].join('\n').replace('שימי לב', name === 'לו' ? 'שים לב' : 'שימו לב');
 }
 
-module.exports = { buildBriefing, urgentAlerts, buildUrgent, fmtDate };
+/**
+ * Operations alerts for the admins, from what the system already records:
+ *   - a job whose last two runs both failed (one failure is an ordinary alert);
+ *   - the ScraperAPI quota at 80% or more;
+ *   - the IFA browser sync (Lou's computer) silent for 36 hours.
+ * Each has a key that repeats once a day at most.
+ */
+function opsAlerts({ jobs = [], ifaSync = null, scraper = null, now = new Date() }) {
+  const out = [];
+  const today = israelDate(now);
+  const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v ? Date.parse(v) || 0 : 0);
+  const byName = {};
+  for (const j of [...jobs].sort((a, b) => ms(b.startedAt) - ms(a.startedAt))) (byName[j.name] = byName[j.name] || []).push(j);
+  for (const [name, runs] of Object.entries(byName)) {
+    if (name === 'golda') continue;
+    if (runs.length >= 2 && runs[0].status === 'error' && runs[1].status === 'error') {
+      out.push({ key: `job2|${name}|${today}`, text: `• העבודה "${name}" נכשלה פעמיים ברצף: ${String(runs[0].error || '').slice(0, 100)}. כדאי לבדוק במסך הניהול ← בריאות.` });
+    }
+  }
+  if (scraper && scraper.requestLimit && scraper.requestCount / scraper.requestLimit >= 0.8) {
+    const pct = Math.round((scraper.requestCount / scraper.requestLimit) * 100);
+    out.push({ key: `scraper80|${scraper.nextReset || today.slice(0, 7)}`, text: `• מכסת ScraperAPI ב-${pct}% (${scraper.requestCount}/${scraper.requestLimit})${scraper.nextReset ? `, מתאפסת ב-${fmtDate(scraper.nextReset)}` : ''}. מעקב TM ייעצר לבד כשיישארו 200 קרדיטים לסנכרון המשחקים.` });
+  }
+  const last = ifaSync ? Math.max(ms(ifaSync.lastRunAt), ms(ifaSync.lastSuccessAt)) : 0;
+  if (ifaSync && last && now.getTime() - last > 36 * 3600000) {
+    const hours = Math.round((now.getTime() - last) / 3600000);
+    out.push({ key: `ifa36|${today}`, text: `• סנכרון ההתאחדות מהמחשב שלך לא רץ ${hours} שעות. כדאי לבדוק שהמחשב דלוק ושהמשימה היומית ב-Chrome פעילה.` });
+  }
+  return out;
+}
+
+function buildOps(name, items) {
+  return [`*${name}, עדכון תפעולי* 🔧`, ...items.map((i) => i.text), '', `${APP}/admin`].join('\n');
+}
+
+module.exports = { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps, fmtDate };

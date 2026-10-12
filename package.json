@@ -13,7 +13,9 @@
     "typecheck": "npm run typecheck -w @goldas/domain",
     "test": "npm run build -w @goldas/domain && npm run test -w @goldas/domain && npm run test:functions",
     "test:functions": "node --test netlify/functions/lib/__tests__/*.test.js",
-    "lint": "eslint apps/web/src netlify/functions packages/domain/src"
+    "lint": "eslint apps/web/src netlify/functions packages/domain/src",
+    "e2e": "playwright test",
+    "restore": "node scripts/restore-backup.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
@@ -23,6 +25,7 @@
     "nodemailer": "^6.9.16"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "esbuild": "^0.21.5",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

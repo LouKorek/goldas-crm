@@ -1,13 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
-import { serviceWorkerVersion } from './scripts/sw-version.js';
+import { serviceWorkerVersion, buildId } from './scripts/sw-version.js';
 
 const r = (p) => fileURLToPath(new URL(p, import.meta.url));
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), serviceWorkerVersion()],
+  // The running version, shown on the admin System screen and stamped on reported errors.
+  define: { __BUILD_ID__: JSON.stringify(buildId()) },
   resolve: {
     alias: {
       lib: r('./src/lib'),

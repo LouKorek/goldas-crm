@@ -43,9 +43,9 @@ export const AREAS = [
     items: [{ label: t('Calendar'), path: '/calendar' }],
   },
   {
-    key: 'scouting', label: t('Scouting'), icon: 'search', path: '/pipeline/jewish/tm-watch',
+    key: 'scouting', label: t('Scouting'), icon: 'search', path: '/scouting/tm-watch',
     items: [
-      { label: t('TM Watch'), path: '/pipeline/jewish/tm-watch', icon: 'star' },
+      { label: t('TM Watch'), path: '/scouting/tm-watch', icon: 'star' },
     ],
   },
   {
@@ -61,6 +61,7 @@ export const AREAS = [
       { label: t('Agency Instagram'), path: '/social', icon: 'social' },
       { label: t('Recycle Bin'), path: '/recycle', icon: 'trash' },
       { label: t('Team'), path: '/team', icon: 'team', adminOnly: true },
+      { label: t('System'), path: '/admin', icon: 'refresh', adminOnly: true },
       { label: t('Data Migrations'), path: '/admin/migrations', icon: 'refresh', adminOnly: true },
     ],
   },
@@ -81,7 +82,7 @@ export const DESTINATIONS = AREAS.flatMap((a) => a.items.map((i) => ({ ...i, are
 /** Which area a pathname belongs to. */
 export function areaOf(pathname) {
   if (pathname.startsWith('/home') || pathname === '/dashboard') return 'home';
-  if (pathname.startsWith('/pipeline/jewish/tm-watch')) return 'scouting';
+  if (pathname.startsWith('/scouting') || pathname.startsWith('/pipeline/jewish/tm-watch')) return 'scouting';
   if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/market')) return 'market';
   if (pathname.startsWith('/players')) return 'players';
   if (pathname.startsWith('/matches') || pathname.startsWith('/calendar')) return 'calendar';

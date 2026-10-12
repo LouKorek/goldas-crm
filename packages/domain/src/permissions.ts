@@ -23,6 +23,14 @@ const MATRIX: Record<Role, ReadonlySet<Action>> = {
   viewer:  new Set<Action>(['read']),
 };
 
+/**
+ * Roles the model reserves for later and nothing grants yet: a scout who
+ * only adds candidates, and a player who sees their own portal. Until a
+ * matrix row exists they normalise to viewer, so storing one is harmless.
+ */
+export const FUTURE_ROLES = ['scout', 'player'] as const;
+export type FutureRole = typeof FUTURE_ROLES[number];
+
 export const isRole = (v: unknown): v is Role => (ROLES as readonly string[]).includes(String(v));
 
 /** Normalises anything stored as a role into a known Role (unknown -> viewer). */
