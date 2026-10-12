@@ -847,6 +847,20 @@ const HE = {
   'Access enabled.': 'הגישה הופעלה.',
   'Enable access': 'הפעל גישה',
   'Disable access': 'השבת גישה',
+  'New': 'חדשים',
+  'Starred': 'מסומנים',
+  'Dismissed': 'נדחו',
+  'All types': 'כל הסוגים',
+  'Any history': 'כל היסטוריה',
+  'Tier 5': 'דרגה 5',
+  'Tier 6': 'דרגה 6',
+  'tracked': 'במעקב',
+  'new': 'חדשים',
+  'Transfermarkt scouting: Jewish and Israeli connections abroad': 'סקאוטינג Transfermarkt: קשר יהודי או ישראלי בחו"ל',
+  '{n} candidates marked as seen.': '{n} מועמדים סומנו כנצפו.',
+  'No scan has run yet': 'עדיין לא רצה סריקה',
+  'Star': 'סמן',
+  'Unstar': 'בטל סימון',
 };
 
 export default HE;

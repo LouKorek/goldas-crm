@@ -593,7 +593,7 @@ export default function Pipeline({ category }) {
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {category==='jewish'&&(
-              <Link to="/pipeline/jewish/tm-watch" className="btn btn-secondary btn-sm"
+              <Link to="/scouting/tm-watch" className="btn btn-secondary btn-sm"
                 style={{height:36,textDecoration:'none',position:'relative'}}>
                 <Icon name="social" size={12} /><span className="btn-text">{t("TM Watch")}</span>
                 {tmNew>0&&<span style={{position:'absolute',top:-6,insetInlineEnd: -6,background:'var(--red)',color:'#fff',borderRadius: 0,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
