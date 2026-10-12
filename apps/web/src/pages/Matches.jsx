@@ -1,0 +1,898 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from 'lib/firebase';
+import { callFunction } from 'lib/api';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS, clearCollection } from 'lib/db';
+import { TIME_SLOTS, fmtDate } from 'lib/constants';
+import { daysAway } from 'lib/alerts';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
+import Icon from 'components/ui/Icons';
+import { toast } from 'components/ui/UI';
+import { useRole } from 'lib/roleContext';
+
+// ── Google Maps loader (loads once) ──────────────────────────────
+let _mapsPromise = null;
+function loadGoogleMaps() {
+  if (window.google?.maps?.places) return Promise.resolve(true);
+  if (_mapsPromise) return _mapsPromise;
+  const key = import.meta.env.REACT_APP_GOOGLE_MAPS_KEY;
+  if (!key || key === 'YOUR_GOOGLE_MAPS_API_KEY_HERE') return Promise.resolve(false);
+  _mapsPromise = new Promise((resolve) => {
+    const cb = '__gmInit' + Date.now();
+    window[cb] = () => { resolve(true); delete window[cb]; };
+    const s = document.createElement('script');
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=${cb}`;
+    s.onerror = () => { _mapsPromise = null; resolve(false); };
+    document.head.appendChild(s);
+  });
+  return _mapsPromise;
+}
+
+// ── Team logo (TheSportsDB, free, no key) ────────────────────────
+const _logoCache = {};
+async function fetchTeamLogo(name) {
+  const k = name.trim().toLowerCase();
+  if (k in _logoCache) return _logoCache[k];
+  try {
+    const r = await fetch(
+      `https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=${encodeURIComponent(name.trim())}`
+    );
+    const d = await r.json();
+    _logoCache[k] = d?.teams?.[0]?.strTeamBadge || null;
+  } catch {
+    _logoCache[k] = null;
+  }
+  return _logoCache[k];
+}
+
+function TeamLogo({ name, size = 24 }) {
+  const [url, setUrl] = useState(() => {
+    const k = (name || '').trim().toLowerCase();
+    return k in _logoCache ? _logoCache[k] : undefined;
+  });
+  useEffect(() => {
+    if (!name || name.trim().length < 2) { setUrl(null); return; }
+    const k = name.trim().toLowerCase();
+    if (k in _logoCache) { setUrl(_logoCache[k]); return; }
+    setUrl(undefined);
+    const t = setTimeout(async () => {
+      const logo = await fetchTeamLogo(name);
+      setUrl(logo);
+    }, 900);
+    return () => clearTimeout(t);
+  }, [name]);
+  if (!url) return null;
+  return (
+    <img src={url} alt={name} title={name}
+      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 0, flexShrink: 0 }}
+      onError={e => { e.currentTarget.style.display = 'none'; }} />
+  );
+}
+
+// ── Stadium autocomplete (Google Places or simple fallback) ──────
+function StadiumInput({ value, onSelect }) {
+  const [q, setQ]         = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [open, setOpen]   = useState(false);
+  const [ready, setReady] = useState(false);
+  const ref               = useRef();
+  const serviceRef        = useRef(null);
+  const timerRef          = useRef();
+
+  useEffect(() => {
+    loadGoogleMaps().then(ok => {
+      if (ok) {
+        serviceRef.current = new window.google.maps.places.AutocompleteService();
+        setReady(true);
+      }
+    });
+  }, []);
+
+  useEffect(() => { setQ(value || ''); }, [value]);
+
+  useEffect(() => {
+    const h = e => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const search = text => {
+    setQ(text);
+    clearTimeout(timerRef.current);
+    if (!text.trim()) { setResults([]); setOpen(false); return; }
+
+    timerRef.current = setTimeout(() => {
+      if (serviceRef.current) {
+        serviceRef.current.getPlacePredictions(
+          { input: text, types: ['establishment', 'stadium'] },
+          (predictions, status) => {
+            if (status === 'OK' && predictions?.length) {
+              setResults(predictions.map(p => ({
+                description: p.description,
+                placeId: p.place_id,
+                main: p.structured_formatting?.main_text || p.description,
+                secondary: p.structured_formatting?.secondary_text || '',
+              })));
+              setOpen(true);
+            } else {
+              setResults([{ description: text, placeId: '', main: text, secondary: 'Search on Google Maps', isManual: true }]);
+              setOpen(true);
+            }
+          }
+        );
+      } else {
+        // No API key — just build a search URL
+        const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(text)}`;
+        onSelect({ name: text, mapsUrl, placeId: '' });
+      }
+    }, 350);
+  };
+
+  const select = r => {
+    const mapsUrl = r.placeId
+      ? `https://www.google.com/maps/place/?q=place_id:${r.placeId}`
+      : `https://www.google.com/maps/search/${encodeURIComponent(r.description)}`;
+    onSelect({ name: r.description, mapsUrl, placeId: r.placeId || '' });
+    setQ(r.description);
+    setOpen(false);
+    setResults([]);
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input value={q} onChange={e => search(e.target.value)}
+        onFocus={() => q && results.length && setOpen(true)}
+        placeholder={ready ? 'Type stadium or venue — Google Maps suggestions…' : 'Type stadium name…'} />
+      {open && results.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'var(--surface-2)', border: '1px solid var(--border-2)',
+          borderRadius: 0, boxShadow: 'var(--shadow-md)', marginTop: 2,
+        }}>
+          {results.map((r, i) => (
+            <div key={i} onMouseDown={() => select(r)}
+              style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, transition: 'background 0.12s' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--gold-dim)'}
+              onMouseLeave={e => e.currentTarget.style.background = ''}>
+              <span style={{ width: 4, height: 4, background: 'var(--gold)', marginTop: 7, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>{r.main}</div>
+                {r.secondary && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{r.secondary}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Youth badge ──────────────────────────────────────────────────
+function YouthBadge({ small }) {
+  return (
+    <span style={{
+      background: 'transparent', borderLeft: '2px solid var(--green-ok)',
+      borderRadius: 0, color: 'var(--green-ok)', fontSize: small ? 8.5 : 10,
+      fontWeight: 700, padding: small ? '0 0 0 4px' : '1px 0 1px 5px',
+      letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0,
+    }}>U19</span>
+  );
+}
+
+// ── Searchable multi-select for linked players ───────────────────
+function LinkedPlayersSelect({ players, value = [], onChange }) {
+  const [q, setQ] = React.useState('');
+  const filtered  = q
+    ? players.filter(p => p.fullName.toLowerCase().includes(q.toLowerCase()) || (p.primaryPosition || '').toLowerCase().includes(q.toLowerCase()))
+    : players;
+  const toggle   = id => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
+  const selected = players.filter(p => value.includes(p.id));
+  return (
+    <div>
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Type to search players…" style={{ marginBottom: 6 }} />
+      {selected.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+          {selected.map(p => (
+            <span key={p.id} style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)', borderRadius: 0, padding: '3px 8px', fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              {p.fullName}
+              <button type="button" onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ border: '1px solid var(--border)', borderRadius: 0, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
+        {filtered.length === 0
+          ? <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
+          : filtered.map(p => {
+            const sel = value.includes(p.id);
+            return (
+              <div key={p.id} onClick={() => toggle(p.id)}
+                style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'center', background: sel ? 'var(--gold-dim)' : 'transparent', transition: 'background 0.12s' }}>
+                <input type="checkbox" readOnly checked={sel} style={{ accentColor: 'var(--gold)', width: 14, height: 14, pointerEvents: 'none' }} />
+                <span style={{ color: sel ? 'var(--gold)' : 'var(--text-2)', fontSize: 13, flex: 1 }}>{p.fullName}</span>
+                <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{p.primaryPosition || ''}</span>
+              </div>
+            );
+          })
+        }
+      </div>
+    </div>
+  );
+}
+
+const EMPTY = {
+  date: '', time: '', homeTeam: '', homeTeamIsYouth: false, awayTeam: '', awayTeamIsYouth: false,
+  stadiumName: '', stadiumPlaceId: '', stadiumMapsUrl: '', notes: '', linkedPlayers: [],
+  source: 'manual', sourceMatchId: '', sourceTeamId: '', season: '',
+};
+
+// ── Source badge for the match card ──────────────────────────────
+const SOURCE_BADGE = {
+  manual:    { label: 'Manual',           icon: '✋', color: 'rgba(255,255,255,0.55)', bg: 'rgba(255,255,255,0.04)' },
+  ifa:       { label: 'Auto · IFA',       icon: '🤖', color: '#60A5FA', bg: 'rgba(96,165,250,0.10)' },
+  '365':     { label: 'Auto · 365',       icon: '🤖', color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
+  sofascore: { label: 'Auto · SofaScore', icon: '🤖', color: '#A78BFA', bg: 'rgba(167,139,250,0.10)' },
+};
+function SourceBadge({ source }) {
+  const c = SOURCE_BADGE[source || 'manual'] || SOURCE_BADGE.manual;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      background: 'transparent', color: c.color,
+      borderLeft: `2px solid ${c.color}`,
+      borderRadius: 0, padding: '1px 0 1px 6px',
+      fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+      textTransform: 'uppercase', whiteSpace: 'nowrap',
+    }}>
+      {c.label}
+    </span>
+  );
+}
+
+// ── View modes + range helpers ───────────────────────────────────
+const VIEW_OPTIONS = ['Schedule', 'Day', '3 Day', 'Week', 'Month'];
+const startOfDay  = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const addDays     = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const startOfWeek = (d) => { const x = startOfDay(d); x.setDate(x.getDate() - x.getDay()); return x; }; // Sunday-start
+const startOfMonth = (d) => { const x = startOfDay(d); x.setDate(1); return x; };
+
+// Returns [start, endExclusive] for the active view, or null for "Schedule".
+function getRange(view, anchor) {
+  const a = startOfDay(anchor);
+  if (view === 'Day')   return [a, addDays(a, 1)];
+  if (view === '3 Day') return [a, addDays(a, 3)];
+  if (view === 'Week')  { const s = startOfWeek(a); return [s, addDays(s, 7)]; }
+  if (view === 'Month') { const s = startOfMonth(a); return [s, new Date(s.getFullYear(), s.getMonth() + 1, 1)]; }
+  return null;
+}
+function getRangeLabel(view, anchor) {
+  const r = getRange(view, anchor);
+  if (!r) return '';
+  const [s, e] = r;
+  const end = addDays(e, -1);
+  if (view === 'Day')   return s.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  if (view === 'Month') return s.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const sameYr = s.getFullYear() === end.getFullYear();
+  return `${s.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} – ${end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: sameYr ? undefined : 'numeric' })}`;
+}
+
+// ── Players multi-select filter (search + checkbox list inside a popover) ──
+function PlayersFilter({ allPlayers, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ]       = useState('');
+  const ref             = useRef();
+
+  useEffect(() => {
+    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const filtered = q
+    ? allPlayers.filter(p => (p.fullName || '').toLowerCase().includes(q.toLowerCase()))
+    : allPlayers;
+  const toggle = (id) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
+  const clear  = () => onChange([]);
+  const selectedCount = value.length;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{
+          height: 36, padding: '0 12px', borderRadius: 0,
+          background: selectedCount ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${selectedCount ? 'var(--gold)' : 'var(--border)'}`,
+          color: selectedCount ? 'var(--gold)' : 'var(--text-2)',
+          fontSize: 13, fontWeight: 500, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+        }}>
+        👤 {selectedCount ? `Players (${selectedCount})` : 'All Players'} <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          width: 280, zIndex: 60,
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-2)',
+          borderRadius: 0,
+          boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+          padding: 10,
+        }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players…" autoFocus
+            style={{ width: '100%', marginBottom: 8 }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {selectedCount ? `${selectedCount} selected` : 'None selected'}
+            </div>
+            {selectedCount > 0 && (
+              <button type="button" onClick={clear}
+                style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>
+                Clear all
+              </button>
+            )}
+          </div>
+          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--input-bg)' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
+            ) : filtered.map(p => {
+              const sel = value.includes(p.id);
+              return (
+                <div key={p.id} onClick={() => toggle(p.id)}
+                  style={{ padding: '7px 10px', cursor: 'pointer', display: 'flex', gap: 9, alignItems: 'center', background: sel ? 'var(--gold-dim)' : 'transparent' }}>
+                  <input type="checkbox" readOnly checked={sel} style={{ accentColor: 'var(--gold)', width: 14, height: 14, pointerEvents: 'none' }} />
+                  <span style={{ color: sel ? 'var(--gold)' : 'var(--text-2)', fontSize: 13, flex: 1 }}>{p.fullName}</span>
+                  {p.primaryPosition && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{p.primaryPosition}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+async function clearAll_matches() {
+  if (!window.confirm('Delete ALL matches? This cannot be undone.')) return;
+  try { await clearCollection(PATHS.MATCHES); window.location.reload(); }
+  catch (e) { toast.error(e.message || 'Not allowed.'); }
+}
+
+// ── Sync report ───────────────────────────────────────────────────
+// Every player the last sync could not produce fixtures for, and why, in
+// words rather than error codes. Collapsed by default; the count is enough
+// on a good day.
+const SYNC_REASONS = {
+  'ifa-url-missing':            { label: 'No IFA link',              fix: 'Paste his football.org.il profile into the player record.' },
+  'ifa-url-invalid':            { label: 'IFA link not readable',    fix: 'The link should be a football.org.il address.' },
+  'ifa-url-has-no-id':          { label: 'IFA link has no player id',fix: 'Copy the link from his profile page, not a search result.' },
+  'ifa-player-page-unreadable': { label: 'IFA profile did not load', fix: 'Usually temporary — the next sync will retry.' },
+  'ifa-club-index-unreadable':  { label: 'IFA club list did not load', fix: 'Usually temporary — the next sync will retry.' },
+  'ifa-club-not-found':         { label: 'Club not found in the IFA register', fix: 'Open the player and pin his squad directly.' },
+  'ifa-team-not-matched':       { label: 'Squad not identified',     fix: 'Open the player and pin his squad directly.' },
+  'ifa-no-fixtures-published':  { label: 'No fixtures published yet',fix: 'The squad was found — the federation has not released its schedule.' },
+  'no-club':                    { label: 'No club on record',        fix: 'Set his current club.' },
+  'no-source':                  { label: 'No source for this league',fix: 'Add a country and tier so the sync knows where to look.' },
+  'no-fixtures-or-team-not-found': { label: 'Nothing found',         fix: 'His league may not be covered by the available sources.' },
+  'ifa-page-unreadable':        { label: 'IFA fixtures page did not load', fix: 'Usually temporary — the next sync will retry.' },
+  'not-reached-time':           { label: 'Not reached this run',     fix: 'The sync ran out of time before him; he is near the front of the queue next time.' },
+  'not-reached-credits':        { label: 'Not reached this run',     fix: "This run's ScraperAPI allowance was used up; he is near the front of the queue next time." },
+  'scraper-quota-exhausted':    { label: 'ScraperAPI monthly quota spent', fix: 'Israeli fixtures cannot be fetched until it resets — the date is on the counter above.' },
+  'ifa-browser-stale':          { label: 'Computer sync has not run', fix: 'Israeli fixtures come from the daily sync on Lou\'s computer (Chrome). Check that the computer was on and the Claude in Chrome extension is connected.' },
+  'ifa-blocked-datacenter':     { label: 'Not synced — IFA blocks the server', fix: 'Waiting for the next computer sync.' },
+  'ifa-kept-existing':          { label: 'Came back empty — kept his matches', fix: 'The federation page showed no fixtures, so the ones on file were left untouched.' },
+  'ifa-old-season':             { label: 'Only last season\'s fixtures', fix: 'The federation has not published this season for his squad yet; nothing was changed.' },
+  'ifa-not-scraped':            { label: 'Not read by the computer sync', fix: 'He was added after the sync started; the next run picks him up.' },
+  'error':                      { label: 'Sync error',               fix: '' },
+};
+
+function SyncReport({ report }) {
+  const [open, setOpen] = useState(false);
+  const list = report?.list || [];
+  if (!report || !list.length) return null;
+  const ran = report.runAt?.toDate?.();
+  return (
+    <div className="card" style={{ marginBottom: 14, borderLeft: '3px solid var(--amber)' }}>
+      <button type="button" onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
+          padding: '10px 14px', display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', gap: 10, color: 'var(--text-2)', fontSize: 12.5,
+        }}>
+        <span>
+          <strong style={{ color: 'var(--amber)' }}>{list.length}</strong> player{list.length !== 1 ? 's' : ''} produced no fixtures in the last sync
+          {ran && <span style={{ color: 'var(--text-3)' }}> · {fmtDate(ran.toISOString().slice(0, 10))}</span>}
+        </span>
+        <span style={{ fontSize: 11 }}>{open ? '▲ hide' : '▼ details'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {list.map((w, i) => {
+            const r = SYNC_REASONS[w.reason] || { label: w.reason, fix: '' };
+            return (
+              <div key={`${w.playerId || i}-${w.reason}`} style={{ fontSize: 12, borderTop: '1px solid var(--border)', paddingTop: 7 }}>
+                <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>
+                  {w.name || w.playerId} <span style={{ fontWeight: 400, color: 'var(--amber)' }}>— {r.label}</span>
+                </div>
+                {(w.detail || w.club) && <div style={{ color: 'var(--text-3)' }}>{w.detail || w.club}</div>}
+                {r.fix && <div style={{ color: 'var(--text-2)', marginTop: 2 }}>{r.fix}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Matches() {
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal]     = useState(null);
+  const [form, setForm]       = useState(EMPTY);
+  const [saving, setSaving]   = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [search, setSearch]   = useState('');
+  const [view, setView]       = useState('Schedule');         // Schedule | Day | 3 Day | Week | Month
+  const [anchorDate, setAnchorDate] = useState(new Date());   // pivot date for range views
+  const [playerFilter, setPlayerFilter] = useState([]);       // selected represented player IDs
+  const [youthScope, setYouthScope]     = useState('');       // '' | 'Youth' | 'Senior'
+  const { confirm, dialog }   = useConfirm();
+  const { canEdit, isAdmin }  = useRole();
+  const [syncing, setSyncing] = useState(false);
+  const [syncReport, setSyncReport] = useState(null);
+
+  // The sync has always recorded, per player, why it produced nothing —
+  // and nothing has ever displayed it. That is how players stayed missing
+  // from this screen for months without a visible symptom.
+  useEffect(() => onSnapshot(doc(db, 'app_meta', 'syncWarnings'),
+    s => setSyncReport(s.exists() ? s.data() : null), () => setSyncReport(null)), []);
+
+  // Admin-only: trigger the Netlify sync function for all represented players.
+  const syncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      // Background function: Netlify returns 202 immediately, the actual work
+      // continues for up to 15 minutes. We don't get the final stats inline —
+      // we tell the user we kicked it off and the matches will refresh on
+      // their own via the Firestore listener as the function writes them.
+      const res = await callFunction('sync-matches-background', { method: 'POST' });
+      if (res.status === 202 || res.ok) {
+        toast.success('Sync started — matches will appear here as they\'re fetched (≈1–2 min).');
+        // Soft "still working" indicator for ~90 s, then drop it. The real
+        // result is whatever shows up in the matches list via the live
+        // Firestore listener.
+        setTimeout(() => setSyncing(false), 90000);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Sync failed (${res.status})`);
+    } catch (e) {
+      toast.error(e.message || 'Sync failed.');
+      setSyncing(false);
+      return;
+    }
+    // Note: in the happy path we DO NOT reach here — the 90s timeout above
+    // owns clearing the syncing flag. This avoids a flicker where the button
+    // re-enables before the user sees fresh data appear.
+  };
+
+  const [allPlayers, setAllPlayers] = useState([]);
+  useEffect(() => { return listenCollection(PATHS.PLAYERS, setAllPlayers); }, []);
+  useEffect(() => {
+    return listenCollection(PATHS.MATCHES, data => {
+      setItems(data.sort((a, b) => (a.date || '') > (b.date || '') ? 1 : -1));
+      setLoading(false);
+    });
+  }, []);
+
+  const s = k => v => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
+  const f = k => form[k] ?? '';
+
+  const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); setIsDirty(false); };
+  const openEdit = p  => { setForm({ ...EMPTY, ...p }); setModal({ edit: p }); setIsDirty(false); };
+
+  const save = async () => {
+    if (!form.homeTeam || !form.awayTeam) { toast.error('Home and away teams are required.'); return; }
+    if (!form.date) { toast.error('Date is required.'); return; }
+    if (!form.linkedPlayers?.length) { toast.error('Please link at least one represented player.'); return; }
+    setSaving(true);
+    try {
+      if (modal === 'add') { await addDoc_(PATHS.MATCHES, form); toast.success('Match added!'); }
+      else { await updateDoc_(PATHS.MATCHES, modal.edit.id, form); toast.success('Match updated.'); }
+      setModal(null);
+    } catch (e) { toast.error(e.message || 'Save failed.'); }
+    finally { setSaving(false); }
+  };
+
+  const del = async p => {
+    const ok = await confirm(`Delete match "${p.homeTeam} vs ${p.awayTeam}"?`);
+    if (!ok) return;
+    await deleteDoc_(PATHS.MATCHES, p.id);
+    toast.success('Deleted.');
+  };
+
+  const now = new Date();
+
+  // Apply search + player filter to all matches first.
+  const baseFiltered = items.filter(m => {
+    if (search && !`${m.homeTeam} ${m.awayTeam} ${m.stadiumName}`.toLowerCase().includes(search.toLowerCase())) return false;
+    if (playerFilter.length) {
+      const linked = m.linkedPlayers || [];
+      if (!linked.some(id => playerFilter.includes(id))) return false;
+    }
+    // Youth scope: a match is "youth" when either side is flagged a youth team.
+    if (youthScope) {
+      const isYouthMatch = !!(m.homeTeamIsYouth || m.awayTeamIsYouth);
+      if (youthScope === 'Youth'  && !isYouthMatch) return false;
+      if (youthScope === 'Senior' &&  isYouthMatch) return false;
+    }
+    return true;
+  });
+
+  // Schedule view splits into upcoming / past; range views filter by date window.
+  const range = getRange(view, anchorDate);
+  // daysAway counts whole local days, so a match today stays under Upcoming
+  // all day. Comparing Date objects made it jump to Past at 03:00, because
+  // 'YYYY-MM-DD' parses as UTC midnight.
+  const upcoming = range ? [] : baseFiltered.filter(m => !m.date || daysAway(m.date, now) >= 0);
+  const past     = range ? [] : baseFiltered.filter(m => m.date && daysAway(m.date, now) < 0);
+  const inRange  = range
+    ? baseFiltered.filter(m => {
+        if (!m.date) return false;
+        const d = new Date(m.date);
+        return d >= range[0] && d < range[1];
+      }).sort((a, b) => {
+        const dc = (a.date || '').localeCompare(b.date || '');
+        if (dc !== 0) return dc;
+        return (a.time || '').localeCompare(b.time || '');
+      })
+    : [];
+
+  // Group range matches by day for display.
+  const groupedByDay = (() => {
+    if (!range) return [];
+    const map = {};
+    inRange.forEach(m => { (map[m.date] = map[m.date] || []).push(m); });
+    return Object.keys(map).sort().map(date => ({ date, items: map[date] }));
+  })();
+
+  const stepDays = { Day: 1, '3 Day': 3, Week: 7 };
+  const stepAnchor = (dir) => {
+    if (view === 'Month') setAnchorDate(d => new Date(d.getFullYear(), d.getMonth() + dir, 1));
+    else if (stepDays[view]) setAnchorDate(d => addDays(d, stepDays[view] * dir));
+  };
+  const goToday = () => setAnchorDate(new Date());
+
+  const MatchCard = ({ m }) => {
+    const linkedNames = allPlayers.filter(p => (m.linkedPlayers || []).includes(p.id)).map(p => p.fullName);
+    return (
+      <div className="card card-body match-card" style={{ marginBottom: 10, transition: 'all 0.18s' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+
+        {/* Teams — ALWAYS one line. Long names truncate with ellipsis. */}
+        <div className="match-card__teams" style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          fontWeight: 600, fontSize: 15, color: 'var(--text-1)',
+          minWidth: 0,
+        }}>
+          <TeamLogo name={m.homeTeam} size={22} />
+          {/* minWidth:0 + flexShrink:1 are what let flex children actually
+              shrink below their content width — without them the ellipsis
+              never triggers and the away team just gets clipped. */}
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{m.homeTeam}</span>
+          {m.homeTeamIsYouth && <YouthBadge small />}
+          <span style={{ color: 'var(--text-3)', fontWeight: 400, flexShrink: 0 }}>vs</span>
+          <TeamLogo name={m.awayTeam} size={22} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{m.awayTeam}</span>
+          {m.awayTeamIsYouth && <YouthBadge small />}
+        </div>
+
+        {/* Details — date, source, stadium */}
+        <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+          <SourceBadge source={m.source} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{fmtDate(m.date)}{m.time ? ' · ' + m.time : ''}</span>
+          {m.stadiumName && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {m.stadiumMapsUrl
+                ? <a href={m.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ color: 'var(--gold)', textDecoration: 'none' }}>
+                    {m.stadiumName}
+                  </a>
+                : m.stadiumName}
+            </span>
+          )}
+        </div>
+
+        {/* Linked players (left) + Edit/Delete actions (right) — on the
+            SAME row, aligned to the two edges of the card. */}
+        {(linkedNames.length > 0 || canEdit) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 8,
+            flexWrap: 'wrap',
+          }}>
+            <div style={{
+              fontSize: 11, color: 'var(--text-3)',
+              display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
+              flex: 1, minWidth: 0,
+            }}>
+              {linkedNames.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-mute)' }}>REP</span>}
+              {linkedNames.map((n, i) => (
+                <span key={i} style={{ background: 'transparent', borderLeft: '2px solid var(--gold-dk)', borderRadius: 0, padding: '0 0 0 6px', color: 'var(--gold)', fontSize: 10.5, letterSpacing: '0.02em' }}>{n}</span>
+              ))}
+            </div>
+            {canEdit && (
+              <div style={{ flexShrink: 0 }}>
+                <RowActions onEdit={() => openEdit(m)} onDelete={() => del(m)} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>{m.notes}</div>}
+      </div>
+    );
+  };
+
+  // Style for the prev / today / next buttons in the date navigator.
+  const navBtnStyle = () => ({
+    width: 34, height: 34, borderRadius: 0,
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid var(--border)',
+    color: 'var(--text-1)', fontSize: 16,
+    cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  });
+
+  // ── Youth toggle helper ──────────────────────────────────────────
+  const YouthToggle = ({ field }) => (
+    <button type="button"
+      className={`chip${form[field] ? ' active' : ''}`}
+      onClick={() => s(field)(!form[field])}
+      style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'center', marginTop: 4 }}>
+      Youth
+    </button>
+  );
+
+  return (
+    <div className="page-matches">
+        <PageHeader
+          title="Matches"
+          subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
+          action={
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Match</span></button>}
+              {isAdmin && (
+                <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
+                  style={{ height: 36, whiteSpace: 'nowrap' }}
+                  title="Pull match fixtures from IFA / 365 / SofaScore for every represented player">
+                  {syncing ? <><Spinner size={12} /><span className="btn-text">Syncing…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Sync Now</span></>}
+                </button>
+              )}
+              <ExportMenu
+                filename="Matches"
+                title={view === 'Schedule' ? 'Matches' : `Matches — ${view}`}
+                subtitle={[
+                  search && `search: "${search}"`,
+                  playerFilter.length && `${playerFilter.length} player${playerFilter.length===1?'':'s'} filter`,
+                  youthScope && `group: ${youthScope}`,
+                  view !== 'Schedule' && `view: ${view}`,
+                ].filter(Boolean).join('  ·  ')}
+                columns={[
+                  { key: 'date',        label: '🗓',  pdfLabel: 'Date' },
+                  { key: 'time',        label: '⏰',  pdfLabel: 'Time' },
+                  { key: 'homeTeam',    label: 'Home', pdfLabel: 'Home' },
+                  { key: 'awayTeam',    label: 'Away', pdfLabel: 'Away' },
+                  { key: 'stadiumName', label: '🏟',  pdfLabel: 'Stadium',
+                    format: (v, r) => v ? (r.stadiumMapsUrl ? { text: v, url: r.stadiumMapsUrl } : v) : '' },
+                  { key: 'season',      label: 'Season', pdfLabel: 'Season' },
+                  { key: 'source',      label: 'Source', pdfLabel: 'Source' },
+                  { key: 'linkedPlayers', label: '🤝',  pdfLabel: 'Players',
+                    format: (ids) => {
+                      if (!Array.isArray(ids) || !ids.length) return '';
+                      return ids.map(id => allPlayers.find(p => p.id === id)?.fullName || id).join(', ');
+                    } },
+                  { key: 'notes',       label: 'Notes', pdfLabel: 'Notes' },
+                ]}
+                rows={baseFiltered}
+              />
+              <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
+                <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+              </div>
+              {isAdmin && <button className="btn btn-danger btn-sm" onClick={clearAll_matches}
+                style={{ height: 36, opacity: 0.45, whiteSpace: 'nowrap' }} title="Clear all"
+                onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '0.45'}>
+                <Icon name="trash" size={12} /><span className="btn-text">Clear All</span>
+              </button>}
+            </div>
+          }
+        >
+
+        {/* Controls bar: view toggle, date navigator (range views only), player filter */}
+        <div className="filter-bar" style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          marginTop: 12, padding: '10px 12px',
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
+          borderRadius: 0,
+        }}>
+          <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} required />
+
+          {view !== 'Schedule' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+              <button type="button" onClick={() => stepAnchor(-1)} title="Previous"
+                style={navBtnStyle()}>‹</button>
+              <span style={{
+                // Fixed width so the layout stays identical across Day / 3 Day /
+                // Week / Month — only the text inside changes. Kept compact so
+                // the player filter can sit on the same row on mobile.
+                width: 115,
+                textAlign: 'center',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11.5, color: 'var(--text-1)', fontWeight: 500,
+                letterSpacing: '-0.01em',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}>{getRangeLabel(view, anchorDate)}</span>
+              <button type="button" onClick={() => stepAnchor(1)} title="Next"
+                style={navBtnStyle()}>›</button>
+              <button type="button" onClick={goToday} title="Jump to the current period"
+                style={{ ...navBtnStyle(), width: 'auto', padding: '0 12px', fontSize: 12, marginLeft: 4 }}>
+                Today
+              </button>
+            </div>
+          )}
+
+          {/* Players filter sits right next to the range navigator (or right
+              next to the view chips in Schedule mode) so on mobile both
+              controls fit on the same row instead of wrapping. */}
+          <div className="filter-pair" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <PlayersFilter allPlayers={allPlayers} value={playerFilter} onChange={setPlayerFilter} />
+
+          {/* Youth/Senior scope — matches any match where at least one team
+              carries the youth flag. Wider min-width + flex-shrink:0 so
+              the long "🌱 Group: All" label doesn't get clipped when
+              the row gets tight on mobile. */}
+          <select value={youthScope} onChange={e => setYouthScope(e.target.value)}
+            style={{ width: 'auto', height: 36, minWidth: 170, fontSize: 12, flexShrink: 0, padding: '0 10px' }}>
+            <option value="">Group: All</option>
+            <option value="Youth">Youth only</option>
+            <option value="Senior">Senior only</option>
+          </select>
+          </div>
+          <ScraperCredits />
+        </div>
+        </PageHeader>
+
+      {canEdit && <SyncReport report={syncReport} />}
+
+      {/* List section — scrolls with the document so mobile users get
+          a single vertical motion instead of fighting an inner scroll
+          area against the page scroll. */}
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
+      ) : items.length === 0 ? (
+        <Empty message="No matches scheduled."
+          action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Match</span></button>} />
+      ) : range ? (
+        // ── Range view (Day / 3 Day / Week / Month) ──
+        groupedByDay.length === 0 ? (
+          <Empty message={`No matches in this ${view.toLowerCase()}.`} />
+        ) : (
+          groupedByDay.map(g => (
+            <div key={g.date} style={{ marginBottom: 22 }}>
+              <div className="section-label" style={{ marginBottom: 10 }}>
+                {new Date(g.date).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
+                <span style={{ color: 'var(--text-3)', marginLeft: 8, fontWeight: 400 }}>
+                  ({g.items.length} match{g.items.length !== 1 ? 'es' : ''})
+                </span>
+              </div>
+              {g.items.map(m => <MatchCard key={m.id} m={m} />)}
+            </div>
+          ))
+        )
+      ) : (
+        // ── Schedule view: upcoming + past ──
+        <>
+          {upcoming.length > 0 && (
+            <div style={{ marginBottom: 28 }}>
+              <div className="section-label" style={{ marginBottom: 12 }}>Upcoming ({upcoming.length})</div>
+              {upcoming.map(m => <MatchCard key={m.id} m={m} />)}
+            </div>
+          )}
+          {past.length > 0 && (
+            <div>
+              <div className="section-label" style={{ marginBottom: 12, color: 'var(--text-3)' }}>Past ({past.length})</div>
+              <div style={{ opacity: 0.65 }}>
+                {/* Show ALL past matches (newest first). Previous version capped at
+                    10 which made the total count seem wrong vs the visible list. */}
+                {[...past].reverse().map(m => <MatchCard key={m.id} m={m} />)}
+              </div>
+            </div>
+          )}
+          {upcoming.length === 0 && past.length === 0 && (
+            <Empty message="No matches match your filters." />
+          )}
+        </>
+      )}
+
+      {modal && (
+        <Modal
+          title={modal === 'add' ? 'Add Match' : 'Edit Match'}
+          onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
+          footer={<>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Match'}
+            </button>
+          </>}
+        >
+          <div className="form-grid-2">
+            <Field label="Date" required><DateInput value={f('date')} onChange={s('date')} /></Field>
+            <Field label="Time">
+              <select value={f('time')} onChange={e => s('time')(e.target.value)}>
+                <option value="">Select time...</option>
+                {TIME_SLOTS.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div className="form-grid-2">
+            <Field label="Home Team" required>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <TeamLogo name={form.homeTeam} size={24} />
+                <input value={f('homeTeam')} onChange={e => s('homeTeam')(e.target.value)} placeholder="Home team name" style={{ flex: 1 }} />
+              </div>
+              <YouthToggle field="homeTeamIsYouth" />
+            </Field>
+            <Field label="Away Team" required>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <TeamLogo name={form.awayTeam} size={24} />
+                <input value={f('awayTeam')} onChange={e => s('awayTeam')(e.target.value)} placeholder="Away team name" style={{ flex: 1 }} />
+              </div>
+              <YouthToggle field="awayTeamIsYouth" />
+            </Field>
+          </div>
+
+          <Field label="Stadium / Venue" hint="Type to search — Google Maps suggestions appear automatically">
+            <StadiumInput
+              value={f('stadiumName')}
+              onSelect={({ name, mapsUrl, placeId }) => {
+                s('stadiumName')(name);
+                s('stadiumMapsUrl')(mapsUrl);
+                s('stadiumPlaceId')(placeId);
+              }}
+            />
+            {form.stadiumMapsUrl && (
+              <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-3)' }}>
+                ✓ Linked to Google Maps —
+                <a href={form.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--gold)', marginLeft: 6, textDecoration: 'none' }}>Preview ↗</a>
+              </div>
+            )}
+          </Field>
+
+          <Field label="Linked Players" required hint="Required — type to search">
+            <LinkedPlayersSelect players={allPlayers} value={f('linkedPlayers') || []} onChange={s('linkedPlayers')} />
+          </Field>
+
+          <Field label="Notes">
+            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
+          </Field>
+        </Modal>
+      )}
+
+      {dialog}
+    </div>
+  );
+}

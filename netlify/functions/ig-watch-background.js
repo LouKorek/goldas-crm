@@ -15,23 +15,16 @@
 //   igPosts/{id}          — one doc per post, engagement refreshed daily
 //   app_meta/igWatch      — latest counters, run status, cached token
 
-const admin = require('firebase-admin');
+const { admin, getDb } = require('./lib/firestore.js');
+const { withAuth } = require('./lib/auth.js');
+const { runJob } = require('./lib/jobs.js');
+const { seal, unseal, isSealed } = require('./lib/seal.js');
 
 const USERNAME = 'goldas_loukorek';
 const TZ = 'Asia/Jerusalem';
 const GRAPH = 'https://graph.instagram.com/v21.0';
 const REFRESH_AFTER_DAYS = 45;   // tokens live 60 days; renew well before
 
-let _db;
-function getDb() {
-  if (_db) return _db;
-  if (!admin.apps.length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-  }
-  _db = admin.firestore();
-  return _db;
-}
 
 function localDate(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
@@ -56,12 +49,17 @@ async function getToken(metaRef, log) {
   const snap = await metaRef.get();
   const cached = snap.exists ? snap.data() : {};
   const envToken = (process.env.IG_ACCESS_TOKEN || '').trim();
-  let token = cached.token || envToken;
+  // The cached token is sealed at rest (lib/seal.js); older plaintext values
+  // still work and are re-sealed on the next refresh.
+  let token = cached.token ? unseal(cached.token) : envToken;
   if (!token) throw new Error('IG_ACCESS_TOKEN is not set in Netlify');
 
   const refreshedAt = cached.tokenRefreshedAt?.toDate?.() || null;
   const ageDays = refreshedAt ? (Date.now() - refreshedAt.getTime()) / 86400000 : Infinity;
-  if (ageDays < REFRESH_AFTER_DAYS) return token;
+  if (ageDays < REFRESH_AFTER_DAYS) {
+    if (cached.token && !isSealed(cached.token)) await metaRef.set({ token: seal(token) }, { merge: true }).catch(() => {});
+    return token;
+  }
 
   try {
     const res = await fetch(
@@ -71,7 +69,7 @@ async function getToken(metaRef, log) {
     if (body.access_token) {
       token = body.access_token;
       await metaRef.set({
-        token,
+        token: seal(token),
         tokenRefreshedAt: admin.firestore.Timestamp.now(),
         tokenExpiresInDays: Math.round((body.expires_in || 0) / 86400),
       }, { merge: true });
@@ -212,4 +210,5 @@ async function run() {
   }
 }
 
-exports.handler = async () => run();
+exports.handler = withAuth({ action: 'run_sync', internal: true }, async () =>
+  runJob('ig-watch', async (job) => { const r = await run(); job.note(r.body); return r; }));

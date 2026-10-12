@@ -17,7 +17,7 @@
 // And per player: someone who has upcoming matches on file and came back
 // with none is left alone and reported, never wiped.
 
-const admin = require('firebase-admin');
+const { admin } = require('./lib/firestore.js');
 const { _lib } = require('./sync-matches-background.js');
 const { checkSyncSecret } = require('./lib/ifa-sync-auth.js');
 

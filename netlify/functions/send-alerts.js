@@ -13,11 +13,11 @@
 //                                   Verification → App passwords).
 
 const { schedule } = require('@netlify/functions');
-const admin        = require('firebase-admin');
+const { admin, getDb, OWNER_EMAIL } = require('./lib/firestore.js');
+const { runJob } = require('./lib/jobs.js');
 const nodemailer   = require('nodemailer');
 
 // ────────────────── Config ──────────────────
-const OWNER_EMAIL     = 'lou.korek@gmail.com';
 const MATCH_LEAD_DAYS = 1;
 const DEFAULT_SETTINGS = {
   contractDays: [7, 30, 60],
@@ -27,17 +27,6 @@ const DEFAULT_SETTINGS = {
 };
 
 // ────────────────── Firebase Admin (cached) ──────────────────
-let _db;
-function getDb() {
-  if (_db) return _db;
-  if (!admin.apps.length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-  }
-  _db = admin.firestore();
-  return _db;
-}
-
 // ────────────────── Date helpers ──────────────────
 function parseDate(s) {
   if (!s) return null;
@@ -320,7 +309,7 @@ async function sendDigest() {
 
 // 06:00 UTC = 08:00 (winter) / 09:00 (summer) in Israel.
 exports.handler = schedule('0 6 * * *', async () => {
-  try { return await sendDigest(); }
+  try { return await runJob('send-alerts', async (job) => { const r = await sendDigest(); job.note(r.body); return r; }); }
   catch (e) {
     console.error('sendDigest failed:', e);
     return { statusCode: 500, body: String(e) };

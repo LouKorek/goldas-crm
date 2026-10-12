@@ -6,19 +6,15 @@
 //     &register=<phone_number_id>   register a newly verified number for the
 //                                   Cloud API; its two-step PIN is created here
 //                                   and kept only in Firestore (app_meta/whatsapp)
-//   ?auto=1 (no key)               for each WhatsApp account in WA_WABA_IDS: subscribe
+//   &auto=1                        for each WhatsApp account in WA_WABA_IDS: subscribe
 //                                   the app and register every verified number that
 //                                   isn't registered yet. Idempotent, returns statuses
-//                                   only, so it can be called from a public CI log.
+//                                   only.
 // Never returns the token or the PIN.
 const crypto = require('crypto');
-const admin = require('firebase-admin');
+const { getDb } = require('./lib/firestore.js');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
-function getDb() {
-  if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)) });
-  return admin.firestore();
-}
 
 async function graph(path, method = 'GET', body) {
   const res = await fetch(`${GRAPH}/${path}`, {
@@ -62,10 +58,10 @@ async function auto() {
 
 exports.handler = async (event) => {
   const q = event.queryStringParameters || {};
+  if (!process.env.WA_VERIFY_TOKEN || q.key !== process.env.WA_VERIFY_TOKEN) return { statusCode: 403, body: 'forbidden' };
   if (q.auto && process.env.WA_TOKEN) {
     return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ at: new Date().toISOString(), accounts: await auto() }, null, 2) };
   }
-  if (!process.env.WA_VERIFY_TOKEN || q.key !== process.env.WA_VERIFY_TOKEN) return { statusCode: 403, body: 'forbidden' };
   const out = {
     env: {
       WA_TOKEN: !!process.env.WA_TOKEN, WA_PHONE_ID: !!process.env.WA_PHONE_ID, WA_APP_SECRET: !!process.env.WA_APP_SECRET,

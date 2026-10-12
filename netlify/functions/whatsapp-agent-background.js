@@ -2,25 +2,14 @@
 // answer Meta immediately. Reads one queued message, runs the agent, replies
 // on WhatsApp. Messages from the same number are handled one at a time, in
 // order, through a lock on the session document.
-const crypto = require('crypto');
-const admin = require('firebase-admin');
+const { admin, getDb } = require('./lib/firestore.js');
+const { withAuth } = require('./lib/auth.js');
 const wa = require('./lib/wa-api.js');
 const { runAgent, MAIN_TOPIC, _internal: { norm } } = require('./lib/wa-agent.js');
 
 const ASSISTANT_NAME = process.env.WA_ASSISTANT_NAME || 'גולדה';
 const LOCK_MS = 5 * 60 * 1000;
 
-function getDb() {
-  if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)) });
-  return admin.firestore();
-}
-
-function internalOk(event) {
-  const want = process.env.WA_APP_SECRET || '';
-  const got = (event.headers || {})['x-wa-internal'] || '';
-  const a = Buffer.from(String(got)), b = Buffer.from(want);
-  return want && a.length === b.length && crypto.timingSafeEqual(a, b);
-}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,8 +35,8 @@ function findTopic(topics, name) {
   return names.find((k) => norm(k) === n) || names.find((k) => norm(k).includes(n) || n.includes(norm(k))) || null;
 }
 
-exports.handler = async (event) => {
-  if (!internalOk(event)) return { statusCode: 403, body: 'forbidden' };
+// Only the webhook of this site may call this (single-use internal nonce).
+exports.handler = withAuth({ internal: true, action: 'manage_settings' }, async (event) => {
   const { messageId } = JSON.parse(event.body || '{}');
   const db = getDb();
   const inboxRef = db.collection('wa_inbox').doc(String(messageId));
@@ -122,4 +111,4 @@ exports.handler = async (event) => {
     await wa.sendText(phone, `${wa.senderName(phone)}, נתקלתי בתקלה ולא ביצעתי את הבקשה. אפשר לנסות שוב בעוד דקה.`, msg.phoneId).catch(() => {});
   }
   return { statusCode: 200, body: 'ok' };
-};
+});

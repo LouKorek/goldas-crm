@@ -22,12 +22,13 @@
 //
 // Env: FIREBASE_SERVICE_ACCOUNT_KEY, SCRAPER_API_KEY, GMAIL_APP_PASSWORD.
 
-const admin      = require('firebase-admin');
+const { admin, getDb, OWNER_EMAIL } = require('./lib/firestore.js');
+const { withAuth } = require('./lib/auth.js');
+const { runJob } = require('./lib/jobs.js');
 const cheerio    = require('cheerio');
 const nodemailer = require('nodemailer');
 const { matchName, buildQueries } = require('./data/jewish-names.js');
 
-const OWNER_EMAIL    = 'lou.korek@gmail.com';
 const TM_BASE        = 'https://www.transfermarkt.com';
 const ISRAEL_LAND_ID = 74;
 
@@ -38,16 +39,6 @@ const DEFAULTS = {
   maxPagesPerHost:   6,    // legionaere pagination cap per host country
 };
 
-let _db;
-function getDb() {
-  if (_db) return _db;
-  if (!admin.apps.length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-  }
-  _db = admin.firestore();
-  return _db;
-}
 
 // ───────────────────── Fetch via ScraperAPI ─────────────────────
 // Transfermarkt is fully server-rendered — no JS render needed, which keeps
@@ -667,4 +658,7 @@ async function run() {
   }
 }
 
-exports.handler = async () => run();
+// Callers: the daily cron (internal nonce) or a manager pressing Run on the
+// TM Watch screen (Firebase ID token). Each run is recorded in `jobs`.
+exports.handler = withAuth({ action: 'run_sync', internal: true }, async () =>
+  runJob('tm-watch', async (job) => { const r = await run(); job.note(r.body); return r; }));

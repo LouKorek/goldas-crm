@@ -1,31 +1,33 @@
 {
   "name": "goldas-crm",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0",
-    "firebase": "^10.7.0",
-    "react-scripts": "5.0.1",
-    "date-fns": "^3.0.0",
-    "zustand": "^4.4.0",
-    "@netlify/functions": "^2.8.0",
-    "@anthropic-ai/sdk": "^0.133.0",
-    "firebase-admin": "^12.7.0",
-    "nodemailer": "^6.9.16",
-    "cheerio": "^1.0.0",
-    "exceljs": "^4.4.0",
-    "jspdf": "^2.5.2",
-    "jspdf-autotable": "^3.8.4"
-  },
+  "description": "Gold A&S football agency CRM: web app (apps/web), shared domain (packages/domain) and Netlify functions (netlify/functions).",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "npm run build -w @goldas/domain && npm run build -w @goldas/web",
+    "dev": "npm run build -w @goldas/domain && npm run dev -w @goldas/web",
+    "typecheck": "npm run typecheck -w @goldas/domain",
+    "test": "npm run test -w @goldas/domain && npm run test:functions",
+    "test:functions": "node --test \"netlify/functions/lib/__tests__/*.test.js\"",
+    "lint": "eslint apps/web/src netlify/functions packages/domain/src"
   },
-  "browserslist": {
-    "production": [">0.2%", "not dead"],
-    "development": ["last 1 chrome version"]
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "@netlify/functions": "^2.8.0",
+    "cheerio": "^1.0.0",
+    "firebase-admin": "^12.7.0",
+    "nodemailer": "^6.9.16"
   },
-  "engines": { "node": ">=18" }
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }

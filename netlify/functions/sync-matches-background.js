@@ -18,37 +18,26 @@
 //              pretending. ScraperAPI is no longer used here.
 //   SofaScore  wired and working, but covers none of the leagues the agency's
 //              players abroad are in (NCAA, NAIA, MLS Next, DR Congo, Benin).
-//   365        a stub. Both of its client functions return an empty array.
 //
 // Whatever a run cannot do is written to app_meta/syncWarnings per player and
 // shown on the Matches screen. Nothing here should fail quietly.
 
-const admin   = require('firebase-admin');
+const { admin, getDb } = require('./lib/firestore.js');
+const { withAuth } = require('./lib/auth.js');
+const { runJob } = require('./lib/jobs.js');
 const cheerio = require('cheerio');
 const IFA_TEAM_PINS = require('./data/ifa-team-pins.js');
 const {
   deriveSeason, normalizeIfaTime, ifaLooksReal, ifaTokens, ifaContainment,
   ifaScoreTeam, ifaParseCaption, ifaRankClubs, ifaPickTeam, ifaFixtureFromCells,
-} = require('../../public/tools/ifa-text.js');
+} = require('../../apps/web/public/tools/ifa-text.js');
 
-const OWNER_EMAIL = 'lou.korek@gmail.com';
 const TZ          = 'Asia/Jerusalem';
 
 // Per-page caps for paged event endpoints. 5 pages × ~10 events ≈ a full
 // season per direction (last + next). Keeps total runtime safely under the
 // 30-second scheduled-function budget for ~15 represented players.
 const MAX_PAGES = 5;
-
-let _db;
-function getDb() {
-  if (_db) return _db;
-  if (!admin.apps.length) {
-    const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    admin.initializeApp({ credential: admin.credential.cert(svc) });
-  }
-  _db = admin.firestore();
-  return _db;
-}
 
 // ───────────────────── Helpers ─────────────────────
 function toLocalDateTime(utcSeconds) {
@@ -79,22 +68,12 @@ function effectiveCountry(p) {
 function decideSources(p) {
   const country  = effectiveCountry(p).toLowerCase();
   const isIsrael = country === 'israel';
-  const isWomen  = p.gender === 'Women';
-  const isYouth  = !!p.currentClubIsYouth;
-  const tier     = (p.leagueTier || '').toLowerCase();
-  const isTopTwo = ['tier 1', 'tier 2', '1st', '2nd'].includes(tier);
 
   // Israel: IFA is the federation, so it carries every league including the
-  // top flight. 365 is listed first for the senior top two because it will
-  // eventually bring live scores, but it is still a stub — routing there
-  // alone meant a senior Ligat Winner player could never get a single
-  // fixture. IFA now always backs it up.
-  if (isIsrael) {
-    if (isWomen || isYouth || !isTopTwo) return ['ifa'];
-    return ['365', 'ifa'];
-  }
-  if (isWomen) return ['sofascore'];
-  return ['365', 'sofascore'];
+  // top flight. Live scores come from a separate source in a later phase
+  // (match_scores); the old 365 stub that returned nothing is gone.
+  if (isIsrael) return ['ifa'];
+  return ['sofascore'];
 }
 
 // ───────────────────── SofaScore client ─────────────────────
@@ -647,13 +626,8 @@ async function ifaFetchFixtures(rawUrl) {
   return out.filter((m) => { if (seen.has(m.sourceMatchId)) return false; seen.add(m.sourceMatchId); return true; });
 }
 
-// 365 still a stub for the next phase.
-async function stubSearchTeam() { return []; }
-async function stubFetchFixtures() { return []; }
-
 const SOURCE_CLIENTS = {
   sofascore: { searchTeam: sofascoreSearchTeam, fetchFixtures: sofascoreFetchFixtures },
-  '365':     { searchTeam: stubSearchTeam,      fetchFixtures: stubFetchFixtures },
   // IFA is handled outside this table because it takes a URL, not a team-id.
 };
 
@@ -1031,54 +1005,14 @@ async function runSync(opts = {}) {
   };
 }
 
-// Reads and destroys the cron's one-time nonce. Rejects anything older than
-// two minutes so a leaked value is worthless.
-async function consumeSyncNonce(nonce) {
-  const ref = getDb().collection('app_meta').doc('syncTrigger');
-  try {
-    const snap = await ref.get();
-    if (!snap.exists) return false;
-    const d = snap.data() || {};
-    await ref.delete().catch(() => {});
-    if (!d.nonce || d.nonce !== nonce) return false;
-    const issued = d.issuedAt?.toDate?.()?.getTime?.() || 0;
-    return Date.now() - issued < 2 * 60 * 1000;
-  } catch (e) {
-    console.error('nonce check failed:', e.message);
-    return false;
-  }
-}
-
 // ───────────────────── Handler (HTTP-only background) ─────────────────────
 // Background functions accept POST and return 202 immediately; the body
 // returned here is only seen in the function logs (the client already has
 // its 202 by the time we finish writing it).
-exports.handler = async (event) => {
+// Callers: a manager pressing Sync Now (Firebase ID token with run_sync), or
+// the nightly cron / deploy hook of this site (single-use internal nonce).
+exports.handler = withAuth({ action: 'run_sync', internal: true }, async (event) => {
   getDb();
-
-  // Auth is REQUIRED. Two callers are legitimate:
-  //   • Lou pressing Sync Now — a Firebase ID token for the owner account.
-  //   • The nightly cron — a single-use nonce it wrote to Firestore moments
-  //     before calling. Only code holding the service-account key can put a
-  //     nonce there, so this needs no new secret and no manual setup.
-  const headers = event.headers || {};
-  const nonce = (headers['x-sync-nonce'] || headers['X-Sync-Nonce'] || '').trim();
-  if (nonce) {
-    const ok = await consumeSyncNonce(nonce);
-    if (!ok) return { statusCode: 401, body: JSON.stringify({ error: 'Invalid nonce' }) };
-  } else {
-    const auth = headers.authorization || headers.Authorization || '';
-    const token = auth.replace(/^Bearer /i, '').trim();
-    if (!token) return { statusCode: 401, body: JSON.stringify({ error: 'No auth token' }) };
-    try {
-      const decoded = await admin.auth().verifyIdToken(token);
-      if ((decoded.email || '').toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
-        return { statusCode: 403, body: JSON.stringify({ error: 'Forbidden' }) };
-      }
-    } catch (e) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Invalid token' }) };
-    }
-  }
 
   // Optional targeting, from the query string or a JSON body: ?only=<name>
   // syncs just that player, ?first=<name> puts him at the head of the queue.
@@ -1088,7 +1022,7 @@ exports.handler = async (event) => {
   const opts = { only: q.only || body.only || '', first: q.first || body.first || '' };
 
   try {
-    const result = await runSync(opts);
+    const result = await runJob('sync-matches', async (job) => { const r = await runSync(opts); job.note(r.message); return r; }, { opts });
     console.log('Sync complete via HTTP:', JSON.stringify(result.stats));
     return {
       statusCode: 200,
@@ -1103,7 +1037,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: String(e?.message || e) }),
     };
   }
-};
+});
 
 // Shared with ifa-targets and ifa-import, so the browser sync writes matches
 // exactly the way this function does.

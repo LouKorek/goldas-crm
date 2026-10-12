@@ -7,7 +7,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const C = require('../data/crm-constants.js');
 
 const MODEL = 'claude-opus-5-5';
-const OWNER_EMAIL = 'lou.korek@gmail.com';
+const { OWNER_EMAIL } = require('./firestore.js');
 const FILE_CHUNK = 600 * 1024;
 const FILE_MAX = 15 * 1024 * 1024;
 const MAX_STEPS = 25;
