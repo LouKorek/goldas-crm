@@ -19,13 +19,15 @@ export const AREAS = [
     ],
   },
   {
-    key: 'market', label: t('Market'), icon: 'clipboard', path: '/pipeline/men',
+    key: 'market', label: t('Market'), icon: 'clipboard', path: '/market/prospects',
     items: [
+      { label: t('Candidates'), path: '/market/prospects', icon: 'players' },
+      { label: t('Club Requirements'), path: '/market/requirements', icon: 'clipboard' },
+      { label: t('Deals'), path: '/market/deals', icon: 'tasks' },
       { label: t('Men'), path: '/pipeline/men', icon: 'men' },
       { label: t('Women'), path: '/pipeline/women', icon: 'women' },
       { label: t('Youth'), path: '/pipeline/youth', icon: 'youth' },
       { label: t('Jewish abroad'), path: '/pipeline/jewish', icon: 'star' },
-      { label: t('Club Requirements'), path: '/requirements', icon: 'clipboard' },
     ],
   },
   {
@@ -36,8 +38,11 @@ export const AREAS = [
     ],
   },
   {
-    key: 'calendar', label: t('Calendar'), icon: 'matches', path: '/matches',
-    items: [{ label: t('Matches'), path: '/matches' }],
+    key: 'calendar', label: t('Calendar'), icon: 'matches', path: '/calendar',
+    items: [
+      { label: t('Calendar'), path: '/calendar' },
+      { label: t('Matches'), path: '/matches' },
+    ],
   },
   {
     key: 'scouting', label: t('Scouting'), icon: 'search', path: '/pipeline/jewish/tm-watch',
@@ -67,7 +72,7 @@ export const AREAS = [
 export const BOTTOM = [
   { key: 'home', label: t('Home'), icon: 'dashboard', path: '/home' },
   { key: 'players', label: t('Players'), icon: 'players', path: '/players' },
-  { key: 'market', label: t('Market'), icon: 'clipboard', path: '/pipeline/men' },
+  { key: 'market', label: t('Market'), icon: 'clipboard', path: '/market/prospects' },
   { key: 'golda', label: t('Golda'), icon: 'chat', path: '/golda' },
   { key: 'more', label: t('More'), icon: 'menu', path: '__more__' },
 ];
@@ -79,9 +84,9 @@ export const DESTINATIONS = AREAS.flatMap((a) => a.items.map((i) => ({ ...i, are
 export function areaOf(pathname) {
   if (pathname.startsWith('/home') || pathname === '/dashboard') return 'home';
   if (pathname.startsWith('/pipeline/jewish/tm-watch')) return 'scouting';
-  if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/deals')) return 'market';
+  if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/market')) return 'market';
   if (pathname.startsWith('/players')) return 'players';
-  if (pathname.startsWith('/matches')) return 'calendar';
+  if (pathname.startsWith('/matches') || pathname.startsWith('/calendar')) return 'calendar';
   if (pathname.startsWith('/clubs') || pathname.startsWith('/contacts')) return 'clubs';
   if (pathname.startsWith('/golda')) return 'golda';
   return 'admin';

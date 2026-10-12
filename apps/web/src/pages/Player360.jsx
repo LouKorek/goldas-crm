@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { listenCollection, PATHS, resolveFileUrl } from 'lib/db';
+import { listenCollection, updateDoc_, PATHS, resolveFileUrl } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { listenDeals } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
@@ -8,7 +8,7 @@ import { calcAge, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
 import { useRole } from 'lib/roleContext';
 import { t, tv, relDays, fmtDateTime, getLang } from 'lib/i18n';
-import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS } from '@goldas/domain';
+import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, AGE_GROUPS, resolveAgeGroup, ageGroupFor, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
 import { PageHeader, Skeleton, Empty, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 
@@ -37,6 +37,32 @@ const Card = ({ title, children, action }) => (
     {children}
   </section>
 );
+
+// Youth age group: the cohort default (IFA rule, season from July 1) with a
+// manual override kept per season, so last season's override is ignored.
+function AgeGroupFact({ p, canEdit }) {
+  const he = getLang() === 'he';
+  if (!p.dob || !isYouthAge(p.dob)) return null;
+  const g = resolveAgeGroup(p);
+  const def = ageGroupFor(p.dob);
+  const overridden = p.ageGroupOverride?.season === seasonStartYear();
+  const set = async (id) => {
+    await updateDoc_(PATHS.PLAYERS, p.id, { ageGroupOverride: id ? { id, season: seasonStartYear() } : null });
+    toast.success(t('Age group updated.'));
+  };
+  return (
+    <div style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
+      <span style={{ color: 'var(--text-3)', minWidth: 110 }}>{t('Age group')} {seasonLabel()}</span>
+      {canEdit ? (
+        <select value={overridden ? p.ageGroupOverride.id : ''} onChange={(e) => set(e.target.value)} style={{ width: 'auto', height: 30, fontSize: 12 }}>
+          <option value="">{def ? `${def[he ? 'he' : 'en']} (${t('by cohort')})` : t('by cohort')}</option>
+          {AGE_GROUPS.map((x) => <option key={x.id} value={x.id}>{x[he ? 'he' : 'en']}{def?.id === x.id ? ` (${t('by cohort')})` : ''}</option>)}
+        </select>
+      ) : <span>{g ? g[he ? 'he' : 'en'] : '—'}</span>}
+      {overridden && <span style={{ fontSize: 10.5, color: 'var(--amber)' }}>{t('manual override')}</span>}
+    </div>
+  );
+}
 
 const Fact = ({ k, v }) => (v ? <div style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)' }}><span style={{ color: 'var(--text-3)', minWidth: 110 }}>{k}</span><span style={{ flex: 1 }}>{v}</span></div> : null);
 
@@ -88,7 +114,7 @@ export default function Player360() {
     await addInteraction({ kind: 'note', playerId: id, text: note.trim(), by: email });
     setNote(''); toast.success(t('Note added.'));
   };
-  const docs = [['contractFiles', t('Contract')], ['passportFiles', t('Passport')], ['reprFiles', t('Representation Agreement')]];
+  const docs = [['contractFiles', t('Contract'), p?.contractEnd], ['passportFiles', t('Passport'), p?.passportExpiry], ['reprFiles', t('Representation Agreement'), p?.reprEnd]];
 
   return (
     <div>
@@ -113,6 +139,7 @@ export default function Player360() {
         <Card title={t('Profile')}>
           <Fact k={t('Nationalities')} v={(p.nationalities || []).map((n) => `${flagEmoji(ISO2[n]) || ''} ${n}`).join(', ')} />
           <Fact k={t('Date of Birth')} v={p.dob ? `${fmtDate(p.dob)} (${calcAge(p.dob)})` : ''} />
+          <AgeGroupFact p={p} canEdit={canEdit} />
           <Fact k={t('Position')} v={[tv(p.primaryPosition), ...(p.secondaryPositions || []).map(tv)].filter(Boolean).join(', ')} />
           <Fact k={t('Foot')} v={tv(p.foot)} />
           <Fact k={t('Height (cm)')} v={p.height} />
@@ -138,13 +165,18 @@ export default function Player360() {
         </Card>
 
         <Card title={t('Documents')}>
-          {docs.every(([k]) => !(p[k] || []).length) ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No documents uploaded yet.')}</p> : docs.map(([k, label]) => (p[k] || []).map((f, i) => (
-            <button key={k + i} onClick={() => openFile(f)} style={{ display: 'flex', gap: 10, width: '100%', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--rule)', background: 'none', border: 'none', borderBottomStyle: 'solid', color: 'var(--text-1)', cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit', fontSize: 13 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--gold)', minWidth: 60 }}>{label}</span>
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{f.uploadedAt ? fmtDate(f.uploadedAt) : ''}</span>
-            </button>
-          )))}
+          {docs.every(([k]) => !(p[k] || []).length) ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No documents uploaded yet.')}</p> : docs.map(([k, label, expires]) => (p[k] || []).map((f, i) => {
+            const exp = f.expiresAt || expires;
+            const d = exp ? daysAway(exp) : null;
+            return (
+              <button key={k + i} onClick={() => openFile(f)} style={{ display: 'flex', gap: 10, width: '100%', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--rule)', background: 'none', border: 'none', borderBottomStyle: 'solid', color: 'var(--text-1)', cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit', fontSize: 13 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--gold)', minWidth: 60 }}>{label}</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                {exp && <span style={{ fontSize: 10.5, color: d < 0 ? 'var(--red)' : d <= 30 ? 'var(--amber)' : 'var(--text-3)' }}>{d < 0 ? t('expired') : t('valid until')} {fmtDate(exp)}</span>}
+                <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{f.uploadedAt ? fmtDate(f.uploadedAt) : ''}</span>
+              </button>
+            );
+          }))}
         </Card>
 
         <Card title={t('Matches')} action={<Link to="/matches" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>
@@ -162,7 +194,7 @@ export default function Player360() {
           {deals.filter((d) => !d.closedAt).length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>—</p> : deals.filter((d) => !d.closedAt).map((d) => (
             <div key={d.id} style={{ display: 'flex', gap: 8, fontSize: 13, padding: '6px 0', borderBottom: '1px solid var(--rule)' }}>
               <span style={{ flex: 1 }}>{d.clubName}</span>
-              <span className="badge" style={{ background: 'var(--gold-dim)', color: 'var(--gold)' }}>{t(d.stage)}</span>
+              <Link to={`/market/deals?deal=${d.id}`} className="badge" style={{ background: 'var(--gold-dim)', color: 'var(--gold)', textDecoration: 'none' }}>{he ? DEAL_STAGE_LABELS[d.stage] || d.stage : d.stage}</Link>
               <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{d.enteredStageAt ? relDays(daysAway(d.enteredStageAt.slice(0, 10))) : ''}</span>
             </div>
           ))}

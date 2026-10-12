@@ -1,316 +1,151 @@
-// Daily alert emails — runs on Netlify's scheduler instead of the Apps Script
-// trigger. Same behaviour as the old Code.gs: reads players/matches and the
-// notification thresholds from Firestore, then emails each alert ONCE the day
-// it crosses a threshold the user configured.
+// The daily alerts email. The alert set comes from the same domain engine the
+// app's Home and Notifications screens use (packages/domain/src/engines/
+// alerts.ts), so what lands in the inbox is exactly what the screen shows.
+// Each alert is emailed once per threshold it crosses; the dedupe keys live
+// in app_meta/sentAlerts.
 //
 // Required Netlify environment variables:
-//   FIREBASE_SERVICE_ACCOUNT_KEY  — the full JSON of a Firebase service
-//                                   account (Project settings → Service
-//                                   accounts → Generate new private key),
-//                                   pasted minified onto one line.
-//   GMAIL_APP_PASSWORD            — a Gmail App Password for lou.korek@gmail.com
-//                                   (Google Account → Security → 2-Step
-//                                   Verification → App passwords).
+//   FIREBASE_SERVICE_ACCOUNT_KEY  — the Firebase service account JSON.
+//   GMAIL_APP_PASSWORD            — a Gmail App Password for the owner mailbox.
 
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
-const nodemailer   = require('nodemailer');
+const { computeAlerts, mergeSettings, israelDate, daysBetween } = require('@goldas/domain');
+const nodemailer = require('nodemailer');
 
-// ────────────────── Config ──────────────────
-const MATCH_LEAD_DAYS = 1;
-const DEFAULT_SETTINGS = {
-  contractDays: [7, 30, 60],
-  reprDays:     [7, 30, 60],
-  passportDays: [30, 90, 180],
-  birthdayDays: [0, 3, 7],
-};
+// Matches are emailed one day ahead only; the screen shows the whole week.
+const EMAIL_SETTINGS = { matchDays: [0, 1] };
+const KEEP_DAYS = 400;
 
-// ────────────────── Firebase Admin (cached) ──────────────────
-// ────────────────── Date helpers ──────────────────
-function parseDate(s) {
-  if (!s) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const [y, m, d] = s.split('-');
-    return new Date(+y, +m - 1, +d);
-  }
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
-    const [d, m, y] = s.split('/');
-    return new Date(+y, +m - 1, +d);
-  }
-  const d = new Date(s);
-  return isNaN(d) ? null : d;
-}
-const stripTime = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-// Whole calendar days, matching daysAway() in src/lib/alerts.js so the email
-// and the screen can never disagree about what "in 7 days" means.
-function daysUntil(s, now) {
-  const d = parseDate(s); if (!d) return null;
-  return Math.round((stripTime(d) - stripTime(now)) / 86400000);
-}
-function daysUntilBirthday(dob, now) {
-  const b = parseDate(dob); if (!b) return null;
-  const next = new Date(now.getFullYear(), b.getMonth(), b.getDate());
-  if (next < stripTime(now)) next.setFullYear(now.getFullYear() + 1);
-  return Math.round((next - stripTime(now)) / 86400000);
-}
-function ageOnNextBirthday(dob, now) {
-  const b = parseDate(dob); if (!b) return '';
-  let age = now.getFullYear() - b.getFullYear();
-  const thisYear = new Date(now.getFullYear(), b.getMonth(), b.getDate());
-  if (thisYear < stripTime(now)) age += 1;
-  return age;
-}
 const pad = (n) => ('0' + n).slice(-2);
-function fmtDate(s) {
-  const d = parseDate(s); if (!d) return s || '';
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-// Mirrors dayLabel() in src/lib/alerts.js.
-const dayLabel = (d) =>
-  d === 0 ? 'today'
-    : d === 1 ? '1 day'
-      : d === -1 ? '1 day ago'
-        : d > 0 ? `${d} days` : `${Math.abs(d)} days ago`;
-// "X - contract expired 3 days ago" / "X - contract expires in 7 days"
-const expiryLine = (name, what, d) =>
-  d < 0 ? `${name} - ${what} EXPIRED ${dayLabel(d)}`
-    : d === 0 ? `${name} - ${what} expires today`
-      : `${name} - ${what} expires in ${dayLabel(d)}`;
+const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(s || ''); };
 
-// ────────────────── Alert computation (mirrors Code.gs / the app) ──────────────────
-function computeNewAlerts(players, matches, settings, sent, now) {
-  const out = { contract: [], repr: [], passport: [], birthday: [], matches: [] };
-  const newKeys = [];
-
-  // Dedup keys carry the date they refer to. Without it, once a player's
-  // 30-day contract warning had gone out the key stayed set forever, so the
-  // NEXT contract — signed years later — silently never warned at all.
-  function handleDate(p, field, cat, thresholds, makeItem) {
-    if (!p[field]) return;
-    if (!thresholds.length) return;          // category switched off entirely
-    const d = daysUntil(p[field], now);
-    if (d === null) return;
-    const stamp = String(p[field]);
-    // Past its date: worth exactly one "this has expired" email, then the
-    // app keeps showing it as OVERDUE until the record is updated.
-    const satisfied = d < 0 ? ['overdue'] : thresholds.filter((t) => d <= t);
-    if (!satisfied.length) return;
-    const keys = satisfied.map((t) => `${p.id}|${cat}|${t}|${stamp}`);
-    if (!keys.some((k) => !sent[k])) return;
-    out[cat].push(makeItem(p, d));
-    keys.forEach((k) => { if (!sent[k]) newKeys.push(k); });
+// One key per alert per threshold, so the same contract warns at 60, 30 and
+// 7 days and then once more when it has passed — and a renewed contract
+// (new date) starts over.
+function dedupeKey(a, settings, today) {
+  const dateTypes = { contract: 'contractDays', repr: 'reprDays', passport: 'passportDays' };
+  if (dateTypes[a.type]) {
+    const bucket = a.overdue ? 'overdue' : Math.min(...settings[dateTypes[a.type]].filter((t) => a.days <= t));
+    return `${a.type}|${a.subject.id}|${a.dueDate}|${bucket}`;
   }
-
-  players.forEach((p) => {
-    // Matches the Notifications screen, which ignores contract dates left
-    // behind on a player who is now a free agent.
-    if (p.contractStatus !== 'Free') {
-      handleDate(p, 'contractEnd', 'contract', settings.contractDays,
-        (p, d) => ({ name: p.fullName, days: d, date: p.contractEnd, club: p.currentClub }));
-    }
-    handleDate(p, 'reprEnd',        'repr',     settings.reprDays,
-      (p, d) => ({ name: p.fullName, days: d, date: p.reprEnd }));
-    handleDate(p, 'passportExpiry', 'passport', settings.passportDays,
-      (p, d) => ({ name: p.fullName, days: d, date: p.passportExpiry }));
-
-    const bd = daysUntilBirthday(p.dob, now);
-    if (bd !== null && bd >= 0 && settings.birthdayDays.length) {
-      const yr = now.getFullYear();
-      const bsat = settings.birthdayDays.filter((t) => bd <= t);
-      if (bsat.length && bsat.some((t) => !sent[`b|${p.id}|${t}|${yr}`])) {
-        out.birthday.push({ name: p.fullName, days: bd, age: ageOnNextBirthday(p.dob, now) });
-        bsat.forEach((t) => {
-          const k = `b|${p.id}|${t}|${yr}`;
-          if (!sent[k]) newKeys.push(k);
-        });
-      }
-    }
-  });
-
-  matches.forEach((m) => {
-    const d = daysUntil(m.date, now);
-    if (d === null || d < 0 || d > MATCH_LEAD_DAYS) return;
-    const k = `m|${m.id || `${m.homeTeam}_${m.awayTeam}_${m.date}`}`;
-    if (sent[k]) return;
-    out.matches.push({ home: m.homeTeam, away: m.awayTeam, days: d, date: m.date, time: m.time, stadium: m.stadiumName });
-    newKeys.push(k);
-  });
-
-  ['contract', 'repr', 'passport', 'birthday', 'matches'].forEach((k) => {
-    out[k].sort((a, b) => a.days - b.days);
-  });
-  const total = out.contract.length + out.repr.length + out.passport.length + out.birthday.length + out.matches.length;
-  return { alerts: out, newKeys, total };
+  if (a.type === 'birthday') return `birthday|${a.subject.id}|${today.slice(0, 4)}|${Math.min(...settings.birthdayDays.filter((t) => a.days <= t))}`;
+  if (a.type === 'match') return `match|${a.subject.id}|${a.dueDate}`;
+  if (a.type === 'deal_stale') return `deal_stale|${a.subject.id}|${a.record.enteredStageAt || ''}|${Math.floor(-a.days / settings.dealStaleDays)}`;
+  if (a.type === 'requirement_expired') return `requirement_expired|${a.subject.id}|${a.dueDate}`;
+  if (a.type === 'task_overdue') return `task_overdue|${a.subject.id}|${a.dueDate}|${a.overdue ? 'overdue' : 'due'}`;
+  if (a.type === 'job_failed') return `job_failed|${a.subject.id}`;
+  return `${a.type}|${a.subject.id}|${a.dueDate || ''}`;
 }
 
-// ────────────────── Email body (identical look to the old script) ──────────────────
-function buildEmailHtml(a, total) {
+const SECTIONS = [
+  ['job_failed', 'עבודות לילה שנכשלו', 'Failed night jobs', '⚠️'],
+  ['deal_stale', 'עסקאות שמחכות יותר מדי', 'Deals waiting too long', '⏳'],
+  ['contract', 'סיום חוזה', 'Contract Expiry', '📋'],
+  ['repr', 'סיום הסכם ייצוג', 'Representation Expiry', '🤝'],
+  ['passport', 'תוקף דרכון', 'Passport Expiry', '🛂'],
+  ['requirement_expired', 'דרישות מועדון שפגו', 'Expired requirements', '📌'],
+  ['task_overdue', 'משימות באיחור', 'Overdue tasks', '✅'],
+  ['birthday', 'ימי הולדת', 'Birthdays', '🎂'],
+  ['match', 'משחקים קרובים', 'Upcoming Matches', '⚽'],
+];
+
+// Hebrew, right-to-left, the same look as before.
+function buildEmailHtml(alerts, total) {
   const gold = '#C9A84C', dark = '#16201A', text = '#1c1c1c';
-  function section(title, icon, rows) {
-    if (!rows.length) return '';
-    return `<tr><td style="padding:18px 0 6px;font:700 13px Arial;color:${gold};letter-spacing:.04em;text-transform:uppercase">${icon} ${title} (${rows.length})</td></tr><tr><td>${rows.join('')}</td></tr>`;
+  const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const row = (a) => {
+    const urgent = a.severity === 'critical' || a.severity === 'gold';
+    const sub = [a.proof.he, a.dueDate ? fmtDate(a.dueDate) : ''].filter(Boolean).join(' &middot; ');
+    return `<div style="border-right:3px solid ${urgent ? '#E74C3C' : gold};background:#faf8f2;border-radius:6px;padding:10px 14px;margin:6px 0;text-align:right"><div style="font:600 14px Arial;color:${text}">${esc(a.subject.name)}</div><div style="font:13px Arial;color:#666;margin-top:2px">${sub}</div></div>`;
+  };
+  let html = `<div dir="rtl" style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;text-align:right"><div style="background:${dark};padding:22px 24px;border-radius:12px 12px 0 0"><div style="font:700 22px Georgia,serif;color:${gold}">Gold A&amp;S</div><div style="font:12px Arial;color:#9bbf9d;letter-spacing:.06em;margin-top:2px">התראות &middot; ${total} חדשות &middot; ${fmtDate(israelDate())}</div></div><div style="border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:8px 24px 24px"><table width="100%" cellpadding="0" cellspacing="0">`;
+  for (const [type, he, , icon] of SECTIONS) {
+    const list = alerts.filter((a) => a.type === type);
+    if (!list.length) continue;
+    html += `<tr><td style="padding:18px 0 6px;font:700 13px Arial;color:${gold};letter-spacing:.04em">${icon} ${he} (${list.length})</td></tr><tr><td>${list.map(row).join('')}</td></tr>`;
   }
-  function row(main, sub, urgent) {
-    const bar = urgent ? '#E74C3C' : gold;
-    return `<div style="border-left:3px solid ${bar};background:#faf8f2;border-radius:6px;padding:10px 14px;margin:6px 0"><div style="font:600 14px Arial;color:${text}">${main}</div>${sub ? `<div style="font:13px Arial;color:#666;margin-top:2px">${sub}</div>` : ''}</div>`;
-  }
-  let html = `<div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif"><div style="background:${dark};padding:22px 24px;border-radius:12px 12px 0 0"><div style="font:700 22px Georgia,serif;color:${gold}">Gold A&amp;S</div><div style="font:12px Arial;color:#9bbf9d;letter-spacing:.1em;text-transform:uppercase;margin-top:2px">Alerts &middot; ${total} new</div></div><div style="border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:8px 24px 24px"><table width="100%" cellpadding="0" cellspacing="0">`;
-  html += section('Contract Expiry', '📋', a.contract.map((x) =>
-    row(expiryLine(x.name, 'contract', x.days),
-        `Expires: ${fmtDate(x.date)}${x.club ? ' &middot; ' + x.club : ''}`, x.days <= 7)));
-  html += section('Representation Expiry', '🤝', a.repr.map((x) =>
-    row(expiryLine(x.name, 'representation', x.days),
-        `Expires: ${fmtDate(x.date)}`, x.days <= 7)));
-  html += section('Passport Expiry', '🛂', a.passport.map((x) =>
-    row(expiryLine(x.name, 'passport', x.days),
-        `Expires: ${fmtDate(x.date)}`, x.days <= 30)));
-  html += section('Birthdays', '🎂', a.birthday.map((x) =>
-    row(`${x.name}${x.age === 18 ? ' - Turning 18!' : ''}`,
-        `${x.days === 0 ? 'Birthday is today!' : 'Birthday in ' + dayLabel(x.days)} &middot; Turning ${x.age}`,
-        x.age === 18)));
-  html += section('Upcoming Matches', '⚽', a.matches.map((x) =>
-    row(`${x.home} vs ${x.away}`,
-        `${fmtDate(x.date)}${x.time ? ' &middot; ' + x.time : ''}${x.stadium ? ' &middot; ' + x.stadium : ''}`,
-        x.days <= 1)));
-  html += `</table></div><div style="text-align:center;font:11px Arial;color:#aaa;padding:14px">Gold A&amp;S Football Agency &middot; gold-as.com</div></div>`;
+  html += `</table><div style="font:12px Arial;color:#888;margin-top:18px">הרשימה המלאה: <a href="https://goldas-crm.netlify.app/notifications" style="color:${gold}">goldas-crm.netlify.app/notifications</a></div></div><div style="text-align:center;font:11px Arial;color:#aaa;padding:14px">Gold A&amp;S Football Agency &middot; gold-as.com</div></div>`;
   return html;
 }
 
-// ────────────────── Firestore reads ──────────────────
-// An empty array means "never alert me about this" and must be honoured.
-// Treating it as missing — which is what `v.length ? … : fallback` did — meant
-// switching a category off in the app kept the emails coming on the defaults.
-const arr = (v, fallback) => (Array.isArray(v) ? v.map(Number).filter((n) => !isNaN(n)) : fallback);
-
 async function fetchSettings(db) {
-  try {
-    const s = await db.collection('settings').doc('notifications').get();
-    if (!s.exists) return DEFAULT_SETTINGS;
-    const d = s.data();
-    return {
-      contractDays: arr(d.contractDays, DEFAULT_SETTINGS.contractDays),
-      reprDays:     arr(d.reprDays,     DEFAULT_SETTINGS.reprDays),
-      passportDays: arr(d.passportDays, DEFAULT_SETTINGS.passportDays),
-      birthdayDays: arr(d.birthdayDays, DEFAULT_SETTINGS.birthdayDays),
-    };
-  } catch (e) {
-    console.error('fetchSettings error:', e);
-    return DEFAULT_SETTINGS;
-  }
+  try { const s = await db.collection('settings').doc('notifications').get(); return mergeSettings({ ...(s.exists ? s.data() : {}), ...EMAIL_SETTINGS }); }
+  catch (e) { console.error('fetchSettings error:', e); return mergeSettings(EMAIL_SETTINGS); }
 }
 
-// Returns null only when the user list could not be read — an empty list is a
-// deliberate "nobody wants these", and used to be overridden by a fallback to
-// the owner, so Lou could never actually turn his own alerts off.
+// An empty list is a deliberate "nobody wants these" and is honoured.
 async function fetchRecipients(db) {
   try {
     const snap = await db.collection('app_users').get();
-    if (snap.empty) return [OWNER_EMAIL];   // nobody configured yet
-    return snap.docs
-      .map((d) => d.data())
-      .filter((u) => u.active !== false && u.emailAlerts !== false && u.email)
-      .map((u) => u.email);
-  } catch (e) {
-    console.error('fetchRecipients error, falling back to owner:', e);
-    return [OWNER_EMAIL];
-  }
+    if (snap.empty) return [OWNER_EMAIL];
+    return snap.docs.map((d) => d.data()).filter((u) => u.active !== false && u.emailAlerts !== false && u.email).map((u) => u.email);
+  } catch (e) { console.error('fetchRecipients error, falling back to owner:', e); return [OWNER_EMAIL]; }
 }
 
-// Dedup state lives in Firestore (replaces Apps Script PropertiesService).
+// Dedupe state: { key: 'YYYY-MM-DD' } (the day it was sent). Older entries
+// used the value 1; they are kept as if sent today and age out normally.
 async function loadSent(db) {
-  try {
-    const s = await db.collection('app_meta').doc('sentAlerts').get();
-    return s.exists ? (s.data().keys || {}) : {};
-  } catch (e) {
-    console.error('loadSent error:', e);
-    return {};
-  }
+  try { const s = await db.collection('app_meta').doc('sentAlerts').get(); return s.exists ? (s.data().keys || {}) : {}; }
+  catch (e) { console.error('loadSent error:', e); return {}; }
 }
-// Keys now carry the date they refer to, so old ones can be recognised and
-// dropped. Left unpruned this single document grows by one key per match and
-// per renewed contract, forever, until it hits Firestore's 1 MiB ceiling.
-function pruneSent(keys, now) {
-  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 400);
-  const thisYear = now.getFullYear();
+function pruneSent(keys, today) {
   const out = {};
-  for (const k of Object.keys(keys)) {
-    const parts = k.split('|');
-    if (parts[0] === 'b') {                       // b|playerId|threshold|year
-      if (Number(parts[3]) >= thisYear - 1) out[k] = 1;
-      continue;
-    }
-    if (parts[0] === 'm') { out[k] = 1; continue; }   // handled below
-    const d = parseDate(parts[3]);                // playerId|cat|threshold|date
-    if (!d || d >= cutoff) out[k] = 1;
+  for (const [k, v] of Object.entries(keys)) {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : today;
+    if (daysBetween(d, today) <= KEEP_DAYS) out[k] = d;
   }
   return out;
 }
-
-async function saveSent(db, keys, matchDates, now) {
-  // Match keys hold no date of their own, so drop the ones whose match has
-  // dropped out of the collection or is long past.
-  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
-  const pruned = pruneSent(keys, now);
-  for (const k of Object.keys(pruned)) {
-    if (!k.startsWith('m|')) continue;
-    const d = matchDates.get(k.slice(2));
-    if (!d || parseDate(d) < cutoff) delete pruned[k];
-  }
-  await db.collection('app_meta').doc('sentAlerts').set({
-    keys: pruned,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: false });
+async function saveSent(db, keys, today) {
+  await db.collection('app_meta').doc('sentAlerts').set({ keys: pruneSent(keys, today), updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: false });
 }
 
-// ────────────────── Main routine ──────────────────
-async function sendDigest() {
+async function sendDigest(job) {
   const db = getDb();
-  const [players, matchesSnap, settings, recipients, sent] = await Promise.all([
+  const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
+  const [players, matches, deals, requirements, tasks, jobs, settings, recipients, sent] = await Promise.all([
     listRepresented(db),
-    db.collection('matches').get(),
+    db.collection('matches').get().then(rows),
+    db.collection('deals').get().then(rows),
+    db.collection('club_requirements').get().then(rows),
+    db.collection('tasks').get().then(rows),
+    db.collection('jobs').orderBy('startedAt', 'desc').limit(40).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))),
     fetchSettings(db),
     fetchRecipients(db),
     loadSent(db),
   ]);
-  const matches = matchesSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
-
   const now = new Date();
-  const r = computeNewAlerts(players, matches, settings, sent, now);
-  if (r.total === 0) {
-    console.log('No new alerts due — nothing sent.');
-    return { statusCode: 200, body: 'no alerts' };
+  const today = israelDate(now);
+  const r = computeAlerts({ players, matches, deals, requirements, tasks: tasks.filter((x) => (x.owner || OWNER_EMAIL) === OWNER_EMAIL), jobs, settings, now });
+  const fresh = [];
+  const newKeys = [];
+  for (const a of r.alerts) {
+    const k = dedupeKey(a, settings, today);
+    if (sent[k]) continue;
+    fresh.push(a); newKeys.push(k);
   }
-  if (!recipients.length) {
-    console.log(`${r.total} alerts due but email is switched off for every user.`);
-    return { statusCode: 200, body: 'no recipients' };
-  }
+  job.note(`${r.alerts.length} alerts, ${fresh.length} new`);
+  if (!fresh.length) return { statusCode: 200, body: 'no new alerts' };
+  if (!recipients.length) return { statusCode: 200, body: 'no recipients' };
 
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: OWNER_EMAIL, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-  const subject = `Gold A&S - ${r.total === 1 ? 'New alert' : `${r.total} new alerts`}`;
+  const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: OWNER_EMAIL, pass: process.env.GMAIL_APP_PASSWORD } });
   await transporter.sendMail({
-    from: `"Gold A&S Alerts" <${OWNER_EMAIL}>`,
+    from: `"Gold A&S" <${OWNER_EMAIL}>`,
     to: recipients.join(','),
-    subject,
-    html: buildEmailHtml(r.alerts, r.total),
+    subject: `Gold A&S · ${fresh.length === 1 ? 'התראה חדשה' : `${fresh.length} התראות חדשות`}`,
+    html: buildEmailHtml(fresh, fresh.length),
   });
-  console.log(`Email sent to ${recipients.join(',')} (${r.total} alerts).`);
-
   const newSent = { ...sent };
-  r.newKeys.forEach((k) => { newSent[k] = 1; });
-  await saveSent(db, newSent, new Map(matches.map((m) => [m.id, m.date])), now);
-
-  return { statusCode: 200, body: `sent ${r.total} alerts` };
+  newKeys.forEach((k) => { newSent[k] = today; });
+  await saveSent(db, newSent, today);
+  return { statusCode: 200, body: `sent ${fresh.length} alerts to ${recipients.length}` };
 }
 
-// 06:00 UTC = 08:00 (winter) / 09:00 (summer) in Israel.
-exports.handler = schedule('0 6 * * *', async () => {
-  try { return await runJob('send-alerts', async (job) => { const r = await sendDigest(); job.note(r.body); return r; }); }
-  catch (e) {
-    console.error('sendDigest failed:', e);
-    return { statusCode: 500, body: String(e) };
-  }
+// 05:30 UTC = 07:30 (winter) / 08:30 (summer) in Israel — after the night run.
+exports.handler = schedule('30 5 * * *', async () => {
+  try { return await runJob('send-alerts', async (job) => { const r = await sendDigest(job); job.note(r.body); return r; }); }
+  catch (e) { console.error('sendDigest failed:', e); return { statusCode: 500, body: String(e) }; }
 });
+exports._internal = { dedupeKey, buildEmailHtml, pruneSent };

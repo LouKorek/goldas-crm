@@ -25,6 +25,9 @@ import Migrations    from 'pages/Migrations';
 import Home          from 'pages/Home';
 import Player360     from 'pages/Player360';
 import Golda         from 'pages/Golda';
+import Prospects     from 'pages/Prospects';
+import Deals         from 'pages/Deals';
+import Calendar      from 'pages/Calendar';
 import { ToastProvider } from 'components/ui/UI';
 import { t } from 'lib/i18n';
 
@@ -192,7 +195,12 @@ export default function App() {
                 <Route path="players"        element={<Players />} />
                 <Route path="players/:id"    element={<Player360 />} />
                 <Route path="matches"        element={<Matches />} />
-                <Route path="requirements"   element={<Requirements />} />
+                <Route path="calendar"       element={<Calendar />} />
+                <Route path="market"         element={<Navigate to="/market/prospects" replace />} />
+                <Route path="market/prospects"    element={<Prospects />} />
+                <Route path="market/requirements" element={<Requirements />} />
+                <Route path="market/deals"        element={<Deals />} />
+                <Route path="requirements"   element={<Navigate to="/market/requirements" replace />} />
                 <Route path="clubs"          element={<Clubs />} />
                 <Route path="clubs/:id"      element={<Clubs />} />
                 <Route path="recycle"        element={<RecycleBin />} />

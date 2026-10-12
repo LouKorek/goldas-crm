@@ -360,30 +360,30 @@ function PlayersFilter({ allPlayers, value, onChange }) {
 // words rather than error codes. Collapsed by default; the count is enough
 // on a good day.
 const SYNC_REASONS = {
-  'ifa-url-missing':            { label: t("No IFA link"),              fix: 'Paste his football.org.il profile into the player record.' },
-  'ifa-url-invalid':            { label: t("IFA link not readable"),    fix: 'The link should be a football.org.il address.' },
-  'ifa-url-has-no-id':          { label: t("IFA link has no player id"),fix: 'Copy the link from his profile page, not a search result.' },
-  'ifa-player-page-unreadable': { label: t("IFA profile did not load"), fix: 'Usually temporary — the next sync will retry.' },
-  'ifa-club-index-unreadable':  { label: t("IFA club list did not load"), fix: 'Usually temporary — the next sync will retry.' },
-  'ifa-club-not-found':         { label: t("Club not found in the IFA register"), fix: 'Open the player and pin his squad directly.' },
-  'ifa-team-not-matched':       { label: t("Squad not identified"),     fix: 'Open the player and pin his squad directly.' },
-  'ifa-no-fixtures-published':  { label: t("No fixtures published yet"),fix: 'The squad was found — the federation has not released its schedule.' },
-  'no-club':                    { label: t("No club on record"),        fix: 'Set his current club.' },
-  'no-source':                  { label: t("No source for this league"),fix: 'Add a country and tier so the sync knows where to look.' },
-  'no-fixtures-or-team-not-found': { label: t("Nothing found"),         fix: 'His league may not be covered by the available sources.' },
-  'ifa-page-unreadable':        { label: t("IFA fixtures page did not load"), fix: 'Usually temporary — the next sync will retry.' },
-  'not-reached-time':           { label: t("Not reached this run"),     fix: 'The sync ran out of time before him; he is near the front of the queue next time.' },
-  'not-reached-credits':        { label: t("Not reached this run"),     fix: "This run's ScraperAPI allowance was used up; he is near the front of the queue next time." },
-  'scraper-quota-exhausted':    { label: t("ScraperAPI monthly quota spent"), fix: 'Israeli fixtures cannot be fetched until it resets — the date is on the counter above.' },
-  'ifa-browser-stale':          { label: t("Computer sync has not run"), fix: 'Israeli fixtures come from the daily sync on Lou\'s computer (Chrome). Check that the computer was on and the Claude in Chrome extension is connected.' },
-  'ifa-blocked-datacenter':     { label: t("Not synced — IFA blocks the server"), fix: 'Waiting for the next computer sync.' },
-  'ifa-kept-existing':          { label: t("Came back empty — kept his matches"), fix: 'The federation page showed no fixtures, so the ones on file were left untouched.' },
-  'ifa-old-season':             { label: t("Only last season's fixtures"), fix: 'The federation has not published this season for his squad yet; nothing was changed.' },
-  'ifa-not-scraped':            { label: t("Not read by the computer sync"), fix: 'He was added after the sync started; the next run picks him up.' },
-  'error':                      { label: t("Sync error"),               fix: '' },
+  'ifa-url-missing':            { label: t("No IFA link"),              fix: t('Paste his football.org.il profile into the player record.') },
+  'ifa-url-invalid':            { label: t("IFA link not readable"),    fix: t('The link should be a football.org.il address.') },
+  'ifa-url-has-no-id':          { label: t("IFA link has no player id"),fix: t('Copy the link from his profile page, not a search result.') },
+  'ifa-player-page-unreadable': { label: t("IFA profile did not load"), fix: t('Usually temporary — the next sync will retry.') },
+  'ifa-club-index-unreadable':  { label: t("IFA club list did not load"), fix: t('Usually temporary — the next sync will retry.') },
+  'ifa-club-not-found':         { label: t("Club not found in the IFA register"), fix: t('Open the player and pin his squad directly.') },
+  'ifa-team-not-matched':       { label: t("Squad not identified"),     fix: t('Open the player and pin his squad directly.') },
+  'ifa-no-fixtures-published':  { label: t("No fixtures published yet"),fix: t('The squad was found — the federation has not released its schedule.') },
+  'no-club':                    { label: t("No club on record"),        fix: t('Set his current club.') },
+  'no-source':                  { label: t("No source for this league"),fix: t('Add a country and tier so the sync knows where to look.') },
+  'no-fixtures-or-team-not-found': { label: t("Nothing found"),         fix: t('His league may not be covered by the available sources.') },
+  'ifa-page-unreadable':        { label: t("IFA fixtures page did not load"), fix: t('Usually temporary — the next sync will retry.') },
+  'not-reached-time':           { label: t("Not reached this run"),     fix: t('The sync ran out of time before him; he is near the front of the queue next time.') },
+  'not-reached-credits':        { label: t("Not reached this run"),     fix: t("This run's ScraperAPI allowance was used up; he is near the front of the queue next time.") },
+  'scraper-quota-exhausted':    { label: t("ScraperAPI monthly quota spent"), fix: t('Israeli fixtures cannot be fetched until it resets — the date is on the counter above.') },
+  'ifa-browser-stale':          { label: t("Computer sync has not run"), fix: t('Israeli fixtures come from the daily sync on Lou\'s computer (Chrome). Check that the computer was on and the Claude in Chrome extension is connected.') },
+  'ifa-blocked-datacenter':     { label: t("Not synced — IFA blocks the server"), fix: t('Waiting for the next computer sync.') },
+  'ifa-kept-existing':          { label: t("Came back empty — kept his matches"), fix: t('The federation page showed no fixtures, so the ones on file were left untouched.') },
+  'ifa-old-season':             { label: t("Only last season's fixtures"), fix: t('The federation has not published this season for his squad yet; nothing was changed.') },
+  'ifa-not-scraped':            { label: t("Not read by the computer sync"), fix: t('He was added after the sync started; the next run picks him up.') },
+  'error':                      { label: t("Sync error"),               fix: t('') },
 };
 
-function SyncReport({ report }) {
+export function SyncReport({ report }) {
   const [open, setOpen] = useState(false);
   const list = report?.list || [];
   if (!report || !list.length) return null;
@@ -405,7 +405,7 @@ function SyncReport({ report }) {
       {open && (
         <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
           {list.map((w, i) => {
-            const r = SYNC_REASONS[w.reason] || { label: w.reason, fix: '' };
+            const r = SYNC_REASONS[w.reason] || { label: w.reason, fix: t('') };
             return (
               <div key={`${w.playerId || i}-${w.reason}`} style={{ fontSize: 12, borderTop: '1px solid var(--border)', paddingTop: 7 }}>
                 <div style={{ color: 'var(--text-1)', fontWeight: 600 }}>
@@ -449,9 +449,14 @@ export default function Matches() {
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
-    if (location.state?.sync && isAdmin) { syncNow(); navigate(location.pathname, { replace: true, state: null }); }
+    const st = location.state;
+    if (!st) return;
+    const clear = () => navigate(location.pathname, { replace: true, state: null });
+    if (st.sync && isAdmin) { syncNow(); clear(); }
+    else if (st.add && canEdit) { openAdd(); clear(); }
+    else if (st.focus && items.length) { const m = items.find((x) => x.id === st.focus); if (m) { setSearch(m.homeTeam || ''); clear(); } }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  }, [location.state, items.length]);
 
   // Admin-only: trigger the Netlify sync function for all represented players.
   const syncNow = async () => {
