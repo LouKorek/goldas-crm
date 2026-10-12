@@ -25,6 +25,7 @@
 const { admin, getDb, listRepresented } = require('./lib/firestore.js');
 const { withAuth } = require('./lib/auth.js');
 const { runJob } = require('./lib/jobs.js');
+const crypto = require('crypto');
 const cheerio = require('cheerio');
 const IFA_TEAM_PINS = require('./data/ifa-team-pins.js');
 const {
@@ -657,40 +658,107 @@ async function resolveTeamId(db, player, source) {
 }
 
 // ───────────────────── Upsert + cleanup ─────────────────────
+// Which existing record a fetched fixture is. The IFA's game_id is the
+// identity when the row carries one. Without it the fallback key is
+// "date|home|away", which changes when a match is postponed, gets its time, or
+// a team is renamed, so the same match used to come back as a new record
+// (the 13 duplicates cleaned up by migration 006). The fixture list has no
+// round column, so the second-level identity is: same squad (sourceTeamId:
+// club × season × age), same two teams in the same order (spelling may
+// differ), nearest date within SAME_MATCH_DAYS. Past matches never match a
+// fetched row this way: they are frozen history.
+const SAME_MATCH_DAYS = 45;
+const dayDiff = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 86400000;
+const sameTeam = (a, b) => {
+  const x = String(a || '').trim(), y = String(b || '').trim();
+  if (!x || !y) return false;
+  return x === y || ifaContainment(x, y) >= 0.5;
+};
+function sameFixture(fetched, existing) {
+  if (!existing || existing.deletedAt) return false;
+  if (existing.sourceTeamId && fetched.sourceTeamId && existing.sourceTeamId !== fetched.sourceTeamId) return false;
+  if (existing.season && fetched.season && existing.season !== fetched.season) return false;
+  if (!sameTeam(fetched.homeTeam, existing.homeTeam) || !sameTeam(fetched.awayTeam, existing.awayTeam)) return false;
+  return !!existing.date && !!fetched.date && dayDiff(existing.date, fetched.date) <= SAME_MATCH_DAYS;
+}
+
+// Records the sync creates get a deterministic id from their identity, so two
+// runs (the night cron and the browser import, or two players of the same
+// squad in parallel) that both decide to create the same match converge on
+// one document instead of two identical copies (what happened on 22.8.2026).
+const syncDocId = (source, sourceMatchId) =>
+  `s_${crypto.createHash('sha1').update(`${source}|${sourceMatchId}`).digest('hex').slice(0, 24)}`;
+
 async function syncMatchesForPlayer(db, player, source, fetched) {
   const col = db.collection('matches');
+  const FieldValue = admin.firestore.FieldValue;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().slice(0, 10);
 
-  // Existing auto matches where THIS player is currently linked.
+  // Existing live auto matches where THIS player is currently linked.
+  // Records in the recycle bin (deletedAt) are not touched and never revived.
   const existSnap = await col.where('source', '==', source)
     .where('linkedPlayers', 'array-contains', player.id).get();
   const existing = new Map();
-  existSnap.forEach((d) => existing.set(d.data().sourceMatchId, { ref: d.ref, data: d.data() }));
+  const live = [];
+  existSnap.forEach((d) => {
+    const data = d.data();
+    if (data.deletedAt) return;
+    existing.set(data.sourceMatchId, { ref: d.ref, data });
+    live.push({ ref: d.ref, data });
+  });
 
+  const claimed = new Set();
   const fetchedIds = new Set(fetched.map((m) => m.sourceMatchId));
   let upserts = 0, removed = 0;
 
-  // Cleanup: future auto matches not in current fetch → player moved on.
-  for (const [smid, info] of existing) {
-    const m = info.data;
-    if (m.date && m.date >= todayStr && !fetchedIds.has(smid)) {
+  // Pass 1: resolve each fetched fixture to this player's existing record,
+  // by id first, then by identity (postponed / renamed / got a time).
+  const resolved = new Map();
+  for (const fm of fetched) {
+    const ex = existing.get(fm.sourceMatchId) || null;
+    if (ex) claimed.add(ex.ref.id);
+    resolved.set(fm, ex);
+  }
+  for (const fm of fetched) {
+    if (resolved.get(fm)) continue;
+    const ex = live.filter((e) => !claimed.has(e.ref.id) && (e.data.date || '') >= todayStr && sameFixture(fm, e.data))
+      .sort((a, b) => dayDiff(a.data.date, fm.date) - dayDiff(b.data.date, fm.date))[0] || null;
+    if (ex) { claimed.add(ex.ref.id); fetchedIds.add(ex.data.sourceMatchId); }
+    resolved.set(fm, ex);
+  }
+
+  // Cleanup: future auto matches of this player that the current fetch no
+  // longer has (and that no fetched row resolved to) → the player moved on,
+  // or the fixture was withdrawn.
+  for (const e of live) {
+    const m = e.data;
+    if (claimed.has(e.ref.id) || fetchedIds.has(m.sourceMatchId)) continue;
+    if (m.date && m.date >= todayStr) {
       const newLinked = (m.linkedPlayers || []).filter((id) => id !== player.id);
-      if (newLinked.length === 0) await info.ref.delete();
-      else await info.ref.update({ linkedPlayers: newLinked, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (newLinked.length === 0) await e.ref.delete();
+      else await e.ref.update({ linkedPlayers: newLinked, updatedAt: FieldValue.serverTimestamp() });
       removed++;
     }
   }
 
-  // Upsert each fetched match.
+  // Pass 2: upsert.
   for (const fm of fetched) {
     // Stadiums on auto-synced matches get a Google Maps search URL so the
     // Match card's location chip is clickable, matching manual matches.
     const stadiumMapsUrl = fm.stadiumName
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fm.stadiumName)}`
       : '';
+    const fields = {
+      sourceMatchId: fm.sourceMatchId,
+      date: fm.date, time: fm.time,
+      homeTeam: fm.homeTeam, awayTeam: fm.awayTeam,
+      stadiumName: fm.stadiumName, stadiumMapsUrl,
+      sourceTeamId: fm.sourceTeamId, season: fm.season,
+      updatedAt: FieldValue.serverTimestamp(), lastFetchedAt: FieldValue.serverTimestamp(),
+    };
 
-    const ex = existing.get(fm.sourceMatchId);
+    const ex = resolved.get(fm);
     if (ex) {
       // Past matches are FROZEN — once a match has happened it's part of the
       // player's history and we never let a later sync rewrite it. This is
@@ -699,64 +767,52 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
       if (ex.data.date && ex.data.date < todayStr) continue;
       const linked = new Set(ex.data.linkedPlayers || []);
       linked.add(player.id);
-      await ex.ref.update({
-        date: fm.date, time: fm.time,
-        homeTeam: fm.homeTeam, awayTeam: fm.awayTeam,
-        stadiumName: fm.stadiumName,
-        stadiumMapsUrl,
-        sourceTeamId: fm.sourceTeamId,
-        season: fm.season,
-        linkedPlayers: Array.from(linked),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastFetchedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      await ex.ref.update({ ...fields, linkedPlayers: Array.from(linked) });
       upserts++;
-    } else {
-      // Maybe another player already created this same match — link instead.
-      const otherSnap = await col.where('source', '==', source)
-        .where('sourceMatchId', '==', fm.sourceMatchId).limit(1).get();
-      if (!otherSnap.empty) {
-        const otherData = otherSnap.docs[0].data();
-        // Same frozen rule for the link-to-existing path: a past match
-        // belongs to whoever played in it at the time. Don't add this
-        // player to it just because their new team has it in its archive.
-        if (otherData.date && otherData.date < todayStr) continue;
-        const ref = otherSnap.docs[0].ref;
-        const linked = new Set(otherData.linkedPlayers || []);
-        linked.add(player.id);
-        await ref.update({
-          linkedPlayers: Array.from(linked),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastFetchedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        upserts++;
-      } else {
-        await col.add({
-          source,
-          sourceMatchId:  fm.sourceMatchId,
-          sourceTeamId:   fm.sourceTeamId,
-          date:           fm.date,
-          time:           fm.time,
-          homeTeam:       fm.homeTeam,
-          homeTeamIsYouth: false,
-          awayTeam:       fm.awayTeam,
-          awayTeamIsYouth: false,
-          stadiumName:    fm.stadiumName,
-          stadiumPlaceId: '',
-          stadiumMapsUrl,
-          notes:          '',
-          season:         fm.season,
-          linkedPlayers:  [player.id],
-          createdAt:      admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt:      admin.firestore.FieldValue.serverTimestamp(),
-          lastFetchedAt:  admin.firestore.FieldValue.serverTimestamp(),
-          createdBy:      'sync',
-          lastEditedBy:   'sync',
-          lastEditedByName: 'Auto-sync',
-        });
-        upserts++;
-      }
+      continue;
     }
+
+    // Maybe another player already created this same match — link instead.
+    // By id first; then by identity among the squad's live future matches.
+    let other = null;
+    const byId = await col.where('source', '==', source).where('sourceMatchId', '==', fm.sourceMatchId).limit(5).get();
+    other = byId.docs.find((d) => !d.data().deletedAt) || null;
+    if (!other && fm.sourceTeamId) {
+      const squad = await col.where('source', '==', source).where('sourceTeamId', '==', fm.sourceTeamId).get();
+      other = squad.docs
+        .filter((d) => (d.data().date || '') >= todayStr && sameFixture(fm, d.data()))
+        .sort((a, b) => dayDiff(a.data().date, fm.date) - dayDiff(b.data().date, fm.date))[0] || null;
+    }
+    if (other) {
+      const otherData = other.data();
+      // Same frozen rule for the link-to-existing path: a past match belongs
+      // to whoever played in it at the time.
+      if (otherData.date && otherData.date < todayStr) continue;
+      const linked = new Set(otherData.linkedPlayers || []);
+      linked.add(player.id);
+      await other.ref.update({ ...fields, linkedPlayers: Array.from(linked) });
+      upserts++;
+      continue;
+    }
+
+    const ref = col.doc(syncDocId(source, fm.sourceMatchId));
+    try {
+      await ref.create({
+        source,
+        ...fields,
+        homeTeamIsYouth: false, awayTeamIsYouth: false,
+        stadiumPlaceId: '', notes: '',
+        linkedPlayers: [player.id],
+        deletedAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: 'sync', lastEditedBy: 'sync', lastEditedByName: 'Auto-sync',
+      });
+    } catch (e) {
+      // ALREADY_EXISTS: a parallel run created it a moment ago — link to it.
+      if (e && e.code !== 6 && !/already exists/i.test(String(e.message || ''))) throw e;
+      await ref.set({ ...fields, linkedPlayers: FieldValue.arrayUnion(player.id) }, { merge: true });
+    }
+    upserts++;
   }
 
   return { upserts, removed };
@@ -1041,6 +1097,6 @@ exports.handler = withAuth({ action: 'run_sync', internal: true }, async (event)
 // Shared with ifa-targets and ifa-import, so the browser sync writes matches
 // exactly the way this function does.
 exports._lib = {
-  getDb, decideSources, seasonStartMs, syncMatchesForPlayer, nameMatcher,
+  getDb, decideSources, seasonStartMs, syncMatchesForPlayer, nameMatcher, sameFixture, syncDocId,
   IFA_TEAM_PINS, IFA_FAIL_TTL_DAYS,
 };

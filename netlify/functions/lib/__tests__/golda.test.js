@@ -6,7 +6,7 @@ process.env.FIREBASE_SERVICE_ACCOUNT_KEY = '{}';
 process.env.OWNER_EMAIL = 'lou.korek@gmail.com';
 
 const { matchSender, sessionKey, whatsappRecipients } = require('../golda-identity.js');
-const { toolsFor, TOOLS } = require('../wa-agent.js');
+const { toolsFor, TOOLS, _internal: { armDeletes, armedFor, normalizePending } } = require('../wa-agent.js');
 const { buildBriefing, urgentAlerts } = require('../golda-briefing.js');
 const { pickRetries, topicCommand, nextUsage } = require('../golda-worker.js');
 const { computeAlerts, mergeSettings } = require('@goldas/domain');
@@ -140,4 +140,16 @@ test('005 moves the legacy numbers onto the users, owner gets WhatsApp as a chan
   assert.ok(!writes.some((w) => w[1] === 'yuval@x.com'), 'a saved number is kept');
   const dana = writes.find((w) => w[1] === 'dana@x.com')[2];
   assert.equal(dana.whatsapp, '972530000003'); assert.equal(dana.channels, undefined);
+});
+
+test('several deletions are armed together and confirmed with one yes, never in the same turn', () => {
+  let pending = normalizePending({ pendingDelete: { collection: 'matches', id: 'old', armedInTurn: 1 } });
+  assert.equal(pending.length, 1, 'the old single pending delete still counts');
+  pending = armDeletes(pending, [{ collection: 'matches', id: 'a' }, { collection: 'tasks', id: 'b' }], 2);
+  pending = armDeletes(pending, [{ collection: 'matches', id: 'a' }], 2);
+  assert.equal(pending.length, 3, 'arming twice does not duplicate');
+  assert.deepEqual(armedFor(pending, [], 2).map((p) => p.id), ['old'], 'the yes must come in a later turn');
+  assert.deepEqual(armedFor(pending, [], 3).map((p) => p.id), ['old', 'a', 'b'], 'one confirmed call takes everything armed');
+  assert.deepEqual(armedFor(pending, [{ collection: 'tasks', id: 'b' }], 3).map((p) => p.id), ['b']);
+  assert.deepEqual(normalizePending({}), []);
 });
