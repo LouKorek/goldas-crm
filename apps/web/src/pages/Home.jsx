@@ -174,7 +174,7 @@ function Today() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {golda.map((a) => (
               <Row key={a.id} tag={a.action === 'delete' ? '✕' : a.action === 'create' ? '+' : '✎'} color="var(--gold)"
-                title={`${ACTION[a.action] || a.action} ${t(a.collection === 'players' ? 'player' : a.collection?.startsWith('pipeline') ? 'Candidates' : a.collection || '')}: ${a.after?.fullName || a.after?.playerName || a.after?.title || a.before?.fullName || a.before?.playerName || a.docId || ''}`}
+                title={`${ACTION[a.action] || a.action} ${t(a.collection === 'players' ? 'player' : a.collection?.startsWith('pipeline') ? 'Candidates' : a.collection || '')}: ${a.after?.fullName || a.after?.playerName || a.after?.title || a.after?.clubName || a.after?.contactName || a.before?.fullName || a.before?.playerName || a.before?.title || a.before?.clubName || a.before?.contactName || ''}`.replace(/:\s*$/, '')}
                 sub={`${fmtDateTime(a.at?.toDate?.())}${a.sender ? ` · ${a.sender}` : ''}`} />
             ))}
           </div>
