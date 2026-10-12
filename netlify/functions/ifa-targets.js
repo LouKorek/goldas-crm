@@ -52,7 +52,7 @@ function targetFor(p) {
 }
 
 exports.handler = async (event) => {
-  const auth = checkSyncSecret(event);
+  const auth = await checkSyncSecret(event);
   if (!auth.ok) return json(auth.statusCode, { error: auth.error });
   const db = getDb();
   const q = event.queryStringParameters || {};

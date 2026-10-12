@@ -18,6 +18,17 @@ export const auth    = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
+// The browser sync (public/tools/ifa-browser-sync.js) runs inside the signed-in
+// CRM tab on Lou's computer; it asks here for the user's ID token so the daily
+// task needs no shared secret.
+if (typeof window !== 'undefined') {
+  window.GA_TOKEN = async () => {
+    for (let i = 0; i < 40 && !auth.currentUser; i++) await new Promise((r) => setTimeout(r, 250));
+    if (!auth.currentUser) throw new Error('not signed in to the CRM in this browser');
+    return auth.currentUser.getIdToken();
+  };
+}
+
 // The permanent owner/admin. Always allowed, always admin, and can never be
 // removed or demoted from the Team screen.
 export const OWNER_EMAIL = 'lou.korek@gmail.com';
