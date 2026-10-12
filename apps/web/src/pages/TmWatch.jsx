@@ -37,7 +37,7 @@ function Flag({ country, size = 15 }) {
   if (!country) return null;
   return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
 }
-const TIER_LABEL = { 1: 'Tier 1', 2: 'Tier 2', 3: 'Tier 3', 4: 'Tier 4', 5: 'Tier 5', 6: 'Tier 6' };
+const TIER_LABEL = { 1: t('Tier 1'), 2: t('Tier 2'), 3: t('Tier 3'), 4: t('Tier 4'), 5: t('Tier 5'), 6: t('Tier 6') };
 // Inline Israel flag image — flag EMOJI renders as plain letters on Windows.
 const IL = () => (
   <img src="https://flagcdn.com/w20/il.png" alt="Israel"
@@ -155,7 +155,7 @@ export default function TmWatch() {
     if (!news.length) return;
     try {
       await Promise.all(news.map(p => updateDoc_(PATHS.TM_WATCH, p.id, { status: 'seen' })));
-      toast.success(`${news.length} candidates marked as seen.`);
+      toast.success(t('{n} candidates marked as seen.', { n: news.length }));
     } catch (e) { toast.error(e.message); }
   };
   const scanNow = async () => {
@@ -174,7 +174,7 @@ export default function TmWatch() {
     <div>
       <PageHeader
         title={t("TM Watch")}
-        subtitle={`Transfermarkt scouting — Jewish & Israeli connections abroad · ${items.length} tracked${newCount ? ` · ${newCount} new` : ''}`}
+        subtitle={`${t('Transfermarkt scouting: Jewish and Israeli connections abroad')} · ${items.length} ${t('tracked')}${newCount ? ` · ${newCount} ${t('new')}` : ''}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Link to="/pipeline/jewish" className="btn btn-ghost btn-sm" style={{ height: 36, textDecoration: 'none' }}><Icon name="chevron" size={12} style={{ transform: 'rotate(180deg)' }} /><span className="btn-text">{t("Jewish")}</span></Link>
@@ -197,17 +197,17 @@ export default function TmWatch() {
         }
       >
         <div className="filter-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
-          <ChipGroup options={TABS} labels={TABS.map(t => `${t} (${tabCounts[t]})`)} value={tab} onChange={setTab} required />
+          <ChipGroup options={TABS} labels={TABS.map(k => `${t(k)} (${tabCounts[k]})`)} value={tab} onChange={setTab} required />
           <span className="filter-div" style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', '0', '1', '2']}
-            labels={[`All types (${tierCounts['']})`, <><IL /> {t("Citizenship (")}{tierCounts['0']})</>, `Strong name (${tierCounts['1']})`, `Possible (${tierCounts['2']})`]}
+            labels={[`${t('All types')} (${tierCounts['']})`, <><IL /> {t("Citizenship (")}{tierCounts['0']})</>, `${t('Strong name')} (${tierCounts['1']})`, `${t('Possible')} (${tierCounts['2']})`]}
             value={tierFilter} onChange={(v) => setTierFilter(v ?? '')} required
           />
           <span className="filter-div" style={{ width: 1, height: 20, background: 'var(--border-2)', flexShrink: 0 }} />
           <ChipGroup
             options={['', 'never', 'played']}
-            labels={[`Any history (${histCounts['']})`, `Never in Israel (${histCounts['never']})`, <><IL /> {t("Played in Israel (")}{histCounts['played']})</>]}
+            labels={[`${t('Any history')} (${histCounts['']})`, `${t('Never in Israel')} (${histCounts['never']})`, <><IL /> {t("Played in Israel (")}{histCounts['played']})</>]}
             value={histFilter} onChange={(v) => setHistFilter(v ?? '')} required
           />
         </div>
@@ -218,7 +218,7 @@ export default function TmWatch() {
                   {meta.cycleProgress != null && <> \u00b7 {meta.cycleProgress} {t("names swept")}</>}
                   {meta.historyRemaining ? <> \u00b7 {meta.historyRemaining} {t("career checks left")}</> : null}
                   {' '}{t("\\u00b7 continues in the background, you can leave this screen")}</>
-              : lastRun ? <>{t("Last scan:")} {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : 'No scan has run yet'}
+              : lastRun ? <>{t("Last scan:")} {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)}</> : t('No scan has run yet')}
             {meta.lastRunNew != null && <> · {meta.lastRunNew} {t("new last run")}</>}
             {items.length > 0 && <> {t("· career history checked:")} {items.filter(p => p.israelHistory).length}/{items.length}</>}
             {' '}· <ScraperCredits />
@@ -257,7 +257,7 @@ export default function TmWatch() {
                         background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}`,
                         borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
-                      {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 0, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>NEW</span>}
+                      {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 0, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{t('NEW')}</span>}
                       {p.israelHistory === 'never' && <span title={t("Career history has no Israeli club — youth or senior")} style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>{t("Never in Israel")}</span>}
                       {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> {t("Played in IL")}</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("in pipeline")}</span>}
@@ -283,7 +283,7 @@ export default function TmWatch() {
                   </div>
                   {canEdit && (
                     <div className="action-btns" style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
-                      <button title={p.starred ? 'Unstar' : 'Star'} onClick={() => toggleStar(p)}
+                      <button title={p.starred ? t('Unstar') : t('Star')} onClick={() => toggleStar(p)}
                         style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: p.starred ? 'rgba(212,176,98,0.25)' : 'rgba(255,255,255,0.05)', color: 'var(--gold)', fontSize: 14 }}>
                         {p.starred ? '★' : '☆'}
                       </button>
