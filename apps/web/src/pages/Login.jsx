@@ -1,14 +1,25 @@
 import React, { useState } from 'react';
 import { signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from 'lib/firebase';
+import { t } from 'lib/i18n';
 
 export default function Login({ denied }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const login = async () => {
-    setLoading(true);
+    setLoading(true); setError('');
     try { await signInWithPopup(auth, googleProvider); }
-    catch (e) { console.error(e); setLoading(false); }
+    catch (e) {
+      console.error(e);
+      setLoading(false);
+      // A silent failure looked like a dead button. Name the cause.
+      const code = e?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+      setError(code === 'auth/unauthorized-domain'
+        ? t('This address is not yet authorized for sign-in. Try again in a minute.')
+        : t('Sign-in failed: {code}', { code: code || e?.message || 'unknown' }));
+    }
   };
 
   return (
@@ -25,19 +36,19 @@ export default function Login({ denied }) {
       }}>
         <div style={{
           position: 'absolute', width: 600, height: 600,
-          borderRadius: 0, top: '-200px', right: '-100px',
+          borderRadius: 0, top: '-200px', insetInlineEnd: '-100px',
           background: 'radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%)',
           animation: 'pulse 8s ease-in-out infinite',
         }} />
         <div style={{
           position: 'absolute', width: 500, height: 500,
-          borderRadius: 0, bottom: '-150px', left: '-100px',
+          borderRadius: 0, bottom: '-150px', insetInlineStart: '-100px',
           background: 'radial-gradient(circle, rgba(22,107,40,0.15) 0%, transparent 70%)',
           animation: 'pulse 10s ease-in-out infinite 2s',
         }} />
         <div style={{
           position: 'absolute', width: 300, height: 300,
-          borderRadius: 0, top: '40%', left: '30%',
+          borderRadius: 0, top: '40%', insetInlineStart: '30%',
           background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%)',
           animation: 'pulse 12s ease-in-out infinite 4s',
         }} />
@@ -56,11 +67,11 @@ export default function Login({ denied }) {
         .google-btn:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 30px rgba(201,168,76,0.3) !important; }
         .google-btn:active { transform: translateY(0) !important; }
         .login-left { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 60px; position: relative; }
-        .login-right { width: 480px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px 32px; background: rgba(255,255,255,0.02); border-left: 1px solid rgba(201,168,76,0.08); position: relative; }
+        .login-right { width: 480px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 40px 32px; background: rgba(255,255,255,0.02); border-inline-start: 1px solid rgba(201,168,76,0.08); position: relative; }
         .login-mobile-logo { display: none; text-align: center; margin-bottom: 32px; }
         @media (max-width: 768px) {
           .login-left { display: none !important; }
-          .login-right { width: 100%; border-left: none; }
+          .login-right { width: 100%; border-inline-start: none; }
           .login-mobile-logo { display: block; }
         }
       `}</style>
@@ -88,10 +99,10 @@ export default function Login({ denied }) {
             textTransform: 'uppercase',
             letterSpacing: '-0.01em',
             lineHeight: 1.05, marginBottom: 18,
-          }}>Gold A&amp;S<br />Football Agency</h1>
+          }}>{t("Gold A&S")}<br />{t("Football Agency")}</h1>
 
           <p style={{ color: 'var(--text-3)', fontSize: 13, lineHeight: 1.7, marginBottom: 36, maxWidth: 380 }}>
-            Player representation and transfer management, run from a single front office.
+            {t("Player representation and transfer management, run from a single front office.")}
           </p>
 
           {/* Feature pills */}
@@ -125,7 +136,7 @@ export default function Login({ denied }) {
             }}>
               <img src="/logo.png" alt="Gold A&S" style={{width:'100%',height:'100%',objectFit:'cover'}} />
             </div>
-            <h2 style={{fontFamily:'var(--font-display)',fontSize:16,color:'var(--text-1)',fontWeight:700,letterSpacing:'0.16em',textTransform:'uppercase'}}>Gold A&amp;S</h2>
+            <h2 style={{fontFamily:'var(--font-display)',fontSize:16,color:'var(--text-1)',fontWeight:700,letterSpacing:'0.16em',textTransform:'uppercase'}}>{t("Gold A&S")}</h2>
           </div>
 
           <h2 style={{
@@ -133,11 +144,11 @@ export default function Login({ denied }) {
             fontSize: 20, fontWeight: 600, color: 'var(--text-1)',
             letterSpacing: '0.1em', textTransform: 'uppercase',
             marginBottom: 8,
-          }}>Sign in</h2>
+          }}>{t("Sign in")}</h2>
           <p style={{
             color: 'var(--text-3)', fontSize: 10, marginBottom: 30,
             letterSpacing: '0.14em', textTransform: 'uppercase',
-          }}>Authorised personnel only</p>
+          }}>{t("Authorised personnel only")}</p>
 
           {denied && (
             <div style={{
@@ -148,7 +159,7 @@ export default function Login({ denied }) {
               display: 'flex', gap: 8, alignItems: 'flex-start',
             }}>
               <span>⚠️</span>
-              <span>Access denied. This platform is restricted to authorized personnel only.</span>
+              <span>{t("Access denied. This platform is restricted to authorized personnel only.")}</span>
             </div>
           )}
 
@@ -186,8 +197,11 @@ export default function Login({ denied }) {
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
             )}
-            {loading ? 'Signing in...' : 'Continue with Google'}
+            {loading ? t('Signing in...') : t('Continue with Google')}
           </button>
+          {error && (
+            <p role="alert" style={{ color: '#E05A55', fontSize: 12.5, marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>{error}</p>
+          )}
 
           <div style={{
             marginTop: 28,
@@ -197,8 +211,8 @@ export default function Login({ denied }) {
             borderRadius: 0,
           }}>
             <p style={{ color: '#5E8060', fontSize: 11, textAlign: 'center', lineHeight: 1.6 }}>
-              🔒 Access restricted to authorized users only.<br />
-              <span style={{color:'rgba(201,168,76,0.6)'}}>gold-as.com</span>
+              {t("🔒 Access restricted to authorized users only.")}<br />
+              <span style={{color:'rgba(201,168,76,0.6)'}}>{t("gold-as.com")}</span>
             </p>
           </div>
         </div>

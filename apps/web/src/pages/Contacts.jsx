@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
          PhoneActions, RowActions, ExportMenu, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
 
@@ -33,32 +34,32 @@ export default function Contacts() {
 
   const save = async () => {
     if (!form.clubName.trim() && !form.contactName.trim()) {
-      toast.error('Add at least a club or a contact name.');
+      toast.error(t("Add at least a club or a contact name."));
       return;
     }
     const data = { ...form, league };
     try {
       if (modal === 'add') {
         await addDoc_(PATHS.CONTACTS, data);
-        toast.success('Contact added.');
+        toast.success(t("Contact added."));
       } else {
         await updateDoc_(PATHS.CONTACTS, modal.edit.id, data);
-        toast.success('Contact updated.');
+        toast.success(t("Contact updated."));
       }
       setModal(null);
     } catch (e) {
-      toast.error('Could not save. Please try again.');
+      toast.error(t("Could not save. Please try again."));
     }
   };
 
   const remove = async (c) => {
-    const ok = await confirm(`Delete contact "${c.contactName || c.clubName}"?`, { title: 'Delete contact' });
+    const ok = await confirm(`Delete contact "${c.contactName || c.clubName}"?`, { title: t("Delete contact") });
     if (!ok) return;
     try {
       await deleteDoc_(PATHS.CONTACTS, c.id);
-      toast.success('Contact deleted.');
+      toast.success(t("Contact deleted."), { undo: () => restoreDoc_(PATHS.CONTACTS, c.id) });
     } catch (e) {
-      toast.error('Could not delete. Please try again.');
+      toast.error(t("Could not delete. Please try again."));
     }
   };
 
@@ -73,20 +74,20 @@ export default function Contacts() {
   return (
     <div>
       <PageHeader
-        title="Contacts"
+        title={t("Contacts")}
         subtitle={`${items.length} contact${items.length !== 1 ? 's' : ''}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">Add Contact</span></button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Contact")}</span></button>}
             <ExportMenu
               filename="Contacts"
-              title="Contacts"
+              title={t("Contacts")}
               subtitle={term ? `search: "${term}"` : ''}
               columns={[
                 { key: 'clubName',       label: '🔰',   pdfLabel: 'Club',
                   format: (v, r) => v ? `${v}${r.clubIsYouth ? ' (U19)' : ''}${r.league ? `  ·  ${r.league}` : ''}` : '' },
                 { key: 'contactName',    label: '👤',   pdfLabel: 'Contact' },
-                { key: 'contactRole',    label: 'Role', pdfLabel: 'Role' },
+                { key: 'contactRole',    label: t("Role"), pdfLabel: 'Role' },
                 { key: 'contactPhone',   label: '📞',   pdfLabel: 'Phone' },
               ]}
               rows={filtered}
@@ -97,12 +98,12 @@ export default function Contacts() {
 
       <div className="filter-bar" style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
-          <SearchInput value={search} onChange={setSearch} placeholder="Search club, name, role..." />
+          <SearchInput value={search} onChange={setSearch} placeholder={t("Search club, name, role...")} />
         </div>
         <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
-          <option value="">Group: All</option>
-          <option value="Youth">Youth</option>
-          <option value="Senior">Senior</option>
+          <option value="">{t("Group: All")}</option>
+          <option value="Youth">{t("Youth")}</option>
+          <option value="Senior">{t("Senior")}</option>
         </select>
       </div>
       </PageHeader>
@@ -111,7 +112,7 @@ export default function Contacts() {
         <Empty
          
           message={items.length === 0 ? 'No contacts yet — add your first one.' : 'No matching contacts.'}
-          action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>+ Add Contact</button> : null}
+          action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>{t("+ Add Contact")}</button> : null}
         />
       ) : (
         <>
@@ -145,22 +146,22 @@ export default function Contacts() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: 100, paddingRight: 20 }}></th>
-                  <th style={{ width: '36%', textAlign: 'center' }}>Club</th>
-                  <th style={{ width: '36%', textAlign: 'center' }}>Contact</th>
-                  <th style={{ width: 210, textAlign: 'center' }}>Phone</th>
+                  <th style={{ width: 100, paddingInlineEnd: 20 }}></th>
+                  <th style={{ width: '36%', textAlign: 'center' }}>{t("Club")}</th>
+                  <th style={{ width: '36%', textAlign: 'center' }}>{t("Contact")}</th>
+                  <th style={{ width: 210, textAlign: 'center' }}>{t("Phone")}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(c => (
                   <tr key={c.id}>
-                    <td style={{ paddingRight: 20 }}>
+                    <td style={{ paddingInlineEnd: 20 }}>
                       {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
                     </td>
-                    <td style={{ textAlign: 'left', paddingLeft: 24 }}>
+                    <td style={{ textAlign: 'start', paddingInlineStart: 24 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
                         <ClubLogoOrAvatar name={c.clubName} size={26} />
-                        <div style={{ textAlign: 'left' }}>
+                        <div style={{ textAlign: 'start' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontWeight: 500, whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.clubName || '—'}</span>
                             {c.clubIsYouth && <U19 />}
@@ -169,7 +170,7 @@ export default function Contacts() {
                         </div>
                       </div>
                     </td>
-                    <td style={{ textAlign: 'left', paddingLeft: 24 }}>
+                    <td style={{ textAlign: 'start', paddingInlineStart: 24 }}>
                       {(c.contactName || c.contactRole) ? (
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>{c.contactName || '—'}</div>
@@ -199,46 +200,46 @@ export default function Contacts() {
           title={modal === 'add' ? 'Add Contact' : `Edit: ${form.contactName || form.clubName || 'Contact'}`}
           onClose={() => setModal(null)}
           footer={<>
-            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
-            <button className="btn btn-primary" onClick={save}>Save</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
+            <button className="btn btn-primary" onClick={save}>{t("Save")}</button>
           </>}
         >
-          <Field label="Club Name">
-            <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder="Club name" />
+          <Field label={t("Club Name")}>
+            <input value={f('clubName')} onChange={e => s('clubName')(e.target.value)} placeholder={t("Club name")} />
             <button type="button" className={`chip${form.clubIsYouth ? ' active' : ''}`}
               onClick={() => s('clubIsYouth')(!form.clubIsYouth)}
-              style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>Youth Team</button>
+              style={{ fontSize: 11, padding: '4px 10px', marginTop: 6 }}>{t("Youth Team")}</button>
           </Field>
-          <Field label="League">
+          <Field label={t("League")}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-              <button type="button" className={`chip${form.leagueMode === 'select' ? ' active' : ''}`} onClick={() => s('leagueMode')('select')}>By Country + Tier</button>
-              <button type="button" className={`chip${form.leagueMode === 'manual' ? ' active' : ''}`} onClick={() => s('leagueMode')('manual')}>Manual</button>
+              <button type="button" className={`chip${form.leagueMode === 'select' ? ' active' : ''}`} onClick={() => s('leagueMode')('select')}>{t("By Country + Tier")}</button>
+              <button type="button" className={`chip${form.leagueMode === 'manual' ? ' active' : ''}`} onClick={() => s('leagueMode')('manual')}>{t("Manual")}</button>
             </div>
             {form.leagueMode === 'select' ? (
               <div className="form-grid-2">
                 <select value={f('leagueCountry')} onChange={e => s('leagueCountry')(e.target.value)}>
-                  <option value="">Country...</option>
+                  <option value="">{t("Country...")}</option>
                   {COUNTRIES.map(co => <option key={co}>{co}</option>)}
                 </select>
                 <ChipGroup options={['1st', '2nd', '3rd', '4th', '5th+']} value={f('leagueTier')} onChange={s('leagueTier')} />
               </div>
             ) : (
-              <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder="e.g. Premier League" />
+              <input value={f('leagueManual')} onChange={e => s('leagueManual')(e.target.value)} placeholder={t("e.g. Premier League")} />
             )}
             {league && (
-              <div className="form-hint">League: <strong>{league}</strong></div>
+              <div className="form-hint">{t("League:")} <strong>{league}</strong></div>
             )}
           </Field>
-          <Field label="Contact Name">
-            <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder="Full name" />
+          <Field label={t("Contact Name")}>
+            <input value={f('contactName')} onChange={e => s('contactName')(e.target.value)} placeholder={t("Full name")} />
           </Field>
-          <Field label="Role">
+          <Field label={t("Role")}>
             <select value={f('contactRole')} onChange={e => s('contactRole')(e.target.value)}>
-              <option value="">Select role...</option>
+              <option value="">{t("Select role...")}</option>
               {CONTACT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </Field>
-          <Field label="Phone" hint="With country code, e.g. +972...">
+          <Field label={t("Phone")} hint={t("With country code, e.g. +972...")}>
             <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
         </Modal>

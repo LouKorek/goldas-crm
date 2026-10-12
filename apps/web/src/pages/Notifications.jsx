@@ -7,6 +7,7 @@ import { PageHeader, Modal } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
 
@@ -20,7 +21,7 @@ function AlertCard({ icon, title, sub, urgency, extra, overdue }) {
   const c = colors[urgency] || colors.info;
   return (
     <div style={{
-      background:'var(--card)', border:'1px solid var(--border)', borderLeft:`2px solid ${c}`,
+      background:'var(--card)', border:'1px solid var(--border)', borderInlineStart:`2px solid ${c}`,
       borderRadius: 0, padding:'11px 14px', display:'flex', gap:12, alignItems:'flex-start',
       transition:'background 0.11s linear',
     }}
@@ -59,19 +60,19 @@ function SettingsModal({ settings, onSave, onClose }) {
   const label = (d) => d === 0 ? 'Same day' : `${d} days before`;
 
   return (
-    <Modal title="Notification Settings" onClose={onClose} footer={<>
-      <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-      <button className="btn btn-primary" onClick={() => onSave(s)}>Save Settings</button>
+    <Modal title={t("Notification Settings")} onClose={onClose} footer={<>
+      <button className="btn btn-ghost" onClick={onClose}>{t("Cancel")}</button>
+      <button className="btn btn-primary" onClick={() => onSave(s)}>{t("Save Settings")}</button>
     </>}>
       <p style={{color:'var(--text-2)',fontSize:13,marginBottom:20}}>
-        Choose when to receive alerts for each category. Multiple values = multiple alerts.
+        {t("Choose when to receive alerts for each category. Multiple values = multiple alerts.")}
       </p>
 
       {[
-        { key:'contractDays',   label:'Contract Expiry' },
-        { key:'reprDays',       label:'Representation Expiry' },
-        { key:'passportDays',   label:'Passport Expiry' },
-        { key:'birthdayDays',   label:'Player Birthdays' },
+        { key:'contractDays',   label:t("Contract Expiry") },
+        { key:'reprDays',       label:t("Representation Expiry") },
+        { key:'passportDays',   label:t("Passport Expiry") },
+        { key:'birthdayDays',   label:t("Player Birthdays") },
       ].map(({ key, label: lbl }) => (
         <div key={key} style={{marginBottom:20}}>
           <div className="form-label">{lbl}</div>
@@ -109,7 +110,7 @@ export default function Notifications() {
       await persistSettings(s);    // localStorage + Firestore (read by the email job)
       setSettings(s);
       setShowSettings(false);
-      toast.success('Notification settings saved.');
+      toast.success(t("Notification settings saved."));
     } catch (e) {
       // Silently swallowing this used to mean the screen changed, the emails
       // didn't, and nothing said so.
@@ -172,12 +173,12 @@ export default function Notifications() {
   return (
     <div>
       <PageHeader
-        title="Notifications"
+        title={t("Notifications")}
         subtitle={`${total} active alert${total!==1?'s':''}`}
         action={
           canEdit ? (
             <button className="btn btn-ghost" onClick={()=>setShowSettings(true)}>
-              <Icon name="bell" size={12} /><span className="btn-text">Alert Settings</span>
+              <Icon name="bell" size={12} /><span className="btn-text">{t("Alert Settings")}</span>
             </button>
           ) : null
         }
@@ -186,23 +187,23 @@ export default function Notifications() {
       {total===0 && upcomingMatches.length===0 ? (
         <div style={{textAlign:'center',padding:'44px 20px',color:'var(--text-3)'}}>
           <div style={{width:42,height:1,background:'var(--gold-dk)',margin:'0 auto 18px'}} />
-          <p style={{fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase'}}>All clear — no active alerts</p>
+          <p style={{fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase'}}>{t("All clear — no active alerts")}</p>
           {canEdit && (
             <button className="btn btn-ghost" style={{marginTop:18}} onClick={()=>setShowSettings(true)}>
-              Configure alert timing
+              {t("Configure alert timing")}
             </button>
           )}
         </div>
       ) : (
         <div style={{display:'flex',flexDirection:'column',gap:28}}>
-          <Section title="Contract Expiry"       items={contractAlerts} icon="CON" />
-          <Section title="Representation Expiry" items={reprAlerts}      icon="REP" />
-          <Section title="Passport Expiry"       items={passportAlerts} icon="PAS" />
-          <Section title="Upcoming Birthdays"    items={birthdayAlerts} icon="DOB" />
+          <Section title={t("Contract Expiry")}       items={contractAlerts} icon="CON" />
+          <Section title={t("Representation Expiry")} items={reprAlerts}      icon="REP" />
+          <Section title={t("Passport Expiry")}       items={passportAlerts} icon="PAS" />
+          <Section title={t("Upcoming Birthdays")}    items={birthdayAlerts} icon="DOB" />
 
           {upcomingMatches.length > 0 && (
             <div>
-              <div className="section-label" style={{marginBottom:12}}>Upcoming Matches ({upcomingMatches.length})</div>
+              <div className="section-label" style={{marginBottom:12}}>{t("Upcoming Matches (")}{upcomingMatches.length})</div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {upcomingMatches.map(m => (
                   <AlertCard key={m.id} icon="FIX"

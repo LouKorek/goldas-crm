@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { listenRecycleBin, restoreItem, purgeItem, RECYCLE_LABELS, recycleTitle } from 'data/recycle';
 import { PageHeader, Empty, Spinner, useConfirm, toast, ActionBtn } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 const KEEP_DAYS = 30;
 const toDate = (v) => (v?.toDate ? v.toDate() : v ? new Date(v) : null);
@@ -19,20 +20,20 @@ export default function RecycleBin() {
     try { await restoreItem(it); toast.success(`"${recycleTitle(it._path, it)}" restored.`); } catch (e) { toast.error(e.message); }
   };
   const purge = async (it) => {
-    if (!(await confirm(`Delete "${recycleTitle(it._path, it)}" permanently? This cannot be undone.`, { confirmLabel: 'Delete forever' }))) return;
-    try { await purgeItem(it); toast.success('Deleted permanently.'); } catch (e) { toast.error(e.message); }
+    if (!(await confirm(`Delete "${recycleTitle(it._path, it)}" permanently? This cannot be undone.`, { confirmLabel: t("Delete forever") }))) return;
+    try { await purgeItem(it); toast.success(t("Deleted permanently.")); } catch (e) { toast.error(e.message); }
   };
 
   return (
     <div>
-      <PageHeader title="Recycle Bin" subtitle={`Deleted records stay here for ${KEEP_DAYS} days and can be restored with one click.`} />
+      <PageHeader title={t("Recycle Bin")} subtitle={`Deleted records stay here for ${KEEP_DAYS} days and can be restored with one click.`} />
       {items === null ? <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
-        : items.length === 0 ? <Empty message="The recycle bin is empty." />
+        : items.length === 0 ? <Empty message={t("The recycle bin is empty.")} />
         : (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <div className="table-wrap">
               <table className="data-table">
-                <thead><tr><th style={{ width: 70 }}></th><th>Type</th><th>Record</th><th>Deleted</th><th>By</th><th>Days left</th></tr></thead>
+                <thead><tr><th style={{ width: 70 }}></th><th>{t("Type")}</th><th>{t("Record")}</th><th>{t("Deleted")}</th><th>{t("By")}</th><th>{t("Days left")}</th></tr></thead>
                 <tbody>
                   {items.map((it) => {
                     const d = toDate(it.deletedAt);
@@ -41,8 +42,8 @@ export default function RecycleBin() {
                       <tr key={`${it._path}/${it.id}`}>
                         <td>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            {canEdit && <ActionBtn icon="refresh" tone="green" title="Restore" onClick={() => restore(it)} />}
-                            {isAdmin && <ActionBtn icon="trash" tone="red" title="Delete forever" onClick={() => purge(it)} />}
+                            {canEdit && <ActionBtn icon="refresh" tone="green" title={t("Restore")} onClick={() => restore(it)} />}
+                            {isAdmin && <ActionBtn icon="trash" tone="red" title={t("Delete forever")} onClick={() => purge(it)} />}
                           </div>
                         </td>
                         <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{RECYCLE_LABELS[it._path] || it._path}</td>

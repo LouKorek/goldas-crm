@@ -6,6 +6,7 @@ import {
   PageHeader, Modal, Field, ChipGroup, Empty, Spinner, useConfirm, toast, RowActions,
 } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import { t } from 'lib/i18n';
 
 const ROLE_OPTIONS = ['Manager', 'Viewer'];
 const ROLE_DESC = {
@@ -54,21 +55,21 @@ export default function Team() {
 
   const save = async () => {
     const email = form.email.trim().toLowerCase();
-    if (!email) { toast.error('Email is required.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Please enter a valid email address.'); return; }
-    if (isOwner(email)) { toast.error('The owner already has full access.'); return; }
+    if (!email) { toast.error(t("Email is required.")); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error(t("Please enter a valid email address.")); return; }
+    if (isOwner(email)) { toast.error(t("The owner already has full access.")); return; }
     const role = form.role === 'Manager' ? 'manager' : 'viewer';
     setSaving(true);
     try {
       if (modal === 'add') {
         if (users.some(u => (u.email || '').toLowerCase() === email)) {
-          toast.error('That email is already on the list.'); setSaving(false); return;
+          toast.error(t("That email is already on the list.")); setSaving(false); return;
         }
         await addAppUser({ email, name: form.name, role, emailAlerts: form.emailAlerts });
         toast.success(`"${form.name.trim() || email}" can now sign in.`);
       } else {
         await updateAppUser(email, { name: form.name.trim() || email, role, emailAlerts: form.emailAlerts });
-        toast.success('User updated.');
+        toast.success(t("User updated."));
       }
       setModal(null);
     } catch (e) {
@@ -81,10 +82,10 @@ export default function Team() {
   const remove = async (u) => {
     const ok = await confirm(
       `Remove access for "${u.name || u.email}"? They will no longer be able to sign in.`,
-      { confirmLabel: 'Remove' }
+      { confirmLabel: t("Remove") }
     );
     if (!ok) return;
-    try { await removeAppUser(u.email); toast.success('Access removed.'); }
+    try { await removeAppUser(u.email); toast.success(t("Access removed.")); }
     catch (e) { toast.error(e.message || 'Could not remove user.'); }
   };
 
@@ -93,15 +94,15 @@ export default function Team() {
   return (
     <div>
       <PageHeader
-        title="Team"
-        subtitle="Manage who can sign in and what they can do"
-        action={<button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add User</span></button>}
+        title={t("Team")}
+        subtitle={t("Manage who can sign in and what they can do")}
+        action={<button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add User")}</span></button>}
       />
 
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : users.length === 0 ? (
-        <Empty message="No users yet." action={<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add User</span></button>} />
+        <Empty message={t("No users yet.")} action={<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">{t("Add User")}</span></button>} />
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-wrap">
@@ -109,11 +110,11 @@ export default function Team() {
               <thead>
                 <tr>
                   <th style={{ width: 70 }}></th>
-                  <th title="Name">Name</th>
-                  <th title="Email">Email</th>
-                  <th title="Role">Role</th>
-                  <th title="Access">Access</th>
-                  <th style={{ width: 80, textAlign: 'center' }} title="Receive email alerts">Alerts</th>
+                  <th title={t("Name")}>{t("Name")}</th>
+                  <th title={t("Email")}>{t("Email")}</th>
+                  <th title={t("Role")}>{t("Role")}</th>
+                  <th title={t("Access")}>{t("Access")}</th>
+                  <th style={{ width: 80, textAlign: 'center' }} title={t("Receive email alerts")}>{t("Alerts")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,33 +163,33 @@ export default function Team() {
           title={modal === 'add' ? 'Add User' : `Edit: ${form.name || form.email}`}
           onClose={() => setModal(null)}
           footer={<>
-            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
               {saving ? 'Saving...' : 'Save'}
             </button>
           </>}
         >
-          <Field label="Email" required hint="Whoever signs in with Google using this address gets the access below.">
+          <Field label={t("Email")} required hint={t("Whoever signs in with Google using this address gets the access below.")}>
             <input value={form.email} disabled={modal !== 'add'}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              placeholder="name@example.com" style={modal !== 'add' ? { opacity: 0.6 } : undefined} />
+              placeholder={t("name@example.com")} style={modal !== 'add' ? { opacity: 0.6 } : undefined} />
           </Field>
-          <Field label="Name">
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Display name" />
+          <Field label={t("Name")}>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t("Display name")} />
           </Field>
-          <Field label="Role">
+          <Field label={t("Role")}>
             <ChipGroup options={ROLE_OPTIONS} value={form.role} onChange={v => setForm(f => ({ ...f, role: v }))} />
             <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
               {form.role === 'Manager' ? ROLE_DESC.manager : ROLE_DESC.viewer}
             </div>
           </Field>
-          <Field label="Email Alerts">
+          <Field label={t("Email Alerts")}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '6px 0' }}>
               <input type="checkbox" checked={form.emailAlerts}
                 onChange={e => setForm(f => ({ ...f, emailAlerts: e.target.checked }))}
                 style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--gold)' }} />
               <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                Receive email notifications when an alert is due
+                {t("Receive email notifications when an alert is due")}
               </span>
             </label>
           </Field>

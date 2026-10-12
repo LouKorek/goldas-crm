@@ -7,6 +7,7 @@ import { fmtDate } from 'lib/constants';
 import { PageHeader, ChipGroup, Empty, Spinner, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 // Social dashboard — Instagram growth for @goldas_loukorek, built from the
 // daily PUBLIC snapshots collected by ig-watch-background (no account access).
@@ -15,9 +16,9 @@ const IG_URL = 'https://www.instagram.com/goldas_loukorek/';
 const RANGES = ['14D', '30D', '90D', 'All'];
 const RANGE_DAYS = { '14D': 14, '30D': 30, '90D': 90, 'All': Infinity };
 const TYPE_META = {
-  image:    { emoji: '🖼', label: 'Photo' },
-  carousel: { emoji: '🎞', label: 'Carousel' },
-  video:    { emoji: '📹', label: 'Reel / Video' },
+  image:    { emoji: '🖼', label: t("Photo") },
+  carousel: { emoji: '🎞', label: t("Carousel") },
+  video:    { emoji: '📹', label: t("Reel / Video") },
 };
 
 const tsToDate = (ts) => (ts && typeof ts.toDate === 'function') ? ts.toDate() : (ts ? new Date(ts) : null);
@@ -28,7 +29,7 @@ function TrendChart({ days, postDays, height = 220 }) {
   if (days.length < 2) {
     return (
       <div style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--text-3)', fontSize: 12.5 }}>
-        Trends appear after at least two daily snapshots — the collector runs every morning.
+        {t("Trends appear after at least two daily snapshots — the collector runs every morning.")}
       </div>
     );
   }
@@ -109,15 +110,14 @@ function DailyBars({ days, postDays, height = 150 }) {
     <div style={{ marginTop: 20 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', padding: '0 2px 2px' }}>
         <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-2)' }}>
-          New follows per day
+          {t("New follows per day")}
         </span>
         <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-          {total.toLocaleString()} in this period · best day {best.newFollowers} on {fmtDate(best.date)}
+          {total.toLocaleString()} {t("in this period · best day")} {best.newFollowers} {t("on")} {fmtDate(best.date)}
         </span>
       </div>
       <div style={{ fontSize: 11.5, color: 'var(--text-3)', padding: '0 2px 8px', lineHeight: 1.5 }}>
-        One bar per day; its height is how many accounts started following that day.
-        These are arrivals only — the line above is the net total, after people who left.
+        {t("One bar per day; its height is how many accounts started following that day. These are arrivals only — the line above is the net total, after people who left.")}
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
@@ -155,8 +155,8 @@ function DailyBars({ days, postDays, height = 150 }) {
       </svg>
 
       <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-3)', padding: '4px 2px 0' }}>
-        <span><span style={{ display: 'inline-block', width: 9, height: 9, background: 'rgba(107,174,245,0.85)', marginRight: 5, verticalAlign: 'middle' }} />Day a post went live</span>
-        <span><span style={{ display: 'inline-block', width: 9, height: 9, background: 'rgba(107,174,245,0.40)', marginRight: 5, verticalAlign: 'middle' }} />Ordinary day</span>
+        <span><span style={{ display: 'inline-block', width: 9, height: 9, background: 'rgba(107,174,245,0.85)', marginInlineEnd: 5, verticalAlign: 'middle' }} />{t("Day a post went live")}</span>
+        <span><span style={{ display: 'inline-block', width: 9, height: 9, background: 'rgba(107,174,245,0.40)', marginInlineEnd: 5, verticalAlign: 'middle' }} />{t("Ordinary day")}</span>
       </div>
     </div>
   );
@@ -247,7 +247,7 @@ export default function Social() {
     try {
       const res = await callFunction('ig-watch-background', { method: 'POST' });
       if (!res.ok && res.status !== 202) throw new Error((await res.json().catch(() => ({}))).error || `Request failed (${res.status})`);
-      toast.success('Snapshot started — data refreshes in under a minute.');
+      toast.success(t("Snapshot started — data refreshes in under a minute."));
     } catch (e) { toast.error(e.message || 'Could not start snapshot.'); }
     setTimeout(() => setSyncing(false), 4000);
   };
@@ -257,15 +257,15 @@ export default function Social() {
   return (
     <div>
       <PageHeader
-        title="Social"
+        title={t("Social")}
         subtitle={
-          <>Instagram — <a href={IG_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none' }}>@goldas_loukorek ↗</a> · collected daily from the account</>
+          <>{t("Instagram —")} <a href={IG_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)', textDecoration: 'none' }}>@goldas_loukorek ↗</a> {t("· collected daily from the account")}</>
         }
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {isAdmin && (
               <button className="btn btn-secondary btn-sm" style={{ height: 36 }} onClick={syncNow} disabled={syncing}>
-                {syncing ? <><Spinner size={12} /><span className="btn-text">Syncing…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Sync now</span></>}
+                {syncing ? <><Spinner size={12} /><span className="btn-text">{t("Syncing…")}</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">{t("Sync now")}</span></>}
               </button>
             )}
           </div>
@@ -276,17 +276,17 @@ export default function Social() {
         </div>
         <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--text-3)' }}>
           {lastRun
-            ? <>Last snapshot: {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)} · {daily.length} days collected</>
+            ? <>{t("Last snapshot:")} {fmtDate(lastRun.toISOString().slice(0, 10))} {lastRun.toTimeString().slice(0, 5)} · {daily.length} {t("days collected")}</>
             : 'No snapshot yet — the first daily run starts the history.'}
-          {' '}· Source: Instagram API
+          {' '}{t("· Source: Instagram API")}
           {/* Shown only while the most recent run is actually failing —
               the collector clears this the moment a run succeeds. */}
           {meta?.lastError && (
             <div style={{ color: 'var(--red)', marginTop: 4, overflowWrap: 'anywhere' }}>
-              Error: {String(meta.lastError)}
+              {t("Error:")} {String(meta.lastError)}
               {/^IG_ACCESS_TOKEN/.test(String(meta.lastError)) && (
                 <div style={{ color: 'var(--text-3)', marginTop: 3 }}>
-                  Add IG_ACCESS_TOKEN (and IG_USER_ID) to the Netlify environment variables, then sync again.
+                  {t("Add IG_ACCESS_TOKEN (and IG_USER_ID) to the Netlify environment variables, then sync again.")}
                 </div>
               )}
             </div>
@@ -295,38 +295,37 @@ export default function Social() {
       </PageHeader>
 
       {daily.length === 0 ? (
-        <Empty message="No Instagram data yet — snapshots begin once the daily collector runs (or hit Sync now)."
-          action={isAdmin ? <button className="btn btn-primary" onClick={syncNow} disabled={syncing}>First snapshot</button> : null} />
+        <Empty message={t("No Instagram data yet — snapshots begin once the daily collector runs (or hit Sync now).")}
+          action={isAdmin ? <button className="btn btn-primary" onClick={syncNow} disabled={syncing}>{t("First snapshot")}</button> : null} />
       ) : (
         <>
           {/* KPI row */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-            <Kpi label="Followers" value={fmtNum(meta?.followers)} delta={kpis.deltaFollowers} deltaLabel={`in ${range === 'All' ? 'total' : range}`} />
-            <Kpi label="Following" value={fmtNum(meta?.following)} delta={kpis.deltaFollowing} deltaLabel={range === 'All' ? '' : `in ${range}`} />
-            <Kpi label="Posts" value={fmtNum(meta?.postCount)} delta={kpis.deltaPosts} deltaLabel={range === 'All' ? '' : `in ${range}`} />
-            <Kpi label="Avg engagement" value={kpis.avgEng != null ? fmtNum(kpis.avgEng) : '—'} delta={null} deltaLabel="" />
-            <Kpi label="Engagement rate" value={kpis.engRate != null ? `${kpis.engRate}%` : '—'} delta={null} deltaLabel="" />
+            <Kpi label={t("Followers")} value={fmtNum(meta?.followers)} delta={kpis.deltaFollowers} deltaLabel={`in ${range === 'All' ? 'total' : range}`} />
+            <Kpi label={t("Following")} value={fmtNum(meta?.following)} delta={kpis.deltaFollowing} deltaLabel={range === 'All' ? '' : `in ${range}`} />
+            <Kpi label={t("Posts")} value={fmtNum(meta?.postCount)} delta={kpis.deltaPosts} deltaLabel={range === 'All' ? '' : `in ${range}`} />
+            <Kpi label={t("Avg engagement")} value={kpis.avgEng != null ? fmtNum(kpis.avgEng) : '—'} delta={null} deltaLabel="" />
+            <Kpi label={t("Engagement rate")} value={kpis.engRate != null ? `${kpis.engRate}%` : '—'} delta={null} deltaLabel="" />
           </div>
 
           {/* Followers trend + post markers */}
           <div className="card" style={{ padding: '16px 18px', marginBottom: 16 }}>
-            <div className="section-label">Follower growth</div>
+            <div className="section-label">{t("Follower growth")}</div>
             <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginBottom: 8, lineHeight: 1.5 }}>
-              Total followers on each day we took a snapshot. Blue markers along the
-              bottom are days a post went live — a rise just after one is the post working.
+              {t("Total followers on each day we took a snapshot. Blue markers along the bottom are days a post went live — a rise just after one is the post working.")}
             </div>
             <TrendChart days={days} postDays={postDays} />
             <DailyBars days={barDays} postDays={postDays} />
           </div>
 
           {/* Posts */}
-          <div className="section-label">Posts · engagement &amp; follower impact</div>
+          <div className="section-label">{t("Posts · engagement & follower impact")}</div>
           {postList.length === 0 ? (
-            <Empty message="Post data appears once Instagram serves the post feed to the collector." />
+            <Empty message={t("Post data appears once Instagram serves the post feed to the collector.")} />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {postList.map(p => {
-                const t = TYPE_META[p.type] || TYPE_META.image;
+                const meta = TYPE_META[p.type] || TYPE_META.image;
                 return (
                   <div key={p.shortcode} className="card card-body" style={{ padding: '12px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
@@ -334,7 +333,7 @@ export default function Social() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <a href={p.url} target="_blank" rel="noopener noreferrer"
                             style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-1)', textDecoration: 'none' }}>
-                            {t.emoji} {t.label} <span style={{ color: 'var(--gold)', fontSize: 12 }}>↗</span>
+                            {meta.emoji} {meta.label} <span style={{ color: 'var(--gold)', fontSize: 12 }}>↗</span>
                           </a>
                           {p.takenAt && <span className="m-sub">{fmtDate(p.takenAt.slice(0, 10))}</span>}
                           {p.impact != null && (
@@ -342,16 +341,16 @@ export default function Social() {
                               background: p.impact >= 0 ? 'var(--green-bg)' : 'var(--red-bg)',
                               color: p.impact >= 0 ? 'var(--green-ok)' : 'var(--red)',
                               borderRadius: 0, padding: '2px 9px', fontSize: 10.5, fontWeight: 600,
-                            }} title="Follower change in the 3 days after this post">
-                              {p.impact >= 0 ? '+' : ''}{p.impact} followers / 3d
+                            }} title={t("Follower change in the 3 days after this post")}>
+                              {p.impact >= 0 ? '+' : ''}{p.impact} {t("followers / 3d")}
                             </span>
                           )}
                         </div>
                         {/* Two bare numbers side by side told you nothing about
                             which was which. */}
                         <div className="m-meta" style={{ marginTop: 6 }}>
-                          {p.likes != null && <span>{fmtNum(p.likes)} likes</span>}
-                          {p.comments != null && <span>{fmtNum(p.comments)} comments</span>}
+                          {p.likes != null && <span>{fmtNum(p.likes)} {t("likes")}</span>}
+                          {p.comments != null && <span>{fmtNum(p.comments)} {t("comments")}</span>}
                         </div>
                         {p.caption && (
                           <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-2)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>

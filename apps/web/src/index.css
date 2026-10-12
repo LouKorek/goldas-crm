@@ -11,16 +11,55 @@
    Hebrew falls through to Heebo in all three (browsers pick the first
    font in the stack carrying the codepoint).
    =================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Heebo:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter+Tight:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* Heebo is self-hosted (also embedded in PDFs) and limited to the Hebrew
+   block, so Latin letters and digits inside Hebrew text keep the Inter Tight
+   / JetBrains Mono voice. The font works offline through the service worker. */
+@font-face {
+  font-family: 'Heebo';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Heebo-400.ttf') format('truetype');
+  unicode-range: U+0590-05FF, U+FB1D-FB4F;
+}
+@font-face {
+  font-family: 'Heebo';
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('/fonts/Heebo-700.ttf') format('truetype');
+  unicode-range: U+0590-05FF, U+FB1D-FB4F;
+}
 
 :root {
   --font-body:    'Inter Tight', 'Heebo', system-ui, -apple-system, sans-serif;
   --font-display: 'Space Grotesk', 'Heebo', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-mono:    'JetBrains Mono', 'Heebo', ui-monospace, SFMono-Regular, monospace;
   /* Legacy alias — anything that still asks for the old serif now gets the
      display grotesk, so no screen is left with an orphaned typeface. */
   --font-serif:   'Space Grotesk', 'Heebo', system-ui, sans-serif;
+
+  /* Type scale — the only sizes new screens use. */
+  --fs-1: 12px; --fs-2: 13px; --fs-3: 15px; --fs-4: 17px; --fs-5: 20px; --fs-6: 26px; --fs-7: 34px;
+  /* Minimum tap target on anything a finger hits. */
+  --tap: 44px;
 }
+/* Hebrew UI: Heebo first for body copy; English words inside Hebrew text still
+   fall to Inter Tight because Heebo carries only Hebrew glyphs here. */
+html[lang="he"] {
+  --font-body:    'Heebo', 'Inter Tight', system-ui, -apple-system, sans-serif;
+  --font-display: 'Heebo', 'Space Grotesk', system-ui, sans-serif;
+  --font-serif:   'Heebo', 'Space Grotesk', system-ui, sans-serif;
+}
+/* Tracked uppercase labels are a Latin idiom; Hebrew has neither. */
+html[lang="he"] .btn, html[lang="he"] .section-label, html[lang="he"] .badge,
+html[lang="he"] .form-label, html[lang="he"] th, html[lang="he"] .empty-state p {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+html[lang="he"] .btn { font-size: 12.5px; font-weight: 600; }
+html[lang="he"] .btn-sm { font-size: 11.5px; }
+html[lang="he"] .form-label, html[lang="he"] th { font-size: 11.5px; }
 
 /* ===================================================================
    Design tokens.
@@ -240,7 +279,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .card-body { padding: 18px 20px; }
 .card-interactive { cursor: pointer; position: relative; }
 .card-interactive::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  content: ''; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 2px;
   background: var(--gold); opacity: 0; transition: opacity var(--trans-fast);
 }
 .card-interactive:hover { border-color: var(--border-2); background: var(--card-hover); }
@@ -287,7 +326,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   padding: 3px 8px;
   white-space: nowrap;
   text-transform: uppercase;
-  border-left: 2px solid currentColor;
+  border-inline-start: 2px solid currentColor;
 }
 
 /* Modal */
@@ -310,7 +349,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .modal-box {
   background: var(--surface-1);
   border: none;
-  border-left: 1px solid var(--border-2);
+  border-inline-start: 1px solid var(--border-2);
   border-radius: 0;
   height: 100vh;
   max-height: 100vh;
@@ -346,7 +385,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   content: '';
   position: absolute;
   bottom: -1px;
-  left: 0;
+  inset-inline-start: 0;
   width: 60px;
   height: 2px;
   background: linear-gradient(90deg, var(--gold), var(--gold-dk));
@@ -399,7 +438,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   border-radius: 0;
   box-shadow: var(--shadow-md);
   display: none;
-  left: 0;
+  inset-inline-start: 0;
   max-height: 220px;
   overflow-y: auto;
   position: absolute;
@@ -457,7 +496,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .data-table th:hover { color: var(--gold); }
 .data-table td {
   border-bottom: 1px solid var(--rule);
-  border-right: none;
+  border-inline-end: none;
   padding: 9px 8px;
   font-size: 11.5px;
   white-space: nowrap;
@@ -472,21 +511,21 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .data-table tbody tr:hover td { background: var(--card-hover) !important; }
 /* Gold marker on the row being pointed at. */
 .data-table tbody tr:hover td:first-child::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  content: ''; position: absolute; inset-inline-start: 0; top: 0; bottom: 0; width: 2px;
   background: var(--gold);
 }
 
 /* Toast */
 .toast-container {
   bottom: 24px; display: flex; flex-direction: column; gap: 10px;
-  position: fixed; right: 24px; z-index: 999;
+  position: fixed; inset-inline-end: 24px; z-index: 999;
 }
 .toast {
   align-items: center;
   animation: toastIn 0.18s var(--ease-out);
   background: var(--surface-2);
   border: 1px solid var(--border-2);
-  border-left: 3px solid var(--gold);
+  border-inline-start: 3px solid var(--gold);
   border-radius: 0;
   box-shadow: var(--shadow-lg);
   color: var(--text-1);
@@ -495,9 +534,15 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
-.toast.success { border-left-color: var(--green-ok); }
-.toast.error   { border-left-color: var(--red); }
-.toast.warning { border-left-color: var(--amber); }
+.toast .toast-undo {
+  background: transparent; border: 1px solid var(--gold); color: var(--gold);
+  cursor: pointer; font: inherit; font-size: 12px; font-weight: 600;
+  min-height: 32px; padding: 4px 12px;
+}
+.toast .toast-undo:hover { background: var(--gold); color: #0A0C0A; }
+.toast.success { border-inline-start-color: var(--green-ok); }
+.toast.error   { border-inline-start-color: var(--red); }
+.toast.warning { border-inline-start-color: var(--amber); }
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(16px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -549,8 +594,8 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   transition: border-color var(--trans-fast), background var(--trans-fast);
 }
 .alert-row:hover { border-color: var(--border-2); background: var(--card-hover); }
-.alert-row.urgent  { border-left: 3px solid var(--red); }
-.alert-row.warning { border-left: 3px solid var(--amber); }
+.alert-row.urgent  { border-inline-start: 3px solid var(--red); }
+.alert-row.warning { border-inline-start: 3px solid var(--amber); }
 
 /* Misc */
 /* Section rule — a micro caption riding a hairline that runs to the edge. */
@@ -637,7 +682,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .page-header::before {
   content: '';
   position: absolute;
-  left: 0; right: 0; bottom: 100%;
+  inset-inline-start: 0; inset-inline-end: 0; bottom: 100%;
   height: 220px;
   background: var(--bg);
 }
@@ -645,10 +690,10 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   .page-header {
     top: 0;
     margin-top: -18px;
-    margin-left: -20px;
-    margin-right: -20px;
-    padding-left: 20px;
-    padding-right: 20px;
+    margin-inline-start: -20px;
+    margin-inline-end: -20px;
+    padding-inline-start: 20px;
+    padding-inline-end: 20px;
     padding-top: 18px;
   }
 }
@@ -710,7 +755,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   content: attr(data-tooltip);
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 50%;
+  inset-inline-start: 50%;
   transform: translateX(-50%) translateY(4px);
   background: var(--surface-2);
   border: 1px solid var(--border-2);
@@ -803,7 +848,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
 .modal-grab {
   display: none;
   position: absolute;
-  top: 6px; left: 50%;
+  top: 6px; inset-inline-start: 50%;
   transform: translateX(-50%);
   width: 36px; height: 4px;
   background: var(--border-2);
@@ -856,8 +901,8 @@ textarea:focus::placeholder {
     display: flex;
     position: fixed;
     bottom: 0;
-    left: 0;
-    right: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
     height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
     background: var(--surface-1);
     border-top: 1px solid var(--border-2);
@@ -885,7 +930,7 @@ textarea:focus::placeholder {
   .bottom-nav-item.active::before {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0; inset-inline-start: 0; inset-inline-end: 0;
     height: 2px;
     background: var(--gold);
   }
@@ -927,8 +972,8 @@ textarea:focus::placeholder {
   .mobile-topbar   { display: flex !important; }
   .main-content    {
     padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)) !important;
-    padding-left: 14px !important;
-    padding-right: 14px !important;
+    padding-inline-start: 14px !important;
+    padding-inline-end: 14px !important;
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 24px) !important;
   }
   /* overflow-x:hidden (set below) turns .main-content into a clip container,
@@ -1136,8 +1181,8 @@ textarea:focus::placeholder {
   .chip-group { gap: 4px; }
 
   .toast-container {
-    left: 14px;
-    right: 14px;
+    inset-inline-start: 14px;
+    inset-inline-end: 14px;
     bottom: calc(var(--bottom-nav-h) + 12px);
   }
   .toast { min-width: unset; max-width: 100%; }
@@ -1150,7 +1195,7 @@ textarea:focus::placeholder {
   }
   .modal-box {
     border-radius: 0;
-    border-left: none;
+    border-inline-start: none;
     border-top: 2px solid var(--gold-dk);
     /* dvh (with vh fallback) — on iOS Safari 94vh sits behind the URL bar
        and hides the footer buttons; dvh tracks the *visible* viewport. */
@@ -1188,7 +1233,7 @@ textarea:focus::placeholder {
   .m-card {
     background: var(--card);
     border: 1px solid var(--border);
-    border-left: 2px solid var(--gold-dk);
+    border-inline-start: 2px solid var(--gold-dk);
     border-radius: 0;
     padding: 12px 14px;
   }
@@ -1209,8 +1254,8 @@ textarea:focus::placeholder {
 @media (max-width: 480px) {
   .main-content {
     padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)) !important;
-    padding-left: 10px !important;
-    padding-right: 10px !important;
+    padding-inline-start: 10px !important;
+    padding-inline-end: 10px !important;
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 20px) !important;
   }
   .page-title { font-size: 22px; }
@@ -1313,7 +1358,7 @@ body.light-mode .data-table tbody tr:hover td { background: var(--card-hover) !i
 
 body.light-mode .modal-box {
   background: var(--surface-1);
-  border-left-color: var(--border-2);
+  border-inline-start-color: var(--border-2);
 }
 body.light-mode .modal-header-frozen { background: var(--surface-1); }
 body.light-mode .modal-footer-bar { background: var(--surface-1); }
@@ -1374,4 +1419,36 @@ body.light-mode ::selection { background: rgba(138,106,40,0.22); }
 @keyframes shimmer {
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
+}
+
+
+/* ===================================================================
+   Phase 2 — shell, Hebrew, accessibility.
+   =================================================================== */
+/* Tap targets: on touch screens every control is at least 44px tall. */
+@media (pointer: coarse) {
+  .btn, .btn-sm, .chip, .form-input, .form-select, .search-input-field, select, input:not([type=checkbox]):not([type=radio]) {
+    min-height: var(--tap);
+  }
+  .btn-icon, .modal-close-btn, .row-actions button, .action-btn { min-width: var(--tap); min-height: var(--tap); }
+  td, th { padding-top: 12px; padding-bottom: 12px; }
+}
+
+/* Visible keyboard focus, one gold ring everywhere. */
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button:focus:not(:focus-visible) { outline: none; }
+
+/* Home: tabs and the two-column board collapse cleanly on a phone. */
+.tabs a { min-height: var(--tap); display: inline-flex; align-items: center; }
+@media (max-width: 480px) {
+  .home-grid { grid-template-columns: 1fr !important; }
+  .tabs a { flex: 1; justify-content: center; }
+}
+
+/* Loading skeleton rows. */
+.skeleton + .skeleton { margin-top: 0; }
+
+/* Honour the OS "reduce motion" setting: no shimmer, no slide-ins. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

@@ -4,21 +4,24 @@ import { COUNTRIES, formatPhone } from 'lib/constants';
 import { callFunctionJson } from 'lib/api';
 import { resolveFileUrl } from 'lib/db';
 import Icon from './Icons';
+import { t, tv } from 'lib/i18n';
 
 // ── Toast ─────────────────────────────────────────────────────────
 let _addToast = null;
+// toast.success(msg, { undo }) shows an Undo button that runs `undo` once.
 export const toast = {
-  success: (msg) => _addToast?.({ msg, type: 'success' }),
-  error:   (msg) => _addToast?.({ msg, type: 'error' }),
-  warning: (msg) => _addToast?.({ msg, type: 'warning' }),
-  info:    (msg) => _addToast?.({ msg, type: 'info' }),
+  success: (msg, opts) => _addToast?.({ msg, type: 'success', ...opts }),
+  error:   (msg, opts) => _addToast?.({ msg, type: 'error', ...opts }),
+  warning: (msg, opts) => _addToast?.({ msg, type: 'warning', ...opts }),
+  info:    (msg, opts) => _addToast?.({ msg, type: 'info', ...opts }),
 };
+const tt = (k) => t(k);
 export function ToastProvider() {
   const [toasts, setToasts] = useState([]);
   _addToast = useCallback((t) => {
     const id = Date.now() + Math.random();
     setToasts(p => [...p, { ...t, id }]);
-    setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), 3500);
+    setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), t.undo ? 7000 : 3500);
   }, []);
   if (!toasts.length) return null;
   const icons = { success: '✓', error: '✕', warning: '!', info: 'i' };
@@ -28,6 +31,9 @@ export function ToastProvider() {
         <div key={t.id} className={`toast ${t.type || ''}`}>
           <span style={{ fontSize: 15, opacity: 0.9 }}>{icons[t.type] || 'ℹ'}</span>
           <span style={{ flex: 1 }}>{t.msg}</span>
+          {t.undo && (
+            <button className="toast-undo" onClick={async () => { setToasts(p => p.filter(x => x.id !== t.id)); try { await t.undo(); } catch (e) { _addToast?.({ msg: e?.message || 'Undo failed', type: 'error' }); } }}>{tt('Undo')}</button>
+          )}
           <button
             style={{
               background: 'none', border: 'none', color: 'inherit',
@@ -127,7 +133,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
         <div className="modal-header-frozen">
           <span className="modal-grab" />
           <span className="modal-title">{title}</span>
-          <button className="modal-close-btn" onClick={handleClose} aria-label="Close"><Icon name="close" size={13} /></button>
+          <button className="modal-close-btn" onClick={handleClose} aria-label={t("Close")}><Icon name="close" size={13} /></button>
         </div>
 
         {/* Body */}
@@ -138,9 +144,9 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
               {!viewOnly && onSave && (
                 <span
                   className="ctrl-enter-hint"
-                  style={{ fontSize: 10, color: 'var(--text-3)', marginRight: 'auto', alignSelf: 'center' }}
+                  style={{ fontSize: 10, color: 'var(--text-3)', marginInlineEnd: 'auto', alignSelf: 'center' }}
                 >
-                  Ctrl+Enter to save
+                  {t("Ctrl+Enter to save")}
                 </span>
               )}
               {footer}
@@ -172,14 +178,14 @@ export function useConfirm() {
     <div className="modal-overlay" style={{ zIndex: 300 }}>
       <div className="modal-box" style={{ maxWidth: 400 }}>
         <div className="modal-header-frozen">
-          <span className="modal-title" style={{ fontSize: 17 }}>{state.title || 'Confirm'}</span>
-          <button className="modal-close-btn" onClick={handleCancel} aria-label="Close"><Icon name="close" size={13} /></button>
+          <span className="modal-title" style={{ fontSize: 17 }}>{state.title || t('Confirm')}</span>
+          <button className="modal-close-btn" onClick={handleCancel} aria-label={t("Close")}><Icon name="close" size={13} /></button>
         </div>
         <div className="modal-scroll-body">
           <p style={{ color: 'var(--text-1)', marginBottom: 20, fontSize: 14, lineHeight: 1.6 }}>{state.msg}</p>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button className="btn btn-ghost" onClick={handleCancel}>Cancel</button>
-            <button className="btn btn-danger" onClick={handleConfirm}>{state.confirmLabel || 'Delete'}</button>
+            <button className="btn btn-ghost" onClick={handleCancel}>{t("Cancel")}</button>
+            <button className="btn btn-danger" onClick={handleConfirm}>{state.confirmLabel || t('Delete')}</button>
           </div>
         </div>
       </div>
@@ -195,7 +201,7 @@ export function Field({ label, children, hint, error, required }) {
     <div className="form-field">
       {label && (
         <label className="form-label">
-          {label}{required && <span style={{ color: 'var(--red)', marginLeft: 2 }}>*</span>}
+          {label}{required && <span style={{ color: 'var(--red)', marginInlineStart: 2 }}>*</span>}
         </label>
       )}
       {children}
@@ -226,7 +232,7 @@ export function ChipGroup({ options, value, onChange, multi, labels, required })
           className={`chip${isActive(o) ? ' active' : ''}`}
           onClick={() => toggle(o)}
         >
-          {labels?.[i] || o}
+          {labels?.[i] || tv(o)}
         </button>
       ))}
     </div>
@@ -262,7 +268,7 @@ export function CountrySelect({ value = [], onChange, single }) {
         {!single && vals.length > 0 && (
           <button type="button" onClick={() => onChange([])}
             style={{
-              position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+              position: 'absolute', insetInlineEnd: 8, top: '50%', transform: 'translateY(-50%)',
               background: 'none', border: 'none', color: 'var(--text-3)',
               cursor: 'pointer', fontSize: 18, lineHeight: 1
             }}>×</button>
@@ -271,8 +277,8 @@ export function CountrySelect({ value = [], onChange, single }) {
       <div className={`dropdown-list${open ? ' open' : ''}`}>
         {!single && (
           <div style={{ padding: '6px 10px', display: 'flex', gap: 8, borderBottom: '1px solid var(--border)' }}>
-            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={() => onChange([...COUNTRIES])}>All</button>
-            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={() => onChange([])}>Clear</button>
+            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={() => onChange([...COUNTRIES])}>{t("All")}</button>
+            <button type="button" className="btn btn-ghost btn-sm" onMouseDown={() => onChange([])}>{t("Clear")}</button>
           </div>
         )}
         {filtered.slice(0, 80).map(c => (
@@ -286,7 +292,7 @@ export function CountrySelect({ value = [], onChange, single }) {
             {c}
           </div>
         ))}
-        {filtered.length === 0 && <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No results</div>}
+        {filtered.length === 0 && <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>{t("No results")}</div>}
       </div>
     </div>
   );
@@ -354,9 +360,9 @@ export function PhoneActions({ phone, vertical }) {
   const onLeave = (e) => { e.currentTarget.style.borderColor = 'var(--border)'; };
   return (
     <span style={{ display: 'inline-flex', flexDirection: vertical ? 'column' : 'row', gap: 4, alignItems: 'center' }}>
-      <a href={`tel:${phone}`} title="Call" onMouseEnter={onEnter} onMouseLeave={onLeave}
+      <a href={`tel:${phone}`} title={t("Call")} onMouseEnter={onEnter} onMouseLeave={onLeave}
         style={{ ...btn, background: 'transparent', color: 'var(--blue)' }}>TEL</a>
-      <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" title="WhatsApp"
+      <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" title={t("WhatsApp")}
         onMouseEnter={onEnter} onMouseLeave={onLeave}
         style={{ ...btn, background: 'transparent', color: 'var(--green-ok)' }}>WA</a>
     </span>
@@ -441,16 +447,16 @@ export function DateInput({ value, onChange }) {
         value={text}
         onChange={onTextInput}
         onBlur={onTextBlur}
-        placeholder="DD/MM/YYYY"
+        placeholder={t("DD/MM/YYYY")}
         inputMode="numeric"
         autoComplete="off"
         maxLength={10}
-        style={{ paddingRight: 38 }}
+        style={{ paddingInlineEnd: 38 }}
       />
       <button type="button" onClick={openNative} tabIndex={-1}
-        title="Open calendar"
+        title={t("Open calendar")}
         style={{
-          position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+          position: 'absolute', insetInlineEnd: 4, top: '50%', transform: 'translateY(-50%)',
           width: 30, height: 30, padding: 0,
           background: 'transparent', border: 'none', cursor: 'pointer',
           color: 'var(--gold)', lineHeight: 1,
@@ -464,7 +470,7 @@ export function DateInput({ value, onChange }) {
         tabIndex={-1}
         aria-hidden="true"
         style={{
-          position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+          position: 'absolute', insetInlineEnd: 4, top: '50%', transform: 'translateY(-50%)',
           width: 30, height: 30, padding: 0,
           opacity: 0, pointerEvents: 'none',
           colorScheme: 'dark',
@@ -475,11 +481,12 @@ export function DateInput({ value, onChange }) {
 }
 
 // ── Search input ──────────────────────────────────────────────────
-export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
+export function SearchInput({ value, onChange, placeholder }) {
+  placeholder = placeholder ?? t('Search...');
   return (
     <div style={{ position: 'relative' }}>
       <span style={{
-        position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+        position: 'absolute', insetInlineStart: 10, top: '50%', transform: 'translateY(-50%)',
         color: 'var(--text-3)', pointerEvents: 'none', display: 'flex',
       }}><Icon name="search" size={13} /></span>
       <input
@@ -487,15 +494,15 @@ export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         className="search-input-field"
-        style={{ paddingLeft: 30, paddingRight: value ? 28 : 12, height: 36, width: 200 }}
+        style={{ paddingInlineStart: 30, paddingInlineEnd: value ? 28 : 12, height: 36, width: 200 }}
       />
       {value && (
         <button
           type="button"
           onClick={() => onChange('')}
-          aria-label="Clear search"
+          aria-label={t("Clear search")}
           style={{
-            position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+            position: 'absolute', insetInlineEnd: 6, top: '50%', transform: 'translateY(-50%)',
             background: 'none', border: 'none', color: 'var(--text-3)',
             cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 4,
           }}
@@ -509,7 +516,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
 export function StatusBadge({ status, colorMap }) {
   if (!status) return null;
   const c = colorMap?.[status] || { bg: 'var(--surface-3)', text: 'var(--text-2)' };
-  return <span className="badge" style={{ background: c.bg, color: c.text }}>{status}</span>;
+  return <span className="badge" style={{ background: c.bg, color: c.text }}>{tv(status)}</span>;
 }
 
 export function EUBadge({ is }) {
@@ -525,7 +532,8 @@ export function Spinner({ size = 20 }) {
   return <span className="spinner" style={{ width: size, height: size }} />;
 }
 
-export function Empty({ icon, message = 'No records yet', action }) {
+export function Empty({ icon, message, action }) {
+  message = message ?? t('No records yet');
   return (
     <div className="empty-state">
       {/* A ruled void rather than a floating emoji. */}
@@ -540,6 +548,29 @@ export function Empty({ icon, message = 'No records yet', action }) {
         color: 'var(--text-3)',
       }}>{message}</p>
       {action}
+    </div>
+  );
+}
+
+// ── Loading / error states ────────────────────────────────────────
+// Skeleton: grey bars in the shape of the list that is about to appear.
+export function Skeleton({ rows = 5, height = 44 }) {
+  return (
+    <div className="card" style={{ padding: 0 }} aria-busy="true" aria-label={t('Loading')}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="skeleton" style={{ height, borderRadius: 0, borderBottom: '1px solid var(--rule)', opacity: 1 - i * 0.08 }} />
+      ))}
+    </div>
+  );
+}
+
+export function ErrorState({ error, onRetry }) {
+  const msg = typeof error === 'string' ? error : error?.message || t('Something went wrong');
+  return (
+    <div className="empty-state" role="alert">
+      <div style={{ width: 42, height: 1, background: 'var(--red)', margin: '0 auto 18px' }} />
+      <p style={{ marginBottom: onRetry ? 18 : 0, fontSize: 13, color: 'var(--text-2)' }}>{msg}</p>
+      {onRetry && <button className="btn btn-ghost" onClick={onRetry}>{t('Try again')}</button>}
     </div>
   );
 }
@@ -570,18 +601,18 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
     try {
       w = window.open('', '_blank');               // open synchronously to avoid popup block
       const dataUrl = await resolveFileUrl(h);
-      if (!dataUrl) { if (w) w.close(); toast.error('File unavailable.'); return; }
+      if (!dataUrl) { if (w) w.close(); toast.error(t("File unavailable.")); return; }
       const blob = await (await fetch(dataUrl)).blob();   // Chrome blocks raw data: URL navigation
       const burl = URL.createObjectURL(blob);
       if (w) w.location = burl; else window.open(burl, '_blank');
-    } catch { if (w) w.close(); toast.error('Could not open file.'); }
+    } catch { if (w) w.close(); toast.error(t("Could not open file.")); }
   };
   return (
     <div>
       {history.length > 0 && (
         <div style={{ marginBottom: 8 }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowH(!showH)}>
-            📎 {history.length} file{history.length > 1 ? 's' : ''} — {showH ? 'Hide' : 'View'} history
+            📎 {history.length} {t("file")}{history.length > 1 ? 's' : ''} — {showH ? 'Hide' : 'View'} {t("history")}
           </button>
           {showH && (
             <div style={{
@@ -603,9 +634,9 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
       )}
       {mode === 'prompt' ? (
         <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('replace')}>Replace existing</button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('keep')}>Keep both</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFile(null); setMode(null); }}>Cancel</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('replace')}>{t("Replace existing")}</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('keep')}>{t("Keep both")}</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFile(null); setMode(null); }}>{t("Cancel")}</button>
         </div>
       ) : file ? (
         <div style={{
@@ -614,14 +645,14 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
           border: '1px solid var(--border)'
         }}>
           <div style={{ flex: 1, minWidth: 140 }}>
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>File: {file.name}</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Enter file name..." />
+            <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>{t("File:")} {file.name}</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder={t("Enter file name...")} />
           </div>
           <div style={{ display: 'flex', gap: 6, paddingTop: 18 }}>
             <button type="button" className="btn btn-primary btn-sm" disabled={!name.trim() || uploading} onClick={() => doUpload()}>
-              {uploading ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Uploading...</> : '⬆ Upload'}
+              {uploading ? <><span className="spinner" style={{ width: 12, height: 12 }} /> {t("Uploading...")}</> : '⬆ Upload'}
             </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFile(null)}>Cancel</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFile(null)}>{t("Cancel")}</button>
           </div>
         </div>
       ) : (
@@ -638,7 +669,7 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
             style={{ display: 'none' }}
             onChange={e => handleFile(e.target.files[0])}
           />
-          <span style={{ fontSize: 13 }}>📎 Click or drag to upload {label}</span>
+          <span style={{ fontSize: 13 }}>{t("📎 Click or drag to upload")} {label}</span>
         </div>
       )}
     </div>
@@ -662,13 +693,13 @@ export function FilterBar({ filters, setFilters, options }) {
       {options.map(opt => (
         <div key={opt.key} className="filter-cell" style={{ minWidth: 140 }}>
           <select value={filters[opt.key] || ''} onChange={e => setFilters(f => ({ ...f, [opt.key]: e.target.value }))}>
-            <option value="">{opt.label}: All</option>
+            <option value="">{opt.label}{t(": All")}</option>
             {opt.values.map(v => <option key={v} value={v}>{v}</option>)}
           </select>
         </div>
       ))}
       {Object.values(filters).some(Boolean) && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters({})}>✕ Clear</button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters({})}>{t("✕ Clear")}</button>
       )}
     </div>
   );
@@ -718,11 +749,11 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
         title={rows?.length ? `Export ${rows.length} row${rows.length === 1 ? '' : 's'}` : 'Nothing to export'}
         style={{ height: 36, whiteSpace: 'nowrap' }}
       >
-        {busy ? <span className="btn-text">Exporting…</span> : <><Icon name="external" size={12} /><span className="btn-text">Export</span></>}
+        {busy ? <span className="btn-text">{t("Exporting…")}</span> : <><Icon name="external" size={12} /><span className="btn-text">{t("Export")}</span></>}
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          position: 'absolute', top: 'calc(100% + 6px)', insetInlineEnd: 0,
           minWidth: 180, zIndex: 60,
           background: 'var(--surface-2)',
           border: '1px solid var(--border-2)',
@@ -734,17 +765,17 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
           <button type="button" onClick={() => run('excel')}
             style={menuItemStyle}
             onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
-            <div style={{ flex: 1, textAlign: 'left' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Excel</div>
-              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Styled table with filters</div>
+            <div style={{ flex: 1, textAlign: 'start' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t("Excel")}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("Styled table with filters")}</div>
             </div>
           </button>
           <button type="button" onClick={() => run('pdf')}
             style={menuItemStyle}
             onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
-            <div style={{ flex: 1, textAlign: 'left' }}>
+            <div style={{ flex: 1, textAlign: 'start' }}>
               <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>PDF</div>
-              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Branded document</div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("Branded document")}</div>
             </div>
           </button>
         </div>
@@ -756,7 +787,7 @@ const menuItemStyle = {
   display: 'flex', alignItems: 'center', gap: 10,
   width: '100%', padding: '9px 10px',
   background: 'transparent', border: 'none', borderRadius: 0,
-  cursor: 'pointer', textAlign: 'left',
+  cursor: 'pointer', textAlign: 'start',
   transition: 'background 0.14s',
 };
 const menuItemHover = (e) => { e.currentTarget.style.background = 'var(--gold-dim)'; };
@@ -791,7 +822,7 @@ export function ScraperCredits() {
         background: empty ? 'var(--red)' : high ? 'var(--amber)' : 'var(--green-ok)',
       }} />
       <span style={{ fontFamily: 'var(--font-mono)' }}>{used.toLocaleString()}/{limit.toLocaleString()}</span>
-      {resetTxt && <span style={{ opacity: 0.85 }}>· resets {resetTxt}</span>}
+      {resetTxt && <span style={{ opacity: 0.85 }}>{t("· resets")} {resetTxt}</span>}
     </span>
   );
 }
@@ -863,13 +894,13 @@ export function RowActions({ onEdit, onDuplicate, onView, onDelete, profileUrl, 
   const abs = (u) => (u.startsWith('http://') || u.startsWith('https://')) ? u : 'https://' + u;
   return (
     <div className="action-btns" style={{ display: 'flex', gap: 4 }}>
-      {onView      && <ActionBtn icon="social"   tone="blue"    title="View"      onClick={onView} />}
-      {onEdit      && <ActionBtn icon="edit"     tone="gold"    title="Edit"      onClick={onEdit} />}
-      {onDuplicate && <ActionBtn icon="copy"     tone="neutral" title="Duplicate" onClick={onDuplicate} />}
-      {profileUrl  && <ActionBtn icon="players"  tone="blue"    title="Profile"   href={abs(profileUrl)} />}
-      {videoUrl    && <ActionBtn icon="external" tone="green"   title="Video"     href={abs(videoUrl)} />}
+      {onView      && <ActionBtn icon="social"   tone="blue"    title={t("View")}      onClick={onView} />}
+      {onEdit      && <ActionBtn icon="edit"     tone="gold"    title={t("Edit")}      onClick={onEdit} />}
+      {onDuplicate && <ActionBtn icon="copy"     tone="neutral" title={t("Duplicate")} onClick={onDuplicate} />}
+      {profileUrl  && <ActionBtn icon="players"  tone="blue"    title={t("Profile")}   href={abs(profileUrl)} />}
+      {videoUrl    && <ActionBtn icon="external" tone="green"   title={t("Video")}     href={abs(videoUrl)} />}
       {children}
-      {onDelete    && <ActionBtn icon="trash"    tone="red"     title="Delete"    onClick={onDelete} />}
+      {onDelete    && <ActionBtn icon="trash"    tone="red"     title={t("Delete")}    onClick={onDelete} />}
     </div>
   );
 }

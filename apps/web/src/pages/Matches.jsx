@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { callFunction } from 'lib/api';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
@@ -10,6 +11,7 @@ import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, Search
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
+import { t } from 'lib/i18n';
 
 // ── Google Maps loader (loads once) ──────────────────────────────
 let _mapsPromise = null;
@@ -146,7 +148,7 @@ function StadiumInput({ value, onSelect }) {
         placeholder={ready ? 'Type stadium or venue — Google Maps suggestions…' : 'Type stadium name…'} />
       {open && results.length > 0 && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          position: 'absolute', top: '100%', insetInlineStart: 0, insetInlineEnd: 0, zIndex: 50,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
           borderRadius: 0, boxShadow: 'var(--shadow-md)', marginTop: 2,
         }}>
@@ -172,7 +174,7 @@ function StadiumInput({ value, onSelect }) {
 function YouthBadge({ small }) {
   return (
     <span style={{
-      background: 'transparent', borderLeft: '2px solid var(--green-ok)',
+      background: 'transparent', borderInlineStart: '2px solid var(--green-ok)',
       borderRadius: 0, color: 'var(--green-ok)', fontSize: small ? 8.5 : 10,
       fontWeight: 700, padding: small ? '0 0 0 4px' : '1px 0 1px 5px',
       letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0,
@@ -190,7 +192,7 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
   const selected = players.filter(p => value.includes(p.id));
   return (
     <div>
-      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Type to search players…" style={{ marginBottom: 6 }} />
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("Type to search players…")} style={{ marginBottom: 6 }} />
       {selected.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
           {selected.map(p => (
@@ -203,7 +205,7 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
       )}
       <div style={{ border: '1px solid var(--border)', borderRadius: 0, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
         {filtered.length === 0
-          ? <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
+          ? <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>{t("No players found.")}</div>
           : filtered.map(p => {
             const sel = value.includes(p.id);
             return (
@@ -229,10 +231,10 @@ const EMPTY = {
 
 // ── Source badge for the match card ──────────────────────────────
 const SOURCE_BADGE = {
-  manual:    { label: 'Manual',           icon: '✋', color: 'rgba(255,255,255,0.55)', bg: 'rgba(255,255,255,0.04)' },
-  ifa:       { label: 'Auto · IFA',       icon: '🤖', color: '#60A5FA', bg: 'rgba(96,165,250,0.10)' },
-  '365':     { label: 'Auto · 365',       icon: '🤖', color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
-  sofascore: { label: 'Auto · SofaScore', icon: '🤖', color: '#A78BFA', bg: 'rgba(167,139,250,0.10)' },
+  manual:    { label: t("Manual"),           icon: '✋', color: 'rgba(255,255,255,0.55)', bg: 'rgba(255,255,255,0.04)' },
+  ifa:       { label: t("Auto · IFA"),       icon: '🤖', color: '#60A5FA', bg: 'rgba(96,165,250,0.10)' },
+  '365':     { label: t("Auto · 365"),       icon: '🤖', color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
+  sofascore: { label: t("Auto · SofaScore"), icon: '🤖', color: '#A78BFA', bg: 'rgba(167,139,250,0.10)' },
 };
 function SourceBadge({ source }) {
   const c = SOURCE_BADGE[source || 'manual'] || SOURCE_BADGE.manual;
@@ -240,7 +242,7 @@ function SourceBadge({ source }) {
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
       background: 'transparent', color: c.color,
-      borderLeft: `2px solid ${c.color}`,
+      borderInlineStart: `2px solid ${c.color}`,
       borderRadius: 0, padding: '1px 0 1px 6px',
       fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
       textTransform: 'uppercase', whiteSpace: 'nowrap',
@@ -311,7 +313,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+          position: 'absolute', top: 'calc(100% + 6px)', insetInlineEnd: 0,
           width: 280, zIndex: 60,
           background: 'var(--surface-2)',
           border: '1px solid var(--border-2)',
@@ -319,7 +321,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
           boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
           padding: 10,
         }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players…" autoFocus
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search players…")} autoFocus
             style={{ width: '100%', marginBottom: 8 }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <div style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
@@ -328,13 +330,13 @@ function PlayersFilter({ allPlayers, value, onChange }) {
             {selectedCount > 0 && (
               <button type="button" onClick={clear}
                 style={{ background: 'none', border: 'none', color: 'var(--text-3)', cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}>
-                Clear all
+                {t("Clear all")}
               </button>
             )}
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--input-bg)' }}>
             {filtered.length === 0 ? (
-              <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>No players found.</div>
+              <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>{t("No players found.")}</div>
             ) : filtered.map(p => {
               const sel = value.includes(p.id);
               return (
@@ -358,27 +360,27 @@ function PlayersFilter({ allPlayers, value, onChange }) {
 // words rather than error codes. Collapsed by default; the count is enough
 // on a good day.
 const SYNC_REASONS = {
-  'ifa-url-missing':            { label: 'No IFA link',              fix: 'Paste his football.org.il profile into the player record.' },
-  'ifa-url-invalid':            { label: 'IFA link not readable',    fix: 'The link should be a football.org.il address.' },
-  'ifa-url-has-no-id':          { label: 'IFA link has no player id',fix: 'Copy the link from his profile page, not a search result.' },
-  'ifa-player-page-unreadable': { label: 'IFA profile did not load', fix: 'Usually temporary — the next sync will retry.' },
-  'ifa-club-index-unreadable':  { label: 'IFA club list did not load', fix: 'Usually temporary — the next sync will retry.' },
-  'ifa-club-not-found':         { label: 'Club not found in the IFA register', fix: 'Open the player and pin his squad directly.' },
-  'ifa-team-not-matched':       { label: 'Squad not identified',     fix: 'Open the player and pin his squad directly.' },
-  'ifa-no-fixtures-published':  { label: 'No fixtures published yet',fix: 'The squad was found — the federation has not released its schedule.' },
-  'no-club':                    { label: 'No club on record',        fix: 'Set his current club.' },
-  'no-source':                  { label: 'No source for this league',fix: 'Add a country and tier so the sync knows where to look.' },
-  'no-fixtures-or-team-not-found': { label: 'Nothing found',         fix: 'His league may not be covered by the available sources.' },
-  'ifa-page-unreadable':        { label: 'IFA fixtures page did not load', fix: 'Usually temporary — the next sync will retry.' },
-  'not-reached-time':           { label: 'Not reached this run',     fix: 'The sync ran out of time before him; he is near the front of the queue next time.' },
-  'not-reached-credits':        { label: 'Not reached this run',     fix: "This run's ScraperAPI allowance was used up; he is near the front of the queue next time." },
-  'scraper-quota-exhausted':    { label: 'ScraperAPI monthly quota spent', fix: 'Israeli fixtures cannot be fetched until it resets — the date is on the counter above.' },
-  'ifa-browser-stale':          { label: 'Computer sync has not run', fix: 'Israeli fixtures come from the daily sync on Lou\'s computer (Chrome). Check that the computer was on and the Claude in Chrome extension is connected.' },
-  'ifa-blocked-datacenter':     { label: 'Not synced — IFA blocks the server', fix: 'Waiting for the next computer sync.' },
-  'ifa-kept-existing':          { label: 'Came back empty — kept his matches', fix: 'The federation page showed no fixtures, so the ones on file were left untouched.' },
-  'ifa-old-season':             { label: 'Only last season\'s fixtures', fix: 'The federation has not published this season for his squad yet; nothing was changed.' },
-  'ifa-not-scraped':            { label: 'Not read by the computer sync', fix: 'He was added after the sync started; the next run picks him up.' },
-  'error':                      { label: 'Sync error',               fix: '' },
+  'ifa-url-missing':            { label: t("No IFA link"),              fix: 'Paste his football.org.il profile into the player record.' },
+  'ifa-url-invalid':            { label: t("IFA link not readable"),    fix: 'The link should be a football.org.il address.' },
+  'ifa-url-has-no-id':          { label: t("IFA link has no player id"),fix: 'Copy the link from his profile page, not a search result.' },
+  'ifa-player-page-unreadable': { label: t("IFA profile did not load"), fix: 'Usually temporary — the next sync will retry.' },
+  'ifa-club-index-unreadable':  { label: t("IFA club list did not load"), fix: 'Usually temporary — the next sync will retry.' },
+  'ifa-club-not-found':         { label: t("Club not found in the IFA register"), fix: 'Open the player and pin his squad directly.' },
+  'ifa-team-not-matched':       { label: t("Squad not identified"),     fix: 'Open the player and pin his squad directly.' },
+  'ifa-no-fixtures-published':  { label: t("No fixtures published yet"),fix: 'The squad was found — the federation has not released its schedule.' },
+  'no-club':                    { label: t("No club on record"),        fix: 'Set his current club.' },
+  'no-source':                  { label: t("No source for this league"),fix: 'Add a country and tier so the sync knows where to look.' },
+  'no-fixtures-or-team-not-found': { label: t("Nothing found"),         fix: 'His league may not be covered by the available sources.' },
+  'ifa-page-unreadable':        { label: t("IFA fixtures page did not load"), fix: 'Usually temporary — the next sync will retry.' },
+  'not-reached-time':           { label: t("Not reached this run"),     fix: 'The sync ran out of time before him; he is near the front of the queue next time.' },
+  'not-reached-credits':        { label: t("Not reached this run"),     fix: "This run's ScraperAPI allowance was used up; he is near the front of the queue next time." },
+  'scraper-quota-exhausted':    { label: t("ScraperAPI monthly quota spent"), fix: 'Israeli fixtures cannot be fetched until it resets — the date is on the counter above.' },
+  'ifa-browser-stale':          { label: t("Computer sync has not run"), fix: 'Israeli fixtures come from the daily sync on Lou\'s computer (Chrome). Check that the computer was on and the Claude in Chrome extension is connected.' },
+  'ifa-blocked-datacenter':     { label: t("Not synced — IFA blocks the server"), fix: 'Waiting for the next computer sync.' },
+  'ifa-kept-existing':          { label: t("Came back empty — kept his matches"), fix: 'The federation page showed no fixtures, so the ones on file were left untouched.' },
+  'ifa-old-season':             { label: t("Only last season's fixtures"), fix: 'The federation has not published this season for his squad yet; nothing was changed.' },
+  'ifa-not-scraped':            { label: t("Not read by the computer sync"), fix: 'He was added after the sync started; the next run picks him up.' },
+  'error':                      { label: t("Sync error"),               fix: '' },
 };
 
 function SyncReport({ report }) {
@@ -387,7 +389,7 @@ function SyncReport({ report }) {
   if (!report || !list.length) return null;
   const ran = report.runAt?.toDate?.();
   return (
-    <div className="card" style={{ marginBottom: 14, borderLeft: '3px solid var(--amber)' }}>
+    <div className="card" style={{ marginBottom: 14, borderInlineStart: '3px solid var(--amber)' }}>
       <button type="button" onClick={() => setOpen(v => !v)}
         style={{
           width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
@@ -395,7 +397,7 @@ function SyncReport({ report }) {
           alignItems: 'center', gap: 10, color: 'var(--text-2)', fontSize: 12.5,
         }}>
         <span>
-          <strong style={{ color: 'var(--amber)' }}>{list.length}</strong> player{list.length !== 1 ? 's' : ''} produced no fixtures in the last sync
+          <strong style={{ color: 'var(--amber)' }}>{list.length}</strong> {t("player")}{list.length !== 1 ? 's' : ''} {t("produced no fixtures in the last sync")}
           {ran && <span style={{ color: 'var(--text-3)' }}> · {fmtDate(ran.toISOString().slice(0, 10))}</span>}
         </span>
         <span style={{ fontSize: 11 }}>{open ? '▲ hide' : '▼ details'}</span>
@@ -443,6 +445,14 @@ export default function Matches() {
   useEffect(() => onSnapshot(doc(db, 'app_meta', 'syncWarnings'),
     s => setSyncReport(s.exists() ? s.data() : null), () => setSyncReport(null)), []);
 
+  // Global search can land here with { sync: true } to start a sync at once.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (location.state?.sync && isAdmin) { syncNow(); navigate(location.pathname, { replace: true, state: null }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
   // Admin-only: trigger the Netlify sync function for all represented players.
   const syncNow = async () => {
     if (syncing) return;
@@ -454,7 +464,7 @@ export default function Matches() {
       // their own via the Firestore listener as the function writes them.
       const res = await callFunction('sync-matches-background', { method: 'POST' });
       if (res.status === 202 || res.ok) {
-        toast.success('Sync started — matches will appear here as they\'re fetched (≈1–2 min).');
+        toast.success(t("Sync started — matches will appear here as they're fetched (≈1–2 min)."));
         // Soft "still working" indicator for ~90 s, then drop it. The real
         // result is whatever shows up in the matches list via the live
         // Firestore listener.
@@ -489,13 +499,13 @@ export default function Matches() {
   const openEdit = p  => { setForm({ ...EMPTY, ...p }); setModal({ edit: p }); setIsDirty(false); };
 
   const save = async () => {
-    if (!form.homeTeam || !form.awayTeam) { toast.error('Home and away teams are required.'); return; }
-    if (!form.date) { toast.error('Date is required.'); return; }
-    if (!form.linkedPlayers?.length) { toast.error('Please link at least one represented player.'); return; }
+    if (!form.homeTeam || !form.awayTeam) { toast.error(t("Home and away teams are required.")); return; }
+    if (!form.date) { toast.error(t("Date is required.")); return; }
+    if (!form.linkedPlayers?.length) { toast.error(t("Please link at least one represented player.")); return; }
     setSaving(true);
     try {
-      if (modal === 'add') { await addDoc_(PATHS.MATCHES, form); toast.success('Match added!'); }
-      else { await updateDoc_(PATHS.MATCHES, modal.edit.id, form); toast.success('Match updated.'); }
+      if (modal === 'add') { await addDoc_(PATHS.MATCHES, form); toast.success(t("Match added!")); }
+      else { await updateDoc_(PATHS.MATCHES, modal.edit.id, form); toast.success(t("Match updated.")); }
       setModal(null);
     } catch (e) { toast.error(e.message || 'Save failed.'); }
     finally { setSaving(false); }
@@ -505,7 +515,7 @@ export default function Matches() {
     const ok = await confirm(`Delete match "${p.homeTeam} vs ${p.awayTeam}"?`);
     if (!ok) return;
     await deleteDoc_(PATHS.MATCHES, p.id);
-    toast.success('Deleted.');
+    toast.success(t("Deleted."), { undo: () => restoreDoc_(PATHS.MATCHES, p.id) });
   };
 
   const now = new Date();
@@ -580,7 +590,7 @@ export default function Matches() {
               never triggers and the away team just gets clipped. */}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{m.homeTeam}</span>
           {m.homeTeamIsYouth && <YouthBadge small />}
-          <span style={{ color: 'var(--text-3)', fontWeight: 400, flexShrink: 0 }}>vs</span>
+          <span style={{ color: 'var(--text-3)', fontWeight: 400, flexShrink: 0 }}>{t("vs")}</span>
           <TeamLogo name={m.awayTeam} size={22} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, flexShrink: 1 }}>{m.awayTeam}</span>
           {m.awayTeamIsYouth && <YouthBadge small />}
@@ -620,7 +630,7 @@ export default function Matches() {
             }}>
               {linkedNames.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-mute)' }}>REP</span>}
               {linkedNames.map((n, i) => (
-                <span key={i} style={{ background: 'transparent', borderLeft: '2px solid var(--gold-dk)', borderRadius: 0, padding: '0 0 0 6px', color: 'var(--gold)', fontSize: 10.5, letterSpacing: '0.02em' }}>{n}</span>
+                <span key={i} style={{ background: 'transparent', borderInlineStart: '2px solid var(--gold-dk)', borderRadius: 0, padding: '0 0 0 6px', color: 'var(--gold)', fontSize: 10.5, letterSpacing: '0.02em' }}>{n}</span>
               ))}
             </div>
             {canEdit && (
@@ -652,23 +662,23 @@ export default function Matches() {
       className={`chip${form[field] ? ' active' : ''}`}
       onClick={() => s(field)(!form[field])}
       style={{ fontSize: 11, padding: '4px 10px', alignSelf: 'center', marginTop: 4 }}>
-      Youth
+      {t("Youth")}
     </button>
   );
 
   return (
     <div className="page-matches">
         <PageHeader
-          title="Matches"
+          title={t("Matches")}
           subtitle={`${items.length} match${items.length !== 1 ? 'es' : ''} total`}
           action={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">Add Match</span></button>}
+              {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Match")}</span></button>}
               {isAdmin && (
                 <button className="btn btn-ghost btn-sm" onClick={syncNow} disabled={syncing}
                   style={{ height: 36, whiteSpace: 'nowrap' }}
-                  title="Pull match fixtures from IFA / 365 / SofaScore for every represented player">
-                  {syncing ? <><Spinner size={12} /><span className="btn-text">Syncing…</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">Sync Now</span></>}
+                  title={t("Pull match fixtures from IFA / 365 / SofaScore for every represented player")}>
+                  {syncing ? <><Spinner size={12} /><span className="btn-text">{t("Syncing…")}</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">{t("Sync Now")}</span></>}
                 </button>
               )}
               <ExportMenu
@@ -683,23 +693,23 @@ export default function Matches() {
                 columns={[
                   { key: 'date',        label: '🗓',  pdfLabel: 'Date' },
                   { key: 'time',        label: '⏰',  pdfLabel: 'Time' },
-                  { key: 'homeTeam',    label: 'Home', pdfLabel: 'Home' },
-                  { key: 'awayTeam',    label: 'Away', pdfLabel: 'Away' },
+                  { key: 'homeTeam',    label: t("Home"), pdfLabel: 'Home' },
+                  { key: 'awayTeam',    label: t("Away"), pdfLabel: 'Away' },
                   { key: 'stadiumName', label: '🏟',  pdfLabel: 'Stadium',
                     format: (v, r) => v ? (r.stadiumMapsUrl ? { text: v, url: r.stadiumMapsUrl } : v) : '' },
-                  { key: 'season',      label: 'Season', pdfLabel: 'Season' },
-                  { key: 'source',      label: 'Source', pdfLabel: 'Source' },
+                  { key: 'season',      label: t("Season"), pdfLabel: 'Season' },
+                  { key: 'source',      label: t("Source"), pdfLabel: 'Source' },
                   { key: 'linkedPlayers', label: '🤝',  pdfLabel: 'Players',
                     format: (ids) => {
                       if (!Array.isArray(ids) || !ids.length) return '';
                       return ids.map(id => allPlayers.find(p => p.id === id)?.fullName || id).join(', ');
                     } },
-                  { key: 'notes',       label: 'Notes', pdfLabel: 'Notes' },
+                  { key: 'notes',       label: t("Notes"), pdfLabel: 'Notes' },
                 ]}
                 rows={baseFiltered}
               />
               <div style={{ height: 36, display: 'flex', alignItems: 'center' }}>
-                <SearchInput value={search} onChange={setSearch} placeholder="Search..." />
+                <SearchInput value={search} onChange={setSearch} placeholder={t("Search...")} />
               </div>
             </div>
           }
@@ -716,8 +726,8 @@ export default function Matches() {
           <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} required />
 
           {view !== 'Schedule' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
-              <button type="button" onClick={() => stepAnchor(-1)} title="Previous"
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginInlineStart: 4 }}>
+              <button type="button" onClick={() => stepAnchor(-1)} title={t("Previous")}
                 style={navBtnStyle()}>‹</button>
               <span style={{
                 // Fixed width so the layout stays identical across Day / 3 Day /
@@ -732,11 +742,11 @@ export default function Matches() {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
               }}>{getRangeLabel(view, anchorDate)}</span>
-              <button type="button" onClick={() => stepAnchor(1)} title="Next"
+              <button type="button" onClick={() => stepAnchor(1)} title={t("Next")}
                 style={navBtnStyle()}>›</button>
-              <button type="button" onClick={goToday} title="Jump to the current period"
-                style={{ ...navBtnStyle(), width: 'auto', padding: '0 12px', fontSize: 12, marginLeft: 4 }}>
-                Today
+              <button type="button" onClick={goToday} title={t("Jump to the current period")}
+                style={{ ...navBtnStyle(), width: 'auto', padding: '0 12px', fontSize: 12, marginInlineStart: 4 }}>
+                {t("Today")}
               </button>
             </div>
           )}
@@ -753,9 +763,9 @@ export default function Matches() {
               the row gets tight on mobile. */}
           <select value={youthScope} onChange={e => setYouthScope(e.target.value)}
             style={{ width: 'auto', height: 36, minWidth: 170, fontSize: 12, flexShrink: 0, padding: '0 10px' }}>
-            <option value="">Group: All</option>
-            <option value="Youth">Youth only</option>
-            <option value="Senior">Senior only</option>
+            <option value="">{t("Group: All")}</option>
+            <option value="Youth">{t("Youth only")}</option>
+            <option value="Senior">{t("Senior only")}</option>
           </select>
           </div>
           <ScraperCredits />
@@ -771,8 +781,8 @@ export default function Matches() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
       ) : items.length === 0 ? (
-        <Empty message="No matches scheduled."
-          action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">Add Match</span></button>} />
+        <Empty message={t("No matches scheduled.")}
+          action={canEdit && !search && <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Match")}</span></button>} />
       ) : range ? (
         // ── Range view (Day / 3 Day / Week / Month) ──
         groupedByDay.length === 0 ? (
@@ -782,8 +792,8 @@ export default function Matches() {
             <div key={g.date} style={{ marginBottom: 22 }}>
               <div className="section-label" style={{ marginBottom: 10 }}>
                 {new Date(g.date).toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short', year: 'numeric' })}
-                <span style={{ color: 'var(--text-3)', marginLeft: 8, fontWeight: 400 }}>
-                  ({g.items.length} match{g.items.length !== 1 ? 'es' : ''})
+                <span style={{ color: 'var(--text-3)', marginInlineStart: 8, fontWeight: 400 }}>
+                  ({g.items.length} {t("match")}{g.items.length !== 1 ? 'es' : ''})
                 </span>
               </div>
               {g.items.map(m => <MatchCard key={m.id} m={m} />)}
@@ -795,13 +805,13 @@ export default function Matches() {
         <>
           {upcoming.length > 0 && (
             <div style={{ marginBottom: 28 }}>
-              <div className="section-label" style={{ marginBottom: 12 }}>Upcoming ({upcoming.length})</div>
+              <div className="section-label" style={{ marginBottom: 12 }}>{t("Upcoming (")}{upcoming.length})</div>
               {upcoming.map(m => <MatchCard key={m.id} m={m} />)}
             </div>
           )}
           {past.length > 0 && (
             <div>
-              <div className="section-label" style={{ marginBottom: 12, color: 'var(--text-3)' }}>Past ({past.length})</div>
+              <div className="section-label" style={{ marginBottom: 12, color: 'var(--text-3)' }}>{t("Past (")}{past.length})</div>
               <div style={{ opacity: 0.65 }}>
                 {/* Show ALL past matches (newest first). Previous version capped at
                     10 which made the total count seem wrong vs the visible list. */}
@@ -810,7 +820,7 @@ export default function Matches() {
             </div>
           )}
           {upcoming.length === 0 && past.length === 0 && (
-            <Empty message="No matches match your filters." />
+            <Empty message={t("No matches match your filters.")} />
           )}
         </>
       )}
@@ -820,40 +830,40 @@ export default function Matches() {
           title={modal === 'add' ? 'Add Match' : 'Edit Match'}
           onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Match'}
+              {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> {t("Saving…")}</> : 'Save Match'}
             </button>
           </>}
         >
           <div className="form-grid-2">
-            <Field label="Date" required><DateInput value={f('date')} onChange={s('date')} /></Field>
-            <Field label="Time">
+            <Field label={t("Date")} required><DateInput value={f('date')} onChange={s('date')} /></Field>
+            <Field label={t("Time")}>
               <select value={f('time')} onChange={e => s('time')(e.target.value)}>
-                <option value="">Select time...</option>
+                <option value="">{t("Select time...")}</option>
                 {TIME_SLOTS.map(t => <option key={t}>{t}</option>)}
               </select>
             </Field>
           </div>
 
           <div className="form-grid-2">
-            <Field label="Home Team" required>
+            <Field label={t("Home Team")} required>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <TeamLogo name={form.homeTeam} size={24} />
-                <input value={f('homeTeam')} onChange={e => s('homeTeam')(e.target.value)} placeholder="Home team name" style={{ flex: 1 }} />
+                <input value={f('homeTeam')} onChange={e => s('homeTeam')(e.target.value)} placeholder={t("Home team name")} style={{ flex: 1 }} />
               </div>
               <YouthToggle field="homeTeamIsYouth" />
             </Field>
-            <Field label="Away Team" required>
+            <Field label={t("Away Team")} required>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <TeamLogo name={form.awayTeam} size={24} />
-                <input value={f('awayTeam')} onChange={e => s('awayTeam')(e.target.value)} placeholder="Away team name" style={{ flex: 1 }} />
+                <input value={f('awayTeam')} onChange={e => s('awayTeam')(e.target.value)} placeholder={t("Away team name")} style={{ flex: 1 }} />
               </div>
               <YouthToggle field="awayTeamIsYouth" />
             </Field>
           </div>
 
-          <Field label="Stadium / Venue" hint="Type to search — Google Maps suggestions appear automatically">
+          <Field label={t("Stadium / Venue")} hint={t("Type to search — Google Maps suggestions appear automatically")}>
             <StadiumInput
               value={f('stadiumName')}
               onSelect={({ name, mapsUrl, placeId }) => {
@@ -864,19 +874,19 @@ export default function Matches() {
             />
             {form.stadiumMapsUrl && (
               <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-3)' }}>
-                ✓ Linked to Google Maps —
+                {t("✓ Linked to Google Maps —")}
                 <a href={form.stadiumMapsUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ color: 'var(--gold)', marginLeft: 6, textDecoration: 'none' }}>Preview ↗</a>
+                  style={{ color: 'var(--gold)', marginInlineStart: 6, textDecoration: 'none' }}>{t("Preview ↗")}</a>
               </div>
             )}
           </Field>
 
-          <Field label="Linked Players" required hint="Required — type to search">
+          <Field label={t("Linked Players")} required hint={t("Required — type to search")}>
             <LinkedPlayersSelect players={allPlayers} value={f('linkedPlayers') || []} onChange={s('linkedPlayers')} />
           </Field>
 
-          <Field label="Notes">
-            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder="Additional notes..." rows={3} />
+          <Field label={t("Notes")}>
+            <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder={t("Additional notes...")} rows={3} />
           </Field>
         </Modal>
       )}
