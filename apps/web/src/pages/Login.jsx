@@ -5,11 +5,21 @@ import { t } from 'lib/i18n';
 
 export default function Login({ denied }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const login = async () => {
-    setLoading(true);
+    setLoading(true); setError('');
     try { await signInWithPopup(auth, googleProvider); }
-    catch (e) { console.error(e); setLoading(false); }
+    catch (e) {
+      console.error(e);
+      setLoading(false);
+      // A silent failure looked like a dead button. Name the cause.
+      const code = e?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+      setError(code === 'auth/unauthorized-domain'
+        ? t('This address is not yet authorized for sign-in. Try again in a minute.')
+        : t('Sign-in failed: {code}', { code: code || e?.message || 'unknown' }));
+    }
   };
 
   return (
@@ -189,6 +199,9 @@ export default function Login({ denied }) {
             )}
             {loading ? t('Signing in...') : t('Continue with Google')}
           </button>
+          {error && (
+            <p role="alert" style={{ color: '#E05A55', fontSize: 12.5, marginTop: 14, textAlign: 'center', lineHeight: 1.5 }}>{error}</p>
+          )}
 
           <div style={{
             marginTop: 28,

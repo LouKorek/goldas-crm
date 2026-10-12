@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const { getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
 const { ensureWebhookCallback } = require('./lib/wa-subscription.js');
+const { ensureAuthorizedDomain } = require('./lib/auth-domains.js');
 const { _startBackground: startMigrations } = require('./migrate.js');
 
 const MIN_GAP_H = 20;
@@ -55,7 +56,17 @@ exports.handler = async (event) => {
   let payload = {};
   try { payload = JSON.parse(event.body || '{}').payload || {}; } catch { payload = {}; }
   if (payload.context && payload.context !== 'production') {
-    return { statusCode: 200, body: `skipped: ${payload.context}` };
+    // A preview or branch deploy only needs one thing: its own host made an
+    // authorized domain for Firebase Auth, so Google sign-in works there and
+    // a phase can be checked on real data before it goes live.
+    const host = payload.deploy_ssl_url || payload.deploy_url || payload.ssl_url || '';
+    let note = 'no host';
+    try {
+      const r = await ensureAuthorizedDomain(host);
+      note = r.added ? `added ${host}` : r.unchanged ? 'already authorized' : r.error ? `error: ${r.error}` : JSON.stringify(r);
+    } catch (e) { note = `failed: ${e.message}`; }
+    console.log(`[deploy-succeeded] ${payload.context}: auth domain ${note}`);
+    return { statusCode: 200, body: `skipped: ${payload.context}; auth domain ${note}` };
   }
 
   const base = process.env.URL || 'https://goldas-crm.netlify.app';

@@ -335,6 +335,8 @@ const HE = {
   'All represented ({n})': 'כל המיוצגים ({n})',
   'Delete "{name}"?': 'למחוק את "{name}"?',
   'Continue with Google': 'כניסה עם Google',
+  'This address is not yet authorized for sign-in. Try again in a minute.': 'הכתובת הזו עדיין לא מאושרת להתחברות. נסה שוב בעוד דקה.',
+  'Sign-in failed: {code}': 'ההתחברות נכשלה: {code}',
   'Signing in...': 'מתחבר...',
   '🤝 Recently Added Players': '🤝 שחקנים שנוספו לאחרונה',
   'Promote': 'קידום',
