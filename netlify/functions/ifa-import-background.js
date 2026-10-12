@@ -112,7 +112,7 @@ function warningFor(e) {
 }
 
 exports.handler = async (event) => {
-  const auth = checkSyncSecret(event);
+  const auth = await checkSyncSecret(event);
   if (!auth.ok) { console.error('[ifa-import]', auth.error); return { statusCode: auth.statusCode }; }
 
   const db = getDb();

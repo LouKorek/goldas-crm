@@ -50,10 +50,19 @@
     return text(c);
   }
 
+  // With a secret: the shared CRM_SYNC_SECRET. Without one: the signed-in
+  // user's Firebase ID token (window.GA_TOKEN, set by the app), so the task
+  // on Lou's computer carries nothing secret.
+  async function authHeaders(secret) {
+    if (secret) return { 'x-sync-secret': secret };
+    if (typeof window.GA_TOKEN !== 'function') throw new Error('the CRM app has not loaded yet (no GA_TOKEN); wait a few seconds and retry');
+    return { Authorization: `Bearer ${await window.GA_TOKEN()}` };
+  }
+
   // ── step 1 ──────────────────────────────────────────────────────────────
   window.GA_TARGETS = async function (secret) {
     if (!onCrm()) throw new Error(`GA_TARGETS must run on ${CRM}`);
-    const r = await fetch('/.netlify/functions/ifa-targets', { headers: { 'x-sync-secret': secret }, cache: 'no-store' });
+    const r = await fetch('/.netlify/functions/ifa-targets', { headers: await authHeaders(secret), cache: 'no-store' });
     if (!r.ok) throw new Error(`ifa-targets answered ${r.status}: ${(await r.text()).slice(0, 200)}`);
     const j = await r.json();
     const bytes = writeState({ stage: 'targets', targetsAt: j.at, targets: j.targets, clubIndex: j.clubIndex || null });
@@ -244,7 +253,7 @@
     const body = JSON.stringify({ payload: st, dryRun: !!(opts && opts.dryRun) });
     if (body.length > 250000) throw new Error(`payload is ${body.length} bytes, over the 256 KB background-function limit`);
     const r = await fetch('/.netlify/functions/ifa-import-background', {
-      method: 'POST', headers: { 'x-sync-secret': secret, 'Content-Type': 'application/json' }, body,
+      method: 'POST', headers: { ...(await authHeaders(secret)), 'Content-Type': 'application/json' }, body,
     });
     return { status: r.status, bytes: body.length };
   };
@@ -252,7 +261,7 @@
   window.GA_REPORT = async function (secret) {
     if (!onCrm()) throw new Error(`GA_REPORT must run on ${CRM}`);
     const r = await fetch(`/.netlify/functions/ifa-targets?report=1&nocache=${Math.random()}`, {
-      headers: { 'x-sync-secret': secret }, cache: 'reload',
+      headers: await authHeaders(secret), cache: 'reload',
     });
     if (!r.ok) throw new Error(`ifa-targets answered ${r.status}`);
     return r.json();
