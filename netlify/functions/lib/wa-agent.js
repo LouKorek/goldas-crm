@@ -1,14 +1,19 @@
-// Golda — the WhatsApp assistant that edits the CRM on Lou's instructions.
-// Claude reads the message, calls the tools below, and the tools write to
-// Firestore with the same shapes and audit fields the React app writes
-// (src/lib/db.js addDoc_/updateDoc_, uploadFile). Every write is logged in
-// wa_audit with the record before and after, so "undo" can reverse it.
+// Golda — the assistant that edits the CRM on the team's instructions, on
+// WhatsApp and inside the app. Claude reads the message, calls the tools
+// below, and the tools write to Firestore with the same shapes and audit
+// fields the React app writes (src/lib/db.js addDoc_/updateDoc_, uploadFile).
+// Golda acts in the sender's name and with the sender's permissions
+// (lib/golda-identity.js + can() from the domain package). Every write is
+// logged in the one `audit` collection with the record before and after,
+// marked via: 'golda', so the Golda screen can show it and "undo" can reverse it.
 const Anthropic = require('@anthropic-ai/sdk');
 const C = require('../data/crm-constants.js');
 
 const MODEL = 'claude-opus-5-5';
 const { OWNER_EMAIL } = require('./firestore.js');
-const { stageFromStatus, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS } = require('@goldas/domain');
+const { stageFromStatus, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
+  computeAlerts, mergeSettings, topMatches, explainMatch, israelDate } = require('@goldas/domain');
+const { internalHeaders } = require('./auth.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -174,13 +179,21 @@ function topicSection(topic) {
   return `Current topic: "${topic.name}". The writer opened this topic with: "${topic.purpose || topic.name}". Stay on this topic and help with it fully (research, writing, planning, advice). Do NOT change anything in the CRM in this topic unless the writer explicitly asks for a CRM change in this message; reading the CRM is fine when it helps.`;
 }
 
-function systemPrompt(name, sender = 'לו', topic = null, topics = []) {
-  return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you on WhatsApp (each in their own private chat). You know the agency's CRM inside out: you read and analyse everything in it, including the documents stored in it, give recommendations, and carry out changes yourself using the tools. You can also search the web. The person writing in this chat is ${sender}${sender === 'לו' ? ' (Lou, the agency owner)' : ', a member of Lou\'s team with full permissions'}.
+const ROLE_LINE = {
+  admin: 'the agency owner, with full permissions',
+  manager: "a member of Lou's team who may view and edit everything (not manage users or settings)",
+  viewer: 'a viewer: they may read and ask anything, but you must NOT change the CRM for them (the write tools are not available in this chat; say so politely if asked)',
+};
+
+function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp') {
+  const sender = identity.name || 'לו';
+  const where = channel === 'app' ? 'in the chat screen inside the CRM app' : 'on WhatsApp (each in their own private chat; the same conversation continues in the app)';
+  return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you ${where}. You know the agency's CRM inside out: you read and analyse everything in it, including the documents stored in it, give recommendations, and carry out changes yourself using the tools. You can also search the web. The person writing is ${sender}, ${ROLE_LINE[identity.role] || ROLE_LINE.viewer}. Every change you make is recorded in their name.
 
 ${topicSection(topic)}
 The chat is split into topics, each with its own separate memory; you only see the current topic's history. Topics in this chat: ${[MAIN_TOPIC, ...topics.filter((t) => t !== MAIN_TOPIC)].join(', ')}. The writer switches with "גולדה, נושא חדש: <name>", "גולדה, חזרה לנושא <name>" and "גולדה, חזרה למערכת" (the system handles the switch before you see the message). If asked how topics work, explain these three phrases.
 
-How you talk: always in Hebrew, in the feminine form about yourself ("הוספתי", "עדכנתי", "אני בודקת"), addressing ${sender} by name, friendly and to the point. WhatsApp formatting only: *bold*, short lines, no markdown headers or tables. After acting, say exactly what changed (record, fields, old → new values). Keep replies short.
+How you talk: always in Hebrew, in the feminine form about yourself ("הוספתי", "עדכנתי", "אני בודקת"), addressing ${sender} by name, friendly and to the point. WhatsApp formatting only: *bold*, short lines, no markdown headers or tables. When you changed something, end with a link to it when one exists: a player → https://goldas-crm.netlify.app/players/<id>, a deal → https://goldas-crm.netlify.app/market/deals?deal=<id>, a requirement → https://goldas-crm.netlify.app/market/requirements?req=<id>, a training or match → https://goldas-crm.netlify.app/calendar, a task → https://goldas-crm.netlify.app/tasks. After acting, say exactly what changed (record, fields, old → new values). Keep replies short.
 
 How you think:
 - For questions about the data ("who…", "how many…", "which players…", "what's missing…"), use list with filters over the whole collection, cross-check collections when needed (e.g. players vs club_requirements vs matches vs tasks), and answer with concrete names and numbers. Don't stop at the first 15 search results when the question is about everything.
@@ -192,10 +205,12 @@ How you work:
 - Find records before changing them (search or list). Never guess an id. If several records match, list them briefly and ask which one. If nothing matches, say so and offer to create it.
 - If an instruction is missing something required, ask for it in one short question rather than inventing it. Don't ask about optional fields.
 - Deleting needs the writer's explicit yes: call delete without confirmed first, show what will be deleted and ask; only after they answer yes in a later message call delete again with confirmed=true.
-- "בטל"/"תבטל"/undo → call undo_last.
+- "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
+- "מי מתאים לדרישה…" / who fits a club's requirement → suggest_matches (live scores from the matching engine). "מה דורש פעולה" / "מה יש היום" → alerts_today. "סנכרני משחקים" → sync_fixtures (admin/manager).
+- Moving a deal: update its stage. The deal engine enforces the rules: "Mandate Received" needs a document on the deal or the writer's explicit confirmation (pass confirmed=true in data after they confirm), "Contract Signed" and "Not Relevant" close the deal (reopening a closed deal also needs confirmed=true), and "Not Relevant" frees the linked requirement. Tell the writer when a transition offers a follow-up (e.g. promote the candidate to a represented player: update the player's stage? No: say that the app offers it on the deal board).
 - When they send a file or photo, it is available to attach_file for this message only. If it's unclear to whom or as what (contract / passport / representation agreement), ask.
 - Never claim you did something a tool didn't confirm. If a tool returns an error, explain it simply and say what you need.
-- You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only.
+- You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
 CRM data (field names are exact; values in lists must match exactly; dates are YYYY-MM-DD):
 - players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
@@ -211,7 +226,7 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id).
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
 Free agents (contractStatus "Free") automatically lose club, contract dates and league.
-Today's date: ${new Date().toISOString().slice(0, 10)} (Israel time zone).`;
+Today's date: ${israelDate(new Date())} (Israel time zone).`;
 }
 
 const TOOLS = [
@@ -242,19 +257,37 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Display name for the document; defaults to the file name' }, mode: { type: 'string', enum: ['add', 'replace'], description: 'add (default) keeps existing documents; replace removes them from the player' } }, required: ['playerId', 'field'], additionalProperties: false } },
   { name: 'remove_file', description: 'Remove one document from a player by its display name.',
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string' } }, required: ['playerId', 'field', 'name'], additionalProperties: false } },
-  { name: 'undo_last', description: 'Reverse the most recent change made through WhatsApp that has not been undone yet.',
+  { name: 'undo_last', description: "Reverse the writer's most recent change made through Golda that has not been undone yet.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'suggest_matches', description: 'The best live matches (players and candidates) for one club requirement, scored 0-100 by the matching engine, each with a worded explanation.',
+    input_schema: { type: 'object', properties: { requirementId: { type: 'string' }, n: { type: 'integer', description: 'How many, default 5, max 10' } }, required: ['requirementId'], additionalProperties: false } },
+  { name: 'alerts_today', description: "Everything that needs action now, from the CRM's alerts engine: contracts, representation and passports ending, birthdays, upcoming matches, stale deals, expired requirements, overdue tasks, failed night jobs. Same list as the app's Home screen.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
+// Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today']);
+const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
+const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
   { type: 'web_search_20260209', name: 'web_search', max_uses: 8 },
   { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 8 },
 ];
 
-function createTools({ db, admin, phone, media, session, assistantName, sender = 'לו' }) {
+function createTools({ db, admin, identity, media, session, assistantName, channel = 'whatsapp' }) {
   const FieldValue = admin.firestore.FieldValue;
-  const who = { email: OWNER_EMAIL, name: sender === 'לו' ? `${assistantName} (WhatsApp)` : `${assistantName} (WhatsApp, ${sender})` };
-  const audit = (entry) => db.collection('wa_audit').add({ ...entry, phone, sender, at: FieldValue.serverTimestamp(), undone: false });
+  const sender = identity.name || 'לו';
+  const role = identity.role || 'viewer';
+  // Writes are stamped with the person Golda acts for; the name says it was Golda.
+  const who = { email: identity.email || OWNER_EMAIL, name: `${sender} (${assistantName})` };
+  const audit = (entry) => db.collection('audit').add({
+    ...entry, fields: Object.keys(entry.after || entry.before || {}).slice(0, 50),
+    by: who.email, byName: who.name, via: 'golda', channel, actor: 'golda', onBehalfOf: identity.email || '',
+    sender, phone: identity.phone || '', at: FieldValue.serverTimestamp(), undone: false,
+  });
+  const need = (action) => { if (!can(role, action)) throw new Error(`${sender} is a ${role} and may not ${action} here`); };
   const colOk = (c) => { if (!COLLECTIONS[c]) throw new Error(READ_ONLY[c] ? `${c} is read-only` : `unknown collection ${c}`); return db.collection(physical(c)); };
   const readOk = (c) => { if (!ALL[c]) throw new Error(`unknown collection ${c}`); return db.collection(physical(c)); };
   // The documents of a (virtual) collection: live records that belong to it.
@@ -337,6 +370,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function renameFile({ playerId, field, name, newName }) {
+    need('edit');
     const { snap, files, idx } = await findDoc(playerId, field, name);
     const to = String(newName || '').trim();
     if (!to) throw new Error('newName is empty');
@@ -357,9 +391,10 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function create({ collection, data }) {
+    need('edit');
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
-    if (collection === 'tasks') d = { priority: 'Normal', done: false, owner: OWNER_EMAIL, ...d };
+    if (collection === 'tasks') d = { priority: 'Normal', done: false, owner: who.email, ...d };
     if (collection === 'matches') d = { source: 'manual', ...d };
     if (collection.startsWith('pipeline_')) d = { status: 'Not Contacted', ...d };
     if (collection === 'players') d = { contractStatus: 'Under Contract', ...d };
@@ -383,14 +418,31 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function update({ collection, id, data }) {
+    need('edit');
     const ref = colOk(collection).doc(id);
     const s = await ref.get();
     if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
     const before = s.data();
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
-    for (const k of ['stage', 'category', 'legacy', 'migratedAt', 'deletedAt', 'deletedBy']) delete d[k];
+    const confirmed = d.confirmed === true;
+    delete d.confirmed;
+    for (const k of [...(collection === 'deals' ? [] : ['stage']), 'category', 'legacy', 'migratedAt', 'deletedAt', 'deletedBy']) delete d[k];
     validate(collection, d, false);
+    // A deal moves through the same state machine as the app's deal board.
+    let effects = null;
+    if (collection === 'deals' && 'stage' in d && d.stage !== before.stage) {
+      if (!isDealStage(d.stage)) throw new Error(`stage must be one of: ${C.PIPELINE_STATUS.join(', ')}`);
+      const check = canTransition({ id, ...before }, d.stage, { confirmed });
+      if (!check.ok) throw new Error(check.reason || 'this transition is not allowed');
+      if (check.confirm && !confirmed) return { needsConfirmation: true, question: check.confirm, instruction: 'Ask the writer; after they agree in a new message, call update again with the same data plus confirmed: true.' };
+      const r = applyTransition({ id, ...before }, d.stage, who.email, new Date(), String(d.note || ''), { confirmed });
+      delete d.note;
+      d = { ...d, ...r.patch };
+      effects = r.effects;
+      await db.collection('interactions').add({ kind: r.interaction.kind, playerId: before.playerId || '', dealId: id, clubId: before.clubId || '', text: r.interaction.text, by: who.email, at: new Date().toISOString(), deletedAt: null, createdAt: FieldValue.serverTimestamp(), createdBy: who.email });
+      if (r.effects.freeRequirement && before.requirementId) await db.collection('club_requirements').doc(before.requirementId).update({ status: 'open' }).catch(() => {});
+    }
     d = freeAgentRules(collection, withLeague(collection, d, before), before);
     if (!Object.keys(d).length) throw new Error('nothing to change');
     // Keep the unified fields in step with what Golda changed.
@@ -402,10 +454,11 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
       lastEditedBy: who.email, lastEditedByName: who.name, ...(collection === 'tasks' && 'done' in d ? { completedAt: d.done ? new Date().toISOString() : null } : {}) });
     await audit({ action: 'update', collection, docId: id, before: prev, after: d });
     state.changed = true;
-    return { updated: true, collection, id, before: prev, after: d };
+    return { updated: true, collection, id, before: prev, after: d, ...(effects ? { effects } : {}) };
   }
 
   async function del({ collection, id, confirmed }) {
+    need('delete');
     const ref = colOk(collection).doc(id);
     const s = await ref.get();
     if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
@@ -429,6 +482,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function attachFile({ playerId, field, name, mode }) {
+    need('edit');
     if (!media) throw new Error('no file was sent with this message; ask the writer to send it again');
     if (media.buffer.length > FILE_MAX) throw new Error('file is over 15 MB, the CRM limit');
     const ref = db.collection('players').doc(playerId);
@@ -453,6 +507,7 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function removeFile({ playerId, field, name }) {
+    need('edit');
     const ref = db.collection('players').doc(playerId);
     const s = await ref.get();
     if (!s.exists) throw new Error('player not found');
@@ -466,9 +521,12 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
   }
 
   async function undoLast() {
-    // Single-field filter only, so no composite index is needed; volume is tiny.
-    const snap = await db.collection('wa_audit').where('phone', '==', phone).get();
-    const open = snap.docs.filter((d) => !d.data().undone)
+    need('edit');
+    // Single-field filter only, so no composite index is needed; Golda's own
+    // writes are a few dozen a day. Each person undoes their own changes.
+    const snap = await db.collection('audit').where('actor', '==', 'golda').get();
+    const mineKey = identity.email ? (d) => d.onBehalfOf === identity.email : (d) => d.phone === identity.phone;
+    const open = snap.docs.filter((d) => !d.data().undone && d.data().before !== undefined && mineKey(d.data()))
       .sort((a, b) => (b.data().at?.toMillis?.() || 0) - (a.data().at?.toMillis?.() || 0));
     if (!open.length) return { nothingToUndo: true };
     const last = open[0];
@@ -487,12 +545,43 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
       for (const [k, v] of Object.entries(e.before || {})) restore[k] = v === null ? FieldValue.delete() : v;
       await ref.update({ ...restore, ...stamp });
     }
-    await last.ref.update({ undone: true, undoneAt: FieldValue.serverTimestamp() });
+    await last.ref.update({ undone: true, undoneAt: FieldValue.serverTimestamp(), undoneBy: who.email });
     state.changed = true;
     return { undone: e.action, collection: e.collection, id: e.docId, restored: e.before };
   }
 
-  const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast };
+  async function suggestMatches({ requirementId, n }) {
+    const s = await db.collection('club_requirements').doc(requirementId).get();
+    if (!s.exists || s.data().deletedAt) throw new Error('requirement not found');
+    const req = { id: s.id, ...plain(s.data()) };
+    const players = (await db.collection('players').get()).docs.map((d) => ({ id: d.id, ...plain(d.data()) })).filter((p) => !p.deletedAt && p.stage !== 'not_relevant');
+    const top = topMatches(req, players, { n: Math.max(1, Math.min(Number(n) || 5, 10)) });
+    return { requirement: summarize('club_requirements', req.id, req), matches: top.map((m) => ({ playerId: m.playerId, name: m.name, score: m.score, why: explainMatch(m, 'he'), link: `https://goldas-crm.netlify.app/players/${m.playerId}` })) };
+  }
+
+  async function alertsToday() {
+    const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.deletedAt);
+    const [players, matches, deals, requirements, tasks, jobs, settings] = await Promise.all([
+      db.collection('players').get().then((s) => rows(s).filter((p) => !p.stage || p.stage === 'represented')),
+      db.collection('matches').get().then(rows), db.collection('deals').get().then(rows), db.collection('club_requirements').get().then(rows),
+      db.collection('tasks').get().then((s) => rows(s).filter((x) => role === 'admin' || (x.owner || OWNER_EMAIL) === who.email)),
+      db.collection('jobs').orderBy('startedAt', 'desc').limit(40).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      db.collection('settings').doc('notifications').get().then((s) => mergeSettings(s.exists ? s.data() : {})),
+    ]);
+    const r = computeAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now: new Date() });
+    return { total: r.total, alerts: r.alerts.map((a) => ({ type: a.type, severity: a.severity, who: a.subject.name, kind: a.subject.kind, id: a.subject.id, what: a.proof.he, dueDate: a.dueDate, days: a.days })) };
+  }
+
+  async function syncFixtures() {
+    need('run_sync');
+    const base = process.env.URL || 'https://goldas-crm.netlify.app';
+    const res = await fetch(`${base}/.netlify/functions/sync-matches-background`, { method: 'POST', headers: await internalHeaders('golda-sync') });
+    if (!res.ok && res.status !== 202) throw new Error(`sync did not start (${res.status})`);
+    return { started: true, note: 'Runs in the background for a few minutes; the Calendar shows the report when it finishes.' };
+  }
+
+  const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
+    suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     return impl[name](input || {});
@@ -501,9 +590,11 @@ function createTools({ db, admin, phone, media, session, assistantName, sender =
 
 // One WhatsApp message in, one reply out. history is a list of prior
 // {role, text} turns (plain text only, so no thinking blocks are replayed).
-async function runAgent({ db, admin, phone, text, media, session, assistantName, sender = 'לו', client, topic = null, topics = [] }) {
+async function runAgent({ db, admin, identity, text, media, session, assistantName, client, topic = null, topics = [], channel = 'whatsapp' }) {
   const anthropic = client || new Anthropic();
-  const tools = createTools({ db, admin, phone, media, session, assistantName, sender });
+  const sender = identity.name || 'לו';
+  const tools = createTools({ db, admin, identity, media, session, assistantName, channel });
+  const usage = { inputTokens: 0, outputTokens: 0, steps: 0 };
   const history = (topic ? topic.history || [] : session.history || []).slice(-20);
   const messages = [];
   for (const h of history) {
@@ -531,10 +622,13 @@ async function runAgent({ db, admin, phone, text, media, session, assistantName,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'high' },
-      system: systemPrompt(assistantName, sender, topic, topics),
-      tools: [...TOOLS, ...SERVER_TOOLS],
+      system: systemPrompt(assistantName, identity, topic, topics, channel),
+      tools: [...toolsFor(identity.role), ...SERVER_TOOLS],
       messages,
     });
+    usage.steps++;
+    usage.inputTokens += res.usage?.input_tokens || 0;
+    usage.outputTokens += res.usage?.output_tokens || 0;
     if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
     messages.push({ role: 'assistant', content: res.content });
     // A long web search pauses server-side; resend as-is and it resumes.
@@ -556,7 +650,7 @@ async function runAgent({ db, admin, phone, text, media, session, assistantName,
     messages.push({ role: 'user', content: results });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
-  return { reply, pendingDelete: tools.state.pendingDelete, changed: tools.state.changed, userText: current.content };
+  return { reply, pendingDelete: tools.state.pendingDelete, changed: tools.state.changed, userText: current.content, usage };
 }
 
-module.exports = { runAgent, createTools, TOOLS, COLLECTIONS, MAIN_TOPIC, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks } };
+module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks } };

@@ -324,6 +324,20 @@ export const updateAppUser = async (email, data) => {
   await updateDoc(doc(db, USERS_COL, e), { ...data, updatedAt: serverTimestamp() });
 };
 
+// A person's own Golda preferences: their WhatsApp number, the channels
+// Golda may reach them on and the hour of the morning briefing. Anyone may
+// set their own; admins may set anyone's from the Team screen.
+export const updateUserPrefs = async (email, { whatsapp, channels, briefingHour }) => {
+  const e = normEmail(email);
+  if (!e) throw new Error('Email is required.');
+  if (e !== normEmail(SESSION.email) && SESSION.role !== 'admin') throw new Error('Only an admin can change another user.');
+  const patch = { updatedAt: serverTimestamp() };
+  if (whatsapp !== undefined) patch.whatsapp = String(whatsapp || '').replace(/\D/g, '');
+  if (channels !== undefined) patch.channels = (Array.isArray(channels) ? channels : []).filter((c) => c === 'email' || c === 'whatsapp');
+  if (briefingHour !== undefined) patch.briefingHour = Math.max(0, Math.min(23, Number(briefingHour) || 0));
+  await setDoc(doc(db, USERS_COL, e), { email: e, ...patch }, { merge: true });
+};
+
 export const removeAppUser = async (email) => {
   assertAdmin();
   const e = normEmail(email);

@@ -164,7 +164,10 @@ export default function Player360() {
           <Fact k={t('IFA Player Profile')} v={p.ifaTeamUrl ? <a href={p.ifaTeamUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{t('Open ↗')}</a> : ''} />
         </Card>
 
-        <Card title={t('Documents')}>
+        <Card title={t('Documents')} action={docs.some(([k]) => (p[k] || []).length) ? (
+          <button type="button" onClick={() => navigate('/golda', { state: { tab: 'chat', prefill: he ? `קראי את המסמכים של ${playerName(p)} ובדקי אם תאריכי החוזה, הדרכון והייצוג במערכת תואמים למה שכתוב בהם.` : `Read ${playerName(p)}'s documents and check whether the contract, passport and representation dates in the CRM match them.` } })}
+            style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{t('Ask Golda')}</button>
+        ) : null}>
           {docs.every(([k]) => !(p[k] || []).length) ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No documents uploaded yet.')}</p> : docs.map(([k, label, expires]) => (p[k] || []).map((f, i) => {
             const exp = f.expiresAt || expires;
             const d = exp ? daysAway(exp) : null;

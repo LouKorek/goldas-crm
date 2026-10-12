@@ -1,11 +1,14 @@
 // Meta calls this for every WhatsApp event on Golda's number.
 // GET  = one-time webhook verification (echo hub.challenge).
-// POST = new messages: check Meta's signature, drop senders not on the allow
-// list and duplicate deliveries, then hand each message to the background
-// function and answer 200 at once (Meta retries anything slower).
+// POST = new messages: check Meta's signature, drop senders who are not CRM
+// users (lib/golda-identity.js: the number on their Team record, or the legacy
+// allow list) and duplicate deliveries, then hand each message to the
+// background function and answer 200 at once (Meta retries anything slower).
+// A hand-off that fails leaves the message queued; golda-queue-cron retries it.
 const { admin, getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
 const wa = require('./lib/wa-api.js');
+const { resolveSender } = require('./lib/golda-identity.js');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'GET') {
@@ -35,10 +38,11 @@ exports.handler = async (event) => {
   const host = h.host || h.Host;
   const base = host ? `https://${host}` : (process.env.URL || 'https://goldas-crm.netlify.app');
   for (const m of msgs) {
-    if (!wa.isAllowed(m.from)) { console.warn('[wa] ignored sender not on allow list'); continue; }
+    const who = await resolveSender(db, m.from).catch((e) => { console.error('[wa] identity lookup failed:', e.message); return null; });
+    if (!who) { console.warn('[wa] ignored sender who is not a CRM user'); continue; }
     // Meta can deliver the same message more than once; create() fails on a repeat.
     try {
-      await db.collection('wa_inbox').doc(m.id).create({ ...m, receivedAt: admin.firestore.FieldValue.serverTimestamp(), state: 'queued' });
+      await db.collection('wa_inbox').doc(m.id).create({ ...m, channel: 'whatsapp', email: who.email || '', receivedAt: admin.firestore.FieldValue.serverTimestamp(), state: 'queued', attempts: 0 });
     } catch (e) {
       if (e.code === 6 || /already exists/i.test(e.message)) continue;
       throw e;

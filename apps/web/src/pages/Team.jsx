@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { listenAppUsers, addAppUser, updateAppUser, removeAppUser, setUserEmailAlerts } from 'lib/db';
+import { listenAppUsers, addAppUser, updateAppUser, removeAppUser, setUserEmailAlerts, updateUserPrefs } from 'lib/db';
 import { OWNER_EMAIL } from 'lib/firebase';
 import { useRole, roleLabel } from 'lib/roleContext';
 import {
@@ -20,7 +20,10 @@ const ROLE_COLOR = {
   viewer:  { bg: 'rgba(96,165,250,0.15)', text: '#60A5FA' },
 };
 
-const EMPTY = { email: '', name: '', role: 'Viewer', emailAlerts: true };
+const EMPTY = { email: '', name: '', role: 'Viewer', emailAlerts: true, whatsapp: '', channels: ['email'], briefingHour: 7 };
+// An Israeli local number becomes international digits, the form WhatsApp reports.
+const normalizePhone = (v) => { const d = String(v || '').replace(/\D/g, ''); return d.startsWith('0') && d.length === 10 ? `972${d.slice(1)}` : d; };
+const showPhone = (d) => (d && String(d).startsWith('972') ? `0${String(d).slice(3)}` : d || '');
 const isOwner = (e) => (e || '').toLowerCase() === OWNER_EMAIL.toLowerCase();
 
 export default function Team() {
@@ -42,7 +45,7 @@ export default function Team() {
   }), []);
 
   const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); };
-  const openEdit = (u) => { setForm({ email: u.email, name: u.name || '', role: roleLabel(u.role), emailAlerts: u.emailAlerts !== false }); setModal({ edit: u }); };
+  const openEdit = (u) => { setForm({ email: u.email, name: u.name || '', role: roleLabel(u.role), emailAlerts: u.emailAlerts !== false, whatsapp: showPhone(u.whatsapp), channels: Array.isArray(u.channels) ? u.channels : ['email'], briefingHour: Number.isInteger(u.briefingHour) ? u.briefingHour : 7 }); setModal({ edit: u }); };
 
   const toggleEmailAlerts = async (u) => {
     try {
@@ -67,10 +70,12 @@ export default function Team() {
         }
         await addAppUser({ email, name: form.name, role, emailAlerts: form.emailAlerts });
         toast.success(`"${form.name.trim() || email}" can now sign in.`);
-      } else {
+      } else if (!isOwner(email)) {
         await updateAppUser(email, { name: form.name.trim() || email, role, emailAlerts: form.emailAlerts });
         toast.success(t("User updated."));
       }
+      // Golda's side of the record: how she recognises and reaches this person.
+      await updateUserPrefs(email, { whatsapp: normalizePhone(form.whatsapp), channels: form.channels, briefingHour: form.briefingHour });
       setModal(null);
     } catch (e) {
       toast.error(e.message || 'Save failed.');
@@ -114,6 +119,7 @@ export default function Team() {
                   <th title={t("Email")}>{t("Email")}</th>
                   <th title={t("Role")}>{t("Role")}</th>
                   <th title={t("Access")}>{t("Access")}</th>
+                  <th title={t("WhatsApp")}>{t("WhatsApp")}</th>
                   <th style={{ width: 80, textAlign: 'center' }} title={t("Receive email alerts")}>{t("Alerts")}</th>
                 </tr>
               </thead>
@@ -125,7 +131,7 @@ export default function Team() {
                     <tr key={u.id}>
                       <td onClick={e => e.stopPropagation()}>
                         {owner ? (
-                          <span style={{ fontSize: 9, color: 'var(--text-mute)', letterSpacing: '0.12em' }}>OWNER</span>
+                          <RowActions onEdit={() => openEdit(u)}><span style={{ fontSize: 9, color: 'var(--text-mute)', letterSpacing: '0.12em' }}>OWNER</span></RowActions>
                         ) : (
                           <RowActions onEdit={() => openEdit(u)} onDelete={() => remove(u)} />
                         )}
@@ -142,6 +148,10 @@ export default function Team() {
                         <span style={{ fontSize: 12, color: u.active === false ? 'var(--red)' : '#4ADE80' }}>
                           {u.active === false ? 'Disabled' : 'Active'}
                         </span>
+                      </td>
+                      <td style={{ fontSize: 12.5, color: 'var(--text-2)' }} dir="ltr">
+                        {showPhone(u.whatsapp) || <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        {u.whatsapp && (Array.isArray(u.channels) && u.channels.includes('whatsapp')) && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{t('briefing at')} {String(Number.isInteger(u.briefingHour) ? u.briefingHour : 7).padStart(2, '0')}:30</div>}
                       </td>
                       <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={u.emailAlerts !== false}
@@ -175,12 +185,25 @@ export default function Team() {
               placeholder={t("name@example.com")} style={modal !== 'add' ? { opacity: 0.6 } : undefined} />
           </Field>
           <Field label={t("Name")}>
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t("Display name")} />
+            <input value={form.name} disabled={isOwner(form.email)} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t("Display name")} />
           </Field>
-          <Field label={t("Role")}>
-            <ChipGroup options={ROLE_OPTIONS} value={form.role} onChange={v => setForm(f => ({ ...f, role: v }))} />
-            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
-              {form.role === 'Manager' ? ROLE_DESC.manager : ROLE_DESC.viewer}
+          {!isOwner(form.email) && (
+            <Field label={t("Role")}>
+              <ChipGroup options={ROLE_OPTIONS} value={form.role} onChange={v => setForm(f => ({ ...f, role: v }))} />
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
+                {form.role === 'Manager' ? ROLE_DESC.manager : ROLE_DESC.viewer}
+              </div>
+            </Field>
+          )}
+          <Field label={t("WhatsApp number")} hint={t("Golda recognises this person by this number and acts in their name.")}>
+            <input value={form.whatsapp} inputMode="tel" dir="ltr" placeholder="0501234567" onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))} />
+          </Field>
+          <Field label={t("Golda's channels")} hint={t("Where the morning briefing and urgent alerts go.")}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <ChipGroup multi options={['whatsapp', 'email']} labels={[t('WhatsApp'), t('Email')]} value={form.channels} onChange={v => setForm(f => ({ ...f, channels: v }))} />
+              <select value={String(form.briefingHour)} onChange={e => setForm(f => ({ ...f, briefingHour: Number(e.target.value) }))} style={{ maxWidth: 120 }}>
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:30</option>)}
+              </select>
             </div>
           </Field>
           <Field label={t("Email Alerts")}>

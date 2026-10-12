@@ -4,6 +4,7 @@ import { listenCollection, PATHS } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { loadSettings, unifiedAlerts, alertLink } from 'lib/alerts';
 import { listenTrainings, trainingsInRange } from 'data/trainings';
+import { listenGoldaAudit } from 'data/golda';
 import { fmtDate } from 'lib/constants';
 import { useRole } from 'lib/roleContext';
 import { t, fmtDateTime, getLang } from 'lib/i18n';
@@ -97,7 +98,7 @@ function Today() {
       listenCollection(PATHS.MATCHES, setMatches),
       listenCollection(PATHS.DEALS, setDeals),
       listenCollection(PATHS.TASKS, (rows) => setTasks(rows.filter((x) => x.owner === email && !x.done))),
-      listenCollection('wa_audit', setAudit),
+      listenGoldaAudit(setAudit),
       listenCollection('jobs', setJobs),
       listenCollection(PATHS.CLUB_REQUIREMENTS, setRequirements),
       listenTrainings(setTrainings),

@@ -827,6 +827,18 @@ const HE = {
   "files": "קבצים",
   "Hide": "הסתר",
   "Sync failed.": "הסנכרון נכשל.",
+  'Chat': "צ'אט",
+  'My briefing': 'התדריך שלי',
+  'Send': 'שליחה',
+  'Golda made no changes yet.': 'גולדה עדיין לא ביצעה שינויים.',
+  'Could not send.': 'השליחה נכשלה.',
+  'Could not undo.': 'הביטול נכשל.',
+  'WhatsApp number': 'מספר וואטסאפ',
+  'Golda recognises this person by this number and acts in their name.': 'גולדה מזהה לפי המספר הזה מי כותב לה ופועלת בשמו.',
+  "Golda's channels": 'הערוצים של גולדה',
+  'Where the morning briefing and urgent alerts go.': 'לאן נשלחים תדריך הבוקר וההתראות הדחופות.',
+  'briefing at': 'תדריך ב-',
+  'Ask Golda': 'שאלי את גולדה',
 };
 
 export default HE;

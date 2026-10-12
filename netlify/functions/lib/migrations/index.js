@@ -10,6 +10,8 @@ const MIGRATIONS = [
   require('./001-unify-players.js'),
   require('./002-clubs.js'),
   require('./003-deals.js'),
+  require('./004-golda-audit.js'),
+  require('./005-golda-numbers.js'),
 ];
 
 async function records(store) {
