@@ -1,0 +1,114 @@
+// Golda speaks first. Every hour this checks, for each user who chose
+// WhatsApp as a channel and saved their number on the Team screen:
+//   1. the morning briefing, once a day at the hour they picked (Israel time):
+//      today's games and trainings, what needs action, what Golda did;
+//   2. urgent alerts the moment they appear (a contract ending within a week,
+//      a night job that failed), each sent once per threshold
+//      (lib/alert-keys.js, state in app_meta/goldaSent).
+// All of it comes from the alerts engine the app uses; nothing is computed here.
+const { schedule } = require('@netlify/functions');
+const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
+const { runJob } = require('./lib/jobs.js');
+const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS } = require('@goldas/domain');
+const { dedupeKey } = require('./lib/alert-keys.js');
+const { buildBriefing, urgentAlerts, buildUrgent } = require('./lib/golda-briefing.js');
+const { whatsappRecipients } = require('./lib/golda-identity.js');
+const wa = require('./lib/wa-api.js');
+
+const KEEP_DAYS = 400;
+const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
+
+async function loadAll(db) {
+  const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
+  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit] = await Promise.all([
+    listRepresented(db),
+    db.collection('matches').get().then(rows),
+    db.collection('deals').get().then(rows),
+    db.collection('club_requirements').get().then(rows),
+    db.collection('tasks').get().then(rows),
+    db.collection('jobs').orderBy('startedAt', 'desc').limit(40).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    db.collection('trainings').get().then(rows),
+    db.collection('app_users').get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    db.collection('settings').doc('notifications').get(),
+    db.collection('app_meta').doc('goldaSent').get(),
+    db.collection('audit').where('via', '==', 'golda').get().then((s) => s.docs.map((d) => d.data())),
+  ]);
+  return { players, matches, deals, requirements, tasks, jobs, trainings, users,
+    settings: mergeSettings({ ...(settingsSnap.exists ? settingsSnap.data() : {}), matchDays: [0] }),
+    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit };
+}
+
+function todaysGames({ matches, trainings, players }, today) {
+  const nameOf = (id) => { const p = players.find((x) => x.id === id); return p ? (p.fullName || p.name || '') : ''; };
+  const games = matches.filter((m) => m.date === today).map((m) => ({
+    date: m.date, time: m.time || '', title: `${m.homeTeam} – ${m.awayTeam}`,
+    sub: [m.stadiumName, (m.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
+  }));
+  for (const tr of trainings) {
+    for (const o of expandTrainings([tr], today, today)) {
+      if (o.cancelled) continue;
+      const group = AGE_GROUPS.find((g) => g.id === tr.ageGroup);
+      games.push({ date: o.date, time: o.time || tr.time || '', title: `אימון: ${tr.title || ''}`,
+        sub: [group && group.he, tr.place, (tr.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · ') });
+    }
+  }
+  return games.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+}
+
+function pruneSent(keys, today) {
+  const out = {};
+  for (const [k, v] of Object.entries(keys || {})) if (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) && daysBetween(String(v), today) <= KEEP_DAYS) out[k] = v;
+  return out;
+}
+
+async function run(job, now = new Date()) {
+  const db = getDb();
+  const data = await loadAll(db);
+  const today = israelDate(now);
+  const hour = israelHour(now);
+  const recipients = whatsappRecipients(data.users);
+  if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
+
+  const sent = { briefings: { ...(data.sent.briefings || {}) }, alerts: pruneSent(data.sent.alerts, today) };
+  const dayMs = 86400000;
+  const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
+  let count = 0;
+
+  for (const u of recipients) {
+    const mine = u.role === 'admin' ? data.tasks : data.tasks.filter((x) => (x.owner || OWNER_EMAIL) === u.email);
+    const r = computeAlerts({ ...data, tasks: mine, settings: data.settings, now });
+    const first = (u.name || '').split(' ')[0] || u.name;
+    try {
+      if (hour === u.briefingHour && sent.briefings[u.email] !== today) {
+        await wa.sendText(u.phone, buildBriefing({ name: first, alerts: r.alerts, games: todaysGames(data, today), goldaActions, now }));
+        sent.briefings[u.email] = today; count++;
+        job.note(`briefing → ${u.email}`);
+      }
+      const urgent = urgentAlerts(r.alerts).filter((a) => !sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`]);
+      if (urgent.length && sent.briefings[u.email] === today) {   // after the briefing, never before it on the same morning
+        await wa.sendText(u.phone, buildUrgent(first, urgent));
+        urgent.forEach((a) => { sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`] = today; });
+        count++;
+        job.note(`${urgent.length} urgent → ${u.email}`);
+      }
+    } catch (e) {
+      job.note(`${u.email}: ${e.message}`);
+      console.error('[golda-briefing] send failed:', u.email, e.message);
+    }
+  }
+  await db.collection('app_meta').doc('goldaSent').set({ ...sent, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  return { sent: count, recipients: recipients.length, hour };
+}
+
+// Every hour at :30. Israel is UTC+2/+3, so "07" Israel time is reached once
+// a day whatever the season; the state above makes each briefing one-a-day.
+exports.handler = schedule('30 * * * *', async () => {
+  try {
+    const r = await runJob('golda-briefing', run);
+    return { statusCode: 200, body: JSON.stringify(r) };
+  } catch (e) {
+    console.error('[golda-briefing] failed:', e);
+    return { statusCode: 500, body: String(e.message || e) };
+  }
+});
+exports._internal = { todaysGames, pruneSent, israelHour };

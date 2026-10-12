@@ -24,7 +24,7 @@ const seed = () => ({
 test('001 tags represented players and copies candidates with stage/category', async () => {
   const store = memoryStore(seed());
   const { migrations: rows, ran } = await migrations.run(store);
-  assert.equal(ran.length, 3);
+  assert.equal(ran.length, 5);
   assert.ok(rows.every((m) => m.status === 'done'));
   const p = store.db.players;
   assert.equal(p.p1.stage, 'represented'); assert.equal(p.p1.category, 'men'); assert.equal(p.p1.name, 'Noam Barzilai');
@@ -85,7 +85,7 @@ test('dryRun writes nothing', async () => {
   const store = memoryStore(seed());
   const before = JSON.stringify(store.db);
   const rows = await migrations.dryRun(store);
-  assert.equal(rows.length, 3);
+  assert.equal(rows.length, 5);
   assert.ok(rows.every((m) => m.status === 'pending' && m.report && m.report.summary));
   assert.equal(JSON.stringify(store.db), before);
 });
