@@ -4,3 +4,7 @@ build
 dist
 coverage
 .netlify
+
+# Playwright
+test-results/
+playwright-report/

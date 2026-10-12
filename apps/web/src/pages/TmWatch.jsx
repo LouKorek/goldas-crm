@@ -5,6 +5,7 @@ import { db } from 'lib/firebase';
 import { callFunction } from 'lib/api';
 import { listenCollection, updateDoc_, addDoc_, PATHS } from 'lib/db';
 import { addPlayer } from 'data/players';
+import { currentUserMeta } from 'lib/db';
 import { fmtDate, ISO2 } from 'lib/constants';
 import { PageHeader, ChipGroup, SearchInput, Empty, Spinner, toast, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
@@ -126,9 +127,11 @@ export default function TmWatch() {
     try { await updateDoc_(PATHS.TM_WATCH, p.id, { starred: !p.starred }); }
     catch (e) { toast.error(e.message); }
   };
+  // "Add to candidates": the player joins the Jewish pipeline and a task to
+  // find out who represents them lands on the user's list, due in a week.
   const addToPipeline = async (p) => {
     try {
-      await addPlayer({
+      const ref = await addPlayer({
         playerName: p.name,
         currentClub: p.club || '',
         league: p.clubCountry ? `${p.clubCountry}${p.league ? ' · ' + p.league : ''}` : (p.league || ''),
@@ -138,8 +141,13 @@ export default function TmWatch() {
         notes: `From TM Watch — ${p.matchedOn || ''}`,
         source: 'tm_watch',
       }, { category: 'jewish', stage: 'tracking' });
+      const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      await addDoc_(PATHS.TASKS, {
+        title: `לברר סוכן של ${p.name}`, dueDate: due, priority: 'Normal', done: false, owner: currentUserMeta().email,
+        notes: [p.club, p.league, p.tmUrl].filter(Boolean).join(' · '), linkedPlayers: ref?.id ? [ref.id] : [], source: 'tm_watch',
+      });
       await updateDoc_(PATHS.TM_WATCH, p.id, { addedToPipeline: true, status: p.status === 'new' ? 'seen' : p.status });
-      toast.success(`${p.name} added to the Jewish pipeline.`);
+      toast.success(t('{name} added to candidates, with a task to find their agent.', { name: p.name }));
     } catch (e) { toast.error(e.message); }
   };
   const markAllSeen = async () => {
@@ -280,7 +288,7 @@ export default function TmWatch() {
                         {p.starred ? '★' : '☆'}
                       </button>
                       {!p.addedToPipeline && p.status !== 'dismissed' && (
-                        <button title={t("Add to Jewish pipeline")} onClick={() => addToPipeline(p)}
+                        <button title={t("Add to candidates")} onClick={() => addToPipeline(p)}
                           style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 15 }}>＋</button>
                       )}
                       {p.status === 'new' && (

@@ -19,7 +19,7 @@
 // the event's JWS signature is verified as well.
 
 const crypto = require('crypto');
-const { getDb } = require('./lib/firestore.js');
+const { admin, getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
 const { ensureWebhookCallback } = require('./lib/wa-subscription.js');
 const { ensureAuthorizedDomain } = require('./lib/auth-domains.js');
@@ -88,6 +88,11 @@ exports.handler = async (event) => {
   console.log(`[deploy-succeeded] ${notes.join('; ')}`);
 
   const db = getDb();
+  // Count production deploys per month for the admin Quotas tab (each costs ~15 Netlify credits).
+  try {
+    const month = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).slice(0, 7);
+    await db.collection('app_meta').doc('deploys').set({ [month]: admin.firestore.FieldValue.increment(1), lastDeployAt: admin.firestore.FieldValue.serverTimestamp(), lastCommit: String(payload.commit_ref || '').slice(0, 10) }, { merge: true });
+  } catch (e) { notes.push(`deploy count failed: ${e.message}`); }
   const status = (await db.collection('app_meta').doc('syncStatus').get()).data() || {};
   const finished = status.finishedAt?.toDate?.()?.getTime?.() || 0;
   const complete = status.lastResult && !status.lastResult.partial;

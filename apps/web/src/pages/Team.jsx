@@ -94,6 +94,13 @@ export default function Team() {
     catch (e) { toast.error(e.message || 'Could not remove user.'); }
   };
 
+  const toggleActive = async (u) => {
+    const disabling = u.active !== false;
+    if (disabling && !(await confirm(t('Disable "{name}"? They will not be able to sign in until re-enabled.', { name: u.name || u.email }), { confirmLabel: t('Disable') }))) return;
+    try { await updateAppUser(u.email, { active: !disabling }); toast.success(disabling ? t('Access disabled.') : t('Access enabled.')); }
+    catch (e) { toast.error(e.message || 'Could not update.'); }
+  };
+
   if (!isAdmin) return null;
 
   return (
@@ -144,10 +151,15 @@ export default function Team() {
                         </span>
                         <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>{ROLE_DESC[u.role] || ''}</div>
                       </td>
-                      <td>
-                        <span style={{ fontSize: 12, color: u.active === false ? 'var(--red)' : '#4ADE80' }}>
-                          {u.active === false ? 'Disabled' : 'Active'}
-                        </span>
+                      <td onClick={e => e.stopPropagation()}>
+                        {owner ? (
+                          <span style={{ fontSize: 12, color: '#4ADE80' }}>{t('Active')}</span>
+                        ) : (
+                          <button type="button" onClick={() => toggleActive(u)} title={u.active === false ? t('Enable access') : t('Disable access')}
+                            style={{ background: 'none', border: '1px solid var(--border-2)', padding: '3px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, color: u.active === false ? 'var(--red)' : '#4ADE80' }}>
+                            {u.active === false ? t('Disabled') : t('Active')}
+                          </button>
+                        )}
                       </td>
                       <td style={{ fontSize: 12.5, color: 'var(--text-2)' }} dir="ltr">
                         {showPhone(u.whatsapp) || <span style={{ color: 'var(--text-3)' }}>—</span>}

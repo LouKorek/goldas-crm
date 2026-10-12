@@ -28,6 +28,11 @@ import Golda         from 'pages/Golda';
 import Prospects     from 'pages/Prospects';
 import Deals         from 'pages/Deals';
 import Calendar      from 'pages/Calendar';
+import Admin         from 'pages/Admin';
+import DesignSystem  from 'pages/DesignSystem';
+import ErrorBoundary, { install as installErrorReporting } from 'components/ErrorBoundary';
+
+installErrorReporting();
 import { ToastProvider } from 'components/ui/UI';
 import { t } from 'lib/i18n';
 
@@ -173,7 +178,7 @@ export default function App() {
   }, [user, mountedAt]);
 
   return (
-    <>
+    <ErrorBoundary>
       {splash.show && <Splash fading={splash.fading} />}
       {user === null && <Login denied={denied} />}
       {user && access && (
@@ -204,6 +209,9 @@ export default function App() {
                 <Route path="clubs"          element={<Clubs />} />
                 <Route path="clubs/:id"      element={<Clubs />} />
                 <Route path="recycle"        element={<RecycleBin />} />
+                <Route path="admin" element={access.role === 'admin' ? <Admin /> : <Navigate to="/home" replace />} />
+                <Route path="admin/design" element={access.role === 'admin' ? <DesignSystem /> : <Navigate to="/home" replace />} />
+                <Route path="admin/:tab" element={access.role === 'admin' ? <Admin /> : <Navigate to="/home" replace />} />
                 <Route path="admin/migrations" element={
                   access.role === 'admin' ? <Migrations /> : <Navigate to="/dashboard" replace />
                 } />
@@ -212,7 +220,9 @@ export default function App() {
                 <Route path="pipeline/women" element={<Pipeline category="women" />} />
                 <Route path="pipeline/youth" element={<Pipeline category="youth" />} />
                 <Route path="pipeline/jewish"element={<Pipeline category="jewish" />} />
-                <Route path="pipeline/jewish/tm-watch" element={<TmWatch />} />
+                <Route path="pipeline/jewish/tm-watch" element={<Navigate to="/scouting/tm-watch" replace />} />
+                <Route path="scouting" element={<Navigate to="/scouting/tm-watch" replace />} />
+                <Route path="scouting/tm-watch" element={<TmWatch />} />
                 <Route path="notifications"  element={<Notifications />} />
                 {/* Personal to-do board — every signed-in user gets their
                     own, and only ever sees their own. */}
@@ -225,6 +235,6 @@ export default function App() {
           </BrowserRouter>
         </RoleContext.Provider>
       )}
-    </>
+    </ErrorBoundary>
   );
 }

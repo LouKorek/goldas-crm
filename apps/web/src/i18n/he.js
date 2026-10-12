@@ -839,6 +839,14 @@ const HE = {
   'Where the morning briefing and urgent alerts go.': 'לאן נשלחים תדריך הבוקר וההתראות הדחופות.',
   'briefing at': 'תדריך ב-',
   'Ask Golda': 'שאלי את גולדה',
+  'Add to candidates': 'הוסף למועמדים',
+  '{name} added to candidates, with a task to find their agent.': '{name} נוסף למועמדים, ונפתחה משימה לברר מי הסוכן שלו.',
+  'Disable "{name}"? They will not be able to sign in until re-enabled.': 'להשבית את "{name}"? לא יוכלו להתחבר עד שתפעיל מחדש.',
+  'Disable': 'השבת',
+  'Access disabled.': 'הגישה הושבתה.',
+  'Access enabled.': 'הגישה הופעלה.',
+  'Enable access': 'הפעל גישה',
+  'Disable access': 'השבת גישה',
 };
 
 export default HE;

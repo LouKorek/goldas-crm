@@ -112,4 +112,4 @@ exports.handler = schedule('0 3 * * *', async () => {
   try { const r = await runJob('nightly-engines', nightly); return { statusCode: 200, body: JSON.stringify(r) }; }
   catch (e) { console.error('nightly-engines failed:', e); return { statusCode: 500, body: String(e) }; }
 });
-exports._internal = { runMatching, runAlerts, runOrphanCleanup };
+exports._internal = { runMatching, runAlerts, runOrphanCleanup, nightly };

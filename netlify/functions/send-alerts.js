@@ -132,4 +132,4 @@ exports.handler = schedule('30 5 * * *', async () => {
   try { return await runJob('send-alerts', async (job) => { const r = await sendDigest(job); job.note(r.body); return r; }); }
   catch (e) { console.error('sendDigest failed:', e); return { statusCode: 500, body: String(e) }; }
 });
-exports._internal = { dedupeKey, buildEmailHtml, pruneSent };
+exports._internal = { dedupeKey, buildEmailHtml, pruneSent, sendDigest };

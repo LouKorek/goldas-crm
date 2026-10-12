@@ -71,3 +71,19 @@ until set up.
 
 Cost: conversations Lou starts are free on Meta's side (service
 conversations); Claude API usage is billed per message.
+
+## גולדה 2.0 (אוקטובר 2026, שלב 4 של ארכיטקטורה 3.0)
+
+- **זהות אמיתית לכל שולח.** המספר שממנו נכתבה ההודעה מותאם ל-`app_users.whatsapp`
+  (`lib/golda-identity.js`); גולדה פועלת בהרשאות של אותו אדם, ושינוייה נרשמים
+  ב-`audit` עם `via: 'golda'` ו-`onBehalfOf`. מי שאינו ברשומות נחסם.
+- **ערוץ אחד לוואטסאפ ולאפליקציה.** הצ'אט במסך גולדה (`/golda`) נכנס לאותו
+  `wa_inbox` ואותו עובד (`lib/golda-worker.js`, `golda-chat-background`).
+- **תור עם ניסיונות חוזרים.** `golda-queue-cron` (כל 10 דקות) מרים הודעות
+  שנתקעו, עד 3 ניסיונות, עם נעילה של 15 דקות לכל שיחה.
+- **היא מדברת ראשונה.** `golda-briefing` (כל שעה ב-:30): תדריך בוקר בשעה שכל
+  אדם בחר במסך הצוות, התראות דחופות כשהן מופיעות, והתראות תפעול לאדמינים
+  (עבודה שנכשלה פעמיים, מכסה מעל 80%, סנכרון ההתאחדות שקט 36 שעות).
+- **כלים חדשים.** `suggest_matches`, `alerts_today`, `sync_fixtures`; כל כלי מוגבל
+  לפי `toolsFor(role)`.
+- **מכסה.** `GOLDA_DAILY_LIMIT` הודעות לאדם ליום; השימוש במסך ניהול ← מכסות.
