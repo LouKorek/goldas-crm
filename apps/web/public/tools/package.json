@@ -1,0 +1,4 @@
+{
+  "type": "commonjs",
+  "//": "esbuild and Node read the nearest package.json: apps/web is type module, but ifa-text.js here is UMD/CommonJS and is also required by netlify/functions/sync-matches-background.js. Without this, the Netlify bundle loses its handler (502)."
+}
