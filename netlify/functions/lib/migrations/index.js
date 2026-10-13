@@ -16,6 +16,7 @@ const MIGRATIONS = [
   require('./007-eyal-and-hadera-dupes.js'),
   require('./008-kishronot-hadera.js'),
   require('./009-ashdod-squads.js'),
+  require('./010-migrate-job-and-times.js'),
 ];
 
 async function records(store) {

@@ -79,7 +79,7 @@ function cleanFixture(f, gamesUrl) {
     sourceMatchId: str(f.sourceMatchId, 200),
     sourceTeamId: gamesUrl,
     date: f.date,
-    time: /^\d{2}:\d{2}$/.test(f.time || '') ? f.time : '',
+    time: /^\d{2}:\d{2}$/.test(f.time || '') && f.time !== '00:00' ? f.time : '',
     homeTeam: str(f.homeTeam, 120),
     awayTeam: str(f.awayTeam, 120),
     stadiumName: str(f.stadiumName, 160),

@@ -15,6 +15,7 @@ const seed = () => ({
   },
   jobs: {
     UHluG6hbVT8aO5mNLGZA: { name: 'migrate', status: 'error', error: 'לא נמחק כלום. נמצאו 51 משחקים בלי שחקן, צפויים 74', startedAt: '2026-10-12T20:55:00Z' },
+    yZpUTyRE6vA9Bw2vXbWE: { name: 'migrate', status: 'error', error: 'לא שונה כלום. נמצאו 26 משחקים של כשרונות חדרה בין 2025-09-07 ל-2026-05-24, צפויים 27; 1 משחקים מחוץ לטווח', startedAt: '2026-10-13T06:02:00Z' },
   },
   pipeline_men: {
     c1: { playerName: 'Yossi Cohen', status: 'Negotiation', linkedClubs: [{ clubName: 'Maccabi Haifa FC', linkedAt: '2026-09-01T00:00:00Z' }, { clubName: 'Hapoel Tel Aviv', linkedAt: '2026-09-02T00:00:00Z' }], previousClubs: [{ clubName: 'Beitar Jerusalem', markedAt: '2026-08-01T00:00:00Z' }] },
@@ -38,7 +39,7 @@ function cleanupMatches() {
   for (const [team, count] of Object.entries(clean._internal.A_TEAMS)) {
     for (let i = 0; i < count; i++) {
       const d = new Date(Date.UTC(2026, 8, 19 + (n % 240)));
-      out[`a${n++}`] = { source: 'ifa', linkedPlayers: [], homeTeam: i % 2 ? team : 'יריבה', awayTeam: i % 2 ? 'יריבה' : team, date: d.toISOString().slice(0, 10), time: '00:00' };
+      out[`a${n++}`] = { source: 'ifa', linkedPlayers: [], homeTeam: i % 2 ? team : 'יריבה', awayTeam: i % 2 ? 'יריבה' : team, date: d.toISOString().slice(0, 10), time: '19:00' };
     }
   }
   for (const r of clean._internal.B_ROWS) {
@@ -66,6 +67,9 @@ function fixMatches() {
   for (let i = 0; i < 26; i++) {
     out[`g${i}`] = { source: 'ifa', sourceTeamId: GADNA, sourceMatchId: `88${i}`, linkedPlayers: ['lQKfyOZsaFHSKkn7JkFO'], homeTeam: 'גדנע ת"א רוני', awayTeam: 'יריבה', date: `2025-${String(9 + (i % 3)).padStart(2, '0')}-1${i % 9}` };
   }
+  out.t0 = { source: 'ifa', sourceMatchId: '2026-10-31|הפ\' מרמורק רחובות "צו פיוס"|עירוני מודיעין "צו פיוס"', date: '2026-10-31', time: '00:00', homeTeam: 'הפ\' מרמורק רחובות "צו פיוס"', awayTeam: 'עירוני מודיעין "צו פיוס"', linkedPlayers: ['lQKfyOZsaFHSKkn7JkFO'] };
+  out.t1 = { source: 'ifa', sourceMatchId: '2027-05-22|עירוני מודיעין "צו פיוס"|מכבי יבנה "צו פיוס"', date: '2027-05-22', time: '00:00', homeTeam: 'עירוני מודיעין "צו פיוס"', awayTeam: 'מכבי יבנה "צו פיוס"', linkedPlayers: ['lQKfyOZsaFHSKkn7JkFO'] };
+  out.t2 = { source: 'ifa', sourceMatchId: '55', date: '2025-10-01', time: '00:00', homeTeam: 'גדנע ת"א רוני', awayTeam: 'יריבה', linkedPlayers: ['lQKfyOZsaFHSKkn7JkFO'] };
   out.CKyrQU414uoxQrueBhk5 = { source: 'ifa', sourceMatchId: '1121923', date: '2026-10-10', time: '17:30', homeTeam: 'הפועל חדרה', awayTeam: 'הפועל ק"ש', linkedPlayers: ['7Cg7ARx3SXjzDYGlQ4NA'] };
   out.XALTePkYxX5YWO1Eu926 = { source: 'ifa', sourceMatchId: '2026-10-10|הפועל חדרה|הפועל ק"ש', date: '2026-10-10', time: '', homeTeam: 'הפועל חדרה', awayTeam: 'הפועל ק"ש', linkedPlayers: ['7Cg7ARx3SXjzDYGlQ4NA', 'fbN4jQ4OGD5u5V8NDYrm'] };
   out.ghMi4dRvNe8enUKmvdT7 = { source: 'ifa', sourceMatchId: '1123327', date: '2026-10-10', time: '13:30', homeTeam: 'הפועל חדרה מתי', awayTeam: 'הפועל ב"ש', linkedPlayers: ['dNxtLA2YQj4nfgLOqwKo'] };
@@ -76,7 +80,7 @@ function fixMatches() {
 test('001 tags represented players and copies candidates with stage/category', async () => {
   const store = memoryStore(seed());
   const { migrations: rows, ran } = await migrations.run(store);
-  assert.equal(ran.length, 9);
+  assert.equal(ran.length, 10);
   assert.ok(rows.every((m) => m.status === 'done'));
   const p = store.db.players;
   assert.equal(p.p1.stage, 'represented'); assert.equal(p.p1.category, 'men'); assert.equal(p.p1.name, 'Noam Barzilai');
@@ -137,7 +141,7 @@ test('dryRun writes nothing', async () => {
   const store = memoryStore(seed());
   const before = JSON.stringify(store.db);
   const rows = await migrations.dryRun(store);
-  assert.equal(rows.length, 9);
+  assert.equal(rows.length, 10);
   assert.ok(rows.every((m) => m.status === 'pending' && m.report && m.report.summary));
   assert.equal(JSON.stringify(store.db), before);
 });
@@ -303,4 +307,34 @@ test('009 refuses on a wrong player id, club or an ambiguous name', async () => 
   const st = memoryStore(wrongId);
   try { await migrations.run(st, only009); } catch {}
   assert.ok(!st.db.players.omri.autoFetch.ifa, 'nothing written on refusal');
+});
+
+const only010 = { only: ['010-migrate-job-and-times'] };
+
+test('010 marks the 008 refusal handled and blanks future 00:00 times', async () => {
+  const st = memoryStore(seed());
+  const { ran } = await migrations.run(st, only010);
+  assert.equal(ran[0].writes, 1 + 2);
+  assert.equal(st.db.jobs.yZpUTyRE6vA9Bw2vXbWE.status, 'handled');
+  assert.equal(st.db.matches.t0.time, ''); assert.equal(st.db.matches.t1.time, '');
+  assert.equal(st.db.matches.t2.time, '00:00', 'past matches are frozen');
+  assert.equal(st.db.matches.CKyrQU414uoxQrueBhk5.time, '17:30');
+  const rep = st.db.migrations['010-migrate-job-and-times'].report;
+  assert.deepEqual(rep.timesCleared.sort(), ['t0', 't1']);
+  assert.ok(rep.notes.some((n) => /BiMQzHkjGH2HeqfsHKNP/.test(n)) && rep.notes.some((n) => /jvuD01Xphtt2GGETEeTX/.test(n)));
+});
+
+test('010 refuses when the job is not the refused 008 run, and skips a handled one', async () => {
+  const ok = seed(); ok.jobs.yZpUTyRE6vA9Bw2vXbWE.status = 'ok';
+  await assert.rejects(migrations.run(memoryStore(ok), only010), /הסטטוס הוא ok/);
+  const other = seed(); other.jobs.yZpUTyRE6vA9Bw2vXbWE.error = 'something else';
+  await assert.rejects(migrations.run(memoryStore(other), only010), /לא מזכירה 26/);
+  const st = memoryStore(ok);
+  try { await migrations.run(st, only010); } catch {}
+  assert.equal(st.db.matches.t0.time, '00:00', 'nothing written on refusal');
+  const done = seed(); done.jobs.yZpUTyRE6vA9Bw2vXbWE.status = 'handled';
+  const st2 = memoryStore(done);
+  const { ran } = await migrations.run(st2, only010);
+  assert.equal(ran[0].writes, 2);
+  assert.equal(st2.db.migrations['010-migrate-job-and-times'].report.counts.skipped, 1);
 });
