@@ -20,8 +20,49 @@
 const { admin, listRepresented } = require('./lib/firestore.js');
 const { _lib } = require('./sync-matches-background.js');
 const { checkSyncSecret } = require('./lib/ifa-sync-auth.js');
+const { ifaAgeGroupOf, ifaContainment, ifaNormalizeName, ifaTokens } = require('../../apps/web/public/tools/ifa-text.js');
+const { resolveAgeGroup } = require('@goldas/domain');
 
 const { getDb, decideSources, seasonStartMs, syncMatchesForPlayer } = _lib;
+
+// Lou's rule of 13.10.2026: a squad the IFA lookup found is linked to a player
+// only when it is plausibly his. Otherwise nothing is linked and the player
+// gets an alert (autoFetch.ifaFail → Home / Notifications, and the Matches
+// screen's sync warnings). Two checks, from data the CRM already holds:
+//   • age — the squad's age group (נערים ג') against the group the player's
+//     birth date puts him in this season (IFA cohort rule, manual override
+//     respected). A seniors squad passes for a youth player (talents play up);
+//     a youth squad that is not his cohort does not.
+//   • club — when both names are Hebrew, the squad's club must be his
+//     currentClub (token containment, as the lookup itself uses). A Latin
+//     currentClub ("Ironi Modi'in") cannot be compared with the IFA's Hebrew,
+//     so the age check carries that case.
+// Squads Lou chose himself (a team link in ifaTeamUrl, or a pin) are trusted.
+const YOUTH_GROUPS = new Set(['noar', 'nearim_a', 'nearim_b', 'nearim_c', 'yeladim_a', 'yeladim_b', 'yeladim_c', 'trom_a', 'trom_b', 'trom_c']);
+function ifaMismatch(player, info, now = new Date()) {
+  if (!info) return null;
+  const squadGroup = ifaAgeGroupOf(info.ageGroup || '') || ifaAgeGroupOf(info.league || '') || ifaAgeGroupOf(info.teamLabel || '');
+  if (squadGroup && YOUTH_GROUPS.has(squadGroup)) {
+    const mine = resolveAgeGroup({ dob: player.dob, ageGroupOverride: player.ageGroupOverride || null }, now);
+    if (!mine || mine.id !== squadGroup) {
+      return { reason: 'ifa-squad-mismatch', kind: 'age', detail: `שכבת הגיל בהתאחדות "${info.ageGroup || info.league || info.teamLabel}" לא מתאימה לתאריך הלידה (${mine ? mine.he : 'בוגר'})` };
+    }
+  }
+  const ifaClub = info.clubName || info.teamName || '';
+  if (/[א-ת]/.test(player.currentClub || '') && ifaClub && ifaContainment(player.currentClub, ifaClub) < 0.5) {
+    return { reason: 'ifa-squad-mismatch', kind: 'club', detail: `המועדון בהתאחדות "${ifaClub}" אינו ${player.currentClub}` };
+  }
+  return null;
+}
+
+// The squad information to check for a target: this run's lookup, or the
+// cached resolution the browser reused (teamFrom 'cache').
+function squadInfo(p, r) {
+  if (r?.resolved) return r.resolved;
+  const c = p.autoFetch?.ifa;
+  if (c?.teamId && r?.teamId && String(c.teamId) === String(r.teamId)) return c;
+  return null;
+}
 
 const MIN_READABLE = 0.7;
 const MIN_FIXTURES = 5;
@@ -82,6 +123,10 @@ async function plan(db, payload) {
     if (r.error) { out.push({ ...entry, action: 'skip', reason: r.error, detail: r.detail }); continue; }
     if (!r.gamesOk) { out.push({ ...entry, action: 'skip', reason: 'ifa-page-unreadable' }); continue; }
 
+    if (r.teamFrom !== 'link' && r.teamFrom !== 'pin') {
+      const mm = ifaMismatch(p, squadInfo(p, r));
+      if (mm) { out.push({ ...entry, action: 'skip', reason: mm.reason, detail: mm.detail, mismatch: mm }); continue; }
+    }
     if (fixtures.length && !isOffSeason() && !fixtures.some((f) => f.date >= seasonStart)) {
       oldSeason++;
       out.push({ ...entry, action: 'skip', reason: 'ifa-old-season', detail: `latest ${fixtures.map(f => f.date).sort().pop()}` });
@@ -150,8 +195,19 @@ exports.handler = async (event) => {
   // Publish.
   let upserts = 0, removed = 0, written = 0;
   const warnings = [];
+  const squads = new Set();
   for (const e of pl.players) {
-    if (e.action !== 'write') { warnings.push(warningFor(e)); continue; }
+    if (e.action !== 'write') {
+      warnings.push(warningFor(e));
+      if (e.mismatch) {
+        // The alert lives on the player record (Home and Notifications read
+        // players); it clears itself on the next run that passes the checks.
+        await db.collection('players').doc(e.p.id).set({
+          autoFetch: { ifaFail: { reason: e.reason, detail: e.detail, teamId: e.r?.teamId || null, at: new Date().toISOString(), via: 'browser' } },
+        }, { merge: true }).catch((err) => console.error(`[ifa-import] ifaFail ${e.p.fullName}:`, err.message));
+      }
+      continue;
+    }
     try {
       const res = e.r.resolved;
       const playerId = (() => { try { return new URL(e.p.ifaTeamUrl).searchParams.get('player_id'); } catch { return null; } })();
@@ -171,8 +227,9 @@ exports.handler = async (event) => {
       const r = await syncMatchesForPlayer(db, e.p, 'ifa', e.fixtures);
       upserts += r.upserts; removed += r.removed; written++;
       await db.collection('players').doc(e.p.id).set({
-        autoFetch: { ifa: { lastFixturesAt: new Date().toISOString() } },
+        autoFetch: { ifa: { lastFixturesAt: new Date().toISOString() }, ifaFail: admin.firestore.FieldValue.delete() },
       }, { merge: true });
+      if (e.gamesUrl) squads.add(e.gamesUrl);
     } catch (err) {
       console.error(`[ifa-import] ${e.p.fullName}:`, err);
       warnings.push({ ...warningFor({ ...e, reason: 'error' }), detail: String(err?.message || err).slice(0, 200) });
@@ -186,11 +243,23 @@ exports.handler = async (event) => {
     }).catch((err) => console.error('club index write failed:', err.message));
   }
 
-  const stats = { ...summary, written, upserts, removed, durationS: Math.round((Date.now() - t0) / 1000) };
+  // After every squad was brought up to date, no two live future records of
+  // one squad may describe the same match (same date, same two teams). Any
+  // that still do are merged into one, keeping every linked player.
+  let merged = 0;
+  const mergedNotes = [];
+  for (const squad of squads) {
+    try {
+      const m = await mergeSquadDuplicates(db, squad);
+      merged += m.merged; mergedNotes.push(...m.notes);
+    } catch (err) { console.error('[ifa-import] merge duplicates:', err.message); }
+  }
+
+  const stats = { ...summary, written, upserts, removed, merged, durationS: Math.round((Date.now() - t0) / 1000) };
   await ref.set({
     lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSuccessAt: admin.firestore.FieldValue.serverTimestamp(),
-    stats, perPlayer, warnings,
+    stats, perPlayer, warnings, merged: mergedNotes.slice(0, 50),
     lastRefused: admin.firestore.FieldValue.delete(),
   }, { merge: true });
 
@@ -206,4 +275,69 @@ exports.handler = async (event) => {
   return { statusCode: 200 };
 };
 
+// One squad's live future records grouped by identity: same date, same home
+// team and same away team after name normalisation (a sponsor suffix or an
+// abbreviation does not make a different team, as in the sync itself). In a
+// group of two or more, the copy to keep is the one that carries the IFA game
+// id, then the one with a time, then the oldest; the others go to the recycle
+// bin and their players move onto it.
+const teamKey = (name) => ifaTokens(ifaNormalizeName(name)).join(' ');
+const sameTeam = (a, b) => teamKey(a) === teamKey(b) || ifaContainment(a, b) >= 0.5;
+const identity = (m) => `${m.date}|${teamKey(m.homeTeam)}|${teamKey(m.awayTeam)}`;
+const hasGameId = (m) => /^\d+$/.test(String(m.sourceMatchId || ''));
+const hasTime = (m) => /^\d{2}:\d{2}$/.test(m.time || '') && m.time !== '00:00';
+const createdMs = (m) => (m.createdAt?.toMillis ? m.createdAt.toMillis() : Date.parse(m.createdAt || '') || Infinity);
+function pickKeeper(group) {
+  return group.slice().sort((a, b) =>
+    (hasGameId(b) - hasGameId(a)) || (hasTime(b) - hasTime(a)) || (createdMs(a) - createdMs(b)) || a.id.localeCompare(b.id))[0];
+}
+function duplicateGroups(rows, todayStr) {
+  const byDate = new Map();
+  for (const m of rows) {
+    if (m.deletedAt || !m.date || m.date < todayStr || !m.homeTeam || !m.awayTeam) continue;
+    if (!byDate.has(m.date)) byDate.set(m.date, []);
+    byDate.get(m.date).push(m);
+  }
+  const groups = [];
+  for (const rowsOfDay of byDate.values()) {
+    const clusters = [];
+    for (const m of rowsOfDay) {
+      const c = clusters.find((cl) => sameTeam(cl[0].homeTeam, m.homeTeam) && sameTeam(cl[0].awayTeam, m.awayTeam));
+      if (c) c.push(m); else clusters.push([m]);
+    }
+    groups.push(...clusters.filter((g) => g.length > 1));
+  }
+  return groups;
+}
+async function mergeSquadDuplicates(db, sourceTeamId) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const snap = await db.collection('matches').where('source', '==', 'ifa').where('sourceTeamId', '==', sourceTeamId).get();
+  const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const notes = [];
+  let merged = 0;
+  for (const group of duplicateGroups(rows, todayStr)) {
+    const keep = pickKeeper(group);
+    const others = group.filter((m) => m.id !== keep.id);
+    const players = others.flatMap((m) => m.linkedPlayers || []).filter((p) => !(keep.linkedPlayers || []).includes(p));
+    const batch = db.batch();
+    const keepRef = db.collection('matches').doc(keep.id);
+    const upd = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (players.length) upd.linkedPlayers = admin.firestore.FieldValue.arrayUnion(...new Set(players));
+    if (!hasTime(keep)) { const t = others.find(hasTime); if (t) upd.time = t.time; }
+    if (!keep.stadiumName) { const st = others.find((m) => m.stadiumName); if (st) { upd.stadiumName = st.stadiumName; upd.stadiumMapsUrl = st.stadiumMapsUrl || ''; } }
+    batch.update(keepRef, upd);
+    for (const m of others) {
+      batch.update(db.collection('matches').doc(m.id), {
+        deletedAt: admin.firestore.FieldValue.serverTimestamp(), deletedBy: 'sync', deletedVia: 'ifa-dedupe',
+        mergedInto: keep.id, updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    merged += others.length;
+    notes.push(`${keep.date} ${keep.homeTeam} - ${keep.awayTeam}: נשאר ${keep.id}, לסל המחזור ${others.map((m) => m.id).join(', ')}`);
+  }
+  return { merged, notes };
+}
+
 exports._plan = plan;
+exports._internal = { ifaMismatch, squadInfo, duplicateGroups, pickKeeper, identity };

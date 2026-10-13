@@ -8,6 +8,7 @@ const APP = 'https://goldas-crm.netlify.app';
 
 const SECTION = {
   job_failed: 'נכשל בלילה',
+  sync_mismatch: 'הסנכרון לא קישר משחקים',
   deal_stale: 'עסקאות שמחכות יותר מדי',
   contract: 'חוזים שמסתיימים',
   repr: 'הסכמי ייצוג שמסתיימים',
@@ -16,7 +17,7 @@ const SECTION = {
   task_overdue: 'משימות',
   birthday: 'ימי הולדת',
 };
-const ORDER = ['job_failed', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday'];
+const ORDER = ['job_failed', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday'];
 
 const line = (a) => `• ${a.subject.name}: ${a.proof.he}${a.dueDate && a.type !== 'birthday' ? ` (${fmtDate(a.dueDate)})` : ''}`;
 

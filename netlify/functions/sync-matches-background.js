@@ -665,8 +665,11 @@ async function resolveTeamId(db, player, source) {
 // (the 13 duplicates cleaned up by migration 006). The fixture list has no
 // round column, so the second-level identity is: same squad (sourceTeamId:
 // club × season × age), same two teams in the same order (spelling may
-// differ), nearest date within SAME_MATCH_DAYS. Past matches never match a
-// fetched row this way: they are frozen history.
+// differ), nearest date within SAME_MATCH_DAYS — the same date first of all,
+// which is how a record still keyed "date|home|away" is recognised and
+// converted (its sourceMatchId, time and stadium updated in place) instead of
+// copied. Past matches never match a fetched row this way: they are frozen
+// history.
 const SAME_MATCH_DAYS = 45;
 const dayDiff = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 86400000;
 const sameTeam = (a, b) => {
@@ -737,7 +740,7 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
     if (m.date && m.date >= todayStr) {
       const newLinked = (m.linkedPlayers || []).filter((id) => id !== player.id);
       if (newLinked.length === 0) await e.ref.delete();
-      else await e.ref.update({ linkedPlayers: newLinked, updatedAt: FieldValue.serverTimestamp() });
+      else await e.ref.update({ linkedPlayers: FieldValue.arrayRemove(player.id), updatedAt: FieldValue.serverTimestamp() });
       removed++;
     }
   }
@@ -765,9 +768,9 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
       // critical when a player moves to a new club: the past matches at the
       // old club must stay untouched.
       if (ex.data.date && ex.data.date < todayStr) continue;
-      const linked = new Set(ex.data.linkedPlayers || []);
-      linked.add(player.id);
-      await ex.ref.update({ ...fields, linkedPlayers: Array.from(linked) });
+      // linkedPlayers is only ever added to (arrayUnion), never rewritten, so
+      // two players of one squad synced in parallel cannot drop each other.
+      await ex.ref.update({ ...fields, linkedPlayers: FieldValue.arrayUnion(player.id) });
       upserts++;
       continue;
     }
@@ -788,9 +791,7 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
       // Same frozen rule for the link-to-existing path: a past match belongs
       // to whoever played in it at the time.
       if (otherData.date && otherData.date < todayStr) continue;
-      const linked = new Set(otherData.linkedPlayers || []);
-      linked.add(player.id);
-      await other.ref.update({ ...fields, linkedPlayers: Array.from(linked) });
+      await other.ref.update({ ...fields, linkedPlayers: FieldValue.arrayUnion(player.id) });
       upserts++;
       continue;
     }

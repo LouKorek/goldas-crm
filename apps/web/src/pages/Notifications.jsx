@@ -24,6 +24,7 @@ const TYPE = {
   requirement_expired: { tag: 'REQ', title: 'Expired club requirements' },
   task_overdue:        { tag: 'TASK', title: 'Overdue tasks' },
   job_failed:          { tag: 'JOB', title: 'Failed night jobs' },
+  sync_mismatch:       { tag: 'SYNC', title: 'Sync found a doubtful squad' },
   match:               { tag: 'FIX', title: 'Upcoming Matches' },
 };
 const COLORS = { critical: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', gold: 'var(--gold)' };
@@ -110,7 +111,7 @@ export default function Notifications() {
   };
 
   const r = useMemo(() => unifiedAlerts({ players, matches, deals, requirements, tasks, jobs, settings }), [players, matches, deals, requirements, tasks, jobs, settings]);
-  const order = ['job_failed', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday', 'match'];
+  const order = ['job_failed', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday', 'match'];
 
   return (
     <div>

@@ -115,7 +115,7 @@ function Today() {
 
   // One engine for everything that needs action (domain engines/alerts.ts).
   const alerts = useMemo(() => (players ? unifiedAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now }) : null), [players, matches, deals, requirements, tasks, jobs, settings]); // eslint-disable-line
-  const TAG = { contract: 'CON', repr: 'REP', passport: 'PAS', birthday: 'DOB', deal_stale: t('Deal waiting'), requirement_expired: 'REQ', task_overdue: t('Task due'), job_failed: t('failed') };
+  const TAG = { contract: 'CON', repr: 'REP', passport: 'PAS', birthday: 'DOB', deal_stale: t('Deal waiting'), requirement_expired: 'REQ', task_overdue: t('Task due'), job_failed: t('failed'), sync_mismatch: t('Sync') };
   const COLOR = { critical: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', gold: 'var(--gold)' };
   const actions = useMemo(() => (alerts ? alerts.alerts.filter((a) => a.type !== 'match').map((a) => ({
     tag: a.type === 'birthday' && a.age === 18 ? '18' : TAG[a.type], color: COLOR[a.severity], title: a.subject.name,
