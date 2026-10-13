@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const T = require('../../../../apps/web/public/tools/ifa-text.js');
 const { _internal } = require('../../ifa-import-background.js');
+const { sameFixture } = require('../../sync-matches-background.js')._lib;
 
 test('age groups are read from squad labels and cells', () => {
   assert.equal(T.ifaAgeGroupOf("נערים א' לאומית דרום"), 'nearim_a');
@@ -74,4 +75,32 @@ test('duplicates of one squad merge onto the copy with the IFA game id', () => {
   // Without a game id the copy with a time wins; otherwise the oldest.
   assert.equal(_internal.pickKeeper([{ id: 'x', sourceMatchId: 'd|h|a', time: '', createdAt: '2026-01-01' }, { id: 'y', sourceMatchId: 'd|h|a', time: '19:00', createdAt: '2026-02-01' }]).id, 'y');
   assert.equal(_internal.pickKeeper([{ id: 'x', sourceMatchId: 'd|h|a', createdAt: '2026-01-01' }, { id: 'y', sourceMatchId: 'd|h|a', createdAt: '2026-02-01' }]).id, 'x');
+});
+
+test('the "צו פיוס" tag never makes two clubs the same team', () => {
+  // Real names from עירוני מודיעין's 2026/27 fixtures (team 6249); before the
+  // fix these scored 0.5–0.67 and the sync overwrote nine matches with others.
+  assert.equal(T.ifaContainment('א.ס נורדיה ירושלים "צו פיוס"', 'הפ\' מרמורק רחובות "צו פיוס"'), 0);
+  assert.equal(T.ifaContainment('עירוני מודיעין "צו פיוס"', 'מכבי יבנה "צו פיוס"'), 0);
+  assert.equal(T.ifaContainment('מכבי יבנה "צו פיוס"', 'מ.ס.דימונה "צו פיוס"'), 0);
+  assert.equal(T.ifaContainment('עירוני מודיעין "צו פיוס"', 'עירוני מודיעין'), 1);
+  assert.ok(T.ifaSameClubName('מכבי ניסנוב "צו פיוס"', 'מכבי ניסנוב'));
+  const base = { sourceTeamId: 'u', season: '2026/27' };
+  const nordia = { ...base, date: '2026-10-19', homeTeam: 'עירוני מודיעין "צו פיוס"', awayTeam: 'א.ס נורדיה ירושלים "צו פיוס"' };
+  const marmorek = { ...base, date: '2026-10-31', homeTeam: 'הפ\' מרמורק רחובות "צו פיוס"', awayTeam: 'עירוני מודיעין "צו פיוס"' };
+  const kfarShalem = { ...base, date: '2026-11-28', homeTeam: 'עירוני מודיעין "צו פיוס"', awayTeam: 'מכבי יפו קביליו "יצחק אסא"' };
+  assert.equal(sameFixture(nordia, marmorek), false);
+  assert.equal(sameFixture(nordia, kfarShalem), false);
+  // The same match, first with the provisional id and then with the IFA game
+  // id, resolves to the one record (the sync then rewrites sourceMatchId).
+  const provisional = { ...nordia, sourceMatchId: '2026-10-19|עירוני מודיעין "צו פיוס"|א.ס נורדיה ירושלים "צו פיוס"' };
+  const official = { ...nordia, sourceMatchId: '1130001', time: '20:45' };
+  assert.equal(sameFixture(official, provisional), true);
+});
+
+test('the IFA\'s "00:00" is "no kickoff time yet"', () => {
+  assert.equal(T.normalizeIfaTime('00:00'), '');
+  assert.equal(T.normalizeIfaTime('20:45'), '20:45');
+  assert.equal(T.normalizeIfaTime('12:00 AM'), '');
+  assert.equal(T.normalizeIfaTime('8:30 PM'), '20:30');
 });

@@ -20,6 +20,8 @@ function deriveSeason(dateStr) {
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}`;
 }
 
+// The IFA shows "00:00" for a match whose kickoff is not set yet; that is
+// "no time", not midnight.
 function normalizeIfaTime(s) {
   if (!s) return '';
   const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)?\s*$/i.exec(s.trim());
@@ -29,6 +31,7 @@ function normalizeIfaTime(s) {
   const ampm = (m[3] || '').toUpperCase();
   if (ampm === 'PM' && h < 12) h += 12;
   if (ampm === 'AM' && h === 12) h = 0;
+  if (h === 0 && mn === '00') return '';
   return `${String(h).padStart(2, '0')}:${mn}`;
 }
 
@@ -72,8 +75,13 @@ const IFA_CITY_ABBREV = [
   [/(?<![א-ת])מ["'׳]?\.?\s*ס\.?(?=\s)/g, ' '],   // מ.ס. = מועדון ספורט
 ];
 
+// "צו פיוס" (Tzav Pius) is a programme tag the IFA appends to many youth
+// teams' names; it says nothing about the club, and left in it made
+// different clubs look alike (two shared words out of three).
+const IFA_TAG_RE = /["'״׳]?\s*(צו\s*פיוס|tzav\s*pius)\s*["'״׳]?/gi;
+
 function ifaNormalizeName(s) {
-  let out = ` ${String(s || '')} `;
+  let out = ` ${String(s || '')} `.replace(IFA_TAG_RE, ' ');
   for (const [re, full] of IFA_CITY_ABBREV) out = out.replace(re, full);
   return out
     .replace(/וו/g, 'ו')          // תקווה → תקוה
@@ -81,7 +89,7 @@ function ifaNormalizeName(s) {
     .replace(/["'״׳()]/g, ' ');
 }
 
-const IFA_CLUB_NOISE = new Set(['מועדון', 'כדורגל', 'מכ', 'מס', 'אס', 'קפ', 'עמותת', 'ספורט', 'עירוני']);
+const IFA_CLUB_NOISE = new Set(['מועדון', 'כדורגל', 'מכ', 'מס', 'אס', 'קפ', 'עמותת', 'ספורט', 'עירוני', 'צו', 'פיוס']);
 
 function ifaClubTokens(s) {
   return ifaTokens(ifaNormalizeName(s)).filter(t => t.length > 1 && !IFA_CLUB_NOISE.has(t));
