@@ -23,7 +23,7 @@ const seed = () => ({
   pipeline_jewish: {},
   club_requirements: { r1: { clubName: 'Maccabi Haifa', requiredPosition: 'CB' } },
   contacts: { k1: { clubName: 'Hapoel Tel-Aviv', contactName: 'Dani' } },
-  matches: { m1: { homeTeam: 'Maccabi Haifa', awayTeam: 'Hapoel Tel Aviv', date: '2026-10-20' }, ...cleanupMatches(), ...fixMatches() },
+  matches: { m1: { homeTeam: 'Maccabi Haifa', awayTeam: 'Hapoel Tel Aviv', date: '2026-10-20' }, ...cleanupMatches(), ...fixMatches(), ...kishronot() },
 });
 
 // A matches collection that migration 006 accepts: the 51 player-less IFA
@@ -74,7 +74,7 @@ function fixMatches() {
 test('001 tags represented players and copies candidates with stage/category', async () => {
   const store = memoryStore(seed());
   const { migrations: rows, ran } = await migrations.run(store);
-  assert.equal(ran.length, 7);
+  assert.equal(ran.length, 8);
   assert.ok(rows.every((m) => m.status === 'done'));
   const p = store.db.players;
   assert.equal(p.p1.stage, 'represented'); assert.equal(p.p1.category, 'men'); assert.equal(p.p1.name, 'Noam Barzilai');
@@ -135,7 +135,7 @@ test('dryRun writes nothing', async () => {
   const store = memoryStore(seed());
   const before = JSON.stringify(store.db);
   const rows = await migrations.dryRun(store);
-  assert.equal(rows.length, 7);
+  assert.equal(rows.length, 8);
   assert.ok(rows.every((m) => m.status === 'pending' && m.report && m.report.summary));
   assert.equal(JSON.stringify(store.db), before);
 });
@@ -232,4 +232,43 @@ test('007 refuses on any mismatch and skips ids that are gone', async () => {
   const { ran } = await migrations.run(st, only);
   assert.equal(ran[0].writes, 1 + 25 + 1 + 1);
   assert.deepEqual(st.db.migrations['007-eyal-and-hadera-dupes'].report.skipped.map((x) => x.id).sort(), ['XALTePkYxX5YWO1Eu926', 'jobs/UHluG6hbVT8aO5mNLGZA']);
+});
+
+// Migration 008: 27 matches of מכבי כשרונות חדרה in 2025/26, imported from the
+// IFA and linked to our players by the old sync. The one that shows no player
+// in the app points at a player record that no longer exists.
+function kishronot() {
+  const out = {};
+  for (let i = 0; i < 27; i++) {
+    const d = new Date(Date.UTC(2025, 8, 7 + i * 9));
+    out[`k${i}`] = { source: 'ifa', sourceMatchId: `77${i}`, date: d.toISOString().slice(0, 10), time: '17:00', homeTeam: i % 2 ? 'מכבי כשרונות חדרה' : 'יריבה', awayTeam: i % 2 ? 'יריבה' : 'מכבי כשרונות חדרה', linkedPlayers: i === 5 ? ['ghost'] : [['lQKfyOZsaFHSKkn7JkFO', 'alon', 'almog'][i % 3]] };
+  }
+  return out;
+}
+const only008 = { only: ['008-kishronot-hadera'] };
+
+test('008 recycles exactly the 27 Kishronot Hadera matches of 2025/26', async () => {
+  const st = memoryStore(seed());
+  const { ran } = await migrations.run(st, only008);
+  assert.equal(ran[0].writes, 27);
+  const m = st.db.matches;
+  for (let i = 0; i < 27; i++) assert.equal(m[`k${i}`].deletedVia, '008-kishronot-hadera', `k${i} recycled`);
+  assert.ok(Object.entries(m).filter(([k]) => !k.startsWith('k')).every(([, x]) => x.deletedVia !== '008-kishronot-hadera'), 'nothing else touched');
+  const rep = st.db.migrations['008-kishronot-hadera'].report;
+  assert.equal(rep.counts.recycled, 27); assert.equal(rep.counts.players, 4);
+  assert.equal(rep.players.lQKfyOZsaFHSKkn7JkFO, 9);
+});
+
+test('008 refuses when the count differs, a match is outside the season or not from the IFA', async () => {
+  const fewer = seed(); delete fewer.matches.k0;
+  await assert.rejects(migrations.run(memoryStore(fewer), only008), /נמצאו 26 משחקים/);
+  const later = seed(); later.matches.k99 = { ...later.matches.k1, date: '2026-10-20' };
+  await assert.rejects(migrations.run(memoryStore(later), only008), /מחוץ לטווח/);
+  const manual = seed(); manual.matches.k2.source = 'manual';
+  await assert.rejects(migrations.run(memoryStore(manual), only008), /לא הגיעו מההתאחדות/);
+  for (const bad of [fewer, later, manual]) {
+    const st = memoryStore(bad);
+    try { await migrations.run(st, only008); } catch {}
+    assert.ok(Object.values(st.db.matches).every((x) => !x.deletedVia || x.deletedVia !== '008-kishronot-hadera'), 'nothing changed on refusal');
+  }
 });
