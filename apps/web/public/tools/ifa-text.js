@@ -122,18 +122,56 @@ function ifaParseCaption(caption) {
 // Deliberately loose: a squad caption often carries a sponsor nickname the
 // register doesn't ("מכבי ע. בת ים \"צו פיוס\""), so a weak name match is worth
 // following; the age-group gate in ifaPickTeam is what actually decides.
+// A club whose register name IS the caption's club name (after the usual
+// normalisation) comes first, before clubs that merely share the city:
+// "עירוני מודיעין" and "הפועל מ.ס חבל מודיעין" both reduce to the token
+// "מודיעין" once the generic words are dropped, and on 12.10.2026 that tie
+// sent Eyal Prashizky to the wrong club.
+const ifaSameClubName = (a, b) => {
+  const x = ifaTokens(ifaNormalizeName(a)).join(' '), y = ifaTokens(ifaNormalizeName(b)).join(' ');
+  return !!x && x === y;
+};
+
 function ifaRankClubs(index, clubName, gender) {
   const wantWomen = gender === 'Women';
   return (index || [])
     .filter(c => (wantWomen ? c.sector === 'נשים' : c.sector !== 'נשים') || !c.sector)
-    .map(c => ({ ...c, s: ifaContainment(clubName, c.name) }))
+    .map(c => ({ ...c, s: ifaSameClubName(clubName, c.name) ? 2 : ifaContainment(clubName, c.name) }))
     .filter(c => c.s >= 0.4)
     .sort((a, b) => b.s - a.s);
 }
 
-// The club page's squad that matches the player page's label, or null.
+// The age group named in a squad label / age-group cell / league name, as the
+// CRM's group id (see @goldas/domain AGE_GROUPS), or null when it names none.
+// "נערים א' לאומית דרום" → nearim_a; "נער.ג דן" → nearim_c; "נוער" → noar;
+// "בוגרים" / "גברים" / "נשים" → seniors.
+function ifaAgeGroupOf(text) {
+  const t = ifaTokens(text);
+  const letter = (i) => {
+    const l = t[i + 1];
+    if (l === 'א') return 'a';
+    if (l === 'ב') return 'b';
+    if (l === 'ג') return 'c';
+    return null;
+  };
+  for (let i = 0; i < t.length; i++) {
+    const w = t[i];
+    if (w === 'נוער' || w === 'נערות') return 'noar';
+    if (w === 'בוגרים' || w === 'גברים' || w === 'נשים' || w === 'בוגרות') return 'seniors';
+    if (w === 'טרום') { const l = letter(t[i + 1] === 'ילדים' || t[i + 1] === 'ילדות' ? i + 1 : i); return l ? `trom_${l}` : 'trom'; }
+    if (w === 'נערים' || w === 'נערות') { const l = letter(i); return l ? `nearim_${l}` : 'nearim'; }
+    if (w === 'ילדים' || w === 'ילדות') { const l = letter(i); return l ? `yeladim_${l}` : 'yeladim'; }
+  }
+  return null;
+}
+
+// The club page's squad that matches the player page's label, or null. A
+// squad whose age group contradicts the label is never it, however well the
+// club name matches: the label "נערים א'" cannot mean the "נערים ג'" squad.
 function ifaPickTeam(teams, teamLabel, clubName) {
+  const want = ifaAgeGroupOf(teamLabel);
   const best = (teams || [])
+    .filter(t => { const have = ifaAgeGroupOf(t.ageGroup); return !want || !have || have === want; })
     .map(t => ({ ...t, s: ifaScoreTeam(teamLabel, clubName, t) }))
     .sort((a, b) => b.s - a.s)[0];
   return best && best.s >= 3 ? best : null;
@@ -178,6 +216,6 @@ function ifaFixtureFromCells(cells, href, isEnglishPage) {
 return {
   deriveSeason, normalizeIfaTime, ifaLooksReal,
   ifaExpandAbbrev, ifaTokens, ifaNormalizeName, ifaClubTokens, ifaContainment,
-  ifaScoreTeam, ifaParseCaption, ifaRankClubs, ifaPickTeam, ifaFixtureFromCells,
+  ifaScoreTeam, ifaParseCaption, ifaRankClubs, ifaPickTeam, ifaFixtureFromCells, ifaAgeGroupOf, ifaSameClubName,
 };
 });

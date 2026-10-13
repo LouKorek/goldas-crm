@@ -25,6 +25,7 @@ const { dedupeKey } = require('./lib/alert-keys.js');
 
 const SECTIONS = [
   ['job_failed', 'עבודות לילה שנכשלו', 'Failed night jobs', '⚠️'],
+  ['sync_mismatch', 'הסנכרון מצא קבוצה מפוקפקת', 'Sync found a doubtful squad', '🔍'],
   ['deal_stale', 'עסקאות שמחכות יותר מדי', 'Deals waiting too long', '⏳'],
   ['contract', 'סיום חוזה', 'Contract Expiry', '📋'],
   ['repr', 'סיום הסכם ייצוג', 'Representation Expiry', '🤝'],

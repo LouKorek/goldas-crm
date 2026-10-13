@@ -13,6 +13,7 @@ function dedupeKey(a, settings, today) {
   if (a.type === 'requirement_expired') return `requirement_expired|${a.subject.id}|${a.dueDate}`;
   if (a.type === 'task_overdue') return `task_overdue|${a.subject.id}|${a.dueDate}|${a.overdue ? 'overdue' : 'due'}`;
   if (a.type === 'job_failed') return `job_failed|${a.subject.id}`;
+  if (a.type === 'sync_mismatch') return `sync_mismatch|${a.subject.id}|${a.record?.autoFetch?.ifaFail?.teamId || ''}`;
   return `${a.type}|${a.subject.id}|${a.dueDate || ''}`;
 }
 

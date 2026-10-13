@@ -65,6 +65,14 @@ describe('alerts engine', () => {
     expect(r.byType.job_failed.map((a) => a.subject.id)).toEqual(['j1']);
     expect(r.alerts[0].severity).toBe('critical');
   });
+  it('flags a player whose IFA squad failed the plausibility check', () => {
+    const r = computeAlerts({ now: noon, players: [
+      { id: 'e', fullName: 'Eyal', autoFetch: { ifaFail: { reason: 'ifa-squad-mismatch', detail: 'נערים ג לא מתאים' } } },
+      { id: 'ok', fullName: 'Ok', autoFetch: { ifaFail: { reason: 'ifa-club-not-found' } } },
+    ] });
+    expect(r.byType.sync_mismatch.map((a) => a.subject.id)).toEqual(['e']);
+    expect(r.byType.sync_mismatch[0].proof.he).toMatch(/נערים ג/);
+  });
   it('lists matches in the window but does not count them as actions', () => {
     const r = computeAlerts({ now: noon, matches: [{ id: 'm', homeTeam: 'A', awayTeam: 'B', date: '2026-10-13', time: '20:00' }, { id: 'old', homeTeam: 'A', awayTeam: 'B', date: '2026-10-01' }] });
     expect(r.byType.match).toHaveLength(1);

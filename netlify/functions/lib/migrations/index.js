@@ -13,6 +13,7 @@ const MIGRATIONS = [
   require('./004-golda-audit.js'),
   require('./005-golda-numbers.js'),
   require('./006-clean-matches.js'),
+  require('./007-eyal-and-hadera-dupes.js'),
 ];
 
 async function records(store) {

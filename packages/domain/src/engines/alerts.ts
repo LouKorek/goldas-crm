@@ -8,7 +8,7 @@ import { playerName, DEAL_STALE_DAYS } from '../stages.js';
 
 export type AlertType =
   | 'contract' | 'repr' | 'passport' | 'birthday' | 'match'
-  | 'deal_stale' | 'requirement_expired' | 'task_overdue' | 'job_failed';
+  | 'deal_stale' | 'requirement_expired' | 'task_overdue' | 'job_failed' | 'sync_mismatch';
 export type Severity = 'critical' | 'warning' | 'info' | 'gold';
 
 export interface AlertSettings {
@@ -183,6 +183,19 @@ export function computeAlerts(input: AlertsInput): AlertsResult {
     });
   }
 
+  // The IFA sync found a squad for a player that cannot be his (wrong age
+  // group, or another club) and linked nothing; someone has to look. The
+  // import clears autoFetch.ifaFail on the next run that passes its checks.
+  for (const p of input.players ?? []) {
+    const fail = (p.autoFetch as Record<string, unknown> | undefined)?.ifaFail as Record<string, unknown> | undefined;
+    if (!fail || fail.reason !== 'ifa-squad-mismatch') continue;
+    alerts.push({
+      type: 'sync_mismatch', severity: 'warning', days: null, dueDate: null, overdue: false,
+      subject: { kind: 'player', id: str(p.id), name: playerName(p) }, record: p,
+      proof: { he: `הסנכרון לא קישר משחקים: ${str(fail.detail)}`, en: `Sync linked no matches: ${str(fail.detail)}` },
+    });
+  }
+
   const windowMs = (input.jobWindowHours ?? 24) * 3600000;
   for (const j of input.jobs ?? []) {
     if (j.status !== 'error') continue;
@@ -198,7 +211,7 @@ export function computeAlerts(input: AlertsInput): AlertsResult {
   const order: Record<Severity, number> = { critical: 0, warning: 1, gold: 2, info: 3 };
   alerts.sort((a, b) => order[a.severity] - order[b.severity] || (a.days ?? 0) - (b.days ?? 0));
 
-  const byType = Object.fromEntries((['contract', 'repr', 'passport', 'birthday', 'match', 'deal_stale', 'requirement_expired', 'task_overdue', 'job_failed'] as AlertType[])
+  const byType = Object.fromEntries((['contract', 'repr', 'passport', 'birthday', 'match', 'deal_stale', 'requirement_expired', 'task_overdue', 'job_failed', 'sync_mismatch'] as AlertType[])
     .map((k) => [k, alerts.filter((a) => a.type === k)])) as Record<AlertType, Alert[]>;
   // Matches are information, not action; the total counts what needs doing.
   const total = alerts.filter((a) => a.type !== 'match').length;
