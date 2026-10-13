@@ -240,7 +240,7 @@ test('007 refuses on any mismatch and skips ids that are gone', async () => {
 function kishronot() {
   const out = {};
   for (let i = 0; i < 27; i++) {
-    const d = new Date(Date.UTC(2025, 8, 7 + i * 9));
+    const d = i === 26 ? new Date(Date.UTC(2026, 4, 25)) : new Date(Date.UTC(2025, 8, 7 + i * 9));
     out[`k${i}`] = { source: 'ifa', sourceMatchId: `77${i}`, date: d.toISOString().slice(0, 10), time: '17:00', homeTeam: i % 2 ? 'מכבי כשרונות חדרה' : 'יריבה', awayTeam: i % 2 ? 'יריבה' : 'מכבי כשרונות חדרה', linkedPlayers: i === 5 ? ['ghost'] : [['lQKfyOZsaFHSKkn7JkFO', 'alon', 'almog'][i % 3]] };
   }
   return out;
