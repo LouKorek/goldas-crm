@@ -10,8 +10,11 @@
 // 13.10.2026 ("מחק 27").
 //
 // Checked against the live data first: exactly 27 live matches of that club
-// in that date range, all from the IFA, and no match of the club outside the
-// range or still linked to a player this season. One mismatch and the plan
+// in that date range (the last one is stored as 25.5, the UTC date of a late
+// 24.5 kickoff), all from the IFA, and no match of the club outside the range.
+// The first run (13.10 06:02) refused because it also required one of them to
+// carry Eyal's current player id; the old sync linked them under player ids
+// that migration 001 has since folded, so the report lists the ids instead. One mismatch and the plan
 // throws, so nothing is written. Deletes are recycle-bin deletes (deletedAt),
 // restorable from the app.
 const { OWNER_EMAIL } = require('../firestore.js');
@@ -21,8 +24,7 @@ const title = '27 משחקי מכבי כשרונות חדרה 2025/26 שקושר
 
 const CLUB_RE = /כשרונות\s*חדרה/;
 const EXPECTED = 27;
-const FROM = '2025-09-07', TO = '2026-05-24';
-const EYAL = 'lQKfyOZsaFHSKkn7JkFO';
+const FROM = '2025-09-07', TO = '2026-05-25';
 
 const live = (m) => m && !m.deletedAt;
 const linked = (m) => (Array.isArray(m.linkedPlayers) ? m.linkedPlayers : []);
@@ -37,7 +39,6 @@ function planA(matches) {
   if (outside.length) problems.push(`${outside.length} משחקים של כשרונות חדרה מחוץ לטווח (${outside.map((m) => `${m.id} ${m.date}`).join(', ')}), לא נוגעים בכלום`);
   const notIfa = rows.filter((m) => m.source !== 'ifa');
   if (notIfa.length) problems.push(`${notIfa.length} משחקים לא הגיעו מההתאחדות (${notIfa.map((m) => m.id).join(', ')})`);
-  if (!rows.some((m) => linked(m).includes(EYAL))) problems.push('אף משחק לא מקושר לאייל פרשיצקי, לא נראה כמו הרשומות שנבדקו');
   if (problems.length) return { problems, notes, writes: [], recycled: [], players: {} };
 
   const players = {};
