@@ -10,6 +10,8 @@ const seed = () => ({
     p2: { fullName: 'Dana Levi', gender: 'Women', currentClub: 'מכבי חיפה', deletedAt: '2026-10-01T00:00:00Z' },
     lQKfyOZsaFHSKkn7JkFO: { fullName: 'Eyal Prashizky', gender: 'Men', currentClub: "Ironi Modi'in", clubId: 'c_ironi_modiin', dob: '2010-04-14', stage: 'represented', contractStatus: 'Under Contract',
       autoFetch: { ifa: { playerId: '256780', teamId: '6522', teamName: "הפ' מ.ס חבל מודיעין", ageGroup: 'נערים ג', forClub: "Ironi Modi'in", resolvedAt: '2026-10-12T20:36:00Z' } } },
+    naveh: { fullName: 'Naveh Salant', gender: 'Men', currentClub: 'מ.ס. אשדוד', dob: '2009-11-01', stage: 'represented', contractStatus: 'Under Contract', ifaTeamUrl: 'https://www.football.org.il/players/player/?player_id=226169' },
+    omri: { fullName: 'Omri Shalom Takala', gender: 'Men', currentClub: "מ.ס. אשדוד/ז'ילבר", dob: '2010-06-01', stage: 'represented', contractStatus: 'Under Contract', ifaTeamUrl: 'https://www.football.org.il/players/player/?player_id=300001', autoFetch: { ifaFail: { reason: 'club-not-found' } } },
   },
   jobs: {
     UHluG6hbVT8aO5mNLGZA: { name: 'migrate', status: 'error', error: 'לא נמחק כלום. נמצאו 51 משחקים בלי שחקן, צפויים 74', startedAt: '2026-10-12T20:55:00Z' },
@@ -74,7 +76,7 @@ function fixMatches() {
 test('001 tags represented players and copies candidates with stage/category', async () => {
   const store = memoryStore(seed());
   const { migrations: rows, ran } = await migrations.run(store);
-  assert.equal(ran.length, 8);
+  assert.equal(ran.length, 9);
   assert.ok(rows.every((m) => m.status === 'done'));
   const p = store.db.players;
   assert.equal(p.p1.stage, 'represented'); assert.equal(p.p1.category, 'men'); assert.equal(p.p1.name, 'Noam Barzilai');
@@ -135,7 +137,7 @@ test('dryRun writes nothing', async () => {
   const store = memoryStore(seed());
   const before = JSON.stringify(store.db);
   const rows = await migrations.dryRun(store);
-  assert.equal(rows.length, 8);
+  assert.equal(rows.length, 9);
   assert.ok(rows.every((m) => m.status === 'pending' && m.report && m.report.summary));
   assert.equal(JSON.stringify(store.db), before);
 });
@@ -271,4 +273,34 @@ test('008 refuses when the count differs, a match is outside the season or not f
     try { await migrations.run(st, only008); } catch {}
     assert.ok(Object.values(st.db.matches).every((x) => !x.deletedVia || x.deletedVia !== '008-kishronot-hadera'), 'nothing changed on refusal');
   }
+});
+
+const only009 = { only: ['009-ashdod-squads'] };
+
+test('009 pins the two Ashdod players to their IFA squads', async () => {
+  const st = memoryStore(seed());
+  const { ran } = await migrations.run(st, only009);
+  assert.equal(ran[0].writes, 2);
+  const n = st.db.players.naveh.autoFetch.ifa, o = st.db.players.omri.autoFetch.ifa;
+  assert.equal(n.teamId, '1199'); assert.equal(n.playerId, '226169'); assert.equal(n.forClub, 'מ.ס. אשדוד');
+  assert.equal(o.teamId, '1200'); assert.equal(o.playerId, '300001'); assert.equal(o.forClub, "מ.ס. אשדוד/ז'ילבר");
+  assert.equal(st.db.players.omri.autoFetch.ifaFail, null);
+  assert.equal(st.db.players.lQKfyOZsaFHSKkn7JkFO.autoFetch.ifa.teamId, '6522', 'other players untouched');
+  // Running again skips both.
+  const again = memoryStore(st.db); delete again.db.migrations['009-ashdod-squads'];
+  const r2 = await migrations.run(again, only009);
+  assert.equal(r2.ran[0].writes, 0);
+  assert.equal(again.db.migrations['009-ashdod-squads'].report.counts.skipped, 2);
+});
+
+test('009 refuses on a wrong player id, club or an ambiguous name', async () => {
+  const wrongId = seed(); wrongId.players.naveh.ifaTeamUrl = 'https://www.football.org.il/players/player/?player_id=1';
+  await assert.rejects(migrations.run(memoryStore(wrongId), only009), /player_id בקישור הוא 1/);
+  const otherClub = seed(); otherClub.players.omri.currentClub = 'Hapoel Hadera';
+  await assert.rejects(migrations.run(memoryStore(otherClub), only009), /לא אשדוד/);
+  const twin = seed(); twin.players.naveh2 = { ...twin.players.naveh };
+  await assert.rejects(migrations.run(memoryStore(twin), only009), /נמצאו 2 שחקנים/);
+  const st = memoryStore(wrongId);
+  try { await migrations.run(st, only009); } catch {}
+  assert.ok(!st.db.players.omri.autoFetch.ifa, 'nothing written on refusal');
 });

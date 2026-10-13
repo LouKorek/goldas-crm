@@ -15,6 +15,7 @@ const MIGRATIONS = [
   require('./006-clean-matches.js'),
   require('./007-eyal-and-hadera-dupes.js'),
   require('./008-kishronot-hadera.js'),
+  require('./009-ashdod-squads.js'),
 ];
 
 async function records(store) {
