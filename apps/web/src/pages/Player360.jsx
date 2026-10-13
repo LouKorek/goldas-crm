@@ -122,9 +122,9 @@ export default function Player360() {
         title={name}
         subtitle={[STAGE_LABELS[stage]?.[he ? 'he' : 'en'], CATEGORY_LABELS[p.category]?.[he ? 'he' : 'en'], tv(p.primaryPosition), p.currentClub || tv(p.contractStatus), p.dob ? `${calcAge(p.dob)} ${t('yrs')}` : null].filter(Boolean).join(' · ')}
         action={<>
-          <button className="btn btn-secondary" onClick={() => cv('he')}><span className="btn-text">{t('CV (Hebrew)')}</span></button>
-          <button className="btn btn-secondary" onClick={() => cv('en')}><span className="btn-text">{t('CV (English)')}</span></button>
-          {canShare && <button className="btn btn-ghost" onClick={() => cv(he ? 'he' : 'en', true)}>{t('Share PDF')}</button>}
+          <button className="btn btn-secondary" onClick={() => cv('he')} title={t('CV (Hebrew)')}><Icon name="clipboard" size={12} /><span className="btn-text">{t('CV (Hebrew)')}</span><span className="btn-text-sm">עב</span></button>
+          <button className="btn btn-secondary" onClick={() => cv('en')} title={t('CV (English)')}><Icon name="clipboard" size={12} /><span className="btn-text">{t('CV (English)')}</span><span className="btn-text-sm">EN</span></button>
+          {canShare && <button className="btn btn-ghost" onClick={() => cv(he ? 'he' : 'en', true)} title={t('Share PDF')}><Icon name="external" size={12} /><span className="btn-text">{t('Share PDF')}</span></button>}
           {canEdit && <button className="btn btn-primary" onClick={() => navigate(stage === 'represented' ? '/players' : `/pipeline/${p.category || 'men'}`, { state: { editId: id } })}><Icon name="edit" size={12} /><span className="btn-text">{t('Edit player')}</span></button>}
         </>}
       />

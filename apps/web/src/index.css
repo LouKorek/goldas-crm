@@ -687,15 +687,34 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
   background: var(--bg);
 }
 @media (min-width: 769px) {
-  .page-header {
+  /* On the desktop the band and its filters freeze together, as before:
+     the wrap is the sticky block and the band inside it loses its own
+     stickiness and spacing. */
+  .page-header-wrap {
+    position: sticky;
     top: 0;
+    z-index: 40;
+    background: var(--bg);
     margin-top: -18px;
     margin-inline-start: -20px;
     margin-inline-end: -20px;
-    padding-inline-start: 20px;
-    padding-inline-end: 20px;
-    padding-top: 18px;
+    margin-bottom: 20px;
+    padding: 18px 20px 12px;
+    border-top: 1px solid var(--gold-dk);
+    border-bottom: 1px solid var(--border);
+    animation: fadeUp 0.3s var(--ease-out);
   }
+  .page-header-wrap::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0; inset-inline-end: 0; bottom: 100%;
+    height: 220px;
+    background: var(--bg);
+  }
+  .page-header-wrap .page-header {
+    position: static; margin: 0; padding: 0; border: none; animation: none;
+  }
+  .page-header-wrap .page-header::before { display: none; }
 }
 @media (max-width: 768px) {
   /* The content pane is the scroll container on phones as well, so the
@@ -715,8 +734,8 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
     top: 0;
     z-index: 40;
     background: var(--bg);
-    margin: 0 0 14px;
-    padding: 10px 0;
+    margin: 0 0 10px;
+    padding: 8px 0;
     max-width: 100%;
   }
   /* Records scrolling up pass behind the opaque top bar, so the masthead
@@ -1018,12 +1037,17 @@ textarea:focus::placeholder {
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
   }
+  /* A table is as wide as its content and never narrower than its
+     frame: a wide register scrolls sideways inside .table-wrap, while a
+     short one (team, recycle bin, jobs: up to five columns) fits the phone
+     with its text wrapping instead of being clipped at the edge. */
   .data-table {
-    /* Hard pixel width so the table is unambiguously wider than the
-       phone viewport — guarantees the wrap has something to scroll. */
-    min-width: 760px !important;
-    width: 760px !important;
+    width: max-content !important;
+    min-width: 100% !important;
   }
+  .data-table:not(:has(th:nth-child(6))) { width: 100% !important; table-layout: auto; }
+  .data-table:not(:has(th:nth-child(6))) td { white-space: normal; overflow-wrap: anywhere; }
+
   /* Mobile table readability: 11px cells / 9.5px headers were below a
      comfortable reading size on phone DPIs. */
   .data-table td { font-size: 12px; padding: 9px 8px; }
@@ -1040,97 +1064,140 @@ textarea:focus::placeholder {
      instead of getting clipped at the card edge. */
   .card { overflow-wrap: anywhere; }
 
-  .page-title    { font-size: 24px; }
-  .page-subtitle { font-size: 12px; }
-  .page-header > div:first-child { flex-direction: column; align-items: flex-start !important; gap: 10px; }
-  .page-header .action-bar { flex-wrap: wrap; gap: 6px; width: 100%; max-width: 100%; }
-  /* Pages wrap their action buttons in their own inline-style <div style=
-     "display:flex"> WITHOUT flex-wrap, so when 3+ buttons + search don't
-     fit one row, content gets clipped instead of wrapping. Force every
-     nested flex container inside .action-bar to wrap, on every screen. */
-  /* ── Toolbar on phones: icon-only controls, one row ──
-     Every action button drops its wording (the label lives in a
-     .btn-text span, hidden here) and becomes a 34px square. Three or four
-     of them plus the search field then occupy a single line instead of
-     three, which is the whole point of a frozen band: minimum height,
-     nothing removed. */
-  .page-header .action-bar,
-  .page-header .action-bar > div {
+  /* ── Masthead on phones: one slim frozen band ──
+     Only the title row (title + icon buttons) and, when a screen has one,
+     the search field stay pinned. Filters, chip rows and range navigators
+     live in .page-filters, which scrolls away with the records, so the
+     frozen band costs ~60–100px instead of half the screen. */
+  .page-header-wrap { display: contents; }
+  .page-header {
+    margin: 0 0 10px;
+    padding: 8px 0;
+    border-top: none;
+  }
+  .page-head-row {
     display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    align-items: center !important;
+    gap: 6px 10px;
+  }
+  .page-head-row > .page-head-text { flex: 1 1 0; min-width: 0; }
+  .page-title {
+    font-size: 18px;
+    line-height: 1.2;
+    overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow-wrap: anywhere;
+  }
+  .page-subtitle {
+    font-size: 10.5px; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* The action strip: 40px squares, never wrapping, never clipping. A
+     button that carries a .btn-text label shows only its icon; a button
+     with a bare label (no icon to stand in for it) keeps its wording at
+     a compact size, and a .btn-text-sm span is the short form shown only
+     here. */
+  .page-header .action-bar {
+    display: flex !important;
+    flex: 0 0 auto;
     flex-wrap: wrap;
     align-items: center;
-    gap: 5px;
-    width: 100%;
+    gap: 6px;
+    width: auto;
     max-width: 100%;
+  }
+  /* With a search field the strip takes a full row of its own under the
+     title, and the field stretches across whatever the buttons leave. */
+  .page-header .action-bar:has(input) { flex: 1 1 100%; width: 100%; }
+  .page-header .action-bar > div:has(input) { flex: 1 1 120px; min-width: 100px; height: 40px; display: flex; align-items: center; }
+  .page-header .action-bar > div:has(input) > div { width: 100%; }
+  .page-header .action-bar input {
+    width: 100% !important; max-width: 100%;
+    height: 40px !important; min-height: 40px; font-size: 13px;
   }
   .page-header .action-bar .btn-text { display: none; }
-  .page-header .action-bar .btn {
-    width: 34px !important;
-    min-width: 34px;
-    height: 34px !important;
-    padding: 0 !important;
-    gap: 0;
+  .page-header .action-bar .btn-text-sm { display: inline; }
+  .page-header .action-bar .btn, .page-header .action-bar a.btn {
+    height: 40px !important; min-height: 40px;
+    width: auto !important; min-width: 40px;
+    padding: 0 10px !important;
+    gap: 5px;
     flex: 0 0 auto;
+    font-size: 11.5px;
   }
-  /* The search field takes whatever space is left on that same row. */
-  .page-header .action-bar > div > div:has(input) {
-    flex: 1 1 120px;
-    min-width: 110px;
-    height: 34px !important;
-  }
-  .page-header .action-bar input {
-    width: 100% !important;
-    max-width: 100%;
-    height: 34px !important;
-    font-size: 12px;
-  }
+  .page-header .action-bar .btn:has(.btn-text):not(:has(.btn-text-sm)) { width: 40px !important; padding: 0 !important; }
+  .page-header .action-bar .btn svg { flex-shrink: 0; }
+  .btn-text-sm { display: none; }
 
-  /* Filter selects: three per row rather than two, and the inline
-     min-widths the screens set for desktop are neutralised here. */
-  .filter-bar > div { min-width: 0 !important; flex: 1 1 96px; max-width: 100%; }
-  /* A chip group is a row of its own — it must never be squeezed into a
-     narrow flex column alongside other groups (that is what pushed the TM
-     Watch filters off the side of the screen). */
-  .filter-bar .chip-group {
-    flex: 1 1 100% !important;
-    min-width: 0;
-    width: 100%;
+  /* Filters under the band: a quiet block that scrolls with the page. */
+  .page-filters { margin-bottom: 12px; }
+  .page-filters > .filter-bar,
+  .page-filters > div[style*="flex"] { margin-top: 0 !important; }
+  /* Screens that hand a plain flex row as their filters (Deals, Prospects)
+     get the same stacked treatment: one control per row, full width. */
+  .page-filters > div:not(.filter-bar)[style*="flex"] {
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px; max-width: 100%;
+  }
+  .page-filters > div:not(.filter-bar) > .chip { align-self: flex-start; }
+  .page-filters > div:not(.filter-bar) > .filter-bar { padding: 0 !important; }
+  .filter-bar {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 8px 10px !important;
     max-width: 100%;
   }
-  /* The thin vertical dividers between groups are meaningless once each
-     group owns its own row. */
+  /* Each chip group is one swipeable row: the chips keep their full
+     wording and counts, and a long group scrolls sideways instead of
+     stacking three rows deep. */
+  .filter-bar .chip-group, .page-filters .chip-group {
+    display: flex;
+    flex-wrap: nowrap !important;
+    flex: 0 0 auto !important;
+    width: 100%; max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    padding-bottom: 1px;
+  }
+  .filter-bar .chip-group::-webkit-scrollbar, .page-filters .chip-group::-webkit-scrollbar { display: none; }
+  /* A group of up to four chips shares the row evenly, so the tabs read as
+     one segmented control; longer groups keep their natural widths and
+     scroll. */
+  .filter-bar .chip-group:not(:has(.chip:nth-child(5))) .chip,
+  .page-filters .chip-group:not(:has(.chip:nth-child(5))) .chip { flex: 1 1 0; }
+  .chip { font-size: 11px; padding: 0 12px; letter-spacing: 0.03em; gap: 4px; min-height: 36px; height: 36px; flex: 0 0 auto; }
+  .chip-group { gap: 6px; }
   .filter-div { display: none !important; }
-
-  /* Dropdown controls share a single row, each taking an equal slice of it:
-     four selects across a phone screen rather than two per row. */
-  .filter-cell {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    max-width: none !important;
+  /* Range navigator (‹ label › today): one row, square buttons, the label
+     taking the room between them. */
+  .filter-bar > div:not(.chip-group):not(.filter-cell):not(.filter-pair):has(> button) {
+    display: flex; align-items: center; gap: 6px; width: 100%; margin: 0 !important;
   }
-  .filter-cell select {
-    width: 100% !important;
-    min-width: 0 !important;
-    font-size: 9.5px;
-    padding: 0 4px;
-    height: 32px;
+  .filter-bar > div:not(.chip-group):not(.filter-cell):not(.filter-pair):has(> button) > span { flex: 1 1 auto; min-width: 0 !important; width: auto !important; }
+  .filter-bar > div:not(.chip-group):not(.filter-cell):not(.filter-pair):has(> button) > button {
+    height: 36px !important; min-height: 36px; min-width: 36px; width: auto !important; padding: 0 10px !important; flex: 0 0 auto;
   }
-  /* Matches pairs its player filter with the group select on one line. */
-  .filter-pair { flex: 1 1 100% !important; min-width: 0 !important; }
+  /* Dropdown filters: two per row at a readable size — four 9px selects
+     across a phone were not usable. */
+  .filter-bar > div:not(.chip-group):not(.filter-cell):not(.filter-pair):not(:has(> button)) { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+  .filter-bar > .filter-cell { flex: 0 1 calc(50% - 4px) !important; min-width: 0 !important; max-width: 100% !important; }
+  .filter-bar { flex-direction: row; flex-wrap: wrap; }
+  .filter-bar > .chip-group, .filter-bar > .filter-pair, .filter-bar > select, .filter-bar > div:not(.filter-cell) { flex: 1 1 100% !important; }
+  .filter-pair { display: flex !important; flex: 1 1 100% !important; gap: 6px; min-width: 0 !important; width: 100%; }
   .filter-pair > * { flex: 1 1 0 !important; min-width: 0 !important; width: auto !important; }
-  .filter-pair select { font-size: 9.5px; padding: 0 4px; height: 32px; min-width: 0 !important; }
-  .filter-pair button { width: 100% !important; font-size: 9.5px; }
-  .filter-bar select {
-    min-width: 0 !important;
-    width: 100% !important;
-    height: 32px;
-    font-size: 10.5px;
-    padding: 0 6px;
+  .filter-bar select, .filter-pair select, .filter-cell select {
+    width: 100% !important; min-width: 0 !important;
+    height: 38px !important; min-height: 38px; font-size: 12.5px; padding: 0 10px;
   }
-
-  /* Masthead runs tight: the band should cost as little height as it can. */
-  .page-title { font-size: 20px; }
-  .page-subtitle { font-size: 10px; margin-top: 3px; }
+  .filter-pair button, .filter-pair .btn { width: 100% !important; font-size: 12px; height: 38px !important; min-height: 38px; }
+  .filter-bar > .btn { align-self: flex-start; }
+  .filter-bar > span { font-size: 11px; }
 
   /* (Matches used to carry a bespoke mobile toolbar layout; it now uses the
      same icon-only single-row toolbar as every other screen, so the special
@@ -1427,9 +1494,10 @@ body.light-mode ::selection { background: rgba(138,106,40,0.22); }
    =================================================================== */
 /* Tap targets: on touch screens every control is at least 44px tall. */
 @media (pointer: coarse) {
-  .btn, .btn-sm, .chip, .form-input, .form-select, .search-input-field, select, input:not([type=checkbox]):not([type=radio]) {
+  .form-input, .form-select, .search-input-field, select, input:not([type=checkbox]):not([type=radio]) {
     min-height: var(--tap);
   }
+  .btn, .btn-sm, .chip { min-height: 38px; }
   .btn-icon, .modal-close-btn, .row-actions button, .action-btn { min-width: var(--tap); min-height: var(--tap); }
   td, th { padding-top: 12px; padding-bottom: 12px; }
 }
