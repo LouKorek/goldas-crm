@@ -828,17 +828,29 @@ export function ScraperCredits() {
 }
 
 // Page header
+// Two blocks: the band (title, subtitle, action strip) and the filters the
+// screen passes as children. On the desktop the two freeze together; on a
+// phone only the band stays pinned and the filters scroll with the records
+// (see the masthead rules in index.css). Screens often hand the action
+// strip as one wrapping <div>; its controls are lifted out so the strip
+// lays them out itself, which is what lets the phone turn them into a
+// single row of squares.
 export function PageHeader({ title, subtitle, action, children }) {
+  const controls = React.isValidElement(action) && action.type === 'div' && !action.props.className
+    ? action.props.children
+    : action;
   return (
-    <div className="page-header">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 className="page-title">{title}</h1>
-          {subtitle && <p className="page-subtitle">{subtitle}</p>}
+    <div className="page-header-wrap">
+      <div className="page-header">
+        <div className="page-head-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div className="page-head-text">
+            <h1 className="page-title">{title}</h1>
+            {subtitle && <p className="page-subtitle">{subtitle}</p>}
+          </div>
+          {controls && <div className="action-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{controls}</div>}
         </div>
-        {action && <div className="action-bar" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>{action}</div>}
       </div>
-      {children}
+      {children && <div className="page-filters">{children}</div>}
     </div>
   );
 }
