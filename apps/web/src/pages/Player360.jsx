@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { listenCollection, updateDoc_, PATHS, resolveFileUrl } from 'lib/db';
+import { listenCollection, PATHS, resolveFileUrl } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { listenDeals } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
@@ -8,7 +8,7 @@ import { calcAge, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
 import { useRole } from 'lib/roleContext';
 import { t, tv, relDays, fmtDateTime, getLang } from 'lib/i18n';
-import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, AGE_GROUPS, resolveAgeGroup, ageGroupFor, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
+import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
 import { PageHeader, FactLine, Skeleton, Empty, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 
@@ -38,30 +38,16 @@ const Card = ({ title, children, action }) => (
   </section>
 );
 
-// Youth age group: the cohort default (IFA rule, season from July 1) with a
-// manual override kept per season, so last season's override is ignored.
-function AgeGroupFact({ p, canEdit }) {
+// Youth age group, read-only like every other fact: the cohort default (IFA
+// rule, season from July 1 — so it rolls over by itself each season) or this
+// season's manual override, which is set in the edit form.
+function AgeGroupFact({ p }) {
   const he = getLang() === 'he';
   if (!p.dob || !isYouthAge(p.dob)) return null;
   const g = resolveAgeGroup(p);
-  const def = ageGroupFor(p.dob);
   const overridden = p.ageGroupOverride?.season === seasonStartYear();
-  const set = async (id) => {
-    await updateDoc_(PATHS.PLAYERS, p.id, { ageGroupOverride: id ? { id, season: seasonStartYear() } : null });
-    toast.success(t('Age group updated.'));
-  };
   return (
-    <div className="fact-row" style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
-      <span className="fact-key" style={{ color: 'var(--text-3)', minWidth: 110 }}>{t('Age group')} {seasonLabel()}</span>
-      {canEdit ? (
-        <select className="fact-select" value={overridden ? p.ageGroupOverride.id : ''} onChange={(e) => set(e.target.value)}>
-          {/* The cohort group is the blank (automatic) choice, so it is listed once. */}
-          <option value="">{def ? def[he ? 'he' : 'en'] : t('by cohort')}</option>
-          {AGE_GROUPS.filter((x) => x.id !== def?.id).map((x) => <option key={x.id} value={x.id}>{x[he ? 'he' : 'en']}</option>)}
-        </select>
-      ) : <span>{g ? g[he ? 'he' : 'en'] : '—'}</span>}
-      {overridden && <span style={{ fontSize: 10.5, color: 'var(--amber)' }}>{t('manual override')}</span>}
-    </div>
+    <Fact k={`${t('Age group')} ${seasonLabel()}`} v={g ? <>{g[he ? 'he' : 'en']}{overridden && <span style={{ fontSize: 10.5, color: 'var(--amber)', marginInlineStart: 8 }}>{t('manual override')}</span>}</> : '—'} />
   );
 }
 
@@ -135,7 +121,7 @@ export default function Player360() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader stacked
         title={name}
         subtitle={<FactLine items={[STAGE_LABELS[stage]?.[he ? 'he' : 'en'], CATEGORY_LABELS[p.category]?.[he ? 'he' : 'en'], tv(p.primaryPosition), p.currentClub || tv(p.contractStatus), p.dob ? `${calcAge(p.dob)} ${t('yrs')}` : null]} />}
         action={<>
@@ -157,7 +143,7 @@ export default function Player360() {
         <Card title={t('Profile')}>
           <Fact k={t('Nationalities')} v={(p.nationalities || []).map((n) => `${flagEmoji(ISO2[n]) || ''} ${n}`).join(', ')} />
           <Fact k={t('Date of Birth')} v={p.dob ? `${fmtDate(p.dob)} (${calcAge(p.dob)})` : ''} />
-          <AgeGroupFact p={p} canEdit={canEdit} />
+          <AgeGroupFact p={p} />
           <Fact k={t('Position')} v={[tv(p.primaryPosition), ...(p.secondaryPositions || []).map(tv)].filter(Boolean).join(', ')} />
           <Fact k={t('Foot')} v={tv(p.foot)} />
           <Fact k={t('Height (cm)')} v={p.height} />

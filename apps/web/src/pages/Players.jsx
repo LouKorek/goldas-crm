@@ -9,6 +9,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          ExportMenu, useConfirm, RowActions } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
+import AgeGroupField from 'components/ui/AgeGroupField';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
 
@@ -627,6 +628,7 @@ export default function Players() {
               <DateInput value={f('dob')} onChange={s('dob')} />
               {age!==null&&<div className="form-hint">{t("Age:")} {age}</div>}
             </Field>
+            <AgeGroupField dob={f('dob')} value={form.ageGroupOverride} onChange={s('ageGroupOverride')} />
             <Field label={t("Primary Position")}>
               <select value={f('primaryPosition')} onChange={e=>s('primaryPosition')(e.target.value)}>
                 <option value="">{t("Select...")}</option>

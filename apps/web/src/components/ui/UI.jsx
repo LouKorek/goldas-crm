@@ -855,14 +855,17 @@ export function FactLine({ items }) {
   );
 }
 
-export function PageHeader({ title, subtitle, action, children }) {
+// `stacked`: on phones the action strip takes a full row beneath the title,
+// so a long name (a player's) is shown whole instead of sharing its row with
+// five buttons and being clipped.
+export function PageHeader({ title, subtitle, action, children, stacked }) {
   const controls = React.isValidElement(action) && action.type === 'div' && !action.props.className
     ? action.props.children
     : action;
   return (
     <div className="page-header-wrap">
       <div className="page-header">
-        <div className="page-head-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div className={`page-head-row${stacked ? ' page-head-row--stacked' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div className="page-head-text">
             <h1 className="page-title">{title}</h1>
             {subtitle && <p className="page-subtitle">{subtitle}</p>}

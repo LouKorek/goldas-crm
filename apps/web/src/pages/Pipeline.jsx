@@ -13,6 +13,7 @@ import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
 import { AgeGroupChip } from './Prospects';
+import AgeGroupField from 'components/ui/AgeGroupField';
 
 // ── Nationality flags (matches the Represented screen) ────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Ivory Coast':'CIV','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -877,6 +878,7 @@ export default function Pipeline({ category }) {
             <Field label={t("Date of Birth")}>
               <DateInput value={f('dob')} onChange={s('dob')} />
             </Field>
+            <AgeGroupField dob={f('dob')} value={form.ageGroupOverride} onChange={s('ageGroupOverride')} />
             <Field label={t("Primary Position")}>
               <select value={f('primaryPosition')} onChange={e=>s('primaryPosition')(e.target.value)}>
                 <option value="">{t("Select...")}</option>
