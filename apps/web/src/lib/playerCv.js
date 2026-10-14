@@ -172,19 +172,31 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
   const footWord = (f) => L.foot_[FOOT_WORD[f] || f] || FOOT_WORD[f] || f || '';
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
   const FAM = useFonts(doc, fonts);
-  await installHebrew(doc);   // Hebrew names, clubs and notes print in Heebo
+  // The Hebrew sheet is a right-to-left document: every line is laid out
+  // right to left and the page is mirrored — logo and name on the right,
+  // labels on the right, values to their left.
+  const rtl = lang === 'he';
+  await installHebrew(doc, { rtl });   // Hebrew names, clubs and notes print in Heebo
   const MED = FAM === 'Poppins' ? 'medium' : 'bold';   // Helvetica has no medium
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 48;
   const age = calcAge(player.dob);
+  // Mirror helpers: a left-edge x becomes a right-edge x on the Hebrew sheet,
+  // and text anchored at it is right-aligned.
+  const X = (x) => (rtl ? W - x : x);
+  const ALIGN = rtl ? 'right' : 'left';
+  // Letterspaced labels are measured without the spacing, so a right-aligned
+  // one would overshoot its anchor by the spacing it adds; nudge it back.
+  const spaced = (text, space) => (rtl ? -(Array.from(String(text)).length - 1) * space : 0);
+  const write = (text, x, y, opts = {}) => doc.text(text, X(x) + spaced(text, opts.charSpace || 0), y, { align: ALIGN, ...opts });
 
   // Small caps label, letterspaced — the recurring typographic motif.
   const label = (text, x, y, colour = GOLD_DARK, size = 7.6) => {
     doc.setFont(FAM, MED);
     doc.setFontSize(size);
     doc.setTextColor(...colour);
-    doc.text(String(text).toUpperCase(), x, y, { charSpace: 1.15 });
+    write(String(text).toUpperCase(), x, y, { charSpace: 1.15 });
   };
 
   // ── Masthead ───────────────────────────────────────────────────
@@ -204,7 +216,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
       const p = doc.getImageProperties(logo);
       const h = 64;
       const w = Math.min((p.width / p.height) * h, 128);
-      const lx = M, ly = (BAND - h) / 2 - 4;
+      const lx = rtl ? W - M - w : M, ly = (BAND - h) / 2 - 4;
       doc.setFillColor(...CREST);
       doc.roundedRect(lx - 5, ly - 5, w + 10, h + 10, 3, 3, 'F');
       doc.setDrawColor(...GOLD_DARK);
@@ -220,14 +232,14 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
   doc.setFont(FAM, 'bold');
   doc.setFontSize(28);
   doc.setTextColor(255, 255, 255);
-  doc.text(latin1(player.playerName) || L.player, textX, 88);
+  write(latin1(player.playerName) || L.player, textX, 88);
 
   const strap = [L.cat[category] || CAT_WORD[category], nationalTeam(player) || (player.nationalities || [])[0]]
     .filter(Boolean).join('  ·  ');
   doc.setFont(FAM, 'normal');
   doc.setFontSize(11);
   doc.setTextColor(...GOLD);
-  doc.text(latin1(strap), textX, 110, { charSpace: 0.5 });
+  write(latin1(strap), textX, 110, { charSpace: 0.5 });
 
   // ── Headline figures ───────────────────────────────────────────
   // The four things a sporting director checks first, given the space they
@@ -245,7 +257,8 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
   const STRIP_Y = BAND + 34;
   const STRIP_H = stats.length ? 62 : 0;
   const colW = (W - M * 2) / Math.max(stats.length, 1);
-  stats.forEach(([k, v], i) => {
+  stats.forEach(([k, v], idx) => {
+    const i = rtl ? stats.length - 1 - idx : idx;   // first figure on the right
     const cx = M + colW * i + colW / 2;
     if (i) {
       doc.setDrawColor(...RULE);
@@ -295,7 +308,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
     doc.setDrawColor(...GOLD_DARK);
     doc.setFillColor(...GOLD_DARK);
     doc.setLineWidth(0.9);
-    ICONS[icon](doc, M, y - ICON_S + 2.5, ICON_S);
+    ICONS[icon](doc, rtl ? W - M - ICON_S : M, y - ICON_S + 2.5, ICON_S);
 
     label(name, LABEL_X, y, MUTED, 7.4);
 
@@ -303,7 +316,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
     doc.setFontSize(12);
     doc.setTextColor(...INK);
     const fitted = doc.splitTextToSize(latin1(value), W - M - VALUE_X)[0] || '';
-    doc.text(fitted, VALUE_X, y);
+    write(fitted, VALUE_X, y);
 
     y += 11;
     doc.setDrawColor(...RULE);
@@ -328,7 +341,7 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
     // a second page stops being a one-pager.
     const roomFor = Math.max(1, Math.floor(((H - 190) - y) / 15));
     const lines = doc.splitTextToSize(notes, W - M * 2).slice(0, roomFor);
-    doc.text(lines, M, y, { lineHeightFactor: 1.45 });
+    write(lines, M, y, { lineHeightFactor: 1.45 });
     y += lines.length * 15 + 10;
   }
 
@@ -345,14 +358,14 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
     // into the footer band.
     const by = Math.min(Math.max(y + 16, H - 176), H - 116);
     buttons.forEach((b, i) => {
-      const bx = M + i * (BW + GAP);
+      const bx = rtl ? W - M - BW - i * (BW + GAP) : M + i * (BW + GAP);
       const bg = b.kind === 'video' ? PLAY_RED : TM_NAVY;
 
       doc.setFillColor(...bg);
       doc.roundedRect(bx, by, BW, BH, 3, 3, 'F');
 
       // Glyph tile on the left of the button.
-      const gx = bx + 14, gy = by + (BH - 16) / 2;
+      const gx = rtl ? bx + BW - 14 - 20 : bx + 14, gy = by + (BH - 16) / 2;
       doc.setDrawColor(255, 255, 255);
       doc.setFillColor(255, 255, 255);
       doc.setLineWidth(1.1);
@@ -371,7 +384,8 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
       doc.setFont(FAM, MED);
       doc.setFontSize(8.8);
       doc.setTextColor(255, 255, 255);
-      doc.text(b.text.toUpperCase(), gx + 32, by + BH / 2 + 3.4, { charSpace: 0.9 });
+      const tx = rtl ? gx - 12 : gx + 32;
+      doc.text(b.text.toUpperCase(), tx + spaced(b.text, 0.9), by + BH / 2 + 3.4, { align: ALIGN, charSpace: 0.9 });
 
       doc.link(bx, by, BW, BH, { url: b.url });
     });
