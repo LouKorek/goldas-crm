@@ -513,6 +513,14 @@ export default function Pipeline({ category }) {
   // Router state from search / Player 360: { add }, { editId }, { focus }.
   const location = useLocation();
   const navigate = useNavigate();
+  // { back: true } means the form was opened from the player's card: once it
+  // closes (saved or cancelled) we go back to that card instead of leaving
+  // the user on this list, which they never asked for.
+  const backOnClose = useRef(false);
+  const closeModal = () => {
+    setModal(null);
+    if (backOnClose.current) { backOnClose.current = false; navigate(-1); }
+  };
   useEffect(() => {
     const st = location.state;
     if (!st) return;
@@ -520,7 +528,7 @@ export default function Pipeline({ category }) {
     if (st.add && canEdit) { openAdd(); clear(); }
     else if ((st.editId || st.focus) && items.length) {
       const p = items.find((x) => x.id === (st.editId || st.focus));
-      if (p) { if (st.editId && canEdit) openEdit(p); else setSearch(p.playerName || ''); clear(); }
+      if (p) { if (st.editId && canEdit) { backOnClose.current = !!st.back; openEdit(p); } else setSearch(p.playerName || ''); clear(); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, items.length]);
@@ -550,7 +558,7 @@ export default function Pipeline({ category }) {
         await updatePlayer(modal.edit.id, data, modal.edit);
         toast.success(t("Updated."));
       }
-      setModal(null);
+      closeModal();
     } catch(e) {
       toast.error(e.message || "Save failed.");
     } finally {
@@ -833,9 +841,9 @@ export default function Pipeline({ category }) {
       {modal && (
         <Modal
           title={modal==='add'?`Add — ${label}`:`Edit: ${form.playerName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
+          onClose={closeModal} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>{t("Cancel")}</button>
+            <button className="btn btn-ghost" onClick={closeModal}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}
               style={{background:color,color:'#0A1F12'}}>
               {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
