@@ -219,6 +219,18 @@ input:focus, select:focus, textarea:focus {
 }
 
 select option { background: var(--surface-2) !important; color: var(--input-text) !important; }
+/* Inline field inside a fact row (e.g. the age group on the player page):
+   sized by its content, never a fixed height, so the value is not clipped. */
+.fact-select {
+  width: auto;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: auto;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.3;
+}
 textarea { resize: vertical; min-height: 80px; }
 input[type="date"] { color-scheme: dark; }
 input[type="date"]::-webkit-calendar-picker-indicator {
@@ -1498,6 +1510,7 @@ body.light-mode ::selection { background: rgba(138,106,40,0.22); }
     min-height: var(--tap);
   }
   .btn, .btn-sm, .chip { min-height: 38px; }
+  .fact-select { min-height: 40px; }
   .btn-icon, .modal-close-btn, .row-actions button, .action-btn { min-width: var(--tap); min-height: var(--tap); }
   td, th { padding-top: 12px; padding-bottom: 12px; }
 }

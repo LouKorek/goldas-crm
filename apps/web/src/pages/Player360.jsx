@@ -51,12 +51,13 @@ function AgeGroupFact({ p, canEdit }) {
     toast.success(t('Age group updated.'));
   };
   return (
-    <div style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
-      <span style={{ color: 'var(--text-3)', minWidth: 110 }}>{t('Age group')} {seasonLabel()}</span>
+    <div className="fact-row" style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
+      <span className="fact-key" style={{ color: 'var(--text-3)', minWidth: 110 }}>{t('Age group')} {seasonLabel()}</span>
       {canEdit ? (
-        <select value={overridden ? p.ageGroupOverride.id : ''} onChange={(e) => set(e.target.value)} style={{ width: 'auto', height: 30, fontSize: 12 }}>
-          <option value="">{def ? `${def[he ? 'he' : 'en']} (${t('by cohort')})` : t('by cohort')}</option>
-          {AGE_GROUPS.map((x) => <option key={x.id} value={x.id}>{x[he ? 'he' : 'en']}{def?.id === x.id ? ` (${t('by cohort')})` : ''}</option>)}
+        <select className="fact-select" value={overridden ? p.ageGroupOverride.id : ''} onChange={(e) => set(e.target.value)}>
+          {/* The cohort group is the blank (automatic) choice, so it is listed once. */}
+          <option value="">{def ? def[he ? 'he' : 'en'] : t('by cohort')}</option>
+          {AGE_GROUPS.filter((x) => x.id !== def?.id).map((x) => <option key={x.id} value={x.id}>{x[he ? 'he' : 'en']}</option>)}
         </select>
       ) : <span>{g ? g[he ? 'he' : 'en'] : '—'}</span>}
       {overridden && <span style={{ fontSize: 10.5, color: 'var(--amber)' }}>{t('manual override')}</span>}

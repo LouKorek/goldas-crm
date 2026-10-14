@@ -84,7 +84,20 @@ function Player() {
           <button className="btn btn-ghost"><Icon name="external" size={12} /><span className="btn-text">שיתוף PDF</span></button>
           <button className="btn btn-primary"><Icon name="edit" size={12} /><span className="btn-text">עריכת שחקן</span></button>
         </>} />
-      <div className="card card-body">פרופיל …</div>
+      <div className="card card-body">
+        <div className="fact-row" style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
+          <span className="fact-key" style={{ color: 'var(--text-3)', minWidth: 110 }}>תאריך לידה</span><span>13.03.2011 (15)</span>
+        </div>
+        <div className="fact-row" style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
+          <span className="fact-key" style={{ color: 'var(--text-3)', minWidth: 110 }}>קבוצת גיל 2026/27</span>
+          <select className="fact-select" defaultValue="">
+            <option value="">נערים א'</option><option value="noar">נוער</option><option value="nearim-b">נערים ב'</option><option value="nearim-c">נערים ג'</option>
+          </select>
+        </div>
+        <div className="fact-row" style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)', alignItems: 'center' }}>
+          <span className="fact-key" style={{ color: 'var(--text-3)', minWidth: 110 }}>עמדה</span><span>CB, DM</span>
+        </div>
+      </div>
     </div>
   );
 }
