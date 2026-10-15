@@ -846,14 +846,37 @@ export function ScraperCredits() {
 // strip as one wrapping <div>; its controls are lifted out so the strip
 // lays them out itself, which is what lets the phone turn them into a
 // single row of squares.
-export function PageHeader({ title, subtitle, action, children }) {
+// A dotted line of short facts ("Represented · Youth · CB · SC Ashdod · 15 yrs").
+// Each fact sits in its own bidi-isolated span, so a run of Latin facts in a
+// Hebrew line can no longer swallow a neighbouring number (the "15" of
+// "15 שנים" used to jump in front of "CB"). The line also wraps on phones
+// instead of being cut off with an ellipsis — see .page-subtitle:has(.fact-line).
+export function FactLine({ items }) {
+  const list = (items || []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <span className="fact-line">
+      {list.map((x, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <span className="fact-line-sep" aria-hidden="true">·</span>}
+          <span className="fact-line-item" dir="auto">{x}</span>
+        </React.Fragment>
+      ))}
+    </span>
+  );
+}
+
+// `stacked`: on phones the action strip takes a full row beneath the title,
+// so a long name (a player's) is shown whole instead of sharing its row with
+// five buttons and being clipped.
+export function PageHeader({ title, subtitle, action, children, stacked }) {
   const controls = React.isValidElement(action) && action.type === 'div' && !action.props.className
     ? action.props.children
     : action;
   return (
     <div className="page-header-wrap">
       <div className="page-header">
-        <div className="page-head-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div className={`page-head-row${stacked ? ' page-head-row--stacked' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div className="page-head-text">
             <h1 className="page-title">{title}</h1>
             {subtitle && <p className="page-subtitle">{subtitle}</p>}

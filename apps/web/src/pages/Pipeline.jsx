@@ -13,6 +13,7 @@ import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
 import { AgeGroupChip } from './Prospects';
+import AgeGroupField from 'components/ui/AgeGroupField';
 
 // ── Nationality flags (matches the Represented screen) ────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Ivory Coast':'CIV','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -513,6 +514,14 @@ export default function Pipeline({ category }) {
   // Router state from search / Player 360: { add }, { editId }, { focus }.
   const location = useLocation();
   const navigate = useNavigate();
+  // { back: true } means the form was opened from the player's card: once it
+  // closes (saved or cancelled) we go back to that card instead of leaving
+  // the user on this list, which they never asked for.
+  const backOnClose = useRef(false);
+  const closeModal = () => {
+    setModal(null);
+    if (backOnClose.current) { backOnClose.current = false; navigate(-1); }
+  };
   useEffect(() => {
     const st = location.state;
     if (!st) return;
@@ -520,7 +529,7 @@ export default function Pipeline({ category }) {
     if (st.add && canEdit) { openAdd(); clear(); }
     else if ((st.editId || st.focus) && items.length) {
       const p = items.find((x) => x.id === (st.editId || st.focus));
-      if (p) { if (st.editId && canEdit) openEdit(p); else setSearch(p.playerName || ''); clear(); }
+      if (p) { if (st.editId && canEdit) { backOnClose.current = !!st.back; openEdit(p); } else setSearch(p.playerName || ''); clear(); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, items.length]);
@@ -550,7 +559,7 @@ export default function Pipeline({ category }) {
         await updatePlayer(modal.edit.id, data, modal.edit);
         toast.success(t("Updated."));
       }
-      setModal(null);
+      closeModal();
     } catch(e) {
       toast.error(e.message || "Save failed.");
     } finally {
@@ -833,9 +842,9 @@ export default function Pipeline({ category }) {
       {modal && (
         <Modal
           title={modal==='add'?`Add — ${label}`:`Edit: ${form.playerName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
+          onClose={closeModal} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>{t("Cancel")}</button>
+            <button className="btn btn-ghost" onClick={closeModal}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}
               style={{background:color,color:'#0A1F12'}}>
               {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
@@ -869,6 +878,7 @@ export default function Pipeline({ category }) {
             <Field label={t("Date of Birth")}>
               <DateInput value={f('dob')} onChange={s('dob')} />
             </Field>
+            <AgeGroupField dob={f('dob')} value={form.ageGroupOverride} onChange={s('ageGroupOverride')} />
             <Field label={t("Primary Position")}>
               <select value={f('primaryPosition')} onChange={e=>s('primaryPosition')(e.target.value)}>
                 <option value="">{t("Select...")}</option>

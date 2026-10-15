@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { deleteDoc_, restoreDoc_, uploadFile, resolveFileUrl, renameFile, PATHS } from 'lib/db';
 import { listenPlayers, addPlayer, updatePlayer } from 'data/players';
@@ -9,6 +9,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          ExportMenu, useConfirm, RowActions } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
+import AgeGroupField from 'components/ui/AgeGroupField';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
 
@@ -300,13 +301,21 @@ export default function Players() {
   // { add: true } opens the form, { editId } opens that player for editing.
   const location = useLocation();
   const navigate = useNavigate();
+  // { back: true } means the form was opened from the player's card: once it
+  // closes (saved or cancelled) we go back to that card instead of leaving
+  // the user on this list, which they never asked for.
+  const backOnClose = useRef(false);
+  const closeModal = () => {
+    setModal(null);
+    if (backOnClose.current) { backOnClose.current = false; navigate(-1); }
+  };
   useEffect(() => {
     const st = location.state;
     if (!st || !canEdit) return;
     if (st.add) { openAdd(); navigate(location.pathname, { replace: true, state: null }); }
     else if (st.editId && players.length) {
       const p = players.find((x) => x.id === st.editId);
-      if (p) { openEdit(p); navigate(location.pathname, { replace: true, state: null }); }
+      if (p) { backOnClose.current = !!st.back; openEdit(p); navigate(location.pathname, { replace: true, state: null }); }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state, players.length]);
@@ -342,7 +351,7 @@ export default function Players() {
       }
       if (modal==='add') { await addPlayer(data, { stage: 'represented' }); toast.success(`"${form.fullName}" added!`); }
       else { await updatePlayer(modal.edit.id, data, modal.edit); toast.success(t("Player updated.")); }
-      setModal(null);
+      closeModal();
     } catch(e) { toast.error(e.message||'Save failed.'); }
     finally { setSaving(false); }
   };
@@ -601,9 +610,9 @@ export default function Players() {
       {/* Add/Edit Modal */}
       {modal && (
         <Modal title={modal==='add'?'Add Represented Player':`Edit: ${form.fullName}`}
-          onClose={()=>setModal(null)} wide isDirty={isDirty} onSave={save}
+          onClose={closeModal} wide isDirty={isDirty} onSave={save}
           footer={<>
-            <button className="btn btn-ghost" onClick={()=>setModal(null)}>{t("Cancel")}</button>
+            <button className="btn btn-ghost" onClick={closeModal}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}>
               {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
             </button>
@@ -619,6 +628,7 @@ export default function Players() {
               <DateInput value={f('dob')} onChange={s('dob')} />
               {age!==null&&<div className="form-hint">{t("Age:")} {age}</div>}
             </Field>
+            <AgeGroupField dob={f('dob')} value={form.ageGroupOverride} onChange={s('ageGroupOverride')} />
             <Field label={t("Primary Position")}>
               <select value={f('primaryPosition')} onChange={e=>s('primaryPosition')(e.target.value)}>
                 <option value="">{t("Select...")}</option>
