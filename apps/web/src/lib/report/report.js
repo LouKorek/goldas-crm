@@ -8,7 +8,7 @@
 //     filename, title, subtitle?, lang: 'he' | 'en',
 //     meta:     [{ label, value }]                  // period, filters, row count…
 //     kpis:     [{ label, value }]                  // already formatted strings
-//     sections: [{ title, subtitle?, columns, rows, chart?, totals? }]
+//     sections: [{ title, subtitle?, columns, rows, chart?, totals?, tall? }]  // tall: the chart may fill a page
 //     records?: { title, columns, rows }            // the slice's records
 //   }
 //   columns = [{ key, label, numeric?, width?, pdfLabel? }]

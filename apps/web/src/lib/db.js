@@ -221,6 +221,7 @@ export const PATHS = {
   TM_WATCH:          'tmWatch',
   IG_DAILY:          'igDaily',
   IG_POSTS:          'igPosts',
+  SAVED_VIEWS:       'saved_views',  // Snapshot board: { name, query }
 };
 
 // ── User management (app_users collection) ────────────────────────

@@ -144,14 +144,16 @@ const SAMPLE = (() => {
   }));
   const stages = ['Not Contacted', 'Waiting Response', 'Initial Talks', 'Mandate Received', 'Offered to Club', 'Negotiation', 'Draft Signed', 'Contract Signed'];
   const deals = Array.from({ length: 22 }, (_, i) => ({ id: `d${i}`, playerId: `p${i * 2}`, playerName: `שחקן ${i * 2 + 1}`, category: players[i * 2].category, clubName: CLUBS[(i + 2) % CLUBS.length], stage: stages[i % stages.length], commission: `${(i + 1) * 1500}`, transferFee: `${(i + 1) * 20}k`, enteredStageAt: `2026-0${1 + (i % 9)}-05`, createdAt: `2026-0${1 + (i % 9)}-01`, owner: i % 3 ? 'lou' : 'aviram' }));
-  const matches = Array.from({ length: 40 }, (_, i) => ({ id: `m${i}`, date: `2026-${String(8 + (i % 4)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`, time: '19:00', homeTeam: CLUBS[i % CLUBS.length], awayTeam: CLUBS[(i + 3) % CLUBS.length], linkedPlayers: [`p${i % 64}`], stadiumName: 'סמי עופר' }));
+  const matches = Array.from({ length: 40 }, (_, i) => ({ id: `m${i}`, date: `2026-${String(8 + (i % 4)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`, time: ['17:00', '19:00', '20:30', '19:00'][i % 4], homeTeam: CLUBS[i % CLUBS.length], awayTeam: CLUBS[(i + 3) % CLUBS.length], linkedPlayers: [`p${i % 64}`], stadiumName: 'סמי עופר' }));
   const tasks = Array.from({ length: 9 }, (_, i) => ({ id: `t${i}`, title: `משימה ${i + 1}`, owner: 'lou', dueDate: `2026-10-${String(5 + i * 3).padStart(2, '0')}`, done: i % 4 === 0 }));
   return { players, deals, matches, requirements: [{ id: 'r1', clubName: 'מכבי חיפה', requiredPosition: 'CB', country: 'Israel', status: 'open', validUntil: '2026-12-31', createdAt: '2026-09-01' }], tasks, trainings: [], interactions: [] };
 })();
 function Snapshot() {
   const [qs, setQs] = useState(location.search.replace(/^\?/, '').replace(/(^|&)(s|light)=[^&]*/g, ''));
   const state = decodeState(qs);
-  return <SnapshotView data={SAMPLE} state={state} setState={(n) => setQs(encodeState(n))} lang="he" now={new Date('2026-10-15T09:00:00Z')} />;
+  return <SnapshotView data={SAMPLE} state={state} setState={(n) => setQs(encodeState(n))} lang="he" now={new Date('2026-10-15T09:00:00Z')}
+    views={[{ id: 'v1', name: 'מיוצגים · נוער', query: 'f=stage%3Arepresented%7Ccategory%3Ayouth' }, { id: 'v2', name: 'עסקאות במו״מ', query: 'f=dealStage%3ANegotiation' }]}
+    saveView={async () => {}} deleteView={async () => {}} />;
 }
 
 const SCREENS = { calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };

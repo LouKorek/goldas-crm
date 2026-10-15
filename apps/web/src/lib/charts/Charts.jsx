@@ -180,6 +180,214 @@ export function Line({ points, lang = 'he', width = 520, height = 160, title, co
   );
 }
 
+// ── Multi-line (several monthly series on one time axis) ────────────
+// Legend click hides/shows a series; the axis is left-to-right time in both
+// languages (a timeline reads that way even in Hebrew), labels are localised.
+export function MultiLine({ series, lang = 'he', width = 760, height = 220, title, format = fmt }) {
+  const [hidden, setHidden] = useState(() => new Set());
+  const [hover, setHover] = useHover();
+  const shown = series.filter((s) => !hidden.has(s.id));
+  const keys = series[0]?.points.map((p) => p.key) ?? [];
+  const n = keys.length || 1;
+  const max = Math.max(1, ...shown.flatMap((s) => s.points.map((p) => p.value)));
+  const padB = 28, padT = 16, padL = 34, padR = 24;
+  const innerW = width - padL - padR, innerH = height - padB - padT;
+  const X = (j) => padL + (n === 1 ? innerW / 2 : (j / (n - 1)) * innerW);
+  const Y = (v) => padT + innerH - (v / max) * innerH;
+  const ticks = [0, 0.5, 1].map((f) => Math.round(max * f));
+  const toggle = (id) => setHidden((h) => { const next = new Set(h); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  return (
+    <div className="chart multiline" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title} style={{ fontFamily: FONT, color: 'var(--text-1)', maxWidth: width, display: 'block' }} direction="ltr">
+        {ticks.map((tv, i) => (
+          <g key={i}>
+            <line x1={padL} x2={width - padR} y1={Y(tv)} y2={Y(tv)} stroke="var(--border)" strokeDasharray={i ? '2 3' : ''} />
+            <text x={padL - 6} y={Y(tv) + 3.5} textAnchor="end" fill="var(--text-3)" fontSize={10} style={{ fontVariantNumeric: 'tabular-nums' }}>{format(tv)}</text>
+          </g>
+        ))}
+        {hover != null && <line x1={X(hover)} x2={X(hover)} y1={padT} y2={padT + innerH} stroke="var(--border-2)" />}
+        {shown.map((s) => {
+          const i = series.indexOf(s);
+          const color = s.color || colorAt(i);
+          const path = s.points.map((p, j) => `${j ? 'L' : 'M'}${X(j).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
+          return (
+            <g key={s.id}>
+              <path d={path} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+              {s.points.map((p, j) => (
+                <circle key={p.key} cx={X(j)} cy={Y(p.value)} r={hover === j ? 4 : 2.5} fill={color}>
+                  <title>{`${s.label[lang]} · ${p.label[lang]}: ${format(p.value)}`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+        {keys.map((k, j) => (
+          <g key={k} onMouseEnter={() => setHover(j)} onMouseLeave={() => setHover(null)}>
+            <rect x={X(j) - innerW / n / 2} y={padT} width={innerW / n} height={innerH} fill="transparent" />
+            {(n <= 8 || j % 2 === (n - 1) % 2) && <text x={X(j)} y={height - 8} textAnchor="middle" fill="var(--text-3)" fontSize={10}>{series[0].points[j].label[lang]}</text>}
+          </g>
+        ))}
+        {hover != null && shown.map((s, k) => (
+          <text key={s.id} x={X(hover) + (hover > n / 2 ? -6 : 6)} y={padT + 10 + k * 12} textAnchor={hover > n / 2 ? 'end' : 'start'} fill={s.color || colorAt(series.indexOf(s))} fontSize={10.5} fontWeight={700}>
+            {`${s.label[lang]} ${format(s.points[hover].value)}`}
+          </text>
+        ))}
+      </svg>
+      <ul className="chart-legend" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+        {series.map((s, i) => (
+          <li key={s.id} onClick={() => toggle(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', opacity: hidden.has(s.id) ? 0.4 : 1, textDecoration: hidden.has(s.id) ? 'line-through' : 'none' }}>
+            <span style={{ width: 14, height: 3, background: s.color || colorAt(i), flexShrink: 0 }} />
+            <span>{s.label[lang]}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-3)', fontVariantNumeric: 'tabular-nums' }}>{format(s.total)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── Funnel (deal pipeline) ──────────────────────────────────────────
+// One centred band per stage, width = deals that reached the stage; the
+// number inside is how many sit there now, with the commission beside it.
+export function Funnel({ steps, lang = 'he', onPick, active, width = 380, rowH = 34, title, money = fmt, rtl = true }) {
+  const [hover, setHover] = useHover();
+  const top = Math.max(1, steps[0]?.reached ?? 0);
+  const labelW = 120, numW = 92;
+  const bandW = width - labelW - numW - 16;
+  const h = steps.length * rowH + 6;
+  const labelX = rtl ? width - 4 : 4;
+  const bandX0 = rtl ? numW + 8 : labelW + 8;
+  const numX = rtl ? numW : width - numW;
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${h}`} role="img" aria-label={title} style={{ fontFamily: FONT, color: 'var(--text-1)', maxWidth: width, display: 'block' }} direction={rtl ? 'rtl' : 'ltr'}>
+      {steps.map((s, i) => {
+        const y = 3 + i * rowH;
+        const w = Math.max(6, (s.reached / top) * bandW);
+        const x = bandX0 + (bandW - w) / 2;
+        const dim = (active && active !== s.key) || (hover != null && hover !== i);
+        const done = s.key === 'Contract Signed';
+        return (
+          <g key={s.key} style={{ cursor: onPick ? 'pointer' : 'default' }} onClick={() => onPick && onPick(s.key)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} opacity={dim ? 0.45 : 1}>
+            <title>{`${s.label[lang]}: ${s.at} (${lang === 'he' ? 'הגיעו' : 'reached'} ${s.reached}, ${Math.round(s.share * 100)}%)${s.commission ? ' · ' + money(s.commission) : ''}`}</title>
+            <rect x={0} y={y} width={width} height={rowH - 2} fill={hover === i ? 'var(--gold-dim)' : 'transparent'} />
+            <text x={labelX} y={y + rowH / 2 + 4} textAnchor="start" fill="currentColor" fontSize={12}>{truncate(s.label[lang], 16)}</text>
+            <rect x={x} y={y + 5} width={w} height={rowH - 12} fill={done ? '#4DBE7A' : PALETTE[0]} opacity={done ? 1 : 0.45 + 0.55 * (1 - i / Math.max(1, steps.length - 1))} />
+            {s.at > 0 && <text x={bandX0 + bandW / 2} y={y + rowH / 2 + 4} textAnchor="middle" fill={done || i > steps.length / 2 ? '#0A140D' : '#0A140D'} fontSize={12} fontWeight={700} style={{ fontVariantNumeric: 'tabular-nums' }}>{s.at}</text>}
+            <text x={numX} y={y + rowH / 2 + 4} textAnchor={rtl ? 'start' : 'end'} fill="var(--text-2)" fontSize={11} style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {`${Math.round(s.share * 100)}%${s.commission ? ' · ' + money(s.commission) : ''}`}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Heat-map (dimension × dimension) ────────────────────────────────
+export function Heatmap({ m, lang = 'he', onPick, active, width = 380, cellH = 26, title, rtl = true }) {
+  const [hover, setHover] = useHover();
+  const rows = m.rowsAxis, cols = m.colsAxis;
+  const labelW = Math.min(110, Math.max(56, ...rows.map((a) => a.label[lang].length * 6.5 + 10)));
+  const headH = 22, gridW = width - labelW - 8;
+  const cw = cols.length ? gridW / cols.length : gridW;
+  const h = headH + rows.length * cellH + 4;
+  const gx0 = rtl ? 0 : labelW + 8;
+  const labelX = rtl ? width - 2 : 2;
+  const colX = (j) => gx0 + (rtl ? cols.length - 1 - j : j) * cw;
+  const shade = (c) => (m.max ? 0.08 + 0.82 * (c / m.max) : 0);
+  const isActive = (r, c) => active && (active.row === r.key || active.col === c.key);
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${h}`} role="img" aria-label={title} style={{ fontFamily: FONT, color: 'var(--text-1)', maxWidth: width, display: 'block' }} direction={rtl ? 'rtl' : 'ltr'}>
+      {cols.map((c, j) => (
+        <text key={c.key} x={colX(j) + cw / 2} y={14} textAnchor="middle" fill={active?.col === c.key ? 'var(--gold)' : 'var(--text-3)'} fontSize={10} fontWeight={active?.col === c.key ? 700 : 400}>
+          <title>{`${c.label[lang]}: ${c.total}`}</title>{truncate(c.label[lang], Math.max(3, Math.floor(cw / 6.5)))}
+        </text>
+      ))}
+      {rows.map((r, i) => {
+        const y = headH + i * cellH;
+        return (
+          <g key={r.key}>
+            <text x={labelX} y={y + cellH / 2 + 4} textAnchor="start" fill={active?.row === r.key ? 'var(--gold)' : 'currentColor'} fontSize={11.5} fontWeight={active?.row === r.key ? 700 : 400}>
+              <title>{`${r.label[lang]}: ${r.total}`}</title>{truncate(r.label[lang], Math.floor(labelW / 6.5))}
+            </text>
+            {cols.map((c, j) => {
+              const cell = m.cells[r.key]?.[c.key];
+              const n = cell?.count ?? 0;
+              const hot = hover && hover[0] === i && hover[1] === j;
+              return (
+                <g key={c.key} style={{ cursor: onPick && n ? 'pointer' : 'default' }} onClick={() => n && onPick && onPick(r.key, c.key)}
+                  onMouseEnter={() => setHover([i, j])} onMouseLeave={() => setHover(null)}>
+                  <title>{`${r.label[lang]} × ${c.label[lang]}: ${n}`}</title>
+                  <rect x={colX(j) + 1} y={y + 1} width={cw - 2} height={cellH - 2} fill={n ? PALETTE[0] : 'var(--border)'} opacity={n ? shade(n) : 0.35}
+                    stroke={hot || isActive(r, c) ? 'var(--gold)' : 'none'} strokeWidth={hot ? 2 : 1} />
+                  {n > 0 && <text x={colX(j) + cw / 2} y={y + cellH / 2 + 4} textAnchor="middle" fill={shade(n) > 0.5 ? '#0A140D' : 'currentColor'} fontSize={11} fontWeight={600} style={{ fontVariantNumeric: 'tabular-nums', pointerEvents: 'none' }}>{n}</text>}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Contract timeline (Gantt-like, soonest expiry first) ────────────
+// Time runs left to right from today; each bar ends where the contract does
+// and is coloured by urgency. Click opens the player.
+const URGENCY = { expired: '#8A6B22', critical: '#E05A55', warning: '#D9A036', ok: '#4DBE7A' };
+export function Timeline({ items, lang = 'he', now, months = 24, width = 760, rowH = 24, title, onPick, rtl = true }) {
+  const [hover, setHover] = useHover();
+  const today = now ?? new Date();
+  const narrow = width < 520;
+  const labelW = narrow ? 118 : 170, dayW = narrow ? 44 : 56;
+  const axisX0 = rtl ? dayW + 6 : labelW + 8;
+  const axisW = width - labelW - dayW - 20;
+  const headH = 20;
+  const h = headH + items.length * rowH + 6;
+  const totalDays = months * 30.4;
+  const minDays = Math.min(0, ...items.map((x) => x.daysLeft));
+  const span = totalDays - minDays;
+  // Hebrew reads the axis right-to-left: today sits beside the names and the
+  // future runs leftwards, like a Hebrew Gantt chart.
+  const X = (d) => (rtl ? axisX0 + axisW - ((d - minDays) / span) * axisW : axisX0 + ((d - minDays) / span) * axisW);
+  const ticks = [];
+  for (let k = 0; k <= months; k += months > 12 ? (narrow ? 6 : 3) : 1) {
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + k, 1));
+    const days = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (days >= minDays && days <= totalDays) ticks.push({ x: X(days), label: `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCFullYear()).slice(2)}` });
+  }
+  const labelX = rtl ? width - 4 : 4;
+  const dayX = rtl ? dayW : width - dayW;
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${h}`} role="img" aria-label={title} style={{ fontFamily: FONT, color: 'var(--text-1)', maxWidth: width, display: 'block' }} direction={rtl ? 'rtl' : 'ltr'}>
+      {ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={t.x} x2={t.x} y1={headH - 4} y2={h - 4} stroke="var(--border)" strokeDasharray="2 3" />
+          <text x={t.x} y={11} textAnchor="middle" fill="var(--text-3)" fontSize={9.5} direction="ltr">{t.label}</text>
+        </g>
+      ))}
+      <line x1={X(0)} x2={X(0)} y1={headH - 4} y2={h - 4} stroke="var(--gold)" strokeWidth={1.5} />
+      {items.map((it, i) => {
+        const y = headH + i * rowH;
+        const xa = X(Math.min(0, it.daysLeft)), xb = X(Math.max(0, it.daysLeft));
+        const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb);
+        const dim = hover != null && hover !== i;
+        return (
+          <g key={it.id} style={{ cursor: onPick ? 'pointer' : 'default' }} onClick={() => onPick && onPick(it)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} opacity={dim ? 0.5 : 1}>
+            <title>{`${it.name} · ${it.club} · ${it.end} (${it.daysLeft} ${lang === 'he' ? 'ימים' : 'days'})`}</title>
+            <rect x={0} y={y} width={width} height={rowH - 1} fill={hover === i ? 'var(--gold-dim)' : 'transparent'} />
+            <text x={labelX} y={y + rowH / 2 + 4} textAnchor="start" fill="currentColor" fontSize={11.5}>{truncate(`${it.name}${it.club ? ' · ' + it.club : ''}`, narrow ? 17 : 26)}</text>
+            <rect x={x0} y={y + 6} width={Math.max(3, x1 - x0)} height={rowH - 12} fill={URGENCY[it.urgency]} rx={2} />
+            <text x={dayX} y={y + rowH / 2 + 4} textAnchor={rtl ? 'start' : 'end'} fill={URGENCY[it.urgency]} fontSize={11} fontWeight={700} style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {it.daysLeft < 0 ? (lang === 'he' ? 'פג' : 'expired') : `${it.daysLeft}${lang === 'he' ? ' י׳' : 'd'}`}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 const truncate = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 // ── Rasterise an SVG element to a PNG data URL (for Excel / PDF) ────

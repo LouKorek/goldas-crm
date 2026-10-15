@@ -11,17 +11,21 @@
 // one area translate to the others through the players (deals of youth
 // players, matches of represented players). Clicking the active slice again
 // removes its filter. The filter state and period live in the URL.
+// Stage B adds an overview row above the areas (monthly trends, the deal
+// funnel, the contract timeline and two heat-maps) and saved views: a named
+// filter set kept in Firestore (`saved_views`) that anyone can re-apply.
 // The engine is packages/domain/src/engines/analytics.ts; this is the view.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { listenCollection, PATHS } from 'lib/db';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { listenCollection, addDoc_, deleteDoc_, canEditNow, PATHS } from 'lib/db';
 import { t, getLang } from 'lib/i18n';
 import { toast, SortTh, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
-import { Donut, Bars, Columns, toPng } from 'lib/charts/Charts';
+import { Donut, Bars, Columns, MultiLine, Funnel, Heatmap, Timeline, toPng } from 'lib/charts/Charts';
 import {
   SOURCE_LABELS, PERIOD_LABELS, buildCtx, applyFilters, slice, kpis, measure as measureOf,
   dimension, decodeState, encodeState, drillInto, COLUMNS, recordPath, formatValue, DEFAULT_STATE,
+  matrix, dealFunnel, contractTimeline, trends,
 } from '@goldas/domain';
 
 const PERIODS = ['all', 'season', 'quarter', 'month', 'next90', 'last12m'];
@@ -67,6 +71,24 @@ const BOARD = [
     { dim: 'month', type: 'columns' },
   ] },
 ];
+// The overview row: trends over 12 months, the deal funnel, contracts ending
+// in the next 24 months and two heat-maps. Each ignores the filters on its
+// own dimensions, like the charts below.
+const OVERVIEW = {
+  trends: { title: { he: 'מגמות · 12 חודשים אחרונים', en: 'Trends · last 12 months' } },
+  funnel: { title: { he: 'משפך עסקאות', en: 'Deal funnel' } },
+  timeline: { title: { he: 'ציר זמן חוזים · מיוצגים, 24 חודשים', en: 'Contract timeline · represented, 24 months' } },
+  heatPlayers: { title: { he: 'שחקנים: קבוצת גיל × עמדה', en: 'Players: age group × position' }, row: 'ageGroup', col: 'position' },
+  heatMatches: { title: { he: 'משחקים: יום × שעה', en: 'Matches: weekday × hour' }, row: 'weekday', col: 'hour' },
+};
+const TIMELINE_ROWS = 30;
+// Wide charts (trends, timeline) shrink to one column on a phone.
+const useNarrow = () => {
+  const q = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 720px)') : null;
+  const [narrow, setNarrow] = useState(() => !!q?.matches);
+  useEffect(() => { if (!q) return undefined; const on = (e) => setNarrow(e.matches); q.addEventListener('change', on); return () => q.removeEventListener('change', on); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return narrow;
+};
 // Tiles whose filters define the tile itself (click = toggle that filter). The
 // rest (contracts ending, representation ending) only narrow to represented.
 const FILTER_TILES = new Set(['represented', 'in_process', 'tracking', 'signed_season', 'matches_week', 'open_reqs', 'overdue_tasks', 'no_contract']);
@@ -93,13 +115,22 @@ export default function Snapshot() {
     return () => u.forEach((f) => f());
   }, []);
 
+  // Saved views: { name, query } — the query is the board's URL state.
+  const [views, setViews] = useState([]);
+  useEffect(() => listenCollection(PATHS.SAVED_VIEWS, (rows) => setViews(rows.filter((v) => !v.deletedAt).sort((a, b) => String(a.name).localeCompare(String(b.name), 'he')))), []);
+  const saveView = canEditNow() ? async (name, query) => { await addDoc_(PATHS.SAVED_VIEWS, { name, query }); toast.success(t('View saved.')); } : null;
+  const deleteView = canEditNow() ? async (id) => { await deleteDoc_(PATHS.SAVED_VIEWS, id); } : null;
+
   if (!data.players) return <Skeleton rows={6} />;
-  return <SnapshotView data={data} state={state} setState={setState} lang={lang} />;
+  return <SnapshotView data={data} state={state} setState={setState} lang={lang} views={views} saveView={saveView} deleteView={deleteView} />;
 }
 
 // Exported for the dev harness (sample data, no Firestore).
-export function SnapshotView({ data, state, setState, lang = 'he', now }) {
+export function SnapshotView({ data, state, setState, lang = 'he', now, views = [], saveView, deleteView }) {
   const ctx = useMemo(() => buildCtx({ ...data, now }), [data, now]);
+  const navigate = useNavigate();
+  const narrow = useNarrow();
+  const wideW = narrow ? 380 : 760;
   const filters = state.filters;
   const period = state.period;
   const chartRefs = useRef({});
@@ -127,6 +158,34 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
 
   // ── Per-area record counts on the full filter set.
   const areaRows = useMemo(() => Object.fromEntries(BOARD.map((g) => [g.source, applyFilters(data[g.source] || [], g.source, filters, ctx, period)])), [data, filters, period, ctx]);
+
+  // ── Overview: trends (filters, no period: the chart is its own period),
+  //    funnel without the deal-stage filter, timeline of represented players,
+  //    heat-maps without the filters on their two axes.
+  const without = (source, dims) => applyFilters(data[source] || [], source, filters.filter((f) => !dims.includes(f.dim)), ctx, period);
+  const overview = useMemo(() => {
+    const noPeriod = (source) => applyFilters(data[source] || [], source, filters, ctx);
+    const trendSeries = trends({ players: noPeriod('players'), deals: noPeriod('deals'), matches: noPeriod('matches'), interactions: noPeriod('interactions') }, ctx, 12);
+    const funnelSteps = dealFunnel(without('deals', ['dealStage']));
+    const timeline = contractTimeline(without('players', ['stage']), ctx, { months: 24 });
+    const heatPlayers = matrix(without('players', ['ageGroup', 'position']), 'players', 'ageGroup', 'position', ctx, { topCols: 10 });
+    const heatMatches = matrix(without('matches', ['weekday', 'hour']), 'matches', 'weekday', 'hour', ctx, { topCols: 8 });
+    return { trendSeries, funnelSteps, timeline, heatPlayers, heatMatches };
+  }, [data, filters, period, ctx]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickCell = (rowDim, colDim) => (r, c) => setFilters(mergeFilters(filters, [{ dim: rowDim, value: r }, { dim: colDim, value: c }]));
+  const heatActive = (rowDim, colDim) => (activeOf(rowDim) || activeOf(colDim) ? { row: activeOf(rowDim), col: activeOf(colDim) } : null);
+
+  // ── Saved views
+  const [naming, setNaming] = useState(false);
+  const [viewName, setViewName] = useState('');
+  const currentQuery = encodeState(state);
+  const applyView = (v) => setState(decodeState(v.query || ''));
+  const submitView = async (e) => {
+    e.preventDefault();
+    const name = viewName.trim();
+    if (!name || !saveView) return;
+    try { await saveView(name, currentQuery); setNaming(false); setViewName(''); } catch (err) { toast.error(err?.message || t('Save failed.')); }
+  };
 
   // ── Tiles: each computed without the filters it would itself set, so a
   //    tile never zeroes out because of its own dimension.
@@ -170,6 +229,28 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
     const win = kind === 'print' ? window.open('', '_blank') : null;
     try {
       const pngs = await Promise.all(charts.map((c) => toPng(chartRefs.current[c.key]).catch(() => null)));
+      const ovPng = {};
+      for (const k of Object.keys(OVERVIEW)) ovPng[k] = await toPng(chartRefs.current['ov:' + k]).catch(() => null);
+      const money = (v) => formatValue(v, 'money', lang);
+      const he = lang === 'he';
+      const heatSection = (k, m) => ({
+        title: OVERVIEW[k].title[lang], chart: ovPng[k], totals: true,
+        columns: [{ key: 'row', label: m.rowDim.label[lang] }, ...m.colsAxis.map((c) => ({ key: c.key, label: c.label[lang], numeric: true })), { key: '__t', label: he ? 'סה״כ' : 'Total', numeric: true }],
+        rows: m.rowsAxis.map((r) => ({ row: r.label[lang], ...Object.fromEntries(m.colsAxis.map((c) => [c.key, m.cells[r.key]?.[c.key]?.count ?? 0])), __t: r.total })),
+      });
+      const overviewSections = [
+        { title: OVERVIEW.trends.title[lang], chart: ovPng.trends,
+          columns: [{ key: 'month', label: he ? 'חודש' : 'Month' }, ...overview.trendSeries.map((sr) => ({ key: sr.id, label: sr.label[lang], numeric: true }))],
+          rows: (overview.trendSeries[0]?.points ?? []).map((pt, i) => ({ month: pt.label[lang], ...Object.fromEntries(overview.trendSeries.map((sr) => [sr.id, sr.points[i].value])) })), totals: true },
+        { title: OVERVIEW.funnel.title[lang], chart: ovPng.funnel,
+          columns: [{ key: 'stage', label: he ? 'שלב' : 'Stage' }, { key: 'at', label: he ? 'בשלב' : 'In stage', numeric: true }, { key: 'reached', label: he ? 'הגיעו' : 'Reached', numeric: true }, { key: 'share', label: he ? 'אחוז' : 'Share' }, { key: 'commission', label: he ? 'עמלות' : 'Commission', numeric: true }],
+          rows: overview.funnelSteps.map((st) => ({ stage: st.label[lang], at: st.at, reached: st.reached, share: `${Math.round(st.share * 100)}%`, commission: st.commission })) },
+        ...(overview.timeline.length ? [{ title: OVERVIEW.timeline.title[lang], chart: ovPng.timeline, tall: true,
+          columns: [{ key: 'name', label: he ? 'שחקן' : 'Player' }, { key: 'club', label: he ? 'מועדון' : 'Club' }, { key: 'end', label: he ? 'סיום חוזה' : 'Contract end' }, { key: 'days', label: he ? 'ימים' : 'Days', numeric: true }, { key: 'urgency', label: he ? 'דחיפות' : 'Urgency' }],
+          rows: overview.timeline.map((it) => ({ name: it.name, club: it.club, end: it.end, days: it.daysLeft, urgency: URGENCY_LABEL[it.urgency][lang] })) }] : []),
+        ...(overview.heatPlayers.total ? [heatSection('heatPlayers', overview.heatPlayers)] : []),
+        ...(overview.heatMatches.total ? [heatSection('heatMatches', overview.heatMatches)] : []),
+      ];
       const report = {
         filename: `${t('Snapshot')} ${filters.length ? filterText : ''}`.trim(),
         title: t('Snapshot'),
@@ -182,6 +263,7 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
         ],
         kpis: tiles.map((k) => ({ label: k.label[lang], value: formatValue(k.value, k.format, lang) })),
         sections: [
+          ...overviewSections,
           ...charts.filter((c) => c.res.groups.length).map((c, i) => ({ title: titleOf(c), columns: groupColumns(c.res, lang), rows: groupRows(c.res, lang), chart: pngs[i], totals: c.res.measure.agg !== 'avg' })),
           ...BOARD.filter((g) => (areaRows[g.source] || []).length).map((g) => ({
             title: `${SOURCE_LABELS[g.source][lang]} · ${filterText}`,
@@ -226,6 +308,26 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
           ))}
           {filters.length > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters([])}>{t('Clear all')}</button>}
         </div>
+        {(views.length > 0 || saveView) && (
+          <div className="snap-filterbar snap-views">
+            <span className="snap-filterbar-label">{t('Saved views')}</span>
+            {views.map((v) => (
+              <span key={v.id} className={`chip snap-view${v.query === currentQuery ? ' active' : ''}`}>
+                <button type="button" className="snap-view-apply" onClick={() => applyView(v)} title={v.query}>{v.name}</button>
+                {deleteView && <button type="button" className="snap-view-x" aria-label={t('Delete')} title={t('Delete')} onClick={() => { if (window.confirm(t('Delete this view?'))) deleteView(v.id).catch((e) => toast.error(e?.message)); }}>✕</button>}
+              </span>
+            ))}
+            {views.length === 0 && <span className="snap-filterbar-empty">{t('Save the current filters as a view to come back to them with one click.')}</span>}
+            {saveView && !naming && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNaming(true)}><Icon name="plus" size={12} /> {t('Save view')}</button>}
+            {saveView && naming && (
+              <form className="snap-view-form" onSubmit={submitView}>
+                <input className="input" autoFocus value={viewName} onChange={(e) => setViewName(e.target.value)} placeholder={t('View name')} maxLength={40} />
+                <button type="submit" className="btn btn-primary btn-sm" disabled={!viewName.trim()}>{t('Save')}</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setNaming(false); setViewName(''); }}>{t('Cancel')}</button>
+              </form>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── KPI tiles */}
@@ -245,6 +347,51 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
           );
         })}
       </div>
+
+      {/* ── Overview: trends, funnel, timeline, heat-maps */}
+      <section className="snap-area">
+        <div className="snap-area-head"><h3 className="snap-area-title">{t('Trends & timeline')}</h3></div>
+        <div className="snap-board snap-overview">
+          <div className="card card-body snap-tile wide">
+            <div className="section-label snap-tile-title">{OVERVIEW.trends.title[lang]}</div>
+            <div ref={(el) => { chartRefs.current['ov:trends'] = el; }} className="snap-chart">
+              <MultiLine series={overview.trendSeries} lang={lang} width={wideW} height={narrow ? 190 : 220} title={OVERVIEW.trends.title[lang]} />
+            </div>
+          </div>
+          <div className={`card card-body snap-tile${activeOf('dealStage') ? ' has-active' : ''}`}>
+            <div className="section-label snap-tile-title">{OVERVIEW.funnel.title[lang]}</div>
+            <div ref={(el) => { chartRefs.current['ov:funnel'] = el; }} className="snap-chart">
+              <Funnel steps={overview.funnelSteps} lang={lang} onPick={pick('dealStage')} active={activeOf('dealStage')} money={(v) => formatValue(v, 'money', lang)} title={OVERVIEW.funnel.title[lang]} rtl={lang === 'he'} width={380} />
+            </div>
+          </div>
+          <div className="card card-body snap-tile wide">
+            <div className="section-label snap-tile-title">{OVERVIEW.timeline.title[lang]} <b style={{ color: 'var(--gold)', fontFamily: 'var(--font-mono)', fontWeight: 500 }}>{overview.timeline.length}</b></div>
+            {overview.timeline.length === 0 ? <p className="snap-empty">{t('No contracts ending in this window.')}</p> : (
+              <div ref={(el) => { chartRefs.current['ov:timeline'] = el; }} className="snap-chart">
+                <Timeline items={overview.timeline.slice(0, TIMELINE_ROWS)} lang={lang} now={ctx.now} months={24} width={wideW} title={OVERVIEW.timeline.title[lang]} rtl={lang === 'he'}
+                  onPick={(it) => { const to = recordPath('players', it.row); if (to) navigate(to); }} />
+                {overview.timeline.length > TIMELINE_ROWS && <p className="snap-empty">{t('And {n} more', { n: overview.timeline.length - TIMELINE_ROWS })}</p>}
+              </div>
+            )}
+          </div>
+          <div className={`card card-body snap-tile${heatActive('ageGroup', 'position') ? ' has-active' : ''}`}>
+            <div className="section-label snap-tile-title">{OVERVIEW.heatPlayers.title[lang]}</div>
+            {overview.heatPlayers.total === 0 ? <p className="snap-empty">{t('Nothing here for this filter.')}</p> : (
+              <div ref={(el) => { chartRefs.current['ov:heatPlayers'] = el; }} className="snap-chart">
+                <Heatmap m={overview.heatPlayers} lang={lang} onPick={pickCell('ageGroup', 'position')} active={heatActive('ageGroup', 'position')} width={380} title={OVERVIEW.heatPlayers.title[lang]} rtl={lang === 'he'} />
+              </div>
+            )}
+          </div>
+          <div className={`card card-body snap-tile${heatActive('weekday', 'hour') ? ' has-active' : ''}`}>
+            <div className="section-label snap-tile-title">{OVERVIEW.heatMatches.title[lang]}</div>
+            {overview.heatMatches.total === 0 ? <p className="snap-empty">{t('Nothing here for this filter.')}</p> : (
+              <div ref={(el) => { chartRefs.current['ov:heatMatches'] = el; }} className="snap-chart">
+                <Heatmap m={overview.heatMatches} lang={lang} onPick={pickCell('weekday', 'hour')} active={heatActive('weekday', 'hour')} width={380} title={OVERVIEW.heatMatches.title[lang]} rtl={lang === 'he'} />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* ── The board */}
       {BOARD.map((g) => {
@@ -308,6 +455,7 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
   );
 }
 
+const URGENCY_LABEL = { expired: { he: 'פג', en: 'Expired' }, critical: { he: 'עד 90 יום', en: '≤ 90 days' }, warning: { he: 'עד 180 יום', en: '≤ 180 days' }, ok: { he: 'תקין', en: 'OK' } };
 const mergeFilters = (current, extra) => current.filter((f) => !extra.some((e) => e.dim === f.dim)).concat(extra);
 const groupColumns = (res, lang) => [
   { key: 'label', label: res.dim.label[lang] },

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildCtx, applyFilters, slice, kpis, monthly, encodeState, decodeState, drillInto, drillUp,
   breadcrumbs, parseMoney, DEFAULT_STATE, dimensionsFor, measuresFor, COLUMNS, periodRange,
+  matrix, dealFunnel, FUNNEL_STAGES, contractTimeline, trends, urgencyOf,
 } from '../engines/analytics';
 
 const now = new Date('2026-10-15T09:00:00Z'); // season 2026/27
@@ -143,5 +144,76 @@ describe('analytics engine', () => {
     }
     const row = COLUMNS.players.map((c) => c.get(players[0], ctx));
     expect(row.slice(0, 5)).toEqual(['Avi', 'מיוצג', 'נוער', 16, "נערים א'"]);
+  });
+
+  // ── stage B ──────────────────────────────────────────────────────
+  it('weekday and hour dimensions bucket matches', () => {
+    const rows = [
+      { id: 'a', date: '2026-10-18', time: '19:00' }, // Sunday
+      { id: 'b', date: '2026-10-19', time: '19:30' }, // Monday
+      { id: 'c', date: '2026-10-25', time: '7:05' },  // Sunday
+      { id: 'd', date: '2026-10-26' },                 // no time
+    ];
+    const wd = slice(rows, 'matches', 'weekday', 'count', ctx);
+    expect(wd.groups.map((g) => [g.key, g.count])).toEqual([['0', 2], ['1', 2]]);
+    expect(wd.groups[0].label.he).toBe('ראשון');
+    const hr = slice(rows, 'matches', 'hour', 'count', ctx);
+    expect(hr.groups.map((g) => [g.key, g.count])).toEqual([['07', 1], ['19', 2]]);
+    expect(hr.totalCount).toBe(4);
+  });
+
+  it('matrix counts rows by two dimensions with totals and max', () => {
+    const live = applyFilters(players, 'players', [], ctx);
+    const m = matrix(live, 'players', 'stage', 'position', ctx);
+    expect(m.rowsAxis.map((a) => a.key)).toEqual(['in_process', 'represented']); // STAGES order
+    expect(m.colsAxis.map((a) => a.key)).toEqual(['GK', 'CB', 'CM', 'ST']); // POSITIONS order
+    expect(m.cells.represented.CB.count).toBe(1);
+    expect(m.cells.in_process.CM.count).toBe(1);
+    expect(m.cells.in_process.GK).toBeUndefined();
+    expect(m.max).toBe(1);
+    expect(m.total).toBe(4);
+    expect(m.rowsAxis[1].total).toBe(3);
+    const top = matrix(live, 'players', 'stage', 'position', ctx, { topCols: 2 });
+    expect(top.colsAxis).toHaveLength(2);
+  });
+
+  it('funnel keeps pipeline order and cumulative reach', () => {
+    const f = dealFunnel(deals);
+    expect(f.map((s) => s.key)).toEqual(FUNNEL_STAGES);
+    expect(FUNNEL_STAGES).not.toContain('Not Relevant');
+    const at = Object.fromEntries(f.map((s) => [s.key, s.at]));
+    expect(at['Waiting Response']).toBe(1);
+    expect(at['Negotiation']).toBe(1);
+    expect(at['Contract Signed']).toBe(1);
+    const reached = Object.fromEntries(f.map((s) => [s.key, s.reached]));
+    expect(reached['Not Contacted']).toBe(3);
+    expect(reached['Waiting Response']).toBe(3);
+    expect(reached['Initial Talks']).toBe(2);
+    expect(reached['Contract Signed']).toBe(1);
+    expect(f[0].share).toBe(1);
+    expect(f[f.length - 1].share).toBeCloseTo(1 / 3);
+    expect(f.find((s) => s.key === 'Negotiation')!.commission).toBe(5000);
+  });
+
+  it('contract timeline lists represented players soonest first with urgency', () => {
+    const tl = contractTimeline(players, ctx);
+    expect(tl.map((x) => x.id)).toEqual(['p1', 'p3']); // p2 has no end, p4 not represented, p5 deleted
+    expect(tl[0].daysLeft).toBe(47);
+    expect(tl[0].urgency).toBe('critical');
+    expect(tl[1].urgency).toBe('ok');
+    expect(contractTimeline(players, ctx, { months: 1 }).map((x) => x.id)).toEqual([]);
+    expect(urgencyOf(-1)).toBe('expired');
+    expect(urgencyOf(120)).toBe('warning');
+  });
+
+  it('trends gives one monthly series per source over the same months', () => {
+    const t = trends({ players, deals, matches }, ctx, 6);
+    const ids = t.map((s) => s.id);
+    expect(ids).toEqual(['players', 'deals', 'signed', 'matches']);
+    for (const s of t) expect(s.points).toHaveLength(6);
+    expect(t[0].points.map((p) => p.key)).toEqual(['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10']);
+    expect(t.find((s) => s.id === 'players')!.points.at(-1)!.value).toBe(2); // p2 + p4 in October
+    expect(t.find((s) => s.id === 'signed')!.points.find((p) => p.key === '2026-09')!.value).toBe(1);
+    expect(t.find((s) => s.id === 'matches')!.total).toBe(2); // m3 is next month
   });
 });
