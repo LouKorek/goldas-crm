@@ -148,3 +148,19 @@ CI (`.github/workflows/ci.yml`) מריץ את כולם על כל PR. מיזוג 
 | `URL` | מוגדר על ידי Netlify, כתובת האתר |
 
 ערכים לא נכתבים לעולם בקוד, בצ'אט או ביומן.
+
+## 13. תמונת מצב, חיתוכים וייצוא
+- המסך: כרטיסייה "תמונת מצב" בבית. מצב החיתוך נמצא בכתובת
+  (`?source=players&dim=club&f=category:youth&period=season`), אז קישור הוא
+  תצוגה שמורה. לחיצה על אריח, פלח או עמודה היא דריל-דאון; פירורי הלחם מחזירים.
+- ממד או מדד חדש: מוסיפים רשומה ל-`DIMENSIONS` / `MEASURES` ב-
+  `packages/domain/src/engines/analytics.ts` (עם `sources` שבהם הוא תקף), ואז
+  `npm run build -w @goldas/domain`. המסך, הסינון המהיר והייצוא מקבלים אותו לבד.
+- ייצוא ממסך רשימה: `lib/exportView.js` בונה `listReport` ומוסר לבונים. ייצוא
+  מהמסך "תמונת מצב": `exportAs` ב-`pages/Snapshot.jsx` בונה דוח מלא עם PNG של
+  הגרפים (`toPng`). הדפסה פותחת חלון בלחיצה ואז מזריקה אליו PDF עם `autoPrint`;
+  אם הדפדפן חסם חלונות קופצים, מורידים PDF ומדפיסים ממנו.
+- בדיקה מקומית בלי Firestore: `apps/web/dev/harness.html?s=snapshot` (נתוני
+  דוגמה), ו-`scripts/mobile-shots.mjs` לצילומי טלפון.
+- עברית ב-PDF: `lib/pdfHebrew.js` (Heebo + סידור חזותי). טקסט הפוך בקובץ
+  פירושו ש-`bidiVisual` לא זיהה את הריצה; מוסיפים מקרה לבדיקה שם.

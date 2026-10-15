@@ -2,9 +2,12 @@
 // content, no Firebase. Served by the Vite dev server only (not built).
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import '../src/index.css';
 import { PageHeader, ChipGroup, SearchInput, FilterBar, SortTh, ExportMenu } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import { SnapshotView } from 'pages/Snapshot';
+import { decodeState, encodeState } from '@goldas/domain';
 
 const Layout = ({ children }) => (
   <div className="layout-root" style={{ display: 'flex', minHeight: '100vh' }}>
@@ -126,9 +129,34 @@ function Players() {
   );
 }
 
-const SCREENS = { calendar: Calendar, tm: TmWatch, player: Player, players: Players };
+
+// Snapshot with sample data through the real engine; the drill state is the
+// page's own query string, like the app.
+const CLUBS = ['מכבי חיפה', 'הפועל תל אביב', 'מ.ס. אשדוד', 'בית"ר ירושלים', 'מכבי פתח תקווה', 'הפועל חדרה', 'Valencia CF'];
+const POS = ['GK', 'CB', 'RB', 'LB', 'CDM', 'CM', 'CAM', 'RW', 'LW', 'ST'];
+const SAMPLE = (() => {
+  const players = Array.from({ length: 64 }, (_, i) => ({
+    id: `p${i}`, name: `שחקן ${i + 1}`, stage: i % 9 === 0 ? 'in_process' : i % 13 === 0 ? 'tracking' : 'represented',
+    category: i % 4 === 0 ? 'men' : i % 11 === 0 ? 'women' : 'youth', dob: `${2004 + (i % 9)}-0${1 + (i % 9)}-1${i % 9}`,
+    primaryPosition: POS[i % POS.length], currentClub: CLUBS[i % CLUBS.length], leagueCountry: i % 7 === 6 ? 'Spain' : 'Israel',
+    contractStatus: i % 5 === 0 ? 'Free' : 'Under Contract', contractEnd: `${2026 + (i % 3)}-${i % 2 ? '06' : '12'}-30`,
+    createdAt: `2026-${String(1 + (i % 10)).padStart(2, '0')}-10`, nationalities: i % 6 ? ['Israel'] : ['Israel', 'France'],
+  }));
+  const stages = ['Not Contacted', 'Waiting Response', 'Initial Talks', 'Mandate Received', 'Offered to Club', 'Negotiation', 'Draft Signed', 'Contract Signed'];
+  const deals = Array.from({ length: 22 }, (_, i) => ({ id: `d${i}`, playerId: `p${i * 2}`, playerName: `שחקן ${i * 2 + 1}`, category: players[i * 2].category, clubName: CLUBS[(i + 2) % CLUBS.length], stage: stages[i % stages.length], commission: `${(i + 1) * 1500}`, transferFee: `${(i + 1) * 20}k`, enteredStageAt: `2026-0${1 + (i % 9)}-05`, createdAt: `2026-0${1 + (i % 9)}-01`, owner: i % 3 ? 'lou' : 'aviram' }));
+  const matches = Array.from({ length: 40 }, (_, i) => ({ id: `m${i}`, date: `2026-${String(8 + (i % 4)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`, time: '19:00', homeTeam: CLUBS[i % CLUBS.length], awayTeam: CLUBS[(i + 3) % CLUBS.length], linkedPlayers: [`p${i % 64}`], stadiumName: 'סמי עופר' }));
+  const tasks = Array.from({ length: 9 }, (_, i) => ({ id: `t${i}`, title: `משימה ${i + 1}`, owner: 'lou', dueDate: `2026-10-${String(5 + i * 3).padStart(2, '0')}`, done: i % 4 === 0 }));
+  return { players, deals, matches, requirements: [{ id: 'r1', clubName: 'מכבי חיפה', requiredPosition: 'CB', country: 'Israel', status: 'open', validUntil: '2026-12-31', createdAt: '2026-09-01' }], tasks, trainings: [], interactions: [] };
+})();
+function Snapshot() {
+  const [qs, setQs] = useState(location.search.replace(/^\?/, '').replace(/(^|&)(s|light)=[^&]*/g, ''));
+  const state = decodeState(qs);
+  return <SnapshotView data={SAMPLE} state={state} setState={(n) => setQs(encodeState(n))} lang="he" now={new Date('2026-10-15T09:00:00Z')} />;
+}
+
+const SCREENS = { calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
 const which = new URLSearchParams(location.search).get('s') || 'calendar';
 const light = new URLSearchParams(location.search).get('light');
 if (light) document.body.classList.add('light-mode');
 const S = SCREENS[which];
-createRoot(document.getElementById('root')).render(<Layout><S /></Layout>);
+createRoot(document.getElementById('root')).render(<MemoryRouter><Layout><S /></Layout></MemoryRouter>);
