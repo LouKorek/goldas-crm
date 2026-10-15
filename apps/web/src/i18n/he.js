@@ -892,6 +892,12 @@ const HE = {
   'Print': 'הדפסה',
   'Opens ready to print': 'נפתח מוכן להדפסה',
   'Export failed.': 'הייצוא נכשל.',
+  'Filter': 'סינון',
+  'Everything': 'הכל',
+  'Show records': 'הצג רשומות',
+  'Hide records': 'הסתר רשומות',
+  'Nothing here for this filter.': 'אין כאן כלום בסינון הזה.',
+  'Click any slice, bar or tile to filter the whole board.': 'לחיצה על פלח, עמודה או אריח מסננת את כל הלוח.',
 };
 
 export default HE;
