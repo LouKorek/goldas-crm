@@ -11,7 +11,7 @@ import { t, fmtDateTime, getLang } from 'lib/i18n';
 import { playerName, israelDate, addDays, AGE_GROUPS } from '@goldas/domain';
 import { PageHeader, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
-import Dashboard from './Dashboard';
+import Snapshot from './Snapshot';
 
 // Home has two tabs. "Today" is the opening screen: what needs action,
 // today's and tomorrow's games, what Golda did in the last 24 hours and
@@ -45,7 +45,7 @@ export default function Home() {
           ))}
         </div>
       </PageHeader>
-      {tab === 'snapshot' ? <Dashboard embedded /> : <Today />}
+      {tab === 'snapshot' ? <Snapshot /> : <Today />}
     </div>
   );
 }

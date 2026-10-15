@@ -728,11 +728,14 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
     if (busy) return;
     setBusy(true);
     setOpen(false);
+    // The print tab must be opened by the click itself or phones block it.
+    const win = kind === 'print' ? window.open('', '_blank') : null;
     try {
       const mod = await import('lib/exportView');
-      const fn = kind === 'pdf' ? mod.exportToPdf : mod.exportToExcel;
-      await fn({ filename, title, subtitle, columns, rows });
+      if (kind === 'print') await mod.exportToPrint({ filename, title, subtitle, columns, rows }, win);
+      else await (kind === 'pdf' ? mod.exportToPdf : mod.exportToExcel)({ filename, title, subtitle, columns, rows });
     } catch (e) {
+      if (win && !win.closed) win.close();
       toast.error(e?.message || 'Export failed.');
     } finally {
       setBusy(false);
@@ -776,6 +779,14 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
             <div style={{ flex: 1, textAlign: 'start' }}>
               <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>PDF</div>
               <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("Branded document")}</div>
+            </div>
+          </button>
+          <button type="button" onClick={() => run('print')}
+            style={menuItemStyle}
+            onMouseEnter={menuItemHover} onMouseLeave={menuItemLeave}>
+            <div style={{ flex: 1, textAlign: 'start' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{t("Print")}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("Opens ready to print")}</div>
             </div>
           </button>
         </div>

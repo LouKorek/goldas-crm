@@ -8,7 +8,6 @@ import './index.css';
 
 import Layout        from 'components/layout/Layout';
 import Login         from 'pages/Login';
-import Dashboard     from 'pages/Dashboard';
 import Players       from 'pages/Players';
 import Pipeline      from 'pages/Pipeline';
 import Requirements  from 'pages/Requirements';

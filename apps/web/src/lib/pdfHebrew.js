@@ -19,24 +19,27 @@ const reverseRun = (run) => Array.from(run).reverse().map((c) => MIRROR[c] || c)
 export function bidiVisual(s) {
   const str = String(s ?? '');
   if (!hasHebrew(str)) return str;
+  const NEUTRAL = /[\s.,:;·\-–—()[\]{}'"/|!?]/;
+  // 1. split into runs: 'he', 'ltr' (Latin, digits) or 'n' (neutral)
   const runs = [];
-  let cur = '', curHe = null;
   for (const ch of str) {
-    const isHe = HE.test(ch);
-    const neutral = /[\s.,:;·\-–—()[\]{}'"/|!?]/.test(ch);
-    if (cur === '') { cur = ch; curHe = isHe ? true : neutral ? null : false; continue; }
-    if (neutral) { cur += ch; continue; }
-    if (curHe === null) { curHe = isHe; cur += ch; continue; }
-    if (isHe === curHe) { cur += ch; continue; }
-    runs.push({ he: curHe, text: cur }); cur = ch; curHe = isHe;
+    const kind = HE.test(ch) ? 'he' : NEUTRAL.test(ch) ? 'n' : 'ltr';
+    const last = runs[runs.length - 1];
+    if (last && last.kind === kind) last.text += ch; else runs.push({ kind, text: ch });
   }
-  if (cur) runs.push({ he: curHe === null ? false : curHe, text: cur });
-  // Neutral tails (spaces/punctuation) at the end of a Hebrew run belong to
-  // the line, not the run: trim and re-attach so they don't jump sides.
-  const firstStrong = runs.find((r) => /[^\s.,:;·\-–—()[\]{}'"/|!?]/.test(r.text));
-  const rtlLine = !!firstStrong?.he;
-  const out = runs.map((r) => (r.he ? reverseRun(r.text) : r.text));
-  return rtlLine ? out.reverse().join('') : out.join('');
+  // 2. neutrals between two LTR runs belong to them (UBA rule N1)
+  for (let i = 1; i < runs.length - 1; i++) {
+    if (runs[i].kind === 'n' && runs[i - 1].kind === 'ltr' && runs[i + 1].kind === 'ltr') {
+      runs[i - 1].text += runs[i].text + runs[i + 1].text; runs.splice(i, 2); i--;
+    }
+  }
+  const firstStrong = runs.find((r) => r.kind !== 'n');
+  const rtlLine = !firstStrong || firstStrong.kind === 'he';
+  // 3. draw order: an RTL line is read right to left, so its runs are laid
+  //    out in reverse; Hebrew and neutral runs are reversed character by
+  //    character (with mirrored brackets), LTR runs stay as they are.
+  if (rtlLine) return runs.reverse().map((r) => (r.kind === 'ltr' ? r.text : reverseRun(r.text))).join('');
+  return runs.map((r) => (r.kind === 'he' ? reverseRun(r.text) : r.text)).join('');
 }
 
 // Register Heebo on the document and wrap `text` / `splitTextToSize` so

@@ -8,7 +8,7 @@ const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM 
 const ctx = await browser.newContext({ ...devices['iPhone 13'], locale: 'he-IL', hasTouch: true });
 const page = await ctx.newPage();
 const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
-for (const s of ['calendar', 'tm', 'player', 'players']) {
+for (const s of ['calendar', 'tm', 'player', 'players', 'snapshot']) {
   for (const light of ['', '1']) {
     await page.goto(`http://127.0.0.1:3000/dev/harness.html?s=${s}&light=${light}`);
     await page.waitForSelector('.page-header');
