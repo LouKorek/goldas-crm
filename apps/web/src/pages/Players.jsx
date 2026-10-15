@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { deleteDoc_, restoreDoc_, uploadFile, resolveFileUrl, renameFile, PATHS } from 'lib/db';
+import { deleteDoc_, restoreDoc_, uploadFile, renameFile, PATHS } from 'lib/db';
 import { listenPlayers, addPlayer, updatePlayer } from 'data/players';
 import { POSITIONS, FOOT_OPTIONS, NAT_TEAM_STATUS, natTeamStatusOf, CONTRACT_STATUS, POSITION_ORDER,
          COUNTRIES, calcAge, fmtDate, daysUntil, isEuropean } from 'lib/constants';
@@ -9,6 +9,7 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, FileUpload,
          ExportMenu, useConfirm, RowActions } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
+import DocViewer from 'components/DocViewer';
 import AgeGroupField from 'components/ui/AgeGroupField';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
@@ -57,85 +58,6 @@ function IfaResolution({ ifa, onPin }) {
         {when && <span style={{ color: 'var(--text-3)' }}>{t("checked")} {fmtDate(when.toISOString().slice(0, 10))}</span>}
       </div>
     </div>
-  );
-}
-
-// ── Document viewer ───────────────────────────────────────────────
-function DocViewer({ files, title, onClose, onRename }) {
-  const [idx, setIdx] = useState(0);
-  const [renaming, setRenaming] = useState(null);   // draft name while editing
-  const file = files?.[idx];
-  const [url, setUrl] = useState(null);
-  const [loadingFile, setLoadingFile] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    let objectUrl = null;
-    setUrl(null);
-    if (!file) return;
-    setLoadingFile(true);
-    resolveFileUrl(file)
-      .then(async (dataUrl) => {
-        if (!dataUrl) throw new Error('unavailable');
-        // Convert to a Blob URL — Chrome blocks navigating/embedding raw data: URLs.
-        const blob = await (await fetch(dataUrl)).blob();
-        objectUrl = URL.createObjectURL(blob);
-        if (!cancelled) setUrl(objectUrl); else URL.revokeObjectURL(objectUrl);
-      })
-      .catch(() => { if (!cancelled) toast.error(t("Could not load this file.")); })
-      .finally(() => { if (!cancelled) setLoadingFile(false); });
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [file]);
-  const saveName = async () => {
-    const name = (renaming || '').trim();
-    if (!name) return;
-    try { await onRename(idx, name); setRenaming(null); toast.success(t("File renamed.")); }
-    catch (e) { toast.error(e.message || 'Rename failed.'); }
-  };
-  return (
-    <Modal title={title} onClose={onClose} wide viewOnly>
-      {!files?.length ? (
-        <p style={{color:'var(--text-3)'}}>{t("No documents uploaded yet.")}</p>
-      ) : (
-        <>
-          {files.length > 1 && (
-            <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-              {files.map((f,i)=>(
-                <button key={i} className={`chip${i===idx?' active':''}`} onClick={()=>{ setIdx(i); setRenaming(null); }}>
-                  {f.name}
-                </button>
-              ))}
-            </div>
-          )}
-          {file && (
-            <div>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                {renaming !== null ? (
-                  <div style={{display:'flex',gap:6,flex:1,marginInlineEnd:8}}>
-                    <input autoFocus value={renaming} onChange={e=>setRenaming(e.target.value)}
-                      onKeyDown={e=>{ if (e.key==='Enter') saveName(); if (e.key==='Escape') setRenaming(null); }} />
-                    <button className="btn btn-primary btn-sm" disabled={!renaming.trim()} onClick={saveName}>{t("Save")}</button>
-                    <button className="btn btn-ghost btn-sm" onClick={()=>setRenaming(null)}>{t("Cancel")}</button>
-                  </div>
-                ) : (
-                  <div style={{fontSize:12,color:'var(--text-3)'}}>{file.name} · {new Date(file.uploadedAt).toLocaleDateString('en-GB')} · {file.uploadedBy}</div>
-                )}
-                <div style={{display:'flex',gap:6}}>
-                  {onRename && renaming === null && <button className="btn btn-secondary btn-sm" onClick={()=>setRenaming(file.name||'')}>{t("✎ Rename")}</button>}
-                  {url && <a href={url} download={file.name} className="btn btn-primary btn-sm">{t("⬇ Download")}</a>}
-                </div>
-              </div>
-              {loadingFile || !url ? (
-                <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>{loadingFile ? 'Loading file…' : 'File unavailable.'}</div>
-              ) : file.type?.startsWith('image/') ? (
-                <img src={url} alt={file.name} style={{width:'100%',borderRadius: 0,border:'1px solid var(--border)'}} />
-              ) : (
-                <iframe src={url} style={{width:'100%',height:480,borderRadius: 0,border:'1px solid var(--border)'}} title={file.name} />
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </Modal>
   );
 }
 

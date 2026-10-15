@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { listenCollection, PATHS, resolveFileUrl } from 'lib/db';
+import { listenCollection, PATHS, renameFile } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { listenDeals } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
@@ -11,6 +11,7 @@ import { t, tv, relDays, fmtDateTime, getLang } from 'lib/i18n';
 import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
 import { PageHeader, FactLine, Skeleton, Empty, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import DocViewer from 'components/DocViewer';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -103,9 +104,13 @@ export default function Player360() {
   // return here once the form closes (saved or cancelled), instead of
   // leaving the user stranded on a list they never opened.
   const edit = () => navigate(listPath, { state: { editId: id, back: true } });
-  const openFile = async (ref) => {
-    try { const url = await resolveFileUrl(ref); if (url) window.open(url, '_blank'); else toast.error(t('File unavailable.')); }
-    catch { toast.error(t('Could not open file.')); }
+  // Documents open in the in-app viewer (DocViewer): a stored file is a
+  // data: URL and Chrome silently refuses to open those in a new tab, which
+  // is why a plain window.open here looked like a dead click.
+  const [docModal, setDocModal] = useState(null); // { field, files, title, idx }
+  const renameDoc = async (index, name) => {
+    const updated = await renameFile(PATHS.PLAYERS, id, docModal.field, docModal.files, index, name);
+    setDocModal((m) => ({ ...m, files: updated }));
   };
   const canShare = (() => { try { return !!navigator.canShare?.({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] }); } catch { return false; } })();
   const cv = async (lang, share = false) => {
@@ -172,15 +177,21 @@ export default function Player360() {
           <button type="button" onClick={() => navigate('/golda', { state: { tab: 'chat', prefill: he ? `קראי את המסמכים של ${playerName(p)} ובדקי אם תאריכי החוזה, הדרכון והייצוג במערכת תואמים למה שכתוב בהם.` : `Read ${playerName(p)}'s documents and check whether the contract, passport and representation dates in the CRM match them.` } })}
             style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{t('Ask Golda')}</button>
         ) : null}>
-          {docs.every(([k]) => !(p[k] || []).length) ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No documents uploaded yet.')}</p> : docs.map(([k, label, expires]) => (p[k] || []).map((f, i) => {
+          {docs.every(([k]) => !(p[k] || []).length) ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <p style={{ color: 'var(--text-3)', fontSize: 12.5, margin: 0 }}>{t('No documents uploaded yet.')}</p>
+              {canEdit && <button type="button" className="btn btn-secondary btn-sm" onClick={edit}><Icon name="plus" size={11} /> {t('Upload documents')}</button>}
+            </div>
+          ) : docs.map(([k, label, expires]) => (p[k] || []).map((f, i) => {
             const exp = f.expiresAt || expires;
             const d = exp ? daysAway(exp) : null;
             return (
-              <button key={k + i} onClick={() => openFile(f)} style={{ display: 'flex', gap: 10, width: '100%', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--rule)', background: 'none', border: 'none', borderBottomStyle: 'solid', color: 'var(--text-1)', cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit', fontSize: 13 }}>
+              <button key={k + i} onClick={() => setDocModal({ field: k, files: p[k] || [], title: label, idx: i })} style={{ display: 'flex', gap: 10, width: '100%', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--rule)', background: 'none', border: 'none', borderBottomStyle: 'solid', color: 'var(--text-1)', cursor: 'pointer', textAlign: 'start', fontFamily: 'inherit', fontSize: 13 }}>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--gold)', minWidth: 60 }}>{label}</span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
                 {exp && <span style={{ fontSize: 10.5, color: d < 0 ? 'var(--red)' : d <= 30 ? 'var(--amber)' : 'var(--text-3)' }}>{d < 0 ? t('expired') : t('valid until')} {fmtDate(exp)}</span>}
                 <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{f.uploadedAt ? fmtDate(f.uploadedAt) : ''}</span>
+                <span className="btn btn-ghost btn-sm" style={{ pointerEvents: 'none' }}><Icon name="search" size={11} /> {t('View')}</span>
               </button>
             );
           }))}
@@ -232,6 +243,7 @@ export default function Player360() {
           ))}
         </Card>
       </div>
+      {docModal && <DocViewer files={docModal.files} initialIndex={docModal.idx} title={docModal.title} onClose={() => setDocModal(null)} onRename={canEdit ? renameDoc : null} />}
     </div>
   );
 }
