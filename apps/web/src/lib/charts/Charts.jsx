@@ -104,9 +104,10 @@ export function Bars({ groups, lang = 'he', onPick, active, format = fmt, width 
             onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} opacity={dim ? 0.5 : 1}>
             <title>{`${g.label[lang]}: ${format(g.value)} (${pct(g.share)})`}</title>
             <rect x={rtl ? 0 : 0} y={y} width={width} height={rowH - 2} fill={hover === i ? 'var(--gold-dim)' : 'transparent'} />
-            <text x={labelX} y={y + rowH / 2 + 4} textAnchor={rtl ? 'end' : 'start'} fill="currentColor" fontSize={12}>{truncate(g.label[lang], Math.floor(labelW / 7))}</text>
+            {/* direction=rtl flips "start" to the right-hand side, so "start" is right in both modes */}
+            <text x={labelX} y={y + rowH / 2 + 4} textAnchor="start" fill="currentColor" fontSize={12}>{truncate(g.label[lang], Math.floor(labelW / 7))}</text>
             <rect x={barX} y={y + 5} width={w} height={rowH - 12} fill={colorAt(i)} />
-            <text x={valX} y={y + rowH / 2 + 4} textAnchor={rtl ? 'end' : 'start'} fill="var(--text-2)" fontSize={11.5} style={{ fontVariantNumeric: 'tabular-nums' }}>{format(g.value)}</text>
+            <text x={valX} y={y + rowH / 2 + 4} textAnchor="start" fill="var(--text-2)" fontSize={11.5} style={{ fontVariantNumeric: 'tabular-nums' }}>{format(g.value)}</text>
           </g>
         );
       })}

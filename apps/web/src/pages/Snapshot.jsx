@@ -1,42 +1,76 @@
-// Snapshot: the numbers dashboard. Every chart is a question and every click
-// is an answer that narrows the whole screen: picking a slice pushes a filter
-// (a breadcrumb), the tiles, charts, trend and record list all recompute for
-// that slice, and the exports carry exactly what is on screen. The engine is
-// packages/domain/src/engines/analytics.ts; this file is only the view.
-// The drill state lives in the URL, so refresh, back and shared links work.
+// Snapshot: one board, many charts, cross-filtering.
+//
+// Everything is on screen at once: the KPI tiles, then a grid of charts per
+// area (players, deals, matches, requirements, tasks, activity). Clicking any
+// slice, bar or tile adds a filter to the bar at the top; every chart and
+// tile recomputes on the filtered set. A chart never hides its own values:
+// it is computed with every filter except the one on its own dimension
+// (faceted search), so picking "represented" in the stage donut highlights
+// that slice and re-cuts all the OTHER charts to represented players, and the
+// tile "in process" keeps its number instead of dropping to zero. Filters on
+// one area translate to the others through the players (deals of youth
+// players, matches of represented players). Clicking the active slice again
+// removes its filter. The filter state and period live in the URL.
+// The engine is packages/domain/src/engines/analytics.ts; this is the view.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { listenCollection, PATHS } from 'lib/db';
 import { t, getLang } from 'lib/i18n';
 import { toast, SortTh, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
-import { Donut, Bars, Columns, Line, toPng } from 'lib/charts/Charts';
+import { Donut, Bars, Columns, toPng } from 'lib/charts/Charts';
 import {
-  SOURCES, SOURCE_LABELS, PERIOD_LABELS, buildCtx, applyFilters, slice, kpis, monthly, dimensionsFor, measuresFor,
-  dimension, decodeState, encodeState, drillInto, drillUp, breadcrumbs, COLUMNS, recordPath, formatValue, DEFAULT_STATE,
+  SOURCE_LABELS, PERIOD_LABELS, buildCtx, applyFilters, slice, kpis, measure as measureOf,
+  dimension, decodeState, encodeState, drillInto, COLUMNS, recordPath, formatValue, DEFAULT_STATE,
 } from '@goldas/domain';
 
 const PERIODS = ['all', 'season', 'quarter', 'month', 'next90', 'last12m'];
-// The dimensions offered as quick filters per source (the rest live in the chart picker).
-const QUICK = {
-  players: ['stage', 'category', 'ageGroup', 'club', 'country', 'position'],
-  deals: ['dealStage', 'category', 'club', 'owner'],
-  matches: ['category', 'ageGroup', 'player', 'club', 'when'],
-  requirements: ['reqStatus', 'club', 'country', 'position'],
-  tasks: ['taskStatus', 'owner'],
-  trainings: ['category', 'ageGroup', 'player'],
-  interactions: ['kind', 'owner'],
-};
-const MINIS = {
-  players: ['stage', 'category', 'ageGroup', 'position', 'club', 'contractStatus'],
-  deals: ['dealStage', 'category', 'club', 'stageAge'],
-  matches: ['category', 'player', 'homeAway', 'when'],
-  requirements: ['reqStatus', 'position', 'country'],
-  tasks: ['taskStatus', 'owner'],
-  trainings: ['category', 'player'],
-  interactions: ['kind', 'owner'],
-};
 const TONE = { good: 'var(--green-ok)', warning: 'var(--amber)', critical: 'var(--red)', gold: 'var(--gold)', neutral: 'var(--text-3)' };
+
+// The board. Each chart: a source, a dimension, an optional measure and an
+// optional fixed filter of its own (matches by player, upcoming only).
+const BOARD = [
+  { source: 'players', charts: [
+    { dim: 'stage', type: 'donut' },
+    { dim: 'category', type: 'donut' },
+    { dim: 'ageGroup', type: 'columns' },
+    { dim: 'position', type: 'bars', topN: 8 },
+    { dim: 'club', type: 'bars', topN: 8 },
+    { dim: 'country', type: 'donut', topN: 6 },
+    { dim: 'contractStatus', type: 'donut' },
+    { dim: 'contractEndQ', type: 'columns', fixed: [{ dim: 'stage', value: 'represented' }], title: { he: 'סיומי חוזה (מיוצגים)', en: 'Contract expiries (represented)' } },
+    { dim: 'addedMonth', type: 'columns', title: { he: 'שחקנים חדשים לפי חודש', en: 'New players per month' } },
+  ] },
+  { source: 'deals', charts: [
+    { dim: 'dealStage', type: 'donut' },
+    { dim: 'dealStage', measure: 'commission', type: 'bars', title: { he: 'עמלות לפי שלב עסקה', en: 'Commission by deal stage' } },
+    { dim: 'club', type: 'bars', topN: 8 },
+    { dim: 'closedMonth', type: 'columns' },
+  ] },
+  { source: 'matches', charts: [
+    { dim: 'month', type: 'columns' },
+    { dim: 'player', type: 'bars', topN: 8, fixed: [{ dim: 'when', value: 'upcoming' }], title: { he: 'משחקים קרובים לפי שחקן', en: 'Upcoming matches by player' } },
+    { dim: 'category', type: 'donut' },
+    { dim: 'homeAway', type: 'donut' },
+  ] },
+  { source: 'requirements', charts: [
+    { dim: 'reqStatus', type: 'donut' },
+    { dim: 'position', type: 'bars', topN: 8 },
+    { dim: 'country', type: 'donut', topN: 6 },
+  ] },
+  { source: 'tasks', charts: [
+    { dim: 'taskStatus', type: 'donut' },
+    { dim: 'owner', type: 'bars', topN: 8 },
+  ] },
+  { source: 'interactions', charts: [
+    { dim: 'kind', type: 'donut' },
+    { dim: 'month', type: 'columns' },
+  ] },
+];
+// Tiles whose filters define the tile itself (click = toggle that filter). The
+// rest (contracts ending, representation ending) only narrow to represented.
+const FILTER_TILES = new Set(['represented', 'in_process', 'tracking', 'signed_season', 'matches_week', 'open_reqs', 'overdue_tasks', 'no_contract']);
+const chartKey = (c) => `${c.source}:${c.dim}:${c.measure || 'count'}${c.fixed ? ':' + c.fixed.map((f) => f.value).join(',') : ''}`;
 
 export default function Snapshot() {
   const lang = getLang() === 'he' ? 'he' : 'en';
@@ -66,67 +100,95 @@ export default function Snapshot() {
 // Exported for the dev harness (sample data, no Firestore).
 export function SnapshotView({ data, state, setState, lang = 'he', now }) {
   const ctx = useMemo(() => buildCtx({ ...data, now }), [data, now]);
-  const [chartType, setChartType] = useState('auto');
-  const [topN, setTopN] = useState(10);
+  const filters = state.filters;
+  const period = state.period;
+  const chartRefs = useRef({});
+  const [openRecords, setOpenRecords] = useState(null); // source whose records are open
   const [recSort, setRecSort] = useState(null);
   const [limit, setLimit] = useState(60);
-  const mainRef = useRef(null);
-  const miniRefs = useRef({});
 
-  const src = state.source;
-  const rowsAll = data[src] || [];
-  const rows = useMemo(() => applyFilters(rowsAll, src, state.filters, ctx, state.period), [rowsAll, src, state.filters, state.period, ctx]);
-  const dims = dimensionsFor(src);
-  const measures = measuresFor(src);
-  const dimId = dims.some((d) => d.id === state.dim) ? state.dim : dims[0].id;
-  const main = useMemo(() => slice(rows, src, dimId, state.measure, ctx, { sort: state.sort, dir: state.dir, lang, topN: topN || undefined, includeUnknown: true }), [rows, src, dimId, state.measure, state.sort, state.dir, lang, topN, ctx]);
-  const tiles = useMemo(() => kpis({ ...data, now, filters: state.filters, period: state.period }), [data, now, state.filters, state.period]);
-  const crumbs = useMemo(() => breadcrumbs(state, rowsAll, ctx, lang), [state, rowsAll, ctx, lang]);
-  const trend = useMemo(() => monthly(rows, src, ctx, 12), [rows, src, ctx]);
-  const minis = useMemo(() => (MINIS[src] || []).filter((d) => d !== dimId && !state.filters.some((f) => f.dim === d)).slice(0, 3)
-    .map((d) => ({ id: d, res: slice(rows, src, d, 'count', ctx, { lang, topN: 6 }) })), [rows, src, dimId, state.filters, ctx, lang]);
-  const columns = COLUMNS[src];
+  const setFilters = (next) => setState({ ...state, filters: next });
+  // Clicking a slice: same dimension replaces, clicking the active one clears it.
+  const pick = (dim) => (key) => {
+    if (key === '__other' || key === '') return;
+    const cur = filters.find((f) => f.dim === dim);
+    if (cur && cur.value === key) setFilters(filters.filter((f) => f.dim !== dim));
+    else setState(drillInto(state, dim, key));
+  };
+  const activeOf = (dim) => filters.find((f) => f.dim === dim)?.value;
+
+  // ── Charts: each computed without the filter on its own dimension.
+  const charts = useMemo(() => BOARD.flatMap((g) => g.charts.map((c) => {
+    const own = filters.filter((f) => f.dim !== c.dim).concat(c.fixed || []);
+    const rows = applyFilters(data[g.source] || [], g.source, own, ctx, period);
+    const res = slice(rows, g.source, c.dim, c.measure || 'count', ctx, { lang, topN: c.topN, includeUnknown: false });
+    return { ...c, source: g.source, key: chartKey({ ...c, source: g.source }), res, rowCount: rows.length };
+  })), [data, filters, period, ctx, lang]);
+
+  // ── Per-area record counts on the full filter set.
+  const areaRows = useMemo(() => Object.fromEntries(BOARD.map((g) => [g.source, applyFilters(data[g.source] || [], g.source, filters, ctx, period)])), [data, filters, period, ctx]);
+
+  // ── Tiles: each computed without the filters it would itself set, so a
+  //    tile never zeroes out because of its own dimension.
+  const tiles = useMemo(() => {
+    const base = kpis({ ...data, now, filters: [], period });
+    const cache = new Map();
+    return base.map((k) => {
+      const skip = new Set((k.drill?.filters || []).map((f) => f.dim));
+      const f = filters.filter((x) => !skip.has(x.dim));
+      const key = f.map((x) => `${x.dim}:${x.value}`).join('|');
+      if (!cache.has(key)) cache.set(key, kpis({ ...data, now, filters: f, period }));
+      return cache.get(key).find((x) => x.id === k.id) || k;
+    });
+  }, [data, now, filters, period]);
+
+  const columns = openRecords ? COLUMNS[openRecords] : null;
   const records = useMemo(() => {
-    const list = rows.map((r) => ({ row: r, cells: Object.fromEntries(columns.map((c) => [c.key, c.get(r, ctx)])) }));
+    if (!openRecords) return [];
+    const list = (areaRows[openRecords] || []).map((r) => ({ row: r, cells: Object.fromEntries(columns.map((c) => [c.key, c.get(r, ctx)])) }));
     if (recSort) {
       const { field, dir } = recSort;
       list.sort((a, b) => { const x = a.cells[field], y = b.cells[field]; const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), lang); return dir === 'asc' ? r : -r; });
     }
     return list;
-  }, [rows, columns, ctx, recSort, lang]);
+  }, [openRecords, areaRows, columns, ctx, recSort, lang]);
 
-  const fmt = (v) => formatValue(v, main.measure.format, lang);
-  const pick = (dId) => (key) => { if (key === '__other' || key === '') return; setState(drillInto(state, dId, key)); };
-  const type = chartType === 'auto' ? (main.dim.temporal ? 'columns' : main.groups.length > 7 ? 'bars' : 'donut') : chartType;
-  const temporal = main.dim.temporal;
+  const filterLabel = (f) => {
+    const dm = dimension(f.dim);
+    const g = slice(data[dm.sources[0]] || [], dm.sources[0], f.dim, 'count', ctx, { lang, includeUnknown: true }).groups.find((x) => x.key === f.value);
+    return `${dm.label[lang]}: ${g ? g.label[lang] : f.value}`;
+  };
+  const periodLabel = PERIOD_LABELS[period.kind][lang];
+  const filterText = filters.length ? filters.map(filterLabel).join(' · ') : t('Everything');
+  const titleOf = (c) => c.title ? c.title[lang] : `${c.res.measure.id === 'count' ? SOURCE_LABELS[c.source][lang] : c.res.measure.label[lang]} ${t('by')} ${c.res.dim.label[lang]}`;
 
-  // ── Export: everything on screen, charts included.
+  // ── Export: every chart on the board, the tiles and the records of each area.
   const [busy, setBusy] = useState(false);
   const exportAs = async (kind) => {
     if (busy) return;
     setBusy(true);
     const win = kind === 'print' ? window.open('', '_blank') : null;
     try {
-      const mainPng = await toPng(mainRef.current).catch(() => null);
-      const miniPngs = await Promise.all(minis.map((m) => toPng(miniRefs.current[m.id]).catch(() => null)));
-      const periodLabel = PERIOD_LABELS[state.period.kind][lang];
-      const pathLabel = crumbs.map((c) => c.label).join(' › ');
+      const pngs = await Promise.all(charts.map((c) => toPng(chartRefs.current[c.key]).catch(() => null)));
       const report = {
-        filename: `${t('Snapshot')} ${SOURCE_LABELS[src][lang]}`,
-        title: `${t('Snapshot')} · ${SOURCE_LABELS[src][lang]}`,
-        subtitle: `${pathLabel} · ${periodLabel}`,
+        filename: `${t('Snapshot')} ${filters.length ? filterText : ''}`.trim(),
+        title: t('Snapshot'),
+        subtitle: `${filterText} · ${periodLabel}`,
         lang,
         meta: [
           { label: t('Period'), value: periodLabel },
-          { label: t('Slice'), value: pathLabel },
-          { label: t('Records'), value: String(rows.length) },
+          { label: t('Filter'), value: filterText },
+          ...BOARD.map((g) => ({ label: SOURCE_LABELS[g.source][lang], value: String((areaRows[g.source] || []).length) })),
         ],
         kpis: tiles.map((k) => ({ label: k.label[lang], value: formatValue(k.value, k.format, lang) })),
         sections: [
-          { title: `${main.measure.label[lang]} ${t('by')} ${main.dim.label[lang]}`, columns: groupColumns(main, lang), rows: groupRows(main, lang), chart: mainPng, totals: main.measure.agg !== 'avg' },
-          ...minis.map((m, i) => ({ title: `${t('Count')} ${t('by')} ${m.res.dim.label[lang]}`, columns: groupColumns(m.res, lang), rows: groupRows(m.res, lang), chart: miniPngs[i], totals: true })),
+          ...charts.filter((c) => c.res.groups.length).map((c, i) => ({ title: titleOf(c), columns: groupColumns(c.res, lang), rows: groupRows(c.res, lang), chart: pngs[i], totals: c.res.measure.agg !== 'avg' })),
+          ...BOARD.filter((g) => (areaRows[g.source] || []).length).map((g) => ({
+            title: `${SOURCE_LABELS[g.source][lang]} · ${filterText}`,
+            columns: COLUMNS[g.source].map((c) => ({ key: c.key, label: c.label[lang], numeric: c.numeric })),
+            rows: areaRows[g.source].map((r) => Object.fromEntries(COLUMNS[g.source].map((c) => [c.key, c.get(r, ctx)]))),
+          })),
         ],
-        records: { title: `${SOURCE_LABELS[src][lang]} · ${pathLabel}`, columns: columns.map((c) => ({ key: c.key, label: c.label[lang], numeric: c.numeric })), rows: records.map((r) => r.cells) },
       };
       if (kind === 'excel') { const { exportExcel } = await import('lib/report/excel'); await exportExcel(report); }
       else { const { exportPdf } = await import('lib/report/pdf'); await exportPdf(report, { print: kind === 'print', win }); }
@@ -136,146 +198,117 @@ export function SnapshotView({ data, state, setState, lang = 'he', now }) {
     } finally { setBusy(false); }
   };
 
-  const Chip = ({ active, onClick, children }) => <button type="button" className={`chip${active ? ' active' : ''}`} onClick={onClick}>{children}</button>;
-  const Select = ({ value, onChange, options, label }) => (
-    <label className="snap-select"><span>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-    </label>
-  );
+  const Chip = ({ active, onClick, children, className = '' }) => <button type="button" className={`chip${active ? ' active' : ''} ${className}`} onClick={onClick}>{children}</button>;
+  const fmtFor = (res) => (v) => formatValue(v, res.measure.format, lang);
 
   return (
     <div className="snapshot">
-      {/* ── Source + period */}
+      {/* ── Period + filters + export */}
       <div className="card card-body snap-toolbar">
-        <div className="chip-group snap-sources">
-          {SOURCES.map((s) => <Chip key={s} active={s === src} onClick={() => setState({ ...DEFAULT_STATE, source: s, dim: dimensionsFor(s)[0].id, period: state.period, filters: state.filters.filter((f) => dimension(f.dim)?.sources.includes(s) || dimension(f.dim)?.sources.includes('players')) })}>{SOURCE_LABELS[s][lang]}</Chip>)}
+        <div className="snap-toolbar-row">
+          <div className="chip-group snap-periods">
+            {PERIODS.map((p) => <Chip key={p} active={period.kind === p} onClick={() => setState({ ...state, period: { kind: p } })}>{PERIOD_LABELS[p][lang]}</Chip>)}
+          </div>
+          <span style={{ flex: 1 }} />
+          <div className="snap-export">
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('excel')}><Icon name="external" size={12} /><span className="btn-text">Excel</span><span className="btn-text-sm">XLS</span></button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('pdf')}><Icon name="clipboard" size={12} /><span className="btn-text">PDF</span><span className="btn-text-sm">PDF</span></button>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => exportAs('print')}><Icon name="external" size={12} /><span className="btn-text">{busy ? t('Exporting…') : t('Print')}</span><span className="btn-text-sm">{t('Print')}</span></button>
+          </div>
         </div>
-        <div className="chip-group snap-periods">
-          {PERIODS.map((p) => <Chip key={p} active={state.period.kind === p} onClick={() => setState({ ...state, period: { kind: p } })}>{PERIOD_LABELS[p][lang]}</Chip>)}
-        </div>
-      </div>
-
-      {/* ── Breadcrumbs + quick filters */}
-      <div className="snap-crumbs">
-        {crumbs.map((c, i) => (
-          <React.Fragment key={i}>
-            {i > 0 && <span className="snap-sep">›</span>}
-            <button type="button" className={`snap-crumb${i === crumbs.length - 1 ? ' current' : ''}`} onClick={() => setState(drillUp(state, i))}>
-              {c.label} <b>{c.count}</b>
+        <div className="snap-filterbar">
+          <span className="snap-filterbar-label">{t('Filter')}</span>
+          {filters.length === 0 && <span className="snap-filterbar-empty">{t('Click any slice, bar or tile to filter the whole board.')}</span>}
+          {filters.map((f) => (
+            <button type="button" key={f.dim} className="chip active snap-filter" onClick={() => setFilters(filters.filter((x) => x.dim !== f.dim))} title={t('Remove')}>
+              {filterLabel(f)} <span className="snap-filter-x">✕</span>
             </button>
-          </React.Fragment>
-        ))}
-        {state.filters.length > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setState(drillUp(state, -1))}>{t('✕ Clear')}</button>}
-        <span style={{ flex: 1 }} />
-        <div className="snap-export">
-          <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('excel')}><Icon name="external" size={12} /><span className="btn-text">Excel</span><span className="btn-text-sm">XLS</span></button>
-          <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('pdf')}><Icon name="clipboard" size={12} /><span className="btn-text">PDF</span><span className="btn-text-sm">PDF</span></button>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => exportAs('print')}><Icon name="external" size={12} /><span className="btn-text">{busy ? t('Exporting…') : t('Print')}</span><span className="btn-text-sm">{t('Print')}</span></button>
+          ))}
+          {filters.length > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setFilters([])}>{t('Clear all')}</button>}
         </div>
-      </div>
-      <div className="filter-bar snap-filters" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {(QUICK[src] || []).filter((d) => !state.filters.some((f) => f.dim === d)).map((d) => {
-          const res = slice(rows, src, d, 'count', ctx, { lang });
-          const dm = dimension(d);
-          return (
-            <div key={d} className="filter-cell" style={{ minWidth: 140 }}>
-              <select value="" onChange={(e) => e.target.value && setState(drillInto(state, d, e.target.value))}>
-                <option value="">{dm.label[lang]}{t(': All')}</option>
-                {res.groups.map((g) => <option key={g.key} value={g.key}>{g.label[lang]} ({g.count})</option>)}
-              </select>
-            </div>
-          );
-        })}
       </div>
 
       {/* ── KPI tiles */}
       <div className="snap-kpis">
-        {tiles.map((k) => (
-          <button type="button" key={k.id} className="snap-kpi" style={{ borderTopColor: TONE[k.tone || 'neutral'] }}
-            onClick={() => setState({ ...state, source: k.drill.source, dim: k.drill.dim || dimensionsFor(k.drill.source)[0].id, measure: 'count', filters: mergeFilters(state.filters, k.drill.filters || []) })}>
-            <span className="snap-kpi-value" style={{ color: TONE[k.tone || 'neutral'] }}>{formatValue(k.value, k.format, lang)}</span>
-            <span className="snap-kpi-label">{k.label[lang]}</span>
-          </button>
-        ))}
+        {tiles.map((k) => {
+          const on = FILTER_TILES.has(k.id) && (k.drill?.filters || []).length > 0 && (k.drill.filters).every((f) => activeOf(f.dim) === f.value);
+          return (
+            <button type="button" key={k.id} className={`snap-kpi${on ? ' active' : ''}`} style={{ borderTopColor: TONE[k.tone || 'neutral'] }}
+              onClick={() => {
+                const own = k.drill?.filters || [];
+                if (!own.length) { setOpenRecords(k.drill?.source || 'players'); return; }
+                setFilters(on ? filters.filter((f) => !own.some((o) => o.dim === f.dim)) : mergeFilters(filters, own));
+              }}>
+              <span className="snap-kpi-value" style={{ color: TONE[k.tone || 'neutral'] }}>{formatValue(k.value, k.format, lang)}</span>
+              <span className="snap-kpi-label">{k.label[lang]}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Main chart */}
-      <div className="card card-body snap-main">
-        <div className="snap-main-head">
-          <div className="section-label" style={{ marginBottom: 0 }}>{main.measure.label[lang]} {t('by')} {main.dim.label[lang]}</div>
-          <span style={{ flex: 1 }} />
-          <Select label={t('Break down by')} value={dimId} onChange={(v) => setState({ ...state, dim: v })} options={dims.filter((d) => !state.filters.some((f) => f.dim === d.id)).map((d) => [d.id, d.label[lang]])} />
-          <Select label={t('Measure')} value={main.measure.id} onChange={(v) => setState({ ...state, measure: v })} options={measures.map((m) => [m.id, m.label[lang]])} />
-          <Select label={t('Sort')} value={`${state.sort || (main.dim.order ? 'natural' : 'count')}:${state.dir || ''}`} onChange={(v) => { const [sort, dir] = v.split(':'); setState({ ...state, sort, dir: dir || undefined }); }}
-            options={[['count:desc', t('Largest first')], ['count:asc', t('Smallest first')], ['label:asc', t('By name')], ...(main.dim.order ? [['natural:asc', t('Natural order')]] : [])]} />
-          <Select label={t('Chart')} value={chartType} onChange={setChartType} options={[['auto', t('Auto')], ['donut', t('Donut')], ['bars', t('Bars')], ['columns', t('Columns')]]} />
-          <Select label={t('Show')} value={String(topN)} onChange={(v) => setTopN(Number(v))} options={[['10', t('Top 10')], ['25', t('Top 25')], ['0', t('All')]]} />
-        </div>
-        {main.groups.length === 0 ? <p className="snap-empty">{t('Nothing here for this slice.')}</p> : (
-          <div ref={mainRef} className="snap-chart">
-            {type === 'donut' && <Donut groups={main.groups} lang={lang} onPick={pick(dimId)} format={fmt} title={main.dim.label[lang]} />}
-            {type === 'bars' && <Bars groups={main.groups} lang={lang} onPick={pick(dimId)} format={fmt} title={main.dim.label[lang]} rtl={lang === 'he'} width={640} />}
-            {type === 'columns' && <Columns groups={main.groups} lang={lang} onPick={pick(dimId)} format={fmt} title={main.dim.label[lang]} rtl={lang === 'he'} width={640} height={240} />}
-          </div>
-        )}
-        {temporal && <p className="snap-hint">{t('Tip: click a bar to see only that period.')}</p>}
-      </div>
-
-      {/* ── Minis + trend */}
-      <div className="snap-minis">
-        {minis.map((m) => (
-          <div key={m.id} className="card card-body snap-mini">
-            <div className="section-label">{t('Count')} {t('by')} {m.res.dim.label[lang]}</div>
-            <div ref={(el) => { miniRefs.current[m.id] = el; }}>
-              {m.res.dim.temporal
-                ? <Columns groups={m.res.groups} lang={lang} onPick={pick(m.id)} rtl={lang === 'he'} width={360} height={170} title={m.res.dim.label[lang]} />
-                : <Donut groups={m.res.groups} lang={lang} onPick={pick(m.id)} size={150} title={m.res.dim.label[lang]} />}
+      {/* ── The board */}
+      {BOARD.map((g) => {
+        const count = (areaRows[g.source] || []).length;
+        const list = charts.filter((c) => c.source === g.source);
+        return (
+          <section key={g.source} className="snap-area">
+            <div className="snap-area-head">
+              <h3 className="snap-area-title">{SOURCE_LABELS[g.source][lang]} <b>{count}</b></h3>
+              <span style={{ flex: 1 }} />
+              <button type="button" className={`btn btn-ghost btn-sm${openRecords === g.source ? ' active' : ''}`} onClick={() => { setOpenRecords(openRecords === g.source ? null : g.source); setLimit(60); setRecSort(null); }}>
+                <Icon name="contacts" size={12} /> {openRecords === g.source ? t('Hide records') : t('Show records')}
+              </button>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => setState({ ...state, dim: m.id })}>{t('Open this view')}</button>
-          </div>
-        ))}
-        <div className="card card-body snap-mini">
-          <div className="section-label">{t('Trend, last 12 months')}</div>
-          <Line points={trend} lang={lang} rtl={lang === 'he'} width={360} height={170} title={t('Trend, last 12 months')} />
-          <p className="snap-hint">{t('New {what} per month', { what: SOURCE_LABELS[src][lang] })}</p>
-        </div>
-      </div>
-
-      {/* ── Records */}
-      <div className="card snap-records">
-        <div className="card-body" style={{ paddingBottom: 8, display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <div className="section-label" style={{ marginBottom: 0 }}>{t('Records')}</div>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold)' }}>{rows.length}</span>
-          <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{crumbs.map((c) => c.label).join(' › ')}</span>
-        </div>
-        {records.length === 0 ? <p className="snap-empty" style={{ padding: '0 20px 18px' }}>{t('Nothing here for this slice.')}</p> : (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead><tr>{columns.map((c) => <SortTh key={c.key} label={c.label[lang]} field={c.key} sort={recSort} setSort={setRecSort} />)}<th /></tr></thead>
-              <tbody>
-                {records.slice(0, limit).map(({ row, cells }, i) => {
-                  const to = recordPath(src, row);
-                  return (
-                    <tr key={row.id || i}>
-                      {columns.map((c) => <td key={c.key} style={{ textAlign: c.numeric ? 'center' : undefined, fontVariantNumeric: 'tabular-nums' }}>{String(cells[c.key] ?? '')}</td>)}
-                      <td>{to && <Link to={to} className="btn btn-ghost btn-sm">{t('Open')}</Link>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {records.length > limit && <div className="card-body" style={{ paddingTop: 6 }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => setLimit(limit + 100)}>{t('Show more')} ({records.length - limit})</button></div>}
-      </div>
+            <div className="snap-board">
+              {list.map((c) => (
+                <div key={c.key} className={`card card-body snap-tile${activeOf(c.dim) ? ' has-active' : ''}`}>
+                  <div className="section-label snap-tile-title">{titleOf(c)}</div>
+                  {c.res.groups.length === 0 ? <p className="snap-empty">{t('Nothing here for this filter.')}</p> : (
+                    <div ref={(el) => { chartRefs.current[c.key] = el; }} className="snap-chart">
+                      {c.type === 'donut' && <Donut groups={c.res.groups} lang={lang} onPick={pick(c.dim)} active={activeOf(c.dim)} format={fmtFor(c.res)} size={150} title={titleOf(c)} />}
+                      {c.type === 'bars' && <Bars groups={c.res.groups} lang={lang} onPick={pick(c.dim)} active={activeOf(c.dim)} format={fmtFor(c.res)} title={titleOf(c)} rtl={lang === 'he'} width={380} rowH={24} />}
+                      {c.type === 'columns' && <Columns groups={c.res.groups} lang={lang} onPick={pick(c.dim)} active={activeOf(c.dim)} format={fmtFor(c.res)} title={titleOf(c)} rtl={lang === 'he'} width={380} height={170} />}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {openRecords === g.source && (
+              <div className="card snap-records">
+                <div className="card-body" style={{ paddingBottom: 8, display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                  <div className="section-label" style={{ marginBottom: 0 }}>{t('Records')}</div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--gold)' }}>{records.length}</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{filterText} · {periodLabel}</span>
+                </div>
+                {records.length === 0 ? <p className="snap-empty" style={{ padding: '0 20px 18px' }}>{t('Nothing here for this filter.')}</p> : (
+                  <div className="table-wrap">
+                    <table className="data-table">
+                      <thead><tr>{columns.map((c) => <SortTh key={c.key} label={c.label[lang]} field={c.key} sort={recSort} setSort={setRecSort} />)}<th /></tr></thead>
+                      <tbody>
+                        {records.slice(0, limit).map(({ row, cells }, i) => {
+                          const to = recordPath(g.source, row);
+                          return (
+                            <tr key={row.id || i}>
+                              {columns.map((c) => <td key={c.key} style={{ textAlign: c.numeric ? 'center' : undefined, fontVariantNumeric: 'tabular-nums' }}>{String(cells[c.key] ?? '')}</td>)}
+                              <td>{to && <Link to={to} className="btn btn-ghost btn-sm">{t('Open')}</Link>}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {records.length > limit && <div className="card-body" style={{ paddingTop: 6 }}><button type="button" className="btn btn-ghost btn-sm" onClick={() => setLimit(limit + 100)}>{t('Show more')} ({records.length - limit})</button></div>}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
 
-const mergeFilters = (current, extra) => {
-  const out = current.filter((f) => !extra.some((e) => e.dim === f.dim));
-  return out.concat(extra);
-};
+const mergeFilters = (current, extra) => current.filter((f) => !extra.some((e) => e.dim === f.dim)).concat(extra);
 const groupColumns = (res, lang) => [
   { key: 'label', label: res.dim.label[lang] },
   { key: 'value', label: res.measure.label[lang], numeric: true },
