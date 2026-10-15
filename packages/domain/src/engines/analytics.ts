@@ -101,6 +101,20 @@ const quarterKey = (v: unknown): string | null => {
 };
 const monthLabel = (k: string): Label => { const [y, m] = k.split('-'); return L(`${m}/${y}`); };
 const quarterLabel = (k: string): Label => { const [y, q] = k.split('-Q'); return L(`רבעון ${q} ${y}`, `Q${q} ${y}`); };
+const WEEKDAYS: Label[] = [L('ראשון', 'Sun'), L('שני', 'Mon'), L('שלישי', 'Tue'), L('רביעי', 'Wed'), L('חמישי', 'Thu'), L('שישי', 'Fri'), L('שבת', 'Sat')];
+const weekdayKey = (v: unknown): string | null => {
+  const d = toDateStr(v);
+  if (!d) return null;
+  const [y, m, dd] = d.split('-').map(Number);
+  return String(new Date(Date.UTC(y, m - 1, dd)).getUTCDay());
+};
+/** "19:00" / "19:30" / "7:05" -> "19" / "07"; anything else -> null. */
+const hourKey = (v: unknown): string | null => {
+  const m = /^\s*(\d{1,2})[:.]?(\d{2})?/.exec(str(v));
+  if (!m) return null;
+  const h = Number(m[1]);
+  return h >= 0 && h < 24 ? String(h).padStart(2, '0') : null;
+};
 /** "50,000 €" / "₪120000" / "1.2M" -> number; empty -> null. */
 export const parseMoney = (v: unknown): number | null => {
   if (typeof v === 'number') return isFinite(v) ? v : null;
@@ -212,6 +226,11 @@ export const DIMENSIONS: Dimension[] = [
     order: enumOrder(['w1', 'w2', 'm1', 'm1+']) },
   { id: 'month', label: L('חודש', 'Month'), sources: ['matches', 'trainings', 'tasks', 'interactions'], temporal: true,
     keyOf: (r, s) => monthKey(s === 'tasks' ? r.dueDate : s === 'interactions' ? r.at : r.date), labelOf: monthLabel, order: chrono },
+  { id: 'weekday', label: L('יום בשבוע', 'Weekday'), sources: ['matches', 'trainings', 'tasks', 'interactions'],
+    keyOf: (r, s) => weekdayKey(s === 'tasks' ? r.dueDate : s === 'interactions' ? r.at : r.date),
+    labelOf: (k) => WEEKDAYS[Number(k)] ?? L(k), order: enumOrder(['0', '1', '2', '3', '4', '5', '6']) },
+  { id: 'hour', label: L('שעה', 'Hour'), sources: ['matches', 'trainings'],
+    keyOf: (r) => hourKey(r.time), labelOf: (k) => L(`${k}:00`), order: chrono },
   { id: 'homeAway', label: L('בית / חוץ', 'Home / away'), sources: ['matches'],
     keyOf: (m, _s, ctx) => {
       const ours = matchPlayers(m, ctx).map((p) => str(p.currentClub).toLowerCase()).filter(Boolean);
@@ -536,6 +555,111 @@ export const breadcrumbs = (s: DrillState, rows: Row[], ctx: Ctx, lang: 'he' | '
   }
   return out;
 };
+
+// ── matrix (heat-map: dimension × dimension) ───────────────────────
+export interface MatrixAxis { key: string; label: Label; total: number }
+export interface MatrixCell { row: string; col: string; count: number; rows: Row[] }
+export interface MatrixResult {
+  source: Source; rowDim: Dimension; colDim: Dimension;
+  rowsAxis: MatrixAxis[]; colsAxis: MatrixAxis[];
+  /** cells[rowKey][colKey]; absent = 0 */
+  cells: Record<string, Record<string, MatrixCell>>;
+  max: number; total: number;
+}
+/**
+ * Count rows by two dimensions at once. A row with several keys on an axis
+ * (a match with two clubs) counts once per combination. Axes keep the
+ * dimensions' natural order, else by total descending; `topN` trims each axis.
+ */
+export const matrix = (rows: Row[], source: Source, rowDimId: string, colDimId: string, ctx: Ctx, opts: { topRows?: number; topCols?: number } = {}): MatrixResult => {
+  const rowDim = dimension(rowDimId), colDim = dimension(colDimId);
+  if (!rowDim || !colDim) throw new Error(`unknown dimension ${!rowDim ? rowDimId : colDimId}`);
+  const cells: Record<string, Record<string, MatrixCell>> = {};
+  const rowTot = new Map<string, number>(), colTot = new Map<string, number>();
+  let total = 0;
+  for (const r of rows) {
+    const rk = keysOf(rowDim, r, source, ctx), ck = keysOf(colDim, r, source, ctx);
+    for (const a of rk) for (const b of ck) {
+      const line = (cells[a] ??= {});
+      const cell = (line[b] ??= { row: a, col: b, count: 0, rows: [] });
+      cell.count += 1; cell.rows.push(r); total += 1;
+      rowTot.set(a, (rowTot.get(a) ?? 0) + 1); colTot.set(b, (colTot.get(b) ?? 0) + 1);
+    }
+  }
+  const axis = (dim: Dimension, tot: Map<string, number>, top?: number): MatrixAxis[] => {
+    let keys = Array.from(tot.keys());
+    keys.sort(dim.order ? dim.order : (a, b) => (tot.get(b)! - tot.get(a)!) || a.localeCompare(b));
+    if (top && keys.length > top) keys = (dim.order ? [...keys].sort((a, b) => tot.get(b)! - tot.get(a)!).slice(0, top).sort(dim.order) : keys.slice(0, top));
+    return keys.map((k) => ({ key: k, label: dim.labelOf ? dim.labelOf(k, ctx) : L(k), total: tot.get(k) ?? 0 }));
+  };
+  const rowsAxis = axis(rowDim, rowTot, opts.topRows), colsAxis = axis(colDim, colTot, opts.topCols);
+  let max = 0;
+  for (const a of rowsAxis) for (const b of colsAxis) max = Math.max(max, cells[a.key]?.[b.key]?.count ?? 0);
+  return { source, rowDim, colDim, rowsAxis, colsAxis, cells, max, total };
+};
+
+// ── deal funnel ────────────────────────────────────────────────────
+export interface FunnelStep { key: string; label: Label; at: number; reached: number; commission: number; rows: Row[]; share: number }
+/** The pipeline stages in order, 'Not Relevant' aside. */
+export const FUNNEL_STAGES: string[] = DEAL_STAGES.filter((s) => s !== 'Not Relevant');
+/**
+ * Deals by pipeline stage, in order. `at` = deals sitting in the stage now;
+ * `reached` = deals at this stage or any later one (the funnel's width);
+ * `share` = reached / reached of the first step.
+ */
+export const dealFunnel = (deals: Row[]): FunnelStep[] => {
+  const idx = (d: Row) => FUNNEL_STAGES.indexOf(str(d.stage));
+  const live = deals.filter((d) => !d.deletedAt && idx(d) >= 0);
+  const steps = FUNNEL_STAGES.map((key, i) => {
+    const rows = live.filter((d) => idx(d) === i);
+    const reachedRows = live.filter((d) => idx(d) >= i);
+    return { key, label: L((DEAL_STAGE_LABELS as Record<string, string>)[key] ?? key, key), at: rows.length, reached: reachedRows.length,
+      commission: rows.reduce((s, d) => s + (parseMoney(d.commission) ?? 0), 0), rows, share: 0 };
+  });
+  const top = steps[0]?.reached ?? 0;
+  for (const s of steps) s.share = top ? s.reached / top : 0;
+  return steps;
+};
+
+// ── contract timeline (represented players, soonest expiry first) ──
+export type Urgency = 'expired' | 'critical' | 'warning' | 'ok';
+export interface TimelineItem { id: string; name: string; club: string; end: string; daysLeft: number; urgency: Urgency; row: Row }
+export const urgencyOf = (daysLeft: number): Urgency => (daysLeft < 0 ? 'expired' : daysLeft <= 90 ? 'critical' : daysLeft <= 180 ? 'warning' : 'ok');
+/**
+ * Represented players with a contract end date, soonest first, within the
+ * next `months` (expired contracts in the last 3 months included so they
+ * are not forgotten). `field` switches to the representation agreement.
+ */
+export const contractTimeline = (players: Row[], ctx: Ctx, opts: { months?: number; field?: 'contractEnd' | 'reprEnd' } = {}): TimelineItem[] => {
+  const months = opts.months ?? 24, field = opts.field ?? 'contractEnd';
+  const horizon = months * 30.5, floor = -92;
+  const out: TimelineItem[] = [];
+  for (const p of players) {
+    if (p.deletedAt || stageOf(p) !== 'represented') continue;
+    const end = toDateStr(p[field]);
+    const days = daysAway(p[field], ctx.now);
+    if (!end || days == null || days > horizon || days < floor) continue;
+    out.push({ id: str(p.id), name: nameOf(p), club: str(p.currentClub), end, daysLeft: days, urgency: urgencyOf(days), row: p });
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft || a.name.localeCompare(b.name, 'he'));
+};
+
+// ── trends (several monthly series side by side) ───────────────────
+export interface TrendSeries { id: string; label: Label; points: TrendPoint[]; total: number }
+export const TREND_SERIES: Array<{ id: string; label: Label; source: Source; pick?: (r: Row) => unknown }> = [
+  { id: 'players', label: L('שחקנים חדשים', 'New players'), source: 'players' },
+  { id: 'deals', label: L('עסקאות שנפתחו', 'Deals opened'), source: 'deals' },
+  { id: 'signed', label: L('חוזים שנחתמו', 'Contracts signed'), source: 'deals', pick: (d) => (str(d.stage) === 'Contract Signed' ? d.closedAt ?? d.enteredStageAt : null) },
+  { id: 'matches', label: L('משחקים', 'Matches'), source: 'matches' },
+  { id: 'interactions', label: L('פעילות', 'Activity'), source: 'interactions' },
+];
+/** Monthly counts for the trend chart, over the already-filtered rows per source. */
+export const trends = (rows: Partial<Record<Source, Row[]>>, ctx: Ctx, months = 12): TrendSeries[] =>
+  TREND_SERIES.map((s) => {
+    const list = (rows[s.source] ?? []).filter((r) => !r.deletedAt);
+    const points = monthly(list, s.source, ctx, months, s.pick ?? ((r) => dateOf(r, s.source)));
+    return { id: s.id, label: s.label, points, total: points.reduce((a, p) => a + p.value, 0) };
+  }).filter((s) => s.total > 0 || s.id === 'players');
 
 // ── record columns for the slice table / export ────────────────────
 export interface Column { key: string; label: Label; get: (row: Row, ctx: Ctx) => string | number; numeric?: boolean }

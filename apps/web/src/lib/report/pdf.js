@@ -122,7 +122,8 @@ export async function buildPdf(report) {
       // Chart no taller than 200pt and no wider than the text block, keeping
       // its aspect ratio; the title and the chart stay on one page together.
       const cw = s.chart.width || 520, ch = s.chart.height || 200;
-      h = Math.min(wide ? 170 : 200, ch); w = cw * (h / ch);
+      // A `tall` section (the contract timeline) may take most of a page.
+      h = Math.min(s.tall ? ph - M * 2 - 70 : wide ? 170 : 200, ch); w = cw * (h / ch);
       if (w > pw - M * 2) { w = pw - M * 2; h = ch * (w / cw); }
       if (y + h + 40 > ph - M) { doc.addPage(); y = M + 10; }
     }
