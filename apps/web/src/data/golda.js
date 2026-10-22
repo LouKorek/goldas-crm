@@ -66,6 +66,27 @@ export const listenMyUser = (email, callback) =>
 
 export const saveMyPrefs = (email, prefs) => updateUserPrefs(email, prefs);
 
+/**
+ * How Golda's proactive messages reach my number (lib/wa-outbox.js on the
+ * server): when I last wrote to her (WhatsApp's 24-hour window), the last
+ * delivery or failure, the re-engagement template, and the texts that wait.
+ */
+export const listenMyDelivery = (phone, callback) => {
+  const p = String(phone || '').replace(/\D/g, '');
+  if (!p) { callback(null); return () => {}; }
+  let contact = null; let pending = [];
+  const emit = () => callback({ contact, pending });
+  const off1 = onSnapshot(doc(db, 'wa_contacts', p), (s) => { contact = s.exists() ? s.data() : {}; emit(); }, (e) => { console.error('contact listen error:', e); contact = {}; emit(); });
+  const off2 = onSnapshot(query(collection(db, 'wa_outbox'), where('to', '==', p), where('state', '==', 'queued')),
+    (snap) => { pending = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.queuedAt || 0) - (b.queuedAt || 0)); emit(); },
+    (e) => { console.error('outbox listen error:', e); pending = []; emit(); });
+  return () => { off1(); off2(); };
+};
+
+/** Golda's re-engagement template status (app_meta/whatsapp.template, lib/wa-templates.js). */
+export const listenWhatsappMeta = (callback) =>
+  onSnapshot(doc(db, 'app_meta', 'whatsapp'), (s) => callback(s.exists() ? s.data() : {}), (e) => { console.error('whatsapp meta listen error:', e); callback({}); });
+
 /** The messages Golda could not handle lately (for the Actions tab). */
 export const listenRecentInbox = (email, callback) =>
   onSnapshot(query(collection(db, 'wa_inbox'), where('email', '==', String(email || '').toLowerCase())),

@@ -35,16 +35,39 @@ async function graph(path, opts = {}) {
 // WhatsApp caps a text message at 4096 characters.
 // `via` is the phone_number_id the message came in on, so Golda answers from
 // the same number; WA_PHONE_ID is the fallback.
+// Returns Meta's message ids (one per part), so delivery statuses coming back
+// through the webhook can be matched to what was sent (lib/wa-outbox.js).
 async function sendText(to, body, via) {
   const from = via || process.env.WA_PHONE_ID;
   const parts = [];
   for (let s = String(body); s.length; s = s.slice(4000)) parts.push(s.slice(0, 4000));
+  const ids = [];
   for (const text of parts) {
-    await graph(`${from}/messages`, {
+    const res = await graph(`${from}/messages`, {
       method: 'POST',
       body: JSON.stringify({ messaging_product: 'whatsapp', to: digits(to), type: 'text', text: { body: text, preview_url: false } }),
     });
+    const json = await res.json().catch(() => ({}));
+    ids.push(json.messages?.[0]?.id || null);
   }
+  return ids;
+}
+
+// An approved message template: the only thing a business may send once 24
+// hours passed since the person last wrote (WhatsApp's customer-service
+// window; a free-form text is accepted with HTTP 200 and then fails with
+// status error 131047). `components` carries parameters when the template has any.
+async function sendTemplate(to, name, language, via, components = []) {
+  const from = via || process.env.WA_PHONE_ID;
+  const res = await graph(`${from}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({
+      messaging_product: 'whatsapp', to: digits(to), type: 'template',
+      template: { name, language: { code: language }, ...(components.length ? { components } : {}) },
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  return json.messages?.[0]?.id || null;
 }
 
 async function markRead(messageId, via) {
@@ -77,6 +100,8 @@ function extractMessages(payload) {
           from: m.from,
           type: m.type,
           text: m.text?.body || m.document?.caption || m.image?.caption || m.video?.caption || m.button?.text || m.interactive?.button_reply?.title || '',
+          // A tap on a template's quick-reply button or an interactive button.
+          payload: m.button?.payload || m.interactive?.button_reply?.id || null,
           mediaId: media?.id || null,
           filename: m.document?.filename || (m.image ? `photo_${m.id.slice(-6)}.jpg` : null),
           timestamp: Number(m.timestamp) || 0,
@@ -88,4 +113,22 @@ function extractMessages(payload) {
   return out;
 }
 
-module.exports = { isAllowed, senderName, validSignature, sendText, markRead, downloadMedia, extractMessages, digits };
+// Delivery statuses in one webhook payload: sent / delivered / read / failed,
+// each with the id of the message it is about and Meta's error list on a failure.
+function extractStatuses(payload) {
+  const out = [];
+  for (const entry of payload?.entry || []) {
+    for (const change of entry.changes || []) {
+      const phoneId = change.value?.metadata?.phone_number_id || null;
+      for (const s of change.value?.statuses || []) {
+        out.push({
+          id: s.id, status: s.status, recipient: s.recipient_id || '', timestamp: Number(s.timestamp) || 0, phoneId,
+          errors: (s.errors || []).map((e) => ({ code: Number(e.code) || 0, title: e.title || '', message: e.message || e.error_data?.details || '' })),
+        });
+      }
+    }
+  }
+  return out;
+}
+
+module.exports = { isAllowed, senderName, validSignature, sendText, sendTemplate, markRead, downloadMedia, extractMessages, extractStatuses, digits };

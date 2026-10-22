@@ -9,7 +9,7 @@ import Icon from 'components/ui/Icons';
 import { DEAL_STAGE_LABELS } from '@goldas/domain';
 import {
   PHYSICAL, listenGoldaAudit, undoGoldaAction, sendToGolda, listenInboxMessage, listenGoldaThread, sessionKeyFor,
-  listenMyUser, saveMyPrefs,
+  listenMyUser, saveMyPrefs, listenMyDelivery, listenWhatsappMeta,
 } from 'data/golda';
 
 // Golda's area, three tabs. "Chat" talks to the same Golda as WhatsApp (and
@@ -353,6 +353,60 @@ function Settings({ me, email, he }) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
         <button className="btn btn-primary" onClick={save} disabled={saving || (wa && !normalizePhone(form.whatsapp))}>{saving ? t('Saving…') : t('Save')}</button>
       </div>
+      {wa && me?.whatsapp ? <Delivery phone={me.whatsapp} he={he} /> : null}
+    </div>
+  );
+}
+
+const HOUR = 3600000;
+const WINDOW_H = 24;
+
+/**
+ * Why a briefing may not have arrived: WhatsApp lets Golda write freely only
+ * for 24 hours after I last wrote to her. Afterwards she sends a short
+ * template with a button; one tap (or any message) releases what waited.
+ */
+function Delivery({ phone, he }) {
+  const [d, setD] = useState(null);
+  const [meta, setMeta] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => listenMyDelivery(phone, setD), [phone]);
+  useEffect(() => listenWhatsappMeta(setMeta), []);
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id); }, []);
+  if (!d) return null;
+  const c = d.contact || {};
+  const last = c.lastInbound || 0;
+  const left = last ? last + WINDOW_H * HOUR - now : 0;
+  const open = left > HOUR;
+  const tpl = meta?.template;
+  const approved = tpl && Object.values(tpl.accounts || {}).some((a) => a.status === 'APPROVED');
+  const tplState = !tpl ? (he ? 'עדיין לא נבדקה' : 'not checked yet')
+    : approved ? (he ? 'מאושרת' : 'approved')
+      : Object.values(tpl.accounts || {}).some((a) => a.status === 'PENDING') ? (he ? 'ממתינה לאישור Meta' : 'awaiting Meta review')
+        : (he ? 'לא זמינה, גולדה שולחת את תבנית hello_world של Meta' : 'unavailable, Golda sends Meta\'s hello_world template');
+  const hrs = Math.max(1, Math.round(left / HOUR));
+  const Row = ({ label, children }) => (
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid var(--border-2)', fontSize: 13 }}>
+      <span style={{ color: 'var(--text-3)' }}>{label}</span><span style={{ textAlign: 'end' }}>{children}</span>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 20 }} data-testid="golda-delivery">
+      <h3 style={{ fontSize: 14, margin: '0 0 4px' }}>{he ? 'משלוח הודעות יזומות' : 'Delivery of proactive messages'}</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 8px' }}>
+        {he ? 'וואטסאפ מאפשר לגולדה לכתוב חופשי רק 24 שעות אחרי ההודעה האחרונה שלך אליה. אחרי זה היא שולחת הודעה קצרה עם כפתור, ולחיצה אחת (או כל הודעה) משחררת את מה שחיכה.'
+          : 'WhatsApp lets Golda write freely only for 24 hours after your last message to her. Then she sends a short template with a button; one tap (or any message) releases what waited.'}
+      </p>
+      <Row label={he ? 'החלון פתוח' : 'Window'}>
+        {!last ? (he ? 'לא ידוע עדיין (ייפתח בהודעה הבאה שלך לגולדה)' : 'unknown yet (opens with your next message to Golda)')
+          : open ? <span style={{ color: 'var(--green-ok)' }}>{he ? `כן, עוד כ-${hrs} שעות` : `yes, about ${hrs}h left`}</span>
+            : <span style={{ color: 'var(--amber)' }}>{he ? 'סגור. הודעה אחת ממך לגולדה פותחת אותו' : 'closed. One message from you to Golda opens it'}</span>}
+      </Row>
+      <Row label={he ? 'הודעות שמחכות' : 'Waiting'}>{d.pending.length ? (he ? `${d.pending.length} (יישלחו כשתכתוב/י לגולדה)` : `${d.pending.length} (sent when you write to Golda)`) : (he ? 'אין' : 'none')}</Row>
+      {c.lastDelivered ? <Row label={he ? 'נמסרה לאחרונה' : 'Last delivered'}>{fmtDateTime(new Date(c.lastDelivered))}</Row> : null}
+      {c.lastFailure?.at ? <Row label={he ? 'כישלון אחרון' : 'Last failure'}>{fmtDateTime(new Date(c.lastFailure.at))}{c.lastFailure.code === 131047 ? (he ? ' · מחוץ לחלון 24 השעות' : ' · outside the 24h window') : c.lastFailure.message ? ` · ${c.lastFailure.message}` : ''}</Row> : null}
+      {c.lastReengageAt ? <Row label={he ? 'תבנית התנעה נשלחה' : 'Re-engagement sent'}>{fmtDateTime(new Date(c.lastReengageAt))}{c.lastReengageError ? ` · ${he ? 'נכשלה' : 'failed'}` : ''}</Row> : null}
+      <Row label={he ? 'התבנית של גולדה' : 'Golda\'s template'}>{tplState}</Row>
     </div>
   );
 }
