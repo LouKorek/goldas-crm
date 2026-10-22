@@ -98,12 +98,17 @@
   את מה שחיכה. `wa_contacts/{phone}`: `lastInbound`, `lastFailure`,
   `lastReengageAt`. מסך גולדה ← התדריך שלי ← "משלוח הודעות יזומות" מראה את
   המצב לאדם עצמו.
-- **התבנית `golda_update`:** נוצרת/נבדקת אוטומטית (`lib/wa-templates.js`) בכל
-  פריסה, ב-`whatsapp-setup?key=…&template=1`, וכל שעה מהתדריך כל עוד היא
-  ממתינה; המצב ב-`app_meta/whatsapp.template`. יצירה דורשת
-  `whatsapp_business_management` על `WA_TOKEN`; בלי זה (`status: error`) גולדה
-  שולחת את `hello_world` של Meta, שקיימת רק על חשבון הבדיקה. אם גם זה נכשל,
-  הסיבה ב-`wa_contacts.lastReengageError` ובהערות העבודה `golda-briefing`.
+- **התבניות `golda_digest` ו-`golda_update`:** נוצרות/נבדקות אוטומטית
+  (`lib/wa-templates.js`) בכל פריסה, ב-`whatsapp-setup?key=…&template=1`, וכל
+  שעה מהתדריך כל עוד אחת ממתינה; המצב ב-`app_meta/whatsapp.templates`.
+  `golda_digest` נושאת את העדכון עצמו (כותרת + שורת תמצית, `digestOf` ב-
+  `lib/wa-outbox.js`; בלי שורות חדשות, עד 640 תווים) וכפתור לפירוט המלא, ונשלחת
+  לכל עדכון; `golda_update` ("יש עדכון, לחץ") היא הגיבוי, לכל היותר אחת ל-12
+  שעות. יצירה דורשת `whatsapp_business_management` על `WA_TOKEN`; בלי זה
+  (`status: error`) גולדה שולחת את `hello_world` של Meta, שקיימת רק על חשבון
+  הבדיקה. אם גם זה נכשל, הסיבה ב-`wa_contacts.lastReengageError` ובהערות
+  העבודה `golda-briefing`. התבנית לא מאושרת? מסך גולדה ← התדריך שלי מראה
+  PENDING/REJECTED; דחייה (`rejected_reason`) דורשת שינוי נוסח ב-`wa-templates.js`.
 
 ## 7. אימייל (תקציר יומי)
 

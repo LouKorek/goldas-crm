@@ -11,8 +11,9 @@
 // All of it comes from the alerts engine the app uses; nothing is computed here.
 // Every message goes through lib/wa-outbox.js: inside WhatsApp's 24-hour window
 // it is sent; outside it, it waits in wa_outbox and the person gets Golda's
-// re-engagement template instead (one tap releases what waited). While that
-// template awaits Meta's approval, lib/wa-templates.js re-checks it hourly.
+// digest template instead (the update's title and summary, a button for the
+// full text). While a template awaits Meta's approval, lib/wa-templates.js
+// re-checks it hourly.
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
@@ -77,7 +78,7 @@ async function run(job, now = new Date(), { force = false, send } = {}) {
   const db = getDb();
   const data = await loadAll(db);
   if (needsRecheck(data.whatsapp, now.getTime())) {
-    try { const t = await ensureTemplate(db, { now: now.getTime() }); if (!t.skipped) job.note(`template: ${Object.values(t.accounts).map((a) => a.status).join('/')}`); }
+    try { const t = await ensureTemplate(db, { now: now.getTime() }); if (!t.skipped) job.note(`templates: ${Object.values(t.templates).map((x) => `${x.name} ${Object.values(x.accounts).map((a) => a.status).join('/')}`).join(', ')}`); }
     catch (e) { job.note(`template check failed: ${e.message}`); }
   }
   // Each proactive message is sent, or queued with a re-engagement template when the window is closed.

@@ -15,7 +15,7 @@ const wa = require('./lib/wa-api.js');
 const outbox = require('./lib/wa-outbox.js');
 const { resolveSender } = require('./lib/golda-identity.js');
 
-const PENDING_WORDS = /^(שלחי את העדכון|שלחי לי את העדכון|שלחי|send the update)$/i;
+const PENDING_WORDS = /^(שלחי את העדכון|שלחי את הפירוט|שלחי לי את העדכון|שלחי|send the update)$/i;
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'GET') {
