@@ -9,6 +9,10 @@
 //      that failed twice in a row, a quota past 80%, the IFA browser sync
 //      silent for 36 hours. Once a day each.
 // All of it comes from the alerts engine the app uses; nothing is computed here.
+// Every message goes through lib/wa-outbox.js: inside WhatsApp's 24-hour window
+// it is sent; outside it, it waits in wa_outbox and the person gets Golda's
+// re-engagement template instead (one tap releases what waited). While that
+// template awaits Meta's approval, lib/wa-templates.js re-checks it hourly.
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
@@ -17,14 +21,15 @@ const { dedupeKey } = require('./lib/alert-keys.js');
 const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
 const { scraperAccount } = require('./lib/scraper-account.js');
 const { whatsappRecipients } = require('./lib/golda-identity.js');
-const wa = require('./lib/wa-api.js');
+const outbox = require('./lib/wa-outbox.js');
+const { ensureTemplate, needsRecheck } = require('./lib/wa-templates.js');
 
 const KEEP_DAYS = 400;
 const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
 
 async function loadAll(db) {
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
-  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper] = await Promise.all([
+  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp] = await Promise.all([
     listRepresented(db),
     db.collection('matches').get().then(rows),
     db.collection('deals').get().then(rows),
@@ -38,10 +43,11 @@ async function loadAll(db) {
     db.collection('audit').where('via', '==', 'golda').get().then((s) => s.docs.map((d) => d.data())),
     db.collection('app_meta').doc('ifaBrowserSync').get().then((s) => (s.exists ? s.data() : null)),
     scraperAccount().catch(() => null),
+    db.collection('app_meta').doc('whatsapp').get().then((s) => (s.exists ? s.data() : {})),
   ]);
   return { players, matches, deals, requirements, tasks, jobs, trainings, users,
     settings: mergeSettings({ ...(settingsSnap.exists ? settingsSnap.data() : {}), matchDays: [0] }),
-    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper };
+    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper, whatsapp };
 }
 
 function todaysGames({ matches, trainings, players }, today) {
@@ -67,9 +73,19 @@ function pruneSent(keys, today) {
   return out;
 }
 
-async function run(job, now = new Date(), { force = false } = {}) {
+async function run(job, now = new Date(), { force = false, send } = {}) {
   const db = getDb();
   const data = await loadAll(db);
+  if (needsRecheck(data.whatsapp, now.getTime())) {
+    try { const t = await ensureTemplate(db, { now: now.getTime() }); if (!t.skipped) job.note(`template: ${Object.values(t.accounts).map((a) => a.status).join('/')}`); }
+    catch (e) { job.note(`template check failed: ${e.message}`); }
+  }
+  // Each proactive message is sent, or queued with a re-engagement template when the window is closed.
+  const say = send || (async (u, body, kind) => {
+    const r = await outbox.deliver(db, { to: u.phone, body, kind }, { now: now.getTime() });
+    if (r.state === 'queued') job.note(`${kind} → ${u.email}: window closed, queued${r.reengage?.template ? `, template ${r.reengage.template}` : r.reengage?.error ? `, template failed: ${r.reengage.error}` : ''}`);
+    return r;
+  });
   const today = israelDate(now);
   const hour = israelHour(now);
   const recipients = whatsappRecipients(data.users);
@@ -87,20 +103,20 @@ async function run(job, now = new Date(), { force = false } = {}) {
     const first = (u.name || '').split(' ')[0] || u.name;
     try {
       if ((force || hour === u.briefingHour) && sent.briefings[u.email] !== today) {
-        await wa.sendText(u.phone, buildBriefing({ name: first, alerts: r.alerts, games: todaysGames(data, today), goldaActions, now }));
+        await say(u, buildBriefing({ name: first, alerts: r.alerts, games: todaysGames(data, today), goldaActions, now }), 'briefing');
         sent.briefings[u.email] = today; count++;
         job.note(`briefing → ${u.email}`);
       }
       const urgent = urgentAlerts(r.alerts).filter((a) => !sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`]);
       if (urgent.length && sent.briefings[u.email] === today) {   // after the briefing, never before it on the same morning
-        await wa.sendText(u.phone, buildUrgent(first, urgent));
+        await say(u, buildUrgent(first, urgent), 'urgent');
         urgent.forEach((a) => { sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`] = today; });
         count++;
         job.note(`${urgent.length} urgent → ${u.email}`);
       }
       const mineOps = u.role === 'admin' ? ops.filter((o) => !sent.ops[`${u.email}|${o.key}`]) : [];
       if (mineOps.length) {
-        await wa.sendText(u.phone, buildOps(first, mineOps));
+        await say(u, buildOps(first, mineOps), 'ops');
         mineOps.forEach((o) => { sent.ops[`${u.email}|${o.key}`] = today; });
         count++;
         job.note(`${mineOps.length} ops → ${u.email}`);

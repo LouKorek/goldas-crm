@@ -12,7 +12,8 @@
 // Two more things happen on a production deploy, before the sync:
 //   1. pending data migrations start in the background (backup first), so a
 //      model change ships with its data in one step and nobody presses anything;
-//   2. Meta's webhook callback for Golda is pointed at production.
+//   2. Meta's webhook callback for Golda is pointed at production, and her
+//      re-engagement template (lib/wa-templates.js) exists on the WhatsApp accounts.
 //
 // Same hand-off as sync-matches-cron: a single-use internal nonce, then an
 // HTTP call to the background worker. When Netlify's WEBHOOK_SECRET is set,
@@ -22,6 +23,7 @@ const crypto = require('crypto');
 const { admin, getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
 const { ensureWebhookCallback } = require('./lib/wa-subscription.js');
+const { ensureTemplate } = require('./lib/wa-templates.js');
 const { ensureAuthorizedDomain } = require('./lib/auth-domains.js');
 const { _startBackground: startMigrations } = require('./migrate.js');
 
@@ -85,9 +87,16 @@ exports.handler = async (event) => {
     console.error('[deploy-succeeded] webhook update failed:', e);
     notes.push(`webhook failed: ${e.message}`);
   }
+  const db = getDb();
+  try {
+    const t = await ensureTemplate(db);
+    notes.push(`template: ${t.skipped ? `skipped (${t.skipped})` : Object.entries(t.accounts).map(([w, a]) => `${w.slice(-4)} ${a.status}`).join(', ')}`);
+  } catch (e) {
+    console.error('[deploy-succeeded] template check failed:', e);
+    notes.push(`template failed: ${e.message}`);
+  }
   console.log(`[deploy-succeeded] ${notes.join('; ')}`);
 
-  const db = getDb();
   // Count production deploys per month for the admin Quotas tab (each costs ~15 Netlify credits).
   try {
     const month = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).slice(0, 7);

@@ -9,6 +9,8 @@
 //   &callback=1                    point Meta's webhook callback at this site
 //                                   (lib/wa-subscription.js; also done on every
 //                                   production deploy)
+//   &template=1                    create / re-check Golda's re-engagement template
+//                                   (lib/wa-templates.js) and report its status
 //   &auto=1                        for each WhatsApp account in WA_WABA_IDS: subscribe
 //                                   the app and register every verified number that
 //                                   isn't registered yet. Idempotent, returns statuses
@@ -17,6 +19,7 @@
 const crypto = require('crypto');
 const { getDb } = require('./lib/firestore.js');
 const { ensureWebhookCallback } = require('./lib/wa-subscription.js');
+const { ensureTemplate } = require('./lib/wa-templates.js');
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 
@@ -65,6 +68,10 @@ exports.handler = async (event) => {
   if (!process.env.WA_VERIFY_TOKEN || q.key !== process.env.WA_VERIFY_TOKEN) return { statusCode: 403, body: 'forbidden' };
   if (q.callback) {
     const r = await ensureWebhookCallback(process.env.URL || 'https://goldas-crm.netlify.app');
+    return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(r, null, 2) };
+  }
+  if (q.template) {
+    const r = await ensureTemplate(getDb());
     return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(r, null, 2) };
   }
   if (q.auto && process.env.WA_TOKEN) {
