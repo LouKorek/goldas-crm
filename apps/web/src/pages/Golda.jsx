@@ -378,12 +378,18 @@ function Delivery({ phone, he }) {
   const last = c.lastInbound || 0;
   const left = last ? last + WINDOW_H * HOUR - now : 0;
   const open = left > HOUR;
-  const tpl = meta?.template;
-  const approved = tpl && Object.values(tpl.accounts || {}).some((a) => a.status === 'APPROVED');
-  const tplState = !tpl ? (he ? 'עדיין לא נבדקה' : 'not checked yet')
-    : approved ? (he ? 'מאושרת' : 'approved')
-      : Object.values(tpl.accounts || {}).some((a) => a.status === 'PENDING') ? (he ? 'ממתינה לאישור Meta' : 'awaiting Meta review')
-        : (he ? 'לא זמינה, גולדה שולחת את תבנית hello_world של Meta' : 'unavailable, Golda sends Meta\'s hello_world template');
+  const all = meta?.templates || (meta?.template ? { [meta.template.name]: meta.template } : {});
+  const stateOf = (t) => {
+    if (!t) return he ? 'עדיין לא נבדקה' : 'not checked yet';
+    const st = Object.values(t.accounts || {}).map((a) => a.status);
+    if (st.includes('APPROVED')) return he ? 'מאושרת' : 'approved';
+    if (st.includes('PENDING')) return he ? 'ממתינה לאישור Meta' : 'awaiting Meta review';
+    if (st.includes('REJECTED')) return he ? 'נדחתה על ידי Meta' : 'rejected by Meta';
+    return he ? 'לא זמינה' : 'unavailable';
+  };
+  const digestOk = Object.values(all.golda_digest?.accounts || {}).some((a) => a.status === 'APPROVED');
+  const updateOk = Object.values(all.golda_update?.accounts || {}).some((a) => a.status === 'APPROVED');
+  const tplState = `${he ? 'תמצית (התוכן בהודעה)' : 'digest (content in the message)'}: ${stateOf(all.golda_digest)} · ${he ? 'הודעת כפתור' : 'pointer'}: ${stateOf(all.golda_update)}${!digestOk && !updateOk ? (he ? ' · בינתיים נשלחת תבנית hello_world של Meta' : ' · meanwhile Meta\'s hello_world is sent') : ''}`;
   const hrs = Math.max(1, Math.round(left / HOUR));
   const Row = ({ label, children }) => (
     <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid var(--border-2)', fontSize: 13 }}>
@@ -394,8 +400,8 @@ function Delivery({ phone, he }) {
     <div style={{ marginTop: 20 }} data-testid="golda-delivery">
       <h3 style={{ fontSize: 14, margin: '0 0 4px' }}>{he ? 'משלוח הודעות יזומות' : 'Delivery of proactive messages'}</h3>
       <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 8px' }}>
-        {he ? 'וואטסאפ מאפשר לגולדה לכתוב חופשי רק 24 שעות אחרי ההודעה האחרונה שלך אליה. אחרי זה היא שולחת הודעה קצרה עם כפתור, ולחיצה אחת (או כל הודעה) משחררת את מה שחיכה.'
-          : 'WhatsApp lets Golda write freely only for 24 hours after your last message to her. Then she sends a short template with a button; one tap (or any message) releases what waited.'}
+        {he ? 'וואטסאפ מאפשר לגולדה לכתוב חופשי רק 24 שעות אחרי ההודעה האחרונה שלך אליה. אחרי זה היא שולחת תבנית מאושרת: את תמצית העדכון עם כפתור לפירוט המלא, ולחיצה אחת (או כל הודעה) משחררת את הטקסט המלא.'
+          : 'WhatsApp lets Golda write freely only for 24 hours after your last message to her. Then she sends an approved template: the update\'s summary with a button for the full text; one tap (or any message) releases it.'}
       </p>
       <Row label={he ? 'החלון פתוח' : 'Window'}>
         {!last ? (he ? 'לא ידוע עדיין (ייפתח בהודעה הבאה שלך לגולדה)' : 'unknown yet (opens with your next message to Golda)')
@@ -406,7 +412,7 @@ function Delivery({ phone, he }) {
       {c.lastDelivered ? <Row label={he ? 'נמסרה לאחרונה' : 'Last delivered'}>{fmtDateTime(new Date(c.lastDelivered))}</Row> : null}
       {c.lastFailure?.at ? <Row label={he ? 'כישלון אחרון' : 'Last failure'}>{fmtDateTime(new Date(c.lastFailure.at))}{c.lastFailure.code === 131047 ? (he ? ' · מחוץ לחלון 24 השעות' : ' · outside the 24h window') : c.lastFailure.message ? ` · ${c.lastFailure.message}` : ''}</Row> : null}
       {c.lastReengageAt ? <Row label={he ? 'תבנית התנעה נשלחה' : 'Re-engagement sent'}>{fmtDateTime(new Date(c.lastReengageAt))}{c.lastReengageError ? ` · ${he ? 'נכשלה' : 'failed'}` : ''}</Row> : null}
-      <Row label={he ? 'התבנית של גולדה' : 'Golda\'s template'}>{tplState}</Row>
+      <Row label={he ? 'התבניות של גולדה' : 'Golda\'s templates'}>{tplState}</Row>
     </div>
   );
 }

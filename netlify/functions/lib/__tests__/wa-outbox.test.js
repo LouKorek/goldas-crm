@@ -7,7 +7,10 @@ process.env.OWNER_EMAIL = 'lou.korek@gmail.com';
 
 const outbox = require('../wa-outbox.js');
 const { extractStatuses, extractMessages } = require('../wa-api.js');
-const { needsRecheck, ensureTemplate, TEMPLATE } = require('../wa-templates.js');
+const { needsRecheck, ensureTemplate, TEMPLATES, DIGEST, UPDATE } = require('../wa-templates.js');
+const { buildBriefing } = require('../golda-briefing.js');
+
+const approved = (...names) => ({ templates: Object.fromEntries(names.map((n) => [n, { name: n, language: 'he', accounts: { 1: { status: 'APPROVED' } } }])) });
 
 const H = 3600000;
 
@@ -45,9 +48,9 @@ function fakeApi() {
   return {
     calls,
     async sendText(to, body, via) { calls.push({ kind: 'text', to, body, via }); return [`wamid.t${++i}`]; },
-    async sendTemplate(to, name, language, via) {
-      calls.push({ kind: 'template', to, name, language, via });
-      if (name === 'golda_update' && via === 'no-template-here') throw new Error('WhatsApp API 404: {"error":{"code":132001,"message":"Template name does not exist"}}');
+    async sendTemplate(to, name, language, via, components = []) {
+      calls.push({ kind: 'template', to, name, language, via, components });
+      if (name !== 'hello_world' && via === 'no-template-here') throw new Error('WhatsApp API 404: {"error":{"code":132001,"message":"Template name does not exist"}}');
       return `wamid.tpl${++i}`;
     },
   };
@@ -72,9 +75,9 @@ test('inside the window the text is sent and recorded under its message id', asy
   assert.equal(db.data.wa_outbox['wamid.t1'].kind, 'briefing');
 });
 
-test('outside the window the text waits and one template goes out, not two', async () => {
+test('outside the window the text waits; a content-free template goes out once, not twice', async () => {
   const now = Date.now();
-  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: { template: { name: 'golda_update', language: 'he', accounts: { 1: { status: 'APPROVED' } } } } } });
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_update') } });
   const api = fakeApi();
   const a = await outbox.deliver(db, { to: '972500000001', body: 'תדריך', kind: 'briefing' }, { now, api, ...quiet });
   const b = await outbox.deliver(db, { to: '972500000001', body: 'דחוף', kind: 'urgent' }, { now: now + 60000, api, ...quiet });
@@ -85,15 +88,42 @@ test('outside the window the text waits and one template goes out, not two', asy
   assert.equal(Object.values(db.data.wa_outbox).filter((r) => r.state === 'queued').length, 2);
 });
 
-test('hello_world is used while Golda\'s template is not approved, and when it is missing on the number\'s account', async () => {
+test('with the digest approved, every queued update goes out as a template that carries its content', async () => {
   const now = Date.now();
-  assert.deepEqual(outbox.templateFor({}), { name: 'hello_world', language: 'en_US', own: false });
-  assert.deepEqual(outbox.templateFor({ template: { name: 'golda_update', language: 'he', accounts: { 1: { status: 'PENDING' } } } }), { name: 'hello_world', language: 'en_US', own: false });
-  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: { template: { name: 'golda_update', language: 'he', accounts: { 1: { status: 'APPROVED' } } } } } });
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_digest', 'golda_update') } });
+  const api = fakeApi();
+  const a = await outbox.deliver(db, { to: '972500000001', body: '*בוקר טוב, לו* ☀️\n\n*היום:*\n• 19:00 · הפועל – מכבי\n\nהכל בבית: https://x.y/home', kind: 'briefing' }, { now, api, ...quiet });
+  const b = await outbox.deliver(db, { to: '972500000001', body: '*לו, שים לב* ⚠️\n• נועם: החוזה מסתיים בעוד 5 ימים', kind: 'urgent' }, { now: now + 60000, api, ...quiet });
+  assert.equal(a.reengage.template, 'golda_digest'); assert.equal(b.reengage.template, 'golda_digest');
+  assert.equal(api.calls.length, 2);
+  const [t1, s1] = api.calls[0].components[0].parameters.map((p) => p.text);
+  assert.equal(t1, 'בוקר טוב, לו ☀️');
+  assert.equal(s1, 'היום: 19:00 · הפועל – מכבי');
+  assert.equal(api.calls[1].components[0].parameters[1].text, 'נועם: החוזה מסתיים בעוד 5 ימים');
+  assert.equal(Object.values(db.data.wa_outbox).filter((r) => r.state === 'queued').length, 2, 'the full texts still wait for the tap');
+});
+
+test('the digest of a real briefing is one clean line without markdown, links or newlines', () => {
+  const body = buildBriefing({ name: 'לו', alerts: [{ type: 'contract', days: 5, subject: { name: 'נועם ברזילי' }, proof: { he: 'החוזה מסתיים בעוד 5 ימים' }, dueDate: '2026-10-27' }], games: [], goldaActions: 3, now: new Date('2026-10-22T05:00:00Z') });
+  const d = outbox.digestOf(body);
+  assert.equal(d.title, 'בוקר טוב, לו ☀️ 22/10');
+  assert.equal(d.summary, 'היום: אין משחקים או אימונים. · דורש פעולה (1): חוזים שמסתיימים · נועם ברזילי: החוזה מסתיים בעוד 5 ימים (27/10) · ב-24 השעות האחרונות ביצעתי 3 שינויים במערכת.');
+  assert.ok(!/[*_\n]|https?:/.test(d.title + d.summary));
+  const long = outbox.digestOf(`כותרת\n${'שורה ארוכה מאוד '.repeat(100)}`);
+  assert.ok(long.summary.length <= 640 && long.summary.endsWith('…'));
+});
+
+test('fallbacks: hello_world while nothing is approved; pointer, then hello_world, when the digest is missing on the number\'s account', async () => {
+  const now = Date.now();
+  assert.equal(outbox.templateFor({}).name, 'hello_world');
+  assert.equal(outbox.templateFor({ templates: { golda_digest: { accounts: { 1: { status: 'PENDING' } } } } }).name, 'hello_world');
+  assert.equal(outbox.templateFor(approved('golda_update')).name, 'golda_update');
+  assert.equal(outbox.templateFor({ template: { name: 'golda_update', language: 'he', accounts: { 1: { status: 'APPROVED' } } } }).name, 'golda_update', 'the older single-template field still counts');
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_digest', 'golda_update') } });
   const api = fakeApi();
   const r = await outbox.deliver(db, { to: '972500000001', body: 'x', via: 'no-template-here' }, { now, api, ...quiet });
   assert.equal(r.reengage.template, 'hello_world');
-  assert.deepEqual(api.calls.map((c) => c.name), ['golda_update', 'hello_world']);
+  assert.deepEqual(api.calls.map((c) => c.name), ['golda_digest', 'golda_update', 'hello_world']);
 });
 
 test('a 131047 status turns a sent text into a queued one and re-engages; delivered is recorded', async () => {
@@ -142,25 +172,31 @@ test('a quick-reply tap arrives with its payload', () => {
   assert.equal(m.payload, 'שלחי את העדכון');
 });
 
-test('the template is created where missing and re-checked while pending', async () => {
+test('both templates are created where missing and re-checked while pending', async () => {
   const seen = [];
   const fetchImpl = async (url, opts = {}) => {
     seen.push(`${opts.method || 'GET'} ${url.replace(/^https:\/\/graph\.facebook\.com\/v[\d.]+\//, '')}`);
     const get = (opts.method || 'GET') === 'GET';
-    if (get && url.includes('/111/')) return { json: async () => ({ data: [{ id: 't1', name: 'golda_update', language: 'he', status: 'APPROVED' }] }) };
+    if (get && url.includes('/111/')) { const name = url.match(/name=(\w+)/)[1]; return { json: async () => ({ data: [{ id: 't1', name, language: 'he', status: 'APPROVED' }] }) }; }
     if (get && url.includes('/222/')) return { json: async () => ({ data: [] }) };
     if (opts.method === 'POST') return { json: async () => ({ id: 't2', status: 'PENDING' }) };
     return { json: async () => ({ error: { code: 200, message: 'no permission' } }) };
   };
   const db = fakeDb();
   const r = await ensureTemplate(db, { fetchImpl, env: { WA_TOKEN: 'x', WA_WABA_IDS: '111,222' }, now: 5, ...quiet });
-  assert.equal(r.accounts['111'].status, 'APPROVED');
-  assert.equal(r.accounts['222'].status, 'PENDING'); assert.equal(r.accounts['222'].created, true);
-  assert.equal(r.accounts['1394027662708325'].status, 'error');
-  assert.ok(seen.some((s) => s.startsWith('POST 222/message_templates')));
-  assert.equal(db.data.app_meta.whatsapp.template.name, TEMPLATE.name);
-  assert.equal(needsRecheck(db.data.app_meta.whatsapp, 10), false, 'approved somewhere: no recheck');
-  assert.equal(needsRecheck({ template: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 0 } }, 2 * H), true);
-  assert.equal(needsRecheck({ template: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 2 * H - 1000 } }, 2 * H), false);
+  for (const t of TEMPLATES) {
+    const acc = r.templates[t.name].accounts;
+    assert.equal(acc['111'].status, 'APPROVED');
+    assert.equal(acc['222'].status, 'PENDING'); assert.equal(acc['222'].created, true);
+    assert.equal(acc['1394027662708325'].status, 'error');
+  }
+  assert.equal(seen.filter((s) => s.startsWith('POST 222/message_templates')).length, 2);
+  assert.equal(db.data.app_meta.whatsapp.template.name, UPDATE.name);
+  assert.equal(db.data.app_meta.whatsapp.templates[DIGEST.name].language, 'he');
+  assert.equal(needsRecheck(db.data.app_meta.whatsapp, 10), false, 'both approved somewhere: no recheck');
+  const pending = { templates: { golda_digest: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 0 }, golda_update: { accounts: { 1: { status: 'APPROVED' } }, checkedAt: 0 } } };
+  assert.equal(needsRecheck(pending, 2 * H), true);
+  assert.equal(needsRecheck({ templates: { ...pending.templates, golda_digest: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 2 * H - 1000 } } }, 2 * H), false);
   assert.equal(needsRecheck({}), true);
+  assert.equal(needsRecheck({ template: { accounts: { 1: { status: 'APPROVED' } } } }), true, 'the old shape alone means the digest was never checked');
 });

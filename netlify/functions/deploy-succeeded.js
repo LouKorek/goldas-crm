@@ -90,7 +90,7 @@ exports.handler = async (event) => {
   const db = getDb();
   try {
     const t = await ensureTemplate(db);
-    notes.push(`template: ${t.skipped ? `skipped (${t.skipped})` : Object.entries(t.accounts).map(([w, a]) => `${w.slice(-4)} ${a.status}`).join(', ')}`);
+    notes.push(`templates: ${t.skipped ? `skipped (${t.skipped})` : Object.values(t.templates).map((x) => `${x.name} ${Object.entries(x.accounts).map(([w, a]) => `${w.slice(-4)} ${a.status}`).join(', ')}`).join('; ')}`);
   } catch (e) {
     console.error('[deploy-succeeded] template check failed:', e);
     notes.push(`template failed: ${e.message}`);

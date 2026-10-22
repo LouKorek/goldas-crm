@@ -9,9 +9,12 @@
 // This module makes every proactive message accountable:
 //   deliver(db, {to, body, via, kind})
 //     window open or unknown → send the text, record it in wa_outbox under
-//     Meta's message id (state 'sent'); window closed → keep the text in
-//     wa_outbox (state 'queued') and send one re-engagement template instead
-//     (at most one per RE_ENGAGE_GAP_MS per person).
+//     Meta's message id (state 'sent'); window closed → keep the full text in
+//     wa_outbox (state 'queued') and send a template instead: golda_digest
+//     carries the update itself (title + one-line summary, digestOf) with a
+//     button for the full text; before it is approved, the pointer template
+//     golda_update or Meta's hello_world (at most one of those per
+//     RE_ENGAGE_GAP_MS per person, since they carry nothing).
 //   onStatuses(db, statuses)   webhook: 'delivered' / 'read' / 'failed' on the
 //     outbox row; a 131047 failure turns the row into 'queued' and re-engages.
 //   onInbound(db, phone, via)  webhook: the person wrote, so the window is open
@@ -23,6 +26,7 @@
 // wa_outbox/{id}: to, via, body, kind, state, queuedAt | sentAt, error, flushedAt.
 const wa = require('./wa-api.js');
 const { digits } = require('./golda-identity.js');
+const { DIGEST, UPDATE, approvedSomewhere } = require('./wa-templates.js');
 
 const WINDOW_MS = 24 * 3600000;
 const SAFE_MS = 23 * 3600000;            // treat the window as closed an hour early
@@ -45,15 +49,44 @@ const isWindowError = (errors) => (errors || []).some((e) => WINDOW_ERRORS.has(N
 const errorCode = (message) => Number((String(message || '').match(/"code"\s*:\s*(\d+)/) || [])[1]) || 0;
 
 /**
- * Which template re-opens the conversation. Preference: Golda's own approved
- * utility template (created by lib/wa-templates.js, status in app_meta/whatsapp);
- * otherwise Meta's hello_world.
+ * Which template goes out when the window is closed. Preference: the digest
+ * (carries the content), then the pointer, then Meta's hello_world. Status
+ * comes from app_meta/whatsapp.templates (lib/wa-templates.js).
  */
 function templateFor(meta) {
-  const t = meta?.template;
-  const approved = t && Object.values(t.accounts || {}).some((a) => a.status === 'APPROVED');
-  return approved ? { name: t.name, language: t.language || 'he', own: true } : { ...FALLBACK_TEMPLATE, own: false };
+  const all = meta?.templates || (meta?.template ? { [meta.template.name]: meta.template } : {});
+  if (approvedSomewhere(all[DIGEST.name])) return { name: DIGEST.name, language: DIGEST.language, own: true, digest: true };
+  if (approvedSomewhere(all[UPDATE.name])) return { name: UPDATE.name, language: UPDATE.language, own: true, digest: false };
+  return { ...FALLBACK_TEMPLATE, own: false, digest: false };
 }
+
+const MD = /[*_~`]/g;
+const URL_RE = /https?:\/\/\S+/g;
+const DIGEST_MAX = 640;
+
+/**
+ * The full WhatsApp text as two template parameters: its first line as the
+ * title, the rest flattened into one line. Template parameters may not hold
+ * newlines, tabs or runs of spaces, and the whole body stays under 1024 chars.
+ */
+function digestOf(body) {
+  const clean = (s) => String(s || '').replace(MD, '').replace(URL_RE, '').replace(/[\t\n\r]+/g, ' ').replace(/ {2,}/g, ' ').replace(/^[•\-–]\s*/, '').trim();
+  const lines = String(body || '').split('\n').map(clean).filter((l) => l && !/^(הכל בבית|פרטים)\s*:?$/.test(l));
+  const title = (lines.shift() || 'עדכון מגולדה').replace(/\s*:\s*$/, '');
+  const parts = [];
+  let header = '';
+  for (const l of lines) {
+    if (/:$/.test(l)) { if (header) parts.push(header); header = l; continue; }   // "היום:" joins the line after it
+    parts.push(header ? `${header} ${l}` : l);
+    header = '';
+  }
+  if (header) parts.push(header.replace(/\s*:\s*$/, ''));
+  let summary = parts.join(' · ');
+  if (!summary) summary = 'יש עדכון חדש בשבילך.';
+  if (summary.length > DIGEST_MAX) summary = `${summary.slice(0, DIGEST_MAX - 1).replace(/\s+\S*$/, '')}…`;
+  return { title: title.slice(0, 120), summary };
+}
+const digestComponents = ({ title, summary }) => [{ type: 'body', parameters: [{ type: 'text', text: title }, { type: 'text', text: summary }] }];
 
 async function contactRef(db, phone) { return db.collection('wa_contacts').doc(digits(phone)); }
 async function readContact(db, phone) {
@@ -61,19 +94,30 @@ async function readContact(db, phone) {
   return snap.exists ? (snap.data() || {}) : {};
 }
 
-async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, log = console.log } = {}) {
-  if (now - ms(contact.lastReengageAt) < RE_ENGAGE_GAP_MS) return { skipped: 'recently' };
+/**
+ * Reach the person outside the window. With `body`, and the digest template
+ * approved, the message carries the update itself and goes out every time;
+ * a content-free template (pointer / hello_world) is rate-limited instead.
+ */
+async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, log = console.log, body = '' } = {}) {
   const meta = (await db.collection('app_meta').doc('whatsapp').get()).data() || {};
   let tpl = templateFor(meta);
+  if (!(tpl.digest && body) && now - ms(contact.lastReengageAt) < RE_ENGAGE_GAP_MS) return { skipped: 'recently' };
   const ref = await contactRef(db, phone);
+  const send = (t) => api.sendTemplate(phone, t.name, t.language, via, t.digest && body ? digestComponents(digestOf(body)) : []);
   try {
     let id;
     try {
-      id = await api.sendTemplate(phone, tpl.name, tpl.language, via);
+      id = await send(tpl);
     } catch (e) {
       if (!tpl.own || !TEMPLATE_MISSING.has(errorCode(e.message))) throw e;
-      tpl = { ...FALLBACK_TEMPLATE, own: false };   // our template is not on this number's account (yet)
-      id = await api.sendTemplate(phone, tpl.name, tpl.language, via);
+      // Our template is not on this number's account (yet): the pointer if it is, else hello_world.
+      tpl = tpl.digest && approvedSomewhere((meta.templates || {})[UPDATE.name]) ? { name: UPDATE.name, language: UPDATE.language, own: true, digest: false } : { ...FALLBACK_TEMPLATE, own: false, digest: false };
+      try { id = await send(tpl); } catch (e2) {
+        if (!tpl.own || !TEMPLATE_MISSING.has(errorCode(e2.message))) throw e2;
+        tpl = { ...FALLBACK_TEMPLATE, own: false, digest: false };
+        id = await send(tpl);
+      }
     }
     await ref.set({ lastReengageAt: now, lastReengageTemplate: tpl.name, lastReengageError: null }, { merge: true });
     log(`[wa-outbox] re-engagement template ${tpl.name} → …${digits(phone).slice(-4)}`);
@@ -99,7 +143,7 @@ async function deliver(db, { to, body, via = null, kind = 'text' }, { now = Date
   }
   const ref = db.collection('wa_outbox').doc();
   await ref.set({ to: phone, via, body, kind, state: 'queued', queuedAt: now, reason: 'window closed' });
-  const re = await reengage(db, phone, via, contact, { now, api, log });
+  const re = await reengage(db, phone, via, contact, { now, api, log, body });
   return { state: 'queued', id: ref.id, reengage: re };
 }
 
@@ -120,7 +164,7 @@ async function onStatuses(db, statuses, { now = Date.now(), api = wa, log = cons
       const cref = await contactRef(db, row.to);
       const contact = (await cref.get()).data() || {};
       await cref.set({ lastFailure: { at: now, code: err.code || 0, message: (err.message || err.title || '').slice(0, 200) } }, { merge: true });
-      if (closed) await reengage(db, row.to, row.via || s.phoneId, contact, { now, api, log });
+      if (closed) await reengage(db, row.to, row.via || s.phoneId, contact, { now, api, log, body: row.body });
       continue;
     }
     if (s.status === 'delivered' || s.status === 'read') {
@@ -152,4 +196,4 @@ async function onInbound(db, phone, via, { now = Date.now(), api = wa, log = con
   return { pending: rows.length, flushed };
 }
 
-module.exports = { deliver, onStatuses, onInbound, windowState, templateFor, isWindowError, reengage, PENDING_BUTTON, FALLBACK_TEMPLATE, WINDOW_MS, SAFE_MS, RE_ENGAGE_GAP_MS, _internal: { errorCode } };
+module.exports = { deliver, onStatuses, onInbound, windowState, templateFor, digestOf, isWindowError, reengage, PENDING_BUTTON, FALLBACK_TEMPLATE, WINDOW_MS, SAFE_MS, RE_ENGAGE_GAP_MS, _internal: { errorCode } };
