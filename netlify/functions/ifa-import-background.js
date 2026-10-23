@@ -147,12 +147,12 @@ async function plan(db, payload) {
   return { refuse, players: out, total, readable, targets: targets.length };
 }
 
-function warningFor(e) {
+function warningFor(e, via = 'browser') {
   const p = e.p;
   return {
     playerId: p.id, name: p.fullName, club: p.currentClub, reason: e.reason,
     ...(e.detail ? { detail: String(e.detail).slice(0, 200) } : {}),
-    via: 'browser',
+    via,
   };
 }
 
@@ -160,12 +160,26 @@ exports.handler = async (event) => {
   const auth = await checkSyncSecret(event);
   if (!auth.ok) { console.error('[ifa-import]', auth.error); return { statusCode: auth.statusCode }; }
 
-  const db = getDb();
-  const ref = db.collection('app_meta').doc('ifaBrowserSync');
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
-  const dryRun = !!body.dryRun;
   const payload = body.payload || {};
+  const r = await runImport(getDb(), payload, { dryRun: !!body.dryRun, via: viaOf(payload, 'browser') });
+  return { statusCode: r.statusCode };
+};
+
+// Where a payload was read: the browser (Chrome on Lou's computer) or the
+// server's own reader (lib/ifa-exa.js, via Exa). Recorded on every record and
+// warning the import writes, so the admin screens can tell the two apart.
+function viaOf(payload, fallback) {
+  const v = String(payload?.via || '');
+  return /^exa-/.test(v) ? v : fallback;
+}
+
+// The import itself: every check, then the writes. Used by the HTTP handler
+// above (browser payloads) and by ifa-server-sync-background (server reads).
+// Returns { statusCode, summary, stats } and never throws for a refused run.
+async function runImport(db, payload, { dryRun = false, via = 'browser' } = {}) {
+  const ref = db.collection('app_meta').doc('ifaBrowserSync');
   const t0 = Date.now();
 
   const pl = await plan(db, payload);
@@ -181,6 +195,7 @@ exports.handler = async (event) => {
     targets: pl.targets || 0, readable: pl.readable || 0, fixtures: pl.total || 0,
     toWrite: pl.players.filter((e) => e.action === 'write').length,
     refused: pl.refuse.length ? pl.refuse : null,
+    via, upcomingOnly: !!payload.upcomingOnly, costDollars: payload.costDollars ?? null,
   };
 
   if (dryRun || pl.refuse.length) {
@@ -189,7 +204,7 @@ exports.handler = async (event) => {
       [dryRun ? 'lastDryRunAt' : 'lastRunAt']: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     console.log(`[ifa-import] ${dryRun ? 'dry run' : 'REFUSED'}:`, JSON.stringify(summary));
-    return { statusCode: 200 };
+    return { statusCode: 200, summary, perPlayer, stats: null };
   }
 
   // Publish.
@@ -198,12 +213,12 @@ exports.handler = async (event) => {
   const squads = new Set();
   for (const e of pl.players) {
     if (e.action !== 'write') {
-      warnings.push(warningFor(e));
+      warnings.push(warningFor(e, via));
       if (e.mismatch) {
         // The alert lives on the player record (Home and Notifications read
         // players); it clears itself on the next run that passes the checks.
         await db.collection('players').doc(e.p.id).set({
-          autoFetch: { ifaFail: { reason: e.reason, detail: e.detail, teamId: e.r?.teamId || null, at: new Date().toISOString(), via: 'browser' } },
+          autoFetch: { ifaFail: { reason: e.reason, detail: e.detail, teamId: e.r?.teamId || null, at: new Date().toISOString(), via } },
         }, { merge: true }).catch((err) => console.error(`[ifa-import] ifaFail ${e.p.fullName}:`, err.message));
       }
       continue;
@@ -218,7 +233,7 @@ exports.handler = async (event) => {
               playerId, teamId: String(res.teamId), clubId: res.clubId || '',
               teamName: res.teamName || '', ageGroup: res.ageGroup || '', league: res.league || '',
               seasonLabel: res.seasonLabel || '', forClub: e.p.currentClub,
-              resolvedAt: new Date().toISOString(), via: 'browser',
+              resolvedAt: new Date().toISOString(), via,
             },
             ifaFail: admin.firestore.FieldValue.delete(),
           },
@@ -232,7 +247,7 @@ exports.handler = async (event) => {
       if (e.gamesUrl) squads.add(e.gamesUrl);
     } catch (err) {
       console.error(`[ifa-import] ${e.p.fullName}:`, err);
-      warnings.push({ ...warningFor({ ...e, reason: 'error' }), detail: String(err?.message || err).slice(0, 200) });
+      warnings.push({ ...warningFor({ ...e, reason: 'error' }, via), detail: String(err?.message || err).slice(0, 200) });
     }
   }
 
@@ -272,8 +287,8 @@ exports.handler = async (event) => {
   await wref.set({ ...cur, list: [...kept, ...warnings], runAt: admin.firestore.FieldValue.serverTimestamp() });
 
   console.log('[ifa-import] published:', JSON.stringify(stats));
-  return { statusCode: 200 };
-};
+  return { statusCode: 200, summary, perPlayer, stats };
+}
 
 // One squad's live future records grouped by identity: same date, same home
 // team and same away team after name normalisation (a sponsor suffix or an
@@ -340,4 +355,6 @@ async function mergeSquadDuplicates(db, sourceTeamId) {
 }
 
 exports._plan = plan;
+exports.runImport = runImport;
+exports.viaOf = viaOf;
 exports._internal = { ifaMismatch, squadInfo, duplicateGroups, pickKeeper, identity };
