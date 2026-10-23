@@ -72,6 +72,8 @@ function buildUrgent(name, alerts) {
  *   - the IFA browser sync (Lou's computer) silent for 36 hours.
  * Each has a key that repeats once a day at most.
  */
+const IFA_QUIET_HOURS = require('./ifa-exa.js').quietHours();
+
 function opsAlerts({ jobs = [], ifaSync = null, scraper = null, now = new Date() }) {
   const out = [];
   const today = israelDate(now);
@@ -88,10 +90,14 @@ function opsAlerts({ jobs = [], ifaSync = null, scraper = null, now = new Date()
     const pct = Math.round((scraper.requestCount / scraper.requestLimit) * 100);
     out.push({ key: `scraper80|${scraper.nextReset || today.slice(0, 7)}`, text: `• מכסת ScraperAPI ב-${pct}% (${scraper.requestCount}/${scraper.requestLimit})${scraper.nextReset ? `, מתאפסת ב-${fmtDate(scraper.nextReset)}` : ''}. מעקב TM ייעצר לבד כשיישארו 200 קרדיטים לסנכרון המשחקים.` });
   }
+  // The Israeli fixtures are read by the server every morning (lib/ifa-exa.js)
+  // and, as a fallback, by Chrome on Lou's computer. Either one updates
+  // app_meta/ifaBrowserSync; quiet means neither published.
   const last = ifaSync ? Math.max(ms(ifaSync.lastRunAt), ms(ifaSync.lastSuccessAt)) : 0;
-  if (ifaSync && last && now.getTime() - last > 36 * 3600000) {
+  if (ifaSync && last && now.getTime() - last > IFA_QUIET_HOURS * 3600000) {
     const hours = Math.round((now.getTime() - last) / 3600000);
-    out.push({ key: `ifa36|${today}`, text: `• סנכרון ההתאחדות מהמחשב שלך לא רץ ${hours} שעות. כדאי לבדוק שהמחשב דלוק ושהמשימה היומית ב-Chrome פעילה.` });
+    const why = ifaSync.lastRefused?.summary?.refused ? ` הסיבה האחרונה: ${String(ifaSync.lastRefused.summary.refused[0] || '').slice(0, 80)}.` : '';
+    out.push({ key: `ifa36|${today}`, text: `• סנכרון ההתאחדות לא פורסם ${hours} שעות (לא מהשרת ולא מהמחשב).${why} פרטים במסך הניהול ← בריאות.` });
   }
   return out;
 }

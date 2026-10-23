@@ -67,6 +67,12 @@ exports.handler = async (event) => {
     } : null);
   }
 
+  return json(200, await buildTargets(db));
+};
+
+// The list itself, shared with ifa-server-sync-background (which reads the
+// same players from the server, through Exa).
+async function buildTargets(db) {
   const targets = (await listRepresented(db)).map(targetFor).filter(Boolean);
 
   // The club register barely changes; hand over the stored copy when it is
@@ -78,5 +84,8 @@ exports.handler = async (event) => {
     if (ci?.clubs?.length && ageMs < CLUB_INDEX_TTL_DAYS * 86400000) clubIndex = ci.clubs;
   } catch (e) { console.error('ifaClubIndex read failed:', e.message); }
 
-  return json(200, { at: new Date().toISOString(), targets, clubIndex });
-};
+  return { at: new Date().toISOString(), targets, clubIndex };
+}
+
+exports.buildTargets = buildTargets;
+exports.targetFor = targetFor;
