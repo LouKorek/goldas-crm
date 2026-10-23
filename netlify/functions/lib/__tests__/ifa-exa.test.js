@@ -199,3 +199,11 @@ test("Golda's quiet threshold follows the schedule: daily → 36h, Sun/Mon/Thu/F
   assert.equal(X.quietHours(), 36);
   assert.equal(X.SCHEDULE.cron, '0 3 * * *');
 });
+
+test('the cron file carries the schedule as a literal that matches SCHEDULE.cron', () => {
+  // Netlify's bundler needs the literal; this keeps it in step with lib/ifa-exa.js.
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../ifa-server-cron.js'), 'utf8');
+  const m = /schedule\('([^']+)'/.exec(src);
+  assert.ok(m, 'schedule() is called with a string literal');
+  assert.equal(m[1], X.SCHEDULE.cron);
+});

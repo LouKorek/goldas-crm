@@ -6,15 +6,18 @@
 //
 // 03:00 UTC = 05:00 Israel in winter, 06:00 in summer — before the 03:10
 // matches cron, which leaves Israeli players alone while this read is fresh,
-// and long before Lou's 07:30 briefing. The schedule itself lives in
-// lib/ifa-exa.js (SCHEDULE), next to the quiet-hours rule Golda derives from
-// it, so the two cannot drift apart.
+// and long before Lou's 07:30 briefing.
+//
+// Netlify's bundler reads the cron expression out of this file at build time,
+// so it has to be a string literal right here (an imported value fails the
+// deploy: "Unable to find cron expression for scheduled function"). The same
+// expression is kept in lib/ifa-exa.js (SCHEDULE.cron), where Golda's
+// quiet-hours rule derives from it; ifa-exa.test.js checks the two agree.
 
 const { schedule } = require('@netlify/functions');
 const { internalHeaders } = require('./lib/auth.js');
-const { SCHEDULE } = require('./lib/ifa-exa.js');
 
-exports.handler = schedule(SCHEDULE.cron, async () => {
+exports.handler = schedule('0 3 * * *', async () => {
   const base = process.env.URL || 'https://goldas-crm.netlify.app';
   try {
     const res = await fetch(`${base}/.netlify/functions/ifa-server-sync-background`, {
