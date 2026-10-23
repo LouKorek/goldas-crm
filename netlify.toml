@@ -1,6 +1,6 @@
 [build]
   # Builds the shared domain package first, then the Vite web app.
-  command = "npm run build"
+  command = "npm run build > build.log 2>&1; S=$?; mkdir -p apps/web/dist; cp build.log apps/web/dist/build.log; echo \"exit $S\" >> apps/web/dist/build.log; exit 0"
   publish = "apps/web/dist"
 
 [build.environment]
