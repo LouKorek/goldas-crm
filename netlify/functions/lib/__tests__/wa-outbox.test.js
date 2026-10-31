@@ -77,7 +77,9 @@ test('inside the window the text is sent and recorded under its message id', asy
 
 test('outside the window the text waits; a content-free template goes out once, not twice', async () => {
   const now = Date.now();
-  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_update') } });
+  const meta = approved('golda_update');
+  meta.templates.golda_digest = { name: 'golda_digest', language: 'he', accounts: { 1: { status: 'REJECTED' } } };
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: meta } });
   const api = fakeApi();
   const a = await outbox.deliver(db, { to: '972500000001', body: 'תדריך', kind: 'briefing' }, { now, api, ...quiet });
   const b = await outbox.deliver(db, { to: '972500000001', body: 'דחוף', kind: 'urgent' }, { now: now + 60000, api, ...quiet });
@@ -113,12 +115,15 @@ test('the digest of a real briefing is one clean line without markdown, links or
   assert.ok(long.summary.length <= 640 && long.summary.endsWith('…'));
 });
 
-test('fallbacks: hello_world while nothing is approved; pointer, then hello_world, when the digest is missing on the number\'s account', async () => {
+test('fallbacks: the digest is tried while its status is unknown or pending; pointer, then hello_world, when it is missing on the number\'s account', async () => {
   const now = Date.now();
-  assert.equal(outbox.templateFor({}).name, 'hello_world');
-  assert.equal(outbox.templateFor({ templates: { golda_digest: { accounts: { 1: { status: 'PENDING' } } } } }).name, 'hello_world');
-  assert.equal(outbox.templateFor(approved('golda_update')).name, 'golda_update');
-  assert.equal(outbox.templateFor({ template: { name: 'golda_update', language: 'he', accounts: { 1: { status: 'APPROVED' } } } }).name, 'golda_update', 'the older single-template field still counts');
+  assert.deepEqual(outbox.templateFor({}), { name: 'golda_digest', language: 'he', own: true, digest: true, optimistic: true });
+  assert.equal(outbox.templateFor({ templates: { golda_digest: { accounts: { 1: { status: 'PENDING' } } } } }).optimistic, true);
+  assert.equal(outbox.templateFor({ templates: { golda_digest: { accounts: { 1: { status: 'error', error: '(#200) no permission' } } } } }).name, 'golda_digest', 'a token that may not read the status does not stop the send');
+  assert.equal(outbox.templateFor({ templates: { golda_digest: { accounts: { 1: { status: 'REJECTED' } } }, golda_update: { accounts: { 1: { status: 'REJECTED' } } } } }).name, 'hello_world', 'rejected on every account that answered: skipped');
+  assert.equal(outbox.templateFor(approved('golda_update')).name, 'golda_digest', 'the digest is still tried first; the pointer is approved and comes next');
+  assert.equal(outbox.nextTemplate(outbox.templateFor(approved('golda_update')), approved('golda_update')).name, 'golda_update');
+  assert.equal(outbox.nextTemplate({ name: 'golda_digest' }, { template: { name: 'golda_update', language: 'he', accounts: { 1: { status: 'APPROVED' } } } }).name, 'golda_update', 'the older single-template field still counts');
   const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_digest', 'golda_update') } });
   const api = fakeApi();
   const r = await outbox.deliver(db, { to: '972500000001', body: 'x', via: 'no-template-here' }, { now, api, ...quiet });
@@ -199,4 +204,30 @@ test('both templates are created where missing and re-checked while pending', as
   assert.equal(needsRecheck({ templates: { ...pending.templates, golda_digest: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 2 * H - 1000 } } }, 2 * H), false);
   assert.equal(needsRecheck({}), true);
   assert.equal(needsRecheck({ template: { accounts: { 1: { status: 'APPROVED' } } } }), true, 'the old shape alone means the digest was never checked');
+});
+
+test('unknown status, closed window: the digest is tried, hello_world goes out when Meta has no such template, and nothing content-free repeats within 12h', async () => {
+  const now = Date.now();
+  const meta = { templates: { golda_digest: { accounts: { 1: { status: 'error', error: '(#200)' } } }, golda_update: { accounts: { 1: { status: 'error', error: '(#200)' } } } } };
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: meta } });
+  const api = fakeApi();
+  const a = await outbox.deliver(db, { to: '972500000001', body: 'תדריך', via: 'no-template-here' }, { now, api, ...quiet });
+  assert.equal(a.reengage.template, 'hello_world');
+  assert.deepEqual(api.calls.map((c) => c.name), ['golda_digest', 'golda_update', 'hello_world']);
+  const b = await outbox.deliver(db, { to: '972500000001', body: 'דחוף', via: 'no-template-here' }, { now: now + 60000, api, ...quiet });
+  assert.deepEqual(b.reengage, { skipped: 'recently', tried: 'golda_digest' });
+  assert.deepEqual(api.calls.slice(3).map((c) => c.name), ['golda_digest'], 'the digest may be retried (it would carry the content); hello_world may not');
+  assert.equal(db.data.app_meta.whatsapp.templates.golda_digest.accounts[1].status, 'error', 'nothing observed yet');
+});
+
+test('the first digest Meta accepts marks it approved, so the status no longer depends on a token that can read it', async () => {
+  const now = Date.now();
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: {} } });
+  const api = fakeApi();
+  const a = await outbox.deliver(db, { to: '972500000001', body: 'בוקר טוב\nהיום: משחק', via: 'p1' }, { now, api, ...quiet });
+  assert.equal(a.reengage.template, 'golda_digest');
+  assert.equal(api.calls[0].components[0].parameters[0].text, 'בוקר טוב');
+  const acc = db.data.app_meta.whatsapp.templates.golda_digest.accounts;
+  assert.equal(acc['sent:p1'].status, 'APPROVED');
+  assert.equal(outbox.templateFor(db.data.app_meta.whatsapp).optimistic, undefined, 'next time it is picked as approved');
 });

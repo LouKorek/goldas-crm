@@ -411,7 +411,7 @@ function Delivery({ phone, he }) {
       <Row label={he ? 'הודעות שמחכות' : 'Waiting'}>{d.pending.length ? (he ? `${d.pending.length} (יישלחו כשתכתוב/י לגולדה)` : `${d.pending.length} (sent when you write to Golda)`) : (he ? 'אין' : 'none')}</Row>
       {c.lastDelivered ? <Row label={he ? 'נמסרה לאחרונה' : 'Last delivered'}>{fmtDateTime(new Date(c.lastDelivered))}</Row> : null}
       {c.lastFailure?.at ? <Row label={he ? 'כישלון אחרון' : 'Last failure'}>{fmtDateTime(new Date(c.lastFailure.at))}{c.lastFailure.code === 131047 ? (he ? ' · מחוץ לחלון 24 השעות' : ' · outside the 24h window') : c.lastFailure.message ? ` · ${c.lastFailure.message}` : ''}</Row> : null}
-      {c.lastReengageAt ? <Row label={he ? 'תבנית התנעה נשלחה' : 'Re-engagement sent'}>{fmtDateTime(new Date(c.lastReengageAt))}{c.lastReengageError ? ` · ${he ? 'נכשלה' : 'failed'}` : ''}</Row> : null}
+      {c.lastReengageAt ? <Row label={he ? 'תבנית התנעה נשלחה' : 'Re-engagement sent'}>{fmtDateTime(new Date(c.lastReengageAt))}{c.lastReengageTemplate ? ` · ${c.lastReengageTemplate}` : ''}{c.lastReengageError ? ` · ${he ? 'נכשלה' : 'failed'}` : ''}</Row> : null}
       <Row label={he ? 'התבניות של גולדה' : 'Golda\'s templates'}>{tplState}</Row>
     </div>
   );
