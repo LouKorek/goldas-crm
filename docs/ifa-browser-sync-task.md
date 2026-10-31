@@ -1,9 +1,10 @@
 # Gold A&S ifa sync — the scheduled task
 
 > Since 23.10.2026 the server reads the fixtures itself every morning
-> (`ifa-server-cron` → `lib/ifa-exa.js`, see runbooks §5 and ADR-17). This
-> Chrome routine is the fallback, and the only reader that can resolve a new
-> player's squad from a player link; it may stay scheduled or be switched off.
+> (`ifa-server-cron` → `lib/ifa-exa.js`, see runbooks §5 and ADR-17). On
+> 24.10.2026 Lou asked for no task on the computer at all, and this Chrome
+> routine was DELETED. The prompt is kept here so it can be restored; it is
+> the only reader that can resolve a new player's squad from a player link.
 
 The daily task that reads Israeli fixtures from football.org.il in Chrome on
 Lou's computer and publishes them to the CRM. This file is the task's prompt,
