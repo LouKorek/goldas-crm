@@ -382,6 +382,7 @@ function WhatsApp({ he }) {
           <div style={{ display: 'grid', gap: 6 }}>
             {row(he ? 'מחובר מאז' : 'Connected', fmtDateTime(new Date(d.connectedAt)))}
             {row(he ? 'תוקף המפתח' : 'Key expires', exp ? fmtDateTime(exp) : (he ? 'לא פג' : 'never'))}
+            {row(he ? 'סוג המפתח' : 'Key type', [d.tokenType, d.reachesWaba === true ? (he ? 'רואה את החשבון של גולדה' : 'sees Golda’s account') : d.reachesWaba === false ? (he ? 'לא רואה את החשבון של גולדה' : 'cannot see Golda’s account') : ''].filter(Boolean).join(' · '))}
             {row(he ? 'בדיקת החשבון ב-Meta' : 'Meta account review', o.account?.review)}
             {row(he ? 'אימות העסק' : 'Business verification', o.account?.businessVerification)}
             {row(he ? 'מצב המספר' : 'Number status', o.phone && !o.phone.error ? `${o.phone.status || ''} · ${o.phone.platform || ''} · ${o.phone.verification || ''}` : '')}

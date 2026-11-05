@@ -135,6 +135,10 @@ test('startUrl: the dialog can ask for a known configuration, never an unknown o
   assert.equal(await cfg(null), '828757043627753', 'default: WhatsApp Embedded Signup, which lets Lou pick the account');
   assert.equal(await cfg('2506080863235560'), '2506080863235560');
   assert.equal(await cfg('999'), '828757043627753');
+  const es = new URL(await metaAuth.startUrl(db, 'lou@x', { env, now: 1 }));
+  assert.deepEqual(JSON.parse(es.searchParams.get('extras')), { setup: {}, featureType: '', sessionInfoVersion: '3' }, 'Embedded Signup extras: pick the account, not coexistence');
+  const general = new URL(await metaAuth.startUrl(db, 'lou@x', { env, config: '2506080863235560', now: 1 }));
+  assert.equal(general.searchParams.get('extras'), null);
 });
 
 test('onboard with a key that cannot see the number: says so, touches nothing', async () => {
