@@ -7,7 +7,7 @@
 const { withAuth, json, internalHeaders } = require('./lib/auth.js');
 
 const WORKERS = { 'sync-matches': 'sync-matches-background', 'tm-watch': 'tm-watch-background', 'ig-watch': 'ig-watch-background' };
-const OPS = new Set(['backup', 'nightly-engines', 'send-alerts', 'golda-briefing']);
+const OPS = new Set(['backup', 'nightly-engines', 'send-alerts', 'golda-briefing', 'meta-onboard']);
 
 exports.handler = withAuth({ action: 'manage_settings' }, async (event, ctx) => {
   let body = {};

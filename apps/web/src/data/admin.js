@@ -26,9 +26,17 @@ export const JOBS = [
   { name: 'tm-watch', he: 'מעקב Transfermarkt', when: 'יומי 04:30 UTC', run: 'tm-watch' },
   { name: 'ig-watch', he: 'אינסטגרם הסוכנות', when: 'יומי 03:50 UTC', run: 'ig-watch' },
   { name: 'backup-weekly', he: 'גיבוי שבועי', when: 'ראשון 01:30 UTC', run: 'backup' },
+  { name: 'meta-onboard', he: 'מעבר גולדה למספר שלה (055)', when: 'כל שעה ב-:45 עד שמסתיים', run: 'meta-onboard' },
   { name: 'golda-queue', he: 'תור הודעות גולדה (ניסיונות חוזרים)', when: 'כל 10 דקות', run: null },
   { name: 'migrate', he: 'מיגרציות נתונים', when: 'אחרי כל פריסה', run: null },
 ];
+
+// ── WhatsApp: the server's own Meta key and Golda's move to her number ──
+/** app_meta/metaConnect: connected?, scopes, onboard { stage, phone, account, ... } (no secrets). */
+export const listenMetaConnect = (callback) =>
+  onSnapshot(doc(db, 'app_meta', 'metaConnect'), (s) => callback(s.exists() ? s.data() : {}), (e) => { console.error('metaConnect error:', e); callback({}); });
+/** The Facebook sign-in address (meta-connect); the page navigates there. */
+export const startMetaConnect = () => callFunctionJson('meta-connect', { method: 'POST' });
 
 /** Start a job now (admin-run-job → the worker or ops-background). */
 export const runJobNow = (job) => callFunctionJson('admin-run-job', { method: 'POST', body: { job } });

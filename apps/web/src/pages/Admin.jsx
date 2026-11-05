@@ -7,6 +7,8 @@
 //   Backups  the weekly backups, "back up now", download as a file
 //   Audit    every change anyone (or Golda) made, with filters
 //   Errors   what the app itself reported from people's browsers
+//   WhatsApp the server's own Meta key (one Facebook sign-in) and Golda's
+//            move to her own number, step by step
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useRole } from 'lib/roleContext';
@@ -15,11 +17,11 @@ import { PageHeader, Skeleton, Empty, ChipGroup, Field, SearchInput, toast, useC
 import Icon from 'components/ui/Icons';
 import {
   JOBS, listenJobs, runJobNow, groupRuns, fetchScraperStatus, listenTmWatchMeta, saveTmWatchBudget, listenDeploys,
-  listenGoldaUsage, listenBackups, downloadBackup, listenAudit, listenClientErrors,
+  listenGoldaUsage, listenBackups, downloadBackup, listenAudit, listenClientErrors, listenMetaConnect, startMetaConnect,
 } from 'data/admin';
 
 const VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
-const TABS = [['health', 'בריאות', 'Health'], ['quotas', 'מכסות', 'Quotas'], ['backups', 'גיבויים', 'Backups'], ['audit', 'יומן פעולות', 'Audit log'], ['errors', 'שגיאות', 'Errors']];
+const TABS = [['health', 'בריאות', 'Health'], ['quotas', 'מכסות', 'Quotas'], ['backups', 'גיבויים', 'Backups'], ['audit', 'יומן פעולות', 'Audit log'], ['errors', 'שגיאות', 'Errors'], ['whatsapp', 'וואטסאפ', 'WhatsApp']];
 const toDate = (v) => (v?.toDate ? v.toDate() : v ? new Date(v) : null);
 const ago = (d, he) => {
   if (!d) return he ? 'מעולם' : 'never';
@@ -68,6 +70,7 @@ export default function Admin() {
       {tab === 'backups' && <Backups he={he} />}
       {tab === 'audit' && <Audit he={he} />}
       {tab === 'errors' && <Errors he={he} />}
+      {tab === 'whatsapp' && <WhatsApp he={he} />}
     </div>
   );
 }
@@ -324,5 +327,68 @@ function Errors({ he }) {
         ))}</tbody>
       </table>
     </div></div>
+  );
+}
+
+// ── WhatsApp ─────────────────────────────────────────────────────
+// One button gives the server its own key to Golda's account at Meta; from
+// then on the hourly job (meta-onboard) moves her to her number by itself.
+const STAGES = {
+  not_connected: ['צריך להתחבר עם פייסבוק פעם אחת', 'Needs one Facebook sign-in'],
+  needs_code: ['המספר עוד לא אומת בקוד SMS', 'The number still needs its SMS code'],
+  waiting_for_meta: ['מחכים לאישור של Meta. בודקים שוב כל שעה, לבד', 'Waiting for Meta’s approval. Checked again every hour, automatically'],
+  error: ['תקלה בקריאה מ-Meta', 'Could not read from Meta'],
+  live: ['גולדה פעילה על המספר שלה ✅', 'Golda is live on her own number ✅'],
+};
+function WhatsApp({ he }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => listenMetaConnect(setD), []);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('meta') === 'ok') toast.success(he ? 'החיבור לפייסבוק הצליח. השרת ממשיך מכאן לבד.' : 'Connected to Facebook. The server takes it from here.');
+    if (p.get('meta') === 'error') toast.error((he ? 'החיבור לא הצליח: ' : 'Sign-in failed: ') + (p.get('reason') || ''));
+  }, []); // eslint-disable-line
+  const connect = async () => {
+    setBusy(true);
+    try { const { url } = await startMetaConnect(); window.location.assign(url); }
+    catch (e) { toast.error(e.message); setBusy(false); }
+  };
+  if (!d) return <Skeleton rows={3} />;
+  const o = d.onboard || {};
+  const stage = d.connected ? (o.stage || 'waiting_for_meta') : 'not_connected';
+  const label = STAGES[stage] || [stage, stage];
+  const exp = d.expiresAt ? new Date(d.expiresAt) : null;
+  const row = (k, v) => v ? <div style={{ display: 'flex', gap: 8, fontSize: 13 }}><span style={{ color: 'var(--text-3)', minWidth: 140 }}>{k}</span><span>{v}</span></div> : null;
+  return (
+    <div style={{ display: 'grid', gap: 12, maxWidth: 680 }}>
+      <Card>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>{he ? 'גולדה על המספר 055-295-9496' : 'Golda on 055-295-9496'}</div>
+        <div style={{ fontSize: 14, marginBottom: 12 }}>{he ? label[0] : label[1]}</div>
+        {!d.connected && (
+          <button className="btn btn-primary" onClick={connect} disabled={busy} style={{ height: 40 }}>
+            {busy ? (he ? 'פותח את פייסבוק…' : 'Opening Facebook…') : (he ? 'התחבר עם פייסבוק' : 'Connect with Facebook')}
+          </button>
+        )}
+        {d.connected && exp && exp.getTime() - Date.now() < 10 * 864e5 && (
+          <button className="btn btn-ghost btn-sm" onClick={connect} disabled={busy} style={{ height: 32 }}>{he ? 'חדש את החיבור לפייסבוק' : 'Renew the Facebook connection'}</button>
+        )}
+        {d.lastError?.message && !d.connected && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 8 }}>{d.lastError.message}</div>}
+      </Card>
+      {d.connected && (
+        <Card>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {row(he ? 'מחובר מאז' : 'Connected', fmtDateTime(new Date(d.connectedAt)))}
+            {row(he ? 'תוקף המפתח' : 'Key expires', exp ? fmtDateTime(exp) : (he ? 'לא פג' : 'never'))}
+            {row(he ? 'בדיקת החשבון ב-Meta' : 'Meta account review', o.account?.review)}
+            {row(he ? 'אימות העסק' : 'Business verification', o.account?.businessVerification)}
+            {row(he ? 'מצב המספר' : 'Number status', o.phone ? `${o.phone.status || ''} · ${o.phone.platform || ''} · ${o.phone.verification || ''}` : '')}
+            {row(he ? 'תבניות' : 'Templates', o.templates && !o.templates.error ? Object.entries(o.templates).map(([n, st]) => `${n}: ${st}`).join(' · ') : o.templates?.error)}
+            {row(he ? 'נבדק לאחרונה' : 'Last checked', o.checkedAt ? ago(new Date(o.checkedAt), he) : '')}
+            {row(he ? 'תשובת Meta אחרונה' : 'Meta’s last answer', o.lastError ? `${o.lastError.code}: ${o.lastError.message}` : '')}
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }

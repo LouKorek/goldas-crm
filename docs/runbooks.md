@@ -127,6 +127,19 @@
   מדולגת. הסיבה לכישלון ב-`wa_contacts.lastReengageError` ובהערות העבודה
   `golda-briefing`; מסך גולדה ← התדריך שלי מראה איזו תבנית נשלחה לאחרונה.
   דחייה (`rejected_reason`) דורשת שינוי נוסח ב-`wa-templates.js` ויצירה מחדש.
+- **המפתח של השרת ל-Meta והמעבר למספר של גולדה (נובמבר 2026):** `WA_TOKEN`
+  שולח הודעות בלבד. לניהול החשבון (סטטוס בדיקה, רישום מספר, תבניות) לו לוחץ
+  פעם אחת "התחבר עם פייסבוק" במסך ניהול ← וואטסאפ (`meta-connect`, Facebook
+  Login for Business על האפליקציה שלנו, תצורה `LOGIN_CONFIG_ID` ב-
+  `lib/meta-auth.js` או `META_LOGIN_CONFIG_ID`). השרת מחליף את הקוד במפתח (עם
+  `WA_APP_SECRET`), שומר אותו חתום ב-`app_secrets/meta` (לא נקרא מהאפליקציה),
+  ותקציר בלי סודות ב-`app_meta/metaConnect`. העבודה `meta-onboard` (כל שעה ב-:45,
+  `meta-onboard-cron`) רושמת את 055-295-9496 עם PIN שהשרת מייצר ושומר חתום, מנויה
+  את האפליקציה על החשבון, יוצרת את התבניות שם, מעבירה את גולדה
+  (`app_meta/whatsapp.primaryPhoneId`, `lib/wa-api.js` בוחר מספר ומפתח) ומודיעה
+  ללו פעם אחת. כל עוד Meta בודקת את החשבון הרישום נדחה (#100) והמצב
+  `waiting_for_meta`; אחרי שהמעבר הושלם בדיקה אחת ביום. מצב: מסך ניהול ←
+  וואטסאפ, או `meta-connect?status=1` עם `x-sync-secret`.
 
 ## 7. אימייל (תקציר יומי)
 
@@ -180,7 +193,8 @@ CI (`.github/workflows/ci.yml`) מריץ את כולם על כל PR. מיזוג 
 | `SCRAPER_API_KEY` | TM Watch |
 | `IG_ACCESS_TOKEN` | אינסטגרם הסוכנות |
 | `GMAIL_APP_PASSWORD` | תקציר יומי |
-| `CRM_SYNC_SECRET` | סנכרון ההתאחדות מהמחשב |
+| `CRM_SYNC_SECRET` | גישת סקריפטים ובדיקות מצב (`x-sync-secret`) |
+| `META_LOGIN_CONFIG_ID` | (רשות) תצורת "התחבר עם פייסבוק"; ברירת המחדל בקוד (`lib/meta-auth.js`) |
 | `EXA_API_KEY` | (רשות) קריאת ההתאחדות מהשרת דרך Exa API; בלעדיו שרת ה-MCP הציבורי |
 | `WEBHOOK_SECRET` | חתימת אירועי Netlify ל-`deploy-succeeded` |
 | `SEAL_KEY` | חתימת nonces פנימיים בין פונקציות |
