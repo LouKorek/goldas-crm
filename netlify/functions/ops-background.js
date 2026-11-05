@@ -4,7 +4,7 @@
 // like any other run. Background, so a long backup never hits the 10-second
 // limit of a plain function.
 //
-//   POST { task: 'backup' | 'nightly-engines' | 'send-alerts' | 'golda-briefing' }
+//   POST { task: 'backup' | 'nightly-engines' | 'send-alerts' | 'golda-briefing' | 'meta-onboard' }
 const { withAuth, json } = require('./lib/auth.js');
 const { runJob } = require('./lib/jobs.js');
 
@@ -13,6 +13,16 @@ const TASKS = {
   'nightly-engines': () => runJob('nightly-engines', require('./nightly-engines.js')._internal.nightly, { trigger: 'manual' }),
   'send-alerts': () => runJob('send-alerts', async (job) => { const r = await require('./send-alerts.js')._internal.sendDigest(job); job.note(r.body); return r; }, { trigger: 'manual' }),
   'golda-briefing': () => runJob('golda-briefing', (job) => require('./golda-briefing.js')._internal.run(job, new Date(), { force: true }), { trigger: 'manual' }),
+  // Golda's move to her own number (hourly from meta-onboard-cron, and after Lou's Facebook sign-in).
+  'meta-onboard': async () => {
+    const onboard = require('./lib/meta-onboard.js');
+    if (!(await onboard.shouldRun(require('./lib/firestore.js').getDb()))) return { skipped: 'checked today' };
+    return runJob('meta-onboard', async (job) => {
+      const r = await onboard.runWithDeps({ force: true });
+      job.note(`${r.stage}${r.lastError ? ` – ${r.lastError.code} ${r.lastError.message}` : ''}`);
+      return r;
+    }, { trigger: 'schedule' });
+  },
 };
 
 exports.handler = withAuth({ action: 'manage_settings', internal: true }, async (event) => {

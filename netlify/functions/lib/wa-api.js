@@ -23,10 +23,39 @@ function validSignature(rawBody, header) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-async function graph(path, opts = {}) {
+// Which number Golda writes from, and with which key. Since she can move to her
+// own number by herself (lib/meta-onboard.js), both can change at run time:
+//   app_meta/whatsapp.primaryPhoneId   the default sending number (else WA_PHONE_ID)
+//   app_meta/whatsapp.managedPhoneIds  numbers whose account only the server's
+//                                      own Meta token reaches (lib/meta-auth.js);
+//                                      every other number uses WA_TOKEN.
+// Read from Firestore at most once a minute; any failure falls back to env.
+let _routing = null;
+async function routing(now = Date.now()) {
+  if (_routing && now - _routing.at < 60000) return _routing;
+  let primary = null, managed = [], metaToken = null;
+  try {
+    const { getDb } = require('./firestore.js');
+    const db = getDb();
+    const wa = (await db.collection('app_meta').doc('whatsapp').get()).data() || {};
+    primary = /^\d+$/.test(wa.primaryPhoneId || '') ? wa.primaryPhoneId : null;
+    managed = Array.isArray(wa.managedPhoneIds) ? wa.managedPhoneIds.map(String) : [];
+    if (managed.length) metaToken = await require('./meta-auth.js').getToken(db);
+  } catch (e) { console.warn('[wa] routing fallback to env:', e.message); }
+  _routing = { at: now, primary, managed, metaToken };
+  return _routing;
+}
+const defaultPhoneId = async () => (await routing()).primary || process.env.WA_PHONE_ID;
+async function tokenFor(phoneId) {
+  const r = await routing();
+  return phoneId && r.metaToken && r.managed.includes(String(phoneId)) ? r.metaToken : process.env.WA_TOKEN;
+}
+
+async function graph(path, opts = {}, phoneId = null) {
+  const token = await tokenFor(phoneId || String(path).split('/')[0]);
   const res = await fetch(`${GRAPH}/${path}`, {
     ...opts,
-    headers: { Authorization: `Bearer ${process.env.WA_TOKEN}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
   });
   if (!res.ok) throw new Error(`WhatsApp API ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res;
@@ -34,11 +63,11 @@ async function graph(path, opts = {}) {
 
 // WhatsApp caps a text message at 4096 characters.
 // `via` is the phone_number_id the message came in on, so Golda answers from
-// the same number; WA_PHONE_ID is the fallback.
+// the same number; the default number (above) is the fallback.
 // Returns Meta's message ids (one per part), so delivery statuses coming back
 // through the webhook can be matched to what was sent (lib/wa-outbox.js).
 async function sendText(to, body, via) {
-  const from = via || process.env.WA_PHONE_ID;
+  const from = via || await defaultPhoneId();
   const parts = [];
   for (let s = String(body); s.length; s = s.slice(4000)) parts.push(s.slice(0, 4000));
   const ids = [];
@@ -58,7 +87,7 @@ async function sendText(to, body, via) {
 // window; a free-form text is accepted with HTTP 200 and then fails with
 // status error 131047). `components` carries parameters when the template has any.
 async function sendTemplate(to, name, language, via, components = []) {
-  const from = via || process.env.WA_PHONE_ID;
+  const from = via || await defaultPhoneId();
   const res = await graph(`${from}/messages`, {
     method: 'POST',
     body: JSON.stringify({
@@ -72,7 +101,7 @@ async function sendTemplate(to, name, language, via, components = []) {
 
 async function markRead(messageId, via) {
   try {
-    await graph(`${via || process.env.WA_PHONE_ID}/messages`, {
+    await graph(`${via || await defaultPhoneId()}/messages`, {
       method: 'POST',
       body: JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: messageId }),
     });
@@ -80,9 +109,10 @@ async function markRead(messageId, via) {
 }
 
 // Media arrives as an id: one call for the short-lived URL, one for the bytes.
-async function downloadMedia(mediaId) {
-  const meta = await (await graph(mediaId)).json();
-  const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${process.env.WA_TOKEN}` } });
+// `via` is the number the media arrived on, which decides the key.
+async function downloadMedia(mediaId, via = null) {
+  const meta = await (await graph(mediaId, {}, via)).json();
+  const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${await tokenFor(via)}` } });
   if (!res.ok) throw new Error(`media download ${res.status}`);
   return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: meta.mime_type || 'application/octet-stream' };
 }
@@ -131,4 +161,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { isAllowed, senderName, validSignature, sendText, sendTemplate, markRead, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, sendTemplate, markRead, downloadMedia, extractMessages, extractStatuses, digits };

@@ -59,12 +59,12 @@ async function graph(path, method = 'GET', body, fetchImpl = fetch, token = proc
 }
 
 /** One account, one template: read its status; create it when missing. */
-async function ensureOn(waba, { fetchImpl = fetch, template = UPDATE } = {}) {
-  const got = await graph(`${waba}/message_templates?name=${template.name}&fields=id,name,status,language,category,rejected_reason`, 'GET', null, fetchImpl);
+async function ensureOn(waba, { fetchImpl = fetch, template = UPDATE, token = process.env.WA_TOKEN } = {}) {
+  const got = await graph(`${waba}/message_templates?name=${template.name}&fields=id,name,status,language,category,rejected_reason`, 'GET', null, fetchImpl, token);
   if (got.body?.error) return { status: 'error', error: `${got.body.error.code || got.status}: ${got.body.error.message || ''}`.slice(0, 200) };
   const found = (got.body?.data || []).find((t) => t.name === template.name && t.language === template.language);
   if (found) return { status: found.status || 'UNKNOWN', id: found.id || null, ...(found.rejected_reason && found.rejected_reason !== 'NONE' ? { error: found.rejected_reason } : {}) };
-  const made = await graph(`${waba}/message_templates`, 'POST', template, fetchImpl);
+  const made = await graph(`${waba}/message_templates`, 'POST', template, fetchImpl, token);
   if (made.body?.error) return { status: 'error', error: `${made.body.error.code || made.status}: ${made.body.error.message || ''}`.slice(0, 200) };
   return { status: made.body?.status || 'PENDING', id: made.body?.id || null, created: true };
 }
@@ -74,13 +74,19 @@ async function ensureOn(waba, { fetchImpl = fetch, template = UPDATE } = {}) {
  * { name: { language, accounts: { waba: { status, id?, error? } }, checkedAt } }
  * (and `template` = golda_update, for the fields older code reads).
  */
-async function ensureTemplate(db, { fetchImpl = fetch, env = process.env, log = console.log, now = Date.now() } = {}) {
-  if (!env.WA_TOKEN) return { skipped: 'WA_TOKEN not set' };
+// Golda's own account answers only to the server's Meta token (lib/meta-auth.js,
+// after Lou's one Facebook sign-in); the test account to WA_TOKEN.
+async function ensureTemplate(db, { fetchImpl = fetch, env = process.env, log = console.log, now = Date.now(), metaToken } = {}) {
+  if (metaToken === undefined) {
+    try { metaToken = await require('./meta-auth.js').getToken(db); } catch { metaToken = null; }
+  }
+  if (!env.WA_TOKEN && !metaToken) return { skipped: 'no WhatsApp token' };
+  const tokenFor = (waba) => (metaToken && waba !== TEST_WABA ? metaToken : env.WA_TOKEN);
   const templates = {};
   for (const template of TEMPLATES) {
     const accounts = {};
     for (const waba of wabaIds(env)) {
-      try { accounts[waba] = await ensureOn(waba, { fetchImpl, template }); }
+      try { accounts[waba] = await ensureOn(waba, { fetchImpl, template, token: tokenFor(waba) }); }
       catch (e) { accounts[waba] = { status: 'error', error: String(e.message).slice(0, 200) }; }
     }
     templates[template.name] = { name: template.name, language: template.language, accounts, checkedAt: now };
