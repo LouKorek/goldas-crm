@@ -11,6 +11,8 @@
 //      Golda's templates there, and switches Golda's default sending number
 //      to it (app_meta/whatsapp.primaryPhoneId, read by lib/wa-api.js);
 //   4. tells Lou on WhatsApp, once.
+// Along the way it puts Golda's profile photo (lib/golda-photo.js) on the
+// number she talks from today, and on her own number once it is registered.
 // Everything it saw goes to app_meta/metaConnect.onboard for the admin screen.
 const crypto = require('crypto');
 const auth = require('./meta-auth.js');
@@ -36,12 +38,14 @@ async function call(token, path, { method = 'GET', body, fetchImpl = fetch } = {
 }
 
 const registered = (p) => p && (p.platform_type === 'CLOUD_API' || p.status === 'CONNECTED');
+const { hasPhoto } = require('./golda-photo.js');
 
 /**
- * One pass. deps: { fetchImpl, now, notify(text) → Promise, ensureTemplates(token) → Promise<summary>, log }
+ * One pass. deps: { fetchImpl, now, notify(text) → Promise, ensureTemplates(token) → Promise<summary>, log,
+ *   setPhoto(token, phoneId) → Promise<{ ok, url, ... }>, currentPhoneId (the number Golda talks from today) }
  * Returns the summary it stored.
  */
-async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ensureTemplates = null, log = console.log } = {}) {
+async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ensureTemplates = null, log = console.log, setPhoto = null, currentPhoneId = null } = {}) {
   const pubRef = db.collection('app_meta').doc('metaConnect');
   const prev = ((await pubRef.get()).data() || {}).onboard || {};
   const token = await auth.getToken(db);
@@ -51,6 +55,15 @@ async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ens
     await pubRef.set({ onboard: out }, { merge: true });
     return out;
   }
+
+  // Golda's profile photo, once per number (and again if the photo changes).
+  out.photo = { ...(prev.photo || {}) };
+  const ensurePhoto = async (phoneId) => {
+    if (!setPhoto || !phoneId || hasPhoto(out.photo, phoneId)) return;
+    out.photo[phoneId] = await setPhoto(token, phoneId);
+    log(`[meta-onboard] profile photo on ${phoneId}: ${out.photo[phoneId].ok ? 'set' : out.photo[phoneId].error?.message}`);
+  };
+  if (currentPhoneId && currentPhoneId !== auth.REAL_PHONE) await ensurePhoto(currentPhoneId);
 
   const waba = await call(token, `${auth.REAL_WABA}?fields=name,account_review_status,business_verification_status`, { fetchImpl });
   out.account = waba.ok ? { review: waba.body.account_review_status || null, businessVerification: waba.body.business_verification_status || null } : { error: waba.error };
@@ -104,6 +117,7 @@ async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ens
   // 3. wire it up (idempotent; repeated every pass until done)
   const sub = await call(token, `${auth.REAL_WABA}/subscribed_apps`, { method: 'POST', fetchImpl });
   out.subscribed = sub.ok ? true : { error: sub.error };
+  await ensurePhoto(auth.REAL_PHONE);
   if (ensureTemplates) {
     try { out.templates = await ensureTemplates(token); } catch (e) { out.templates = { error: String(e.message).slice(0, 200) }; }
   }
@@ -141,7 +155,10 @@ async function runWithDeps({ db = require('./firestore.js').getDb(), force = fal
   const { deliver } = require('./wa-outbox.js');
   const { digits } = require('./wa-api.js');
   const lou = digits((process.env.WA_ALLOWED_NUMBERS || '').split(',')[0].split(':')[0]);
+  const photo = require('./golda-photo.js');
   return run(db, {
+    setPhoto: (token, phoneId) => photo.setPhoto(token, phoneId, { appId: auth.APP_ID }),
+    currentPhoneId: process.env.WA_PHONE_ID || null,
     ensureTemplates: async (token) => {
       const t = await ensureTemplate(db, { metaToken: token });
       return Object.fromEntries(Object.entries(t.templates || {}).map(([n, x]) => [n, x.accounts?.[auth.REAL_WABA]?.status || 'unknown']));
