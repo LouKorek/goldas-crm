@@ -334,8 +334,7 @@ html[lang="he"] .data-table th { font-size: 12.5px; }
 /* ── Toasts ── */
 .toast {
   background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-inline-start: 4px solid var(--accent);
+  border: 1px solid var(--border-2);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);
   font-size: 14px;
