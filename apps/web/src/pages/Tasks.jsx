@@ -24,10 +24,10 @@ import { t, t as tr } from 'lib/i18n';
 const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
 const PRIORITY_RANK = { Urgent: 0, High: 1, Normal: 2, Low: 3 };
 const PRIORITY_COLOR = {
-  Low:     { bg: 'rgba(96,165,250,0.14)',  fg: '#60A5FA', border: 'rgba(96,165,250,0.35)' },
-  Normal:  { bg: 'rgba(212,176,98,0.14)',  fg: '#D4B062', border: 'rgba(212,176,98,0.35)' },
-  High:    { bg: 'rgba(251,191,36,0.16)',  fg: '#FBBF24', border: 'rgba(251,191,36,0.42)' },
-  Urgent:  { bg: 'rgba(248,113,113,0.18)', fg: '#F87171', border: 'rgba(248,113,113,0.45)' },
+  Low:     { bg: 'var(--blue-bg)',  fg: 'var(--blue)', border: 'var(--blue-bg)' },
+  Normal:  { bg: 'var(--amber-bg)',  fg: 'var(--brass)', border: 'var(--amber-bg)' },
+  High:    { bg: 'var(--amber-bg)',  fg: 'var(--amber)', border: 'var(--amber-bg)' },
+  Urgent:  { bg: 'var(--red-bg)', fg: 'var(--red)', border: 'var(--red-bg)' },
 };
 
 const EMPTY = {
@@ -95,21 +95,21 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
         style={{
           width: '100%', minHeight: 40, padding: '8px 12px',
           background: 'var(--input-bg)', border: '1.5px solid var(--border)',
-          borderRadius: 0, color: 'var(--input-text)',
+          borderRadius: 6, color: 'var(--input-text)',
           textAlign: 'start', cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
         }}>
         {selected.length === 0 && <span style={{ color: 'var(--text-3)' }}>{t("Link represented players…")}</span>}
         {allChecked ? (
           <span style={{
-            background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
-            borderRadius: 0, padding: '2px 10px', color: 'var(--gold)', fontSize: 12, fontWeight: 600,
+            background: 'var(--gold-dim)', border: '1px solid var(--amber-bg)',
+            borderRadius: 6, padding: '2px 10px', color: 'var(--gold)', fontSize: 12, fontWeight: 600,
           }}>{t("All represented (")}{allPlayers.length})</span>
         ) : (
           selected.map(p => (
             <span key={p.id} style={{
-              background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.3)',
-              borderRadius: 0, padding: '2px 8px', color: 'var(--gold)', fontSize: 12,
+              background: 'var(--gold-dim)', border: '1px solid var(--amber-bg)',
+              borderRadius: 6, padding: '2px 8px', color: 'var(--gold)', fontSize: 12,
               whiteSpace: 'nowrap',
             }}>{p.fullName}</span>
           ))
@@ -120,7 +120,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
           position: 'absolute', top: 'calc(100% + 6px)', insetInlineStart: 0, insetInlineEnd: 0,
           maxHeight: 320, overflowY: 'auto', zIndex: 80,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
-          borderRadius: 0, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', padding: 8,
+          borderRadius: 6, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', padding: 8,
         }}>
           {/* Sticky header: search + select-all toggle + close */}
           <div style={{
@@ -136,7 +136,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
                 title={t("Close")}
                 style={{
                   width: 32, height: 32, padding: 0, flexShrink: 0,
-                  border: '1px solid var(--border-2)', borderRadius: 0,
+                  border: '1px solid var(--border-2)', borderRadius: 6,
                   background: 'transparent', color: 'var(--text-2)',
                   cursor: 'pointer', fontSize: 16, lineHeight: 1,
                 }}>×</button>
@@ -145,8 +145,8 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
               style={{
                 width: '100%', padding: '7px 10px',
                 background: allChecked ? 'var(--gold-dim)' : 'transparent',
-                border: `1px solid ${allChecked ? 'rgba(212,176,98,0.45)' : 'var(--border-2)'}`,
-                borderRadius: 0, color: allChecked ? 'var(--gold)' : 'var(--text-2)',
+                border: `1px solid ${allChecked ? 'var(--amber-bg)' : 'var(--border-2)'}`,
+                borderRadius: 6, color: allChecked ? 'var(--gold)' : 'var(--text-2)',
                 cursor: 'pointer', fontSize: 12, fontWeight: 600,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
@@ -161,7 +161,7 @@ function PlayersMultiSelect({ allPlayers, value, onChange }) {
           ) : filtered.map(p => (
             <label key={p.id} style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px',
-              cursor: 'pointer', borderRadius: 0,
+              cursor: 'pointer', borderRadius: 6,
               background: value.includes(p.id) ? 'var(--gold-dim)' : 'transparent',
             }}>
               <input type="checkbox" checked={value.includes(p.id)} onChange={() => toggle(p.id)} />
@@ -286,7 +286,7 @@ export default function Tasks() {
     <div className="tasks-page">
       <PageHeader
         title={t("My Tasks")}
-        subtitle={`${open.length} open  ·  ${done.length} done  ·  private to ${name || email}`}
+        subtitle={`${open.length} ${t('open')} · ${done.length} ${t('done')} · ${t('private to')} ${name || email}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {canEdit && (
@@ -400,10 +400,10 @@ function TaskCard({ t, players, canEdit, onToggle, onEdit, onDelete }) {
       <button type="button" onClick={onToggle} className="task-check" disabled={!canEdit}
         title={canEdit ? (t.done ? 'Mark as open' : 'Mark as done') : 'View-only access'}
         style={{
-          width: 24, height: 24, borderRadius: 0, flexShrink: 0,
+          width: 24, height: 24, borderRadius: 6, flexShrink: 0,
           border: `1.5px solid ${t.done ? 'var(--green-ok)' : 'var(--border-2)'}`,
           background: t.done ? 'var(--green-ok)' : 'transparent',
-          color: '#0A140D', cursor: canEdit ? 'pointer' : 'default', marginTop: 2,
+          color: 'var(--on-accent)', cursor: canEdit ? 'pointer' : 'default', marginTop: 2,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 14, fontWeight: 700,
         }}>
@@ -428,8 +428,8 @@ function TaskCard({ t, players, canEdit, onToggle, onEdit, onDelete }) {
         }}>
           <span style={{
             background: pri.bg, color: pri.fg, border: `1px solid ${pri.border}`,
-            borderRadius: 0, padding: '2px 10px',
-            fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+            borderRadius: 6, padding: '2px 10px',
+            fontWeight: 600, letterSpacing: 0, textTransform: 'none',
           }}>{t.priority || 'Normal'}</span>
 
           {due && (
@@ -447,15 +447,15 @@ function TaskCard({ t, players, canEdit, onToggle, onEdit, onDelete }) {
               <span style={{ flexShrink: 0 }}>🤝</span>
               {allLinked ? (
                 <span style={{
-                  background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.35)',
-                  borderRadius: 0, padding: '1px 8px', color: 'var(--gold)',
+                  background: 'var(--gold-dim)', border: '1px solid var(--amber-bg)',
+                  borderRadius: 6, padding: '1px 8px', color: 'var(--gold)',
                   fontSize: 11, fontWeight: 600,
                 }}>{tr('All represented ({n})', { n: players.length })}</span>
               ) : (
                 linked.map(p => (
                   <span key={p.id} className="task-linked-chip" style={{
-                    background: 'var(--gold-dim)', border: '1px solid rgba(212,176,98,0.2)',
-                    borderRadius: 0, padding: '1px 7px', color: 'var(--gold)', fontSize: 11,
+                    background: 'var(--gold-dim)', border: '1px solid var(--amber-bg)',
+                    borderRadius: 6, padding: '1px 7px', color: 'var(--gold)', fontSize: 11,
                     maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                   }}>{p.fullName}</span>

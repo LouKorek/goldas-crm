@@ -67,7 +67,7 @@ function TeamLogo({ name, size = 24 }) {
   if (!url) return null;
   return (
     <img src={url} alt={name} title={name}
-      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 0, flexShrink: 0 }}
+      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }}
       onError={e => { e.currentTarget.style.display = 'none'; }} />
   );
 }
@@ -150,7 +150,7 @@ function StadiumInput({ value, onSelect }) {
         <div style={{
           position: 'absolute', top: '100%', insetInlineStart: 0, insetInlineEnd: 0, zIndex: 50,
           background: 'var(--surface-2)', border: '1px solid var(--border-2)',
-          borderRadius: 0, boxShadow: 'var(--shadow-md)', marginTop: 2,
+          borderRadius: 6, boxShadow: 'var(--shadow-md)', marginTop: 2,
         }}>
           {results.map((r, i) => (
             <div key={i} onMouseDown={() => select(r)}
@@ -175,9 +175,9 @@ function YouthBadge({ small }) {
   return (
     <span style={{
       background: 'transparent', borderInlineStart: '2px solid var(--green-ok)',
-      borderRadius: 0, color: 'var(--green-ok)', fontSize: small ? 8.5 : 10,
+      borderRadius: 6, color: 'var(--green-ok)', fontSize: small ? 8.5 : 10,
       fontWeight: 700, padding: small ? '0 0 0 4px' : '1px 0 1px 5px',
-      letterSpacing: '0.1em', whiteSpace: 'nowrap', flexShrink: 0,
+      letterSpacing: 0, whiteSpace: 'nowrap', flexShrink: 0,
     }}>U19</span>
   );
 }
@@ -196,14 +196,14 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
       {selected.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
           {selected.map(p => (
-            <span key={p.id} style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)', borderRadius: 0, padding: '3px 8px', fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span key={p.id} style={{ background: 'var(--gold-dim)', border: '1px solid var(--gold)', borderRadius: 6, padding: '3px 8px', fontSize: 12, color: 'var(--gold)', display: 'flex', alignItems: 'center', gap: 5 }}>
               {p.fullName}
               <button type="button" onClick={() => toggle(p.id)} style={{ background: 'none', border: 'none', color: 'var(--gold)', cursor: 'pointer', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
             </span>
           ))}
         </div>
       )}
-      <div style={{ border: '1px solid var(--border)', borderRadius: 0, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
+      <div style={{ border: '1px solid var(--border)', borderRadius: 6, maxHeight: 160, overflowY: 'auto', background: 'var(--input-bg)' }}>
         {filtered.length === 0
           ? <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>{t("No players found.")}</div>
           : filtered.map(p => {
@@ -232,9 +232,9 @@ const EMPTY = {
 // ── Source badge for the match card ──────────────────────────────
 const SOURCE_BADGE = {
   manual:    { label: t("Manual"),           icon: '✋', color: 'rgba(255,255,255,0.55)', bg: 'rgba(255,255,255,0.04)' },
-  ifa:       { label: t("Auto · IFA"),       icon: '🤖', color: '#60A5FA', bg: 'rgba(96,165,250,0.10)' },
-  '365':     { label: t("Auto · 365"),       icon: '🤖', color: '#C9A84C', bg: 'rgba(201,168,76,0.12)' },
-  sofascore: { label: t("Auto · SofaScore"), icon: '🤖', color: '#A78BFA', bg: 'rgba(167,139,250,0.10)' },
+  ifa:       { label: t("Auto · IFA"),       icon: '🤖', color: 'var(--blue)', bg: 'var(--blue-bg)' },
+  '365':     { label: t("Auto · 365"),       icon: '🤖', color: 'var(--brass)', bg: 'var(--amber-bg)' },
+  sofascore: { label: t("Auto · SofaScore"), icon: '🤖', color: 'var(--purple)', bg: 'var(--purple-bg)' },
 };
 function SourceBadge({ source }) {
   const c = SOURCE_BADGE[source || 'manual'] || SOURCE_BADGE.manual;
@@ -243,9 +243,9 @@ function SourceBadge({ source }) {
       display: 'inline-flex', alignItems: 'center', gap: 4,
       background: 'transparent', color: c.color,
       borderInlineStart: `2px solid ${c.color}`,
-      borderRadius: 0, padding: '1px 0 1px 6px',
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-      textTransform: 'uppercase', whiteSpace: 'nowrap',
+      borderRadius: 6, padding: '1px 0 1px 6px',
+      fontSize: 9, fontWeight: 700, letterSpacing: 0,
+      textTransform: 'none', whiteSpace: 'nowrap',
     }}>
       {c.label}
     </span>
@@ -302,7 +302,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" onClick={() => setOpen(o => !o)}
         style={{
-          height: 36, padding: '0 12px', borderRadius: 0,
+          height: 36, padding: '0 12px', borderRadius: 6,
           background: selectedCount ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)',
           border: `1px solid ${selectedCount ? 'var(--gold)' : 'var(--border)'}`,
           color: selectedCount ? 'var(--gold)' : 'var(--text-2)',
@@ -317,14 +317,14 @@ function PlayersFilter({ allPlayers, value, onChange }) {
           width: 280, zIndex: 60,
           background: 'var(--surface-2)',
           border: '1px solid var(--border-2)',
-          borderRadius: 0,
+          borderRadius: 6,
           boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
           padding: 10,
         }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search players…")} autoFocus
             style={{ width: '100%', marginBottom: 8 }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 0, textTransform: 'none' }}>
               {selectedCount ? `${selectedCount} selected` : 'None selected'}
             </div>
             {selectedCount > 0 && (
@@ -334,7 +334,7 @@ function PlayersFilter({ allPlayers, value, onChange }) {
               </button>
             )}
           </div>
-          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 0, background: 'var(--input-bg)' }}>
+          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--input-bg)' }}>
             {filtered.length === 0 ? (
               <div style={{ padding: '10px 12px', color: 'var(--text-3)', fontSize: 12 }}>{t("No players found.")}</div>
             ) : filtered.map(p => {
@@ -633,9 +633,9 @@ export default function Matches() {
               display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
               flex: 1, minWidth: 0,
             }}>
-              {linkedNames.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-mute)' }}>REP</span>}
+              {linkedNames.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: 0, color: 'var(--text-mute)' }}>REP</span>}
               {linkedNames.map((n, i) => (
-                <span key={i} style={{ background: 'transparent', borderInlineStart: '2px solid var(--gold-dk)', borderRadius: 0, padding: '0 0 0 6px', color: 'var(--gold)', fontSize: 10.5, letterSpacing: '0.02em' }}>{n}</span>
+                <span key={i} style={{ background: 'transparent', borderInlineStart: '2px solid var(--gold-dk)', borderRadius: 6, padding: '0 0 0 6px', color: 'var(--gold)', fontSize: 10.5, letterSpacing: 0 }}>{n}</span>
               ))}
             </div>
             {canEdit && (
@@ -653,7 +653,7 @@ export default function Matches() {
 
   // Style for the prev / today / next buttons in the date navigator.
   const navBtnStyle = () => ({
-    width: 34, height: 34, borderRadius: 0,
+    width: 34, height: 34, borderRadius: 6,
     background: 'rgba(255,255,255,0.04)',
     border: '1px solid var(--border)',
     color: 'var(--text-1)', fontSize: 16,
@@ -726,7 +726,7 @@ export default function Matches() {
           marginTop: 12, padding: '10px 12px',
           background: 'var(--surface-1)',
           border: '1px solid var(--border)',
-          borderRadius: 0,
+          borderRadius: 6,
         }}>
           <ChipGroup options={VIEW_OPTIONS} value={view} onChange={setView} required />
 

@@ -24,7 +24,7 @@ function NatFlags({ nats=[] }) {
   return (
     <div style={{display:'flex',gap:4,flexWrap:'wrap',width:76}}>
       {nats.filter(Boolean).map(n=>(
-        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius: 0,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
+        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius: 6,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing: 0,cursor:'default'}}>{cc(n)}</span>
       ))}
     </div>
   );
@@ -32,7 +32,7 @@ function NatFlags({ nats=[] }) {
 
 const CAT = { men:'Men', women:'Women', youth:'Youth', jewish:'Jewish' };
 const CAT_EMOJI = { men:'🏃', women:'🏃‍♀️', youth:'🌱', jewish:'✡️' };
-const CAT_COLOR = { men:'#4ADE80', women:'#F472B6', youth:'#60A5FA', jewish:'#A78BFA' };
+const CAT_COLOR = { men:'var(--green-ok)', women:'var(--pink)', youth:'var(--blue)', jewish:'var(--purple)' };
 
 
 const EMPTY = {
@@ -153,7 +153,7 @@ function PlayerCardModal({ player, category, onClose }) {
       <button className="btn btn-primary" onClick={copy}>{copied ? 'Copied!' : 'Copy Card'}</button>
     </>}>
       <pre style={{
-        background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0,
+        background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 6,
         color: 'var(--text-1)', fontFamily: 'monospace', fontSize: 13, lineHeight: 1.7,
         padding: 16, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
       }}>{card}</pre>
@@ -299,10 +299,10 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
         onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
         title={`${linked.length} linked${previous.length ? ` · ${previous.length} previous` : ''}`}
         style={{
-          background: linked.length ? 'rgba(74,222,128,0.12)' : 'rgba(212,176,98,0.10)',
-          border: `1px solid ${linked.length ? 'rgba(74,222,128,0.35)' : 'rgba(212,176,98,0.30)'}`,
-          color: linked.length ? '#4ADE80' : 'var(--gold)',
-          borderRadius: 0, padding: '3px 8px', fontSize: 10, fontWeight: 700,
+          background: linked.length ? 'var(--green-bg)' : 'var(--amber-bg)',
+          border: `1px solid ${linked.length ? 'var(--green-bg)' : 'var(--amber-bg)'}`,
+          color: linked.length ? 'var(--green-ok)' : 'var(--gold)',
+          borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700,
           cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.3,
         }}>
         {linked.length}{previous.length ? ` · ${previous.length}↩` : ''}
@@ -315,7 +315,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
             position: 'fixed', top: pos.top, left: pos.left,
             width: 280, maxHeight: '70vh', overflowY: 'auto',
             background: 'var(--surface-2)', border: '1px solid var(--border-2)',
-            borderRadius: 0, boxShadow: '0 14px 40px rgba(0,0,0,0.55)',
+            borderRadius: 6, boxShadow: '0 14px 40px rgba(0,0,0,0.55)',
             padding: 12, zIndex: 200, fontSize: 12,
           }}>
           {/* Header */}
@@ -337,9 +337,9 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                 <button type="button" onClick={() => addClub(adding)}
                   disabled={!adding}
                   style={{
-                    flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 0,
+                    flexShrink: 0, height: 30, padding: '0 10px', borderRadius: 6,
                     background: adding ? 'var(--gold)' : 'var(--surface-3)',
-                    color: adding ? '#0A140D' : 'var(--text-3)',
+                    color: adding ? 'var(--on-accent)' : 'var(--text-3)',
                     border: 'none', cursor: adding ? 'pointer' : 'not-allowed',
                     fontSize: 11, fontWeight: 700,
                   }}>{t("Link")}</button>
@@ -360,8 +360,8 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
               {linked.map((c, i) => (
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(74,222,128,0.08)', borderRadius: 0, padding: '5px 8px',
-                  border: '1px solid rgba(74,222,128,0.18)',
+                  background: 'var(--green-bg)', borderRadius: 6, padding: '5px 8px',
+                  border: '1px solid var(--green-bg)',
                 }}>
                   <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-1)' }}>
                     {c.clubName}
@@ -373,7 +373,7 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                         style={{
                           flexShrink: 0, padding: '2px 6px', fontSize: 10, fontWeight: 600,
                           background: 'rgba(229,181,71,0.15)', color: 'var(--amber)',
-                          border: '1px solid rgba(229,181,71,0.3)', borderRadius: 0,
+                          border: '1px solid rgba(229,181,71,0.3)', borderRadius: 6,
                           cursor: 'pointer', whiteSpace: 'nowrap',
                         }}>{t("Not relevant")}</button>
                       <button type="button" onClick={() => remove(i, 'linked')}
@@ -407,10 +407,10 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                   {previous.map((c, i) => (
                     <div key={i} style={{
                       display: 'flex', alignItems: 'center', gap: 6,
-                      background: 'rgba(248,113,113,0.05)', borderRadius: 0, padding: '5px 8px',
-                      border: '1px dashed rgba(248,113,113,0.25)',
+                      background: 'var(--red-bg)', borderRadius: 6, padding: '5px 8px',
+                      border: '1px dashed var(--red-bg)',
                     }}>
-                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-2)', textDecoration: 'line-through', textDecorationColor: 'rgba(248,113,113,0.4)' }}>
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-2)', textDecoration: 'line-through', textDecorationColor: 'var(--red-bg)' }}>
                         {c.clubName}
                       </span>
                       {canEdit && (
@@ -419,8 +419,8 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
                             title={t("Move back to Linked")}
                             style={{
                               flexShrink: 0, padding: '2px 6px', fontSize: 10, fontWeight: 600,
-                              background: 'rgba(74,222,128,0.12)', color: '#4ADE80',
-                              border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0,
+                              background: 'var(--green-bg)', color: 'var(--green-ok)',
+                              border: '1px solid var(--green-bg)', borderRadius: 6,
                               cursor: 'pointer', whiteSpace: 'nowrap',
                             }}>{t("Reactivate")}</button>
                           <button type="button" onClick={() => remove(i, 'previous')}
@@ -598,17 +598,17 @@ export default function Pipeline({ category }) {
     <div>
       <PageHeader
         title={label}
-        subtitle={`${items.length} player${items.length!==1?'s':''} in this category`}
+        subtitle={`${items.length} ${t('players in this category')}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {category==='jewish'&&(
               <Link to="/scouting/tm-watch" className="btn btn-secondary btn-sm"
                 style={{height:36,textDecoration:'none',position:'relative'}}>
                 <Icon name="social" size={12} /><span className="btn-text">{t("TM Watch")}</span>
-                {tmNew>0&&<span style={{position:'absolute',top:-6,insetInlineEnd: -6,background:'var(--red)',color:'#fff',borderRadius: 0,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
+                {tmNew>0&&<span style={{position:'absolute',top:-6,insetInlineEnd: -6,background:'var(--red)',color:'#fff',borderRadius: 6,fontSize:10,fontWeight:700,minWidth:17,height:17,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{tmNew}</span>}
               </Link>
             )}
-            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36,background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>}
+            {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>}
             <ExportMenu
               filename={label}
               title={label}
@@ -662,7 +662,7 @@ export default function Pipeline({ category }) {
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length === 0 ? (
         <Empty  message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
-          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd} style={{background:color,color:'#0A1F12'}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>} />
+          action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>} />
       ) : (
         <>
         <div className="mobile-cards">
@@ -677,7 +677,7 @@ export default function Pipeline({ category }) {
                     <span style={{fontWeight:600,fontSize:14.5}}>{p.playerName}</span>
                     {p.height&&<span className="m-sub" style={{marginInlineStart:6}}>{p.height}{t("cm")}</span>}
                   </div>
-                  {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius: 0,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{p.status}</span>}
+                  {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius: 6,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{p.status}</span>}
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
@@ -685,11 +685,11 @@ export default function Pipeline({ category }) {
                   {dobDisplay&&<span>{dobDisplay}</span>}
                   {category==='youth'&&<AgeGroupChip player={p} />}
                   {p.foot&&<span>{p.foot}</span>}
-                  <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5}}>{pIsEU?'EU':'Non-EU'}</span>
+                  <span className="badge" style={{background:pIsEU?'var(--blue-bg)':'var(--red-bg)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.currentClub||'Free'}</span>
-                  {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                  {p.currentClubIsYouth&&<span style={{background:'var(--green-bg)',border:'1px solid var(--green-bg)',borderRadius: 6,color:'var(--green-ok)',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                   {p.league&&<span className="m-sub">{p.league}</span>}
                   {(p.transferFee&&p.transferFee!=='Not specified')&&<span>€{Number(p.transferFee).toLocaleString()}</span>}
                   {(p.salary&&p.salary!=='Not specified')&&<span>€{Number(p.salary).toLocaleString()}/mo</span>}
@@ -749,7 +749,7 @@ export default function Pipeline({ category }) {
                   <tr key={p.id}
                     onClick={()=>setCardFor(p)}
                     style={{cursor:'pointer'}}
-                    onMouseEnter={e=>e.currentTarget.style.background='rgba(201,168,76,0.05)'}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--amber-bg)'}
                     onMouseLeave={e=>e.currentTarget.style.background=''}
                   >
                     {/* Actions — icons arranged 2-over-2; row click opens the player card */}
@@ -772,7 +772,7 @@ export default function Pipeline({ category }) {
                     <td>
                       <NatFlags nats={p.nationalities} />
                       <div style={{marginTop:3}}>
-                        <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:10}}>
+                        <span className="badge" style={{background:pIsEU?'var(--blue-bg)':'var(--red-bg)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:10}}>
                           {pIsEU?'EU':'Non-EU'}
                         </span>
                       </div>
@@ -787,11 +787,11 @@ export default function Pipeline({ category }) {
                     <td>
                       <div style={{display:'flex',alignItems:'center',gap:5}}>
                         <span style={{fontWeight:500}}>{p.currentClub||'Free'}</span>
-                        {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                        {p.currentClubIsYouth&&<span style={{background:'var(--green-bg)',border:'1px solid var(--green-bg)',borderRadius: 6,color:'var(--green-ok)',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                       </div>
                       <div style={{fontSize:11,color:'var(--text-3)',display:'flex',alignItems:'center',gap:4}}>
                         {p.league||''}
-                        {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
+                        {p.currentClubIsYouth&&<span style={{background:'var(--green-bg)',border:'1px solid var(--green-bg)',borderRadius: 6,color:'var(--green-ok)',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
                       </div>
                     </td>
                     {/* Status — wraps to two lines to keep the column narrow */}
@@ -799,7 +799,7 @@ export default function Pipeline({ category }) {
                       {p.status && (() => {
                         const c = PIPELINE_STATUS_COLORS[p.status] || { bg:'var(--surface-3)', text:'var(--text-2)' };
                         return (
-                          <span style={{display:'inline-block',background:c.bg,color:c.text,borderRadius: 0,fontSize:10,fontWeight:600,lineHeight:1.2,padding:'3px 7px',whiteSpace:'normal',textAlign:'center',maxWidth:72}}>
+                          <span style={{display:'inline-block',background:c.bg,color:c.text,borderRadius: 6,fontSize:10,fontWeight:600,lineHeight:1.2,padding:'3px 7px',whiteSpace:'normal',textAlign:'center',maxWidth:72}}>
                             {p.status}
                           </span>
                         );
@@ -846,7 +846,7 @@ export default function Pipeline({ category }) {
           footer={<>
             <button className="btn btn-ghost" onClick={closeModal}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}
-              style={{background:color,color:'#0A1F12'}}>
+             >
               {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
             </button>
           </>}

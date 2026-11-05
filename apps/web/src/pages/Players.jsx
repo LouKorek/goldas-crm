@@ -23,7 +23,7 @@ function NatFlags({ nats=[] }) {
   return (
     <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
       {nats.filter(Boolean).map(n=>(
-        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius: 0,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing:'0.03em',cursor:'default'}}>{cc(n)}</span>
+        <span key={n} title={n} style={{background:'var(--surface-3)',borderRadius: 6,padding:'2px 5px',fontSize:10,fontWeight:700,color:'var(--text-2)',border:'1px solid var(--border)',letterSpacing: 0,cursor:'default'}}>{cc(n)}</span>
       ))}
     </div>
   );
@@ -73,7 +73,7 @@ function PlayerView({ player, onClose }) {
   const isEU = isEuropean(player.nationalities||[]);
   const Row = ({label,value}) => value && value!=='—' ? (
     <div style={{display:'flex',gap:12,padding:'7px 0',borderBottom:'1px solid var(--border)'}}>
-      <div className="view-row-label" style={{width:170,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em'}}>{label}</div>
+      <div className="view-row-label" style={{width:170,flexShrink:0,color:'var(--text-3)',fontSize:11,fontWeight:600,textTransform: 'none',letterSpacing: 0}}>{label}</div>
       <div style={{color:'var(--text-1)',fontSize:13}}>{value}</div>
     </div>
   ) : null;
@@ -328,7 +328,7 @@ export default function Players() {
     <div>
       <PageHeader
         title={t("Represented Players")}
-        subtitle={`${players.length} player${players.length!==1?'s':''} under representation`}
+        subtitle={`${players.length} ${t('players under representation')}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>}
@@ -402,7 +402,7 @@ export default function Players() {
               <div key={p.id} className="m-card" onClick={()=>setViewPlayer(p)}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <Link to={`/players/${p.id}`} style={{fontWeight:600,fontSize:14.5,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'inherit',textDecoration:'none'}}>{p.fullName}</Link>
-                  <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5,flexShrink:0}}>{pIsEU?'EU':'Non-EU'}</span>
+                  <span className="badge" style={{background:pIsEU?'var(--blue-bg)':'var(--red-bg)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5,flexShrink:0}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
@@ -412,7 +412,7 @@ export default function Players() {
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   <span style={{fontWeight:500,color:'var(--text-1)'}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
-                  {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                  {p.currentClubIsYouth&&<span style={{background:'var(--green-bg)',border:'1px solid var(--green-bg)',borderRadius: 6,color:'var(--green-ok)',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                   {p.league&&<span className="m-sub">{p.league}</span>}
                   <span className="badge" style={{background:p.contractStatus==='Free'?'var(--amber-bg)':p.contractStatus==='Under Contract'?'var(--green-bg)':'var(--blue-bg)',color:p.contractStatus==='Free'?'var(--amber)':p.contractStatus==='Under Contract'?'var(--green-ok)':'var(--blue)',fontSize:9.5}}>{p.contractStatus||'—'}</span>
                 </div>
@@ -474,7 +474,7 @@ export default function Players() {
                     <tr key={p.id}
                       onClick={()=>setViewPlayer(p)}
                       style={{cursor:'pointer'}}
-                      onMouseEnter={e=>e.currentTarget.style.background='rgba(201,168,76,0.05)'}
+                      onMouseEnter={e=>e.currentTarget.style.background='var(--amber-bg)'}
                       onMouseLeave={e=>e.currentTarget.style.background=''}
                     >
                       {/* Actions cell - click stops propagation */}
@@ -492,7 +492,7 @@ export default function Players() {
                       <td>
                         <NatFlags nats={p.nationalities} />
                         <div style={{marginTop:3}}>
-                          <span className="badge" style={{background:pIsEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:10}}>
+                          <span className="badge" style={{background:pIsEU?'var(--blue-bg)':'var(--red-bg)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:10}}>
                             {pIsEU?'EU':'Non-EU'}
                           </span>
                         </div>
@@ -503,11 +503,11 @@ export default function Players() {
                       <td>
                         <div style={{display:'flex',alignItems:'center',gap:5}}>
                           <span style={{fontWeight:500}}>{p.contractStatus==='Free'?'Free Agent':(p.currentClub||'—')}</span>
-                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
+                          {p.currentClubIsYouth&&<span style={{background:'var(--green-bg)',border:'1px solid var(--green-bg)',borderRadius: 6,color:'var(--green-ok)',fontSize:9,fontWeight:700,padding:'1px 5px'}}>U19</span>}
                         </div>
                         <div style={{fontSize:10,color:'var(--text-3)',display:'flex',alignItems:'center',gap:4}}>
                           {p.league||''}
-                          {p.currentClubIsYouth&&<span style={{background:'rgba(74,222,128,0.12)',border:'1px solid rgba(74,222,128,0.3)',borderRadius: 0,color:'#4ADE80',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
+                          {p.currentClubIsYouth&&<span style={{background:'var(--green-bg)',border:'1px solid var(--green-bg)',borderRadius: 6,color:'var(--green-ok)',fontSize:8,fontWeight:700,padding:'0 4px'}}>U19</span>}
                         </div>
                       </td>
                       <td style={{textAlign:'center'}}>
@@ -563,7 +563,7 @@ export default function Players() {
           <Field label={t("Nationalities")}>
             <CountrySelect value={f('nationalities')} onChange={s('nationalities')} />
             <div style={{marginTop:6,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-              <span className="badge" style={{background:isEU?'rgba(96,165,250,0.15)':'rgba(248,113,113,0.12)',color:isEU?'var(--blue)':'var(--red)'}}>{isEU?'🇪🇺 EU Player':'Non-EU'}</span>
+              <span className="badge" style={{background:isEU?'var(--blue-bg)':'var(--red-bg)',color:isEU?'var(--blue)':'var(--red)'}}>{isEU?'🇪🇺 EU Player':'Non-EU'}</span>
             </div>
           </Field>
           <Field label={t("National Team Status")}><ChipGroup options={NAT_TEAM_STATUS} value={f('natTeamStatus')} onChange={s('natTeamStatus')} /></Field>

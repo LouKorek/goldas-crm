@@ -15,9 +15,9 @@ const ROLE_DESC = {
   viewer:  'Read-only — cannot make changes',
 };
 const ROLE_COLOR = {
-  admin:   { bg: 'rgba(201,168,76,0.15)', text: 'var(--gold)' },
-  manager: { bg: 'rgba(74,222,128,0.15)', text: '#4ADE80' },
-  viewer:  { bg: 'rgba(96,165,250,0.15)', text: '#60A5FA' },
+  admin:   { bg: 'var(--amber-bg)', text: 'var(--gold)' },
+  manager: { bg: 'var(--green-bg)', text: 'var(--green-ok)' },
+  viewer:  { bg: 'var(--blue-bg)', text: 'var(--blue)' },
 };
 
 const EMPTY = { email: '', name: '', role: 'Viewer', emailAlerts: true, whatsapp: '', channels: ['email'], briefingHour: 7 };
@@ -138,7 +138,7 @@ export default function Team() {
                     <tr key={u.id}>
                       <td onClick={e => e.stopPropagation()}>
                         {owner ? (
-                          <RowActions onEdit={() => openEdit(u)}><span style={{ fontSize: 9, color: 'var(--text-mute)', letterSpacing: '0.12em' }}>OWNER</span></RowActions>
+                          <RowActions onEdit={() => openEdit(u)}><span style={{ fontSize: 9, color: 'var(--text-mute)', letterSpacing: 0 }}>OWNER</span></RowActions>
                         ) : (
                           <RowActions onEdit={() => openEdit(u)} onDelete={() => remove(u)} />
                         )}
@@ -146,17 +146,17 @@ export default function Team() {
                       <td style={{ fontWeight: 600 }}>{u.name || '—'}</td>
                       <td style={{ color: 'var(--text-2)', fontSize: 13 }}>{u.email}</td>
                       <td>
-                        <span style={{ display: 'inline-block', background: c.bg, color: c.text, borderRadius: 0, fontSize: 11, fontWeight: 600, padding: '3px 9px' }}>
+                        <span style={{ display: 'inline-block', background: c.bg, color: c.text, borderRadius: 6, fontSize: 11, fontWeight: 600, padding: '3px 9px' }}>
                           {roleLabel(u.role)}
                         </span>
                         <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>{ROLE_DESC[u.role] || ''}</div>
                       </td>
                       <td onClick={e => e.stopPropagation()}>
                         {owner ? (
-                          <span style={{ fontSize: 12, color: '#4ADE80' }}>{t('Active')}</span>
+                          <span style={{ fontSize: 12, color: 'var(--green-ok)' }}>{t('Active')}</span>
                         ) : (
                           <button type="button" onClick={() => toggleActive(u)} title={u.active === false ? t('Enable access') : t('Disable access')}
-                            style={{ background: 'none', border: '1px solid var(--border-2)', padding: '3px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, color: u.active === false ? 'var(--red)' : '#4ADE80' }}>
+                            style={{ background: 'none', border: '1px solid var(--border-2)', padding: '3px 9px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, color: u.active === false ? 'var(--red)' : 'var(--green-ok)' }}>
                             {u.active === false ? t('Disabled') : t('Active')}
                           </button>
                         )}

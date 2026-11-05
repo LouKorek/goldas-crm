@@ -58,7 +58,7 @@ export default function Migrations() {
         <div key={m.id} className="card" style={{ padding: 16, marginTop: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontWeight: 700 }}>{m.id} <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>{m.title}</span></div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: m.status === 'done' ? '#4ADE80' : m.status === 'pending' ? 'var(--gold)' : 'var(--red)' }}>{m.status}{m.ranAt ? ` · ${new Date(m.ranAt).toLocaleString('he-IL')}` : ''}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: m.status === 'done' ? 'var(--green-ok)' : m.status === 'pending' ? 'var(--gold)' : 'var(--red)' }}>{m.status}{m.ranAt ? ` · ${new Date(m.ranAt).toLocaleString('he-IL')}` : ''}</span>
           </div>
           {m.report && <Report r={m.report} />}
         </div>

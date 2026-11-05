@@ -59,7 +59,7 @@ function Section({ title, sub, children, to, count }) {
 function Row({ tag, color, title, sub, to, onClick }) {
   const body = (
     <div className="alert-row" style={{ borderInlineStartColor: color, cursor: to || onClick ? 'pointer' : 'default' }} onClick={onClick}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, color, flexShrink: 0, minWidth: 30, paddingTop: 3 }}>{tag}</span>
+      <span className="row-tag" style={{ color, flexShrink: 0 }}>{tag}</span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 500 }}>{title}</div>
         {sub && <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{sub}</div>}

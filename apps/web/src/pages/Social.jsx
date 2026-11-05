@@ -50,14 +50,14 @@ function TrendChart({ days, postDays, height = 220 }) {
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
       <defs>
         <linearGradient id="sg-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(212,176,98,0.30)" />
+          <stop offset="0%" stopColor="var(--amber-bg)" />
           <stop offset="100%" stopColor="rgba(212,176,98,0)" />
         </linearGradient>
       </defs>
       {/* gridlines: min / mid / max */}
       {[min, (min + max) / 2, max].map((v, i) => (
         <g key={i}>
-          <line x1={PAD_X} x2={W - PAD_X} y1={y(v)} y2={y(v)} stroke="rgba(212,176,98,0.10)" strokeWidth="1" />
+          <line x1={PAD_X} x2={W - PAD_X} y1={y(v)} y2={y(v)} stroke="var(--amber-bg)" strokeWidth="1" />
           <text x={PAD_X - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-3)">
             {Math.round(v).toLocaleString()}
           </text>
@@ -109,7 +109,7 @@ function DailyBars({ days, postDays, height = 150 }) {
   return (
     <div style={{ marginTop: 20 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', padding: '0 2px 2px' }}>
-        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0, textTransform: 'none', color: 'var(--text-2)' }}>
           {t("New follows per day")}
         </span>
         <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
@@ -124,7 +124,7 @@ function DailyBars({ days, postDays, height = 150 }) {
         {ticks.map(v => (
           <g key={v}>
             <line x1={PAD_X} x2={W - PAD_X} y1={y(v)} y2={y(v)}
-              stroke={v === 0 ? 'rgba(212,176,98,0.35)' : 'rgba(212,176,98,0.12)'} strokeWidth="1" />
+              stroke={v === 0 ? 'var(--amber-bg)' : 'var(--amber-bg)'} strokeWidth="1" />
             <text x={PAD_X - 8} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--text-3)">{v}</text>
           </g>
         ))}
@@ -166,7 +166,7 @@ function Kpi({ label, value, delta, deltaLabel }) {
   const up = delta > 0, down = delta < 0;
   return (
     <div className="card" style={{ padding: '14px 18px', flex: '1 1 140px', minWidth: 130 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{label}</div>
+      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0, textTransform: 'none', color: 'var(--text-3)' }}>{label}</div>
       <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--gold)', lineHeight: 1.15, marginTop: 4 }}>{value}</div>
       {delta != null && (
         <div style={{ fontSize: 11.5, marginTop: 3, color: up ? 'var(--green-ok)' : down ? 'var(--red)' : 'var(--text-3)' }}>
@@ -340,7 +340,7 @@ export default function Social() {
                             <span style={{
                               background: p.impact >= 0 ? 'var(--green-bg)' : 'var(--red-bg)',
                               color: p.impact >= 0 ? 'var(--green-ok)' : 'var(--red)',
-                              borderRadius: 0, padding: '2px 9px', fontSize: 10.5, fontWeight: 600,
+                              borderRadius: 6, padding: '2px 9px', fontSize: 10.5, fontWeight: 600,
                             }} title={t("Follower change in the 3 days after this post")}>
                               {p.impact >= 0 ? '+' : ''}{p.impact} {t("followers / 3d")}
                             </span>

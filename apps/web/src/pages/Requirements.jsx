@@ -576,7 +576,7 @@ export function ClubLogoOrAvatar({ name, size = 28, src, onResolved }) {
   if (url) {
     return (
       <img src={url} alt={name} title={name}
-        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 0, flexShrink: 0 }}
+        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }}
         onError={() => setUrl(null)} />
     );
   }
@@ -589,11 +589,11 @@ export function ClubLogoOrAvatar({ name, size = 28, src, onResolved }) {
   const hue = (name || '').split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xFFFF, 0) % 360;
   return (
     <div style={{
-      width: size, height: size, borderRadius: 0, flexShrink: 0,
+      width: size, height: size, borderRadius: 6, flexShrink: 0,
       background: `hsl(${hue},45%,22%)`, border: `1px solid hsl(${hue},50%,35%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: size <= 28 ? 9 : 11, fontWeight: 800,
-      color: `hsl(${hue},70%,80%)`, letterSpacing: '0.04em', userSelect: 'none',
+      color: `hsl(${hue},70%,80%)`, letterSpacing: 0, userSelect: 'none',
     }}>{initials}</div>
   );
 }
@@ -601,9 +601,9 @@ export function ClubLogoOrAvatar({ name, size = 28, src, onResolved }) {
 // ── Youth U19 badge ──────────────────────────────────────────────
 export const U19 = () => (
   <span style={{
-    background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
-    borderRadius: 0, color: '#4ADE80', fontSize: 9, fontWeight: 700,
-    padding: '1px 5px', letterSpacing: '0.04em', whiteSpace: 'nowrap', flexShrink: 0,
+    background: 'var(--green-bg)', border: '1px solid var(--green-bg)',
+    borderRadius: 6, color: 'var(--green-ok)', fontSize: 9, fontWeight: 700,
+    padding: '1px 5px', letterSpacing: 0, whiteSpace: 'nowrap', flexShrink: 0,
   }}>U19</span>
 );
 
@@ -638,7 +638,7 @@ export function MatchesPanel({ req, players, compact }) {
 function RequirementView({ req, players, onClose }) {
   const Row = ({ label, value }) => value && value !== '—' ? (
     <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-      <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>{label}</div>
       <div style={{ color: 'var(--text-1)', fontSize: 13 }}>{value}</div>
     </div>
   ) : null;
@@ -657,7 +657,7 @@ function RequirementView({ req, players, onClose }) {
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: 16, color: 'var(--text-1)' }}>{req.clubName}</span>
-            {req.clubIsYouth && <span style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 0, color: '#4ADE80', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>{t("Youth Team 🌱")}</span>}
+            {req.clubIsYouth && <span style={{ background: 'var(--green-bg)', border: '1px solid var(--green-bg)', borderRadius: 6, color: 'var(--green-ok)', fontSize: 10, fontWeight: 700, padding: '2px 7px' }}>{t("Youth Team 🌱")}</span>}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
             {req.league || 'League not set'}
@@ -686,7 +686,7 @@ function RequirementView({ req, players, onClose }) {
           <Row label={t("Role")} value={req.contactRole} />
           {req.contactPhone && (
             <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-              <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t("Phone")}</div>
+              <div className="view-row-label" style={{ width: 160, flexShrink: 0, color: 'var(--text-3)', fontSize: 11, fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>{t("Phone")}</div>
               <PhoneDisplay phone={req.contactPhone} />
             </div>
           )}

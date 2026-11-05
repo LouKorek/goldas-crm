@@ -353,7 +353,7 @@ export function PhoneActions({ phone, vertical }) {
   const wa = phone.replace(/[^0-9]/g, '');
   const btn = {
     width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    borderRadius: 0, border: '1px solid var(--border)',
+    borderRadius: 6, border: '1px solid var(--border)',
     textDecoration: 'none', fontSize: 11, fontWeight: 700, flexShrink: 0,
     letterSpacing: '0.04em',
     transition: 'border-color 0.12s linear',
@@ -560,7 +560,7 @@ export function Skeleton({ rows = 5, height = 44 }) {
   return (
     <div className="card" style={{ padding: 0 }} aria-busy="true" aria-label={t('Loading')}>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="skeleton" style={{ height, borderRadius: 0, borderBottom: '1px solid var(--rule)', opacity: 1 - i * 0.08 }} />
+        <div key={i} className="skeleton" style={{ height, borderRadius: 6, borderBottom: '1px solid var(--rule)', opacity: 1 - i * 0.08 }} />
       ))}
     </div>
   );
@@ -619,7 +619,7 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
           {showH && (
             <div style={{
               marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4,
-              padding: '8px', background: 'var(--surface-3)', borderRadius: 0
+              padding: '8px', background: 'var(--surface-3)', borderRadius: 6
             }}>
               {history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
@@ -643,7 +643,7 @@ export function FileUpload({ label, onUpload, history = [], accept = '.pdf,.doc,
       ) : file ? (
         <div style={{
           display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap',
-          background: 'var(--surface-3)', padding: 12, borderRadius: 0,
+          background: 'var(--surface-3)', padding: 12, borderRadius: 6,
           border: '1px solid var(--border)'
         }}>
           <div style={{ flex: 1, minWidth: 140 }}>
@@ -762,7 +762,7 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
           minWidth: 180, zIndex: 60,
           background: 'var(--surface-2)',
           border: '1px solid var(--border-2)',
-          borderRadius: 0,
+          borderRadius: 6,
           boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
           padding: 6,
           animation: 'dropdownIn 0.18s var(--ease-out)',
@@ -799,7 +799,7 @@ export function ExportMenu({ filename, title, subtitle, columns, rows }) {
 const menuItemStyle = {
   display: 'flex', alignItems: 'center', gap: 10,
   width: '100%', padding: '9px 10px',
-  background: 'transparent', border: 'none', borderRadius: 0,
+  background: 'transparent', border: 'none', borderRadius: 6,
   cursor: 'pointer', textAlign: 'start',
   transition: 'background 0.14s',
 };
@@ -935,7 +935,7 @@ export function ActionBtn({ icon, title, onClick, href, tone = 'neutral', text }
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     background: 'transparent',
     border: '1px solid var(--border)',
-    borderRadius: 0,
+    borderRadius: 6,
     color,
     cursor: 'pointer',
     textDecoration: 'none',

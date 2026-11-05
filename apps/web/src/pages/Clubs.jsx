@@ -104,7 +104,7 @@ export default function Clubs() {
 
   return (
     <div>
-      <PageHeader title={t("Clubs")} subtitle={`${clubs.length} clubs · players, candidates, requirements and contacts in one place`}
+      <PageHeader title={t("Clubs")} subtitle={`${clubs.length} ${t('clubs · players, candidates, requirements and contacts in one place')}`}
         action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Club")}</span></button>}
           <div style={{ height: 36, display: 'flex', alignItems: 'center' }}><SearchInput value={search} onChange={setSearch} placeholder={t("Search clubs...")} /></div>
@@ -170,7 +170,7 @@ function Section({ title, count, children }) {
   return (
     <div className="card" style={{ padding: 16, marginTop: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{title}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: 'var(--text-3)' }}>{title}</div>
         <span style={{ fontSize: 11, color: 'var(--text-mute)' }}>{count}</span>
       </div>
       {count === 0 ? <div style={{ fontSize: 12, color: 'var(--text-mute)' }}>—</div> : children}
