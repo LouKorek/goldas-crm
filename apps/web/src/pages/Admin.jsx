@@ -360,7 +360,8 @@ function WhatsApp({ he }) {
   const stage = d.connected ? (o.stage || 'waiting_for_meta') : 'not_connected';
   const label = STAGES[stage] || [stage, stage];
   const exp = d.expiresAt ? new Date(d.expiresAt) : null;
-  const reconnect = d.connected && (stage === 'no_access' || (d.reachesWaba === false && !(o.phone && !o.phone.error)));
+  const seesAccount = d.reachesWaba === true || (o.phone && !o.phone.error) || (o.account && !o.account.error);
+  const reconnect = d.connected && (stage === 'no_access' || (d.reachesWaba === false && !seesAccount));
   const row = (k, v) => v ? <div style={{ display: 'flex', gap: 8, fontSize: 13 }}><span style={{ color: 'var(--text-3)', minWidth: 140 }}>{k}</span><span>{v}</span></div> : null;
   return (
     <div style={{ display: 'grid', gap: 12, maxWidth: 680 }}>
@@ -382,7 +383,7 @@ function WhatsApp({ he }) {
           <div style={{ display: 'grid', gap: 6 }}>
             {row(he ? 'מחובר מאז' : 'Connected', fmtDateTime(new Date(d.connectedAt)))}
             {row(he ? 'תוקף המפתח' : 'Key expires', exp ? fmtDateTime(exp) : (he ? 'לא פג' : 'never'))}
-            {row(he ? 'סוג המפתח' : 'Key type', [d.tokenType, (d.reachesWaba === true || (o.phone && !o.phone.error)) ? (he ? 'רואה את החשבון של גולדה' : 'sees Golda’s account') : d.reachesWaba === false ? (he ? 'לא רואה את החשבון של גולדה' : 'cannot see Golda’s account') : ''].filter(Boolean).join(' · '))}
+            {row(he ? 'סוג המפתח' : 'Key type', [d.tokenType, seesAccount ? (he ? 'רואה את החשבון של גולדה' : 'sees Golda’s account') : d.reachesWaba === false ? (he ? 'לא רואה את החשבון של גולדה' : 'cannot see Golda’s account') : ''].filter(Boolean).join(' · '))}
             {row(he ? 'בדיקת החשבון ב-Meta' : 'Meta account review', o.account?.review)}
             {row(he ? 'אימות העסק' : 'Business verification', o.account?.businessVerification)}
             {row(he ? 'מצב המספר' : 'Number status', o.phone && !o.phone.error ? `${o.phone.status || ''} · ${o.phone.platform || ''} · ${o.phone.verification || ''}` : '')}
