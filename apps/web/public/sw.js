@@ -41,7 +41,8 @@ self.addEventListener('activate', (event) => {
 // Fetch strategy:
 //   • Firebase / Google / Firestore                     → bypass SW
 //   • HTML navigation                                   → network-first
-//   • /assets/* hashed assets (CSS, JS, fonts, images)  → network-first,
+//   • /assets/* hashed assets and /fonts/*              → cache-first
+//   • anything else                                     → network-first,
 //                                                          cache as fallback
 // This is the critical change from the previous version, which used
 // cache-first for static assets and meant the user's browser served the
@@ -83,7 +84,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else (CSS, JS, fonts, images) — network-first, fall back to
+  // Hashed build files (/assets/name-HASH.js|css) never change under the same
+  // name: a new build gets new names. So they come from the cache when
+  // present, which saves re-downloading the whole app on every open. The
+  // stale-CSS problem the old cache-first had came from unhashed files,
+  // which still go network-first below.
+  if (url.origin === self.location.origin && (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/fonts/'))) {
+    event.respondWith(
+      caches.match(request).then((hit) => hit || fetch(request).then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, clone)).catch(() => {});
+        }
+        return response;
+      }))
+    );
+    return;
+  }
+
+  // Everything else (unhashed images, manifest) — network-first, fall back to
   // cache only when the network actually fails.
   event.respondWith(
     fetch(request)
