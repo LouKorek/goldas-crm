@@ -32,6 +32,13 @@ const CONFIGS = {
   '2506080863235560': 'Golda server key (General: no WhatsApp account in the dialog)',
 };
 const LOGIN_CONFIG_ID = '828757043627753';
+// Embedded Signup only walks through "pick the WhatsApp account and number"
+// when the dialog carries these extras (what Meta's JS SDK sends). Without
+// them Facebook ran a plain login: a 60-day key that saw no WhatsApp account
+// (5.11.2026). featureType '' = the standard flow (not the WhatsApp Business
+// app "coexistence" one, which would touch Lou's own app number).
+const EMBEDDED_SIGNUP = new Set(['828757043627753']);
+const ES_EXTRAS = JSON.stringify({ setup: {}, featureType: '', sessionInfoVersion: '3' });
 const STATE_TTL_MS = 15 * 60 * 1000;
 const SECRETS = ['app_secrets', 'meta'];           // server-only (not readable by the web app)
 const PUBLIC = ['app_meta', 'metaConnect'];         // status for the admin screen, no secrets
@@ -53,6 +60,7 @@ async function startUrl(db, email, { env = process.env, now = Date.now(), config
     client_id: APP_ID, redirect_uri: redirectUri(env), response_type: 'code',
     config_id: cfg, override_default_response_type: 'true', state,
   });
+  if (EMBEDDED_SIGNUP.has(cfg)) qs.set('extras', ES_EXTRAS);
   return `${DIALOG}?${qs}`;
 }
 
