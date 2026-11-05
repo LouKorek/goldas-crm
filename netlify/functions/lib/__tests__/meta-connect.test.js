@@ -52,6 +52,7 @@ test('finish: trades the code, stores the token sealed, publishes only a summary
   };
   const info = await metaAuth.finish(db, { code: 'c', state: 'a'.repeat(48) }, { env: { WA_APP_SECRET: 's', URL: 'https://site' }, fetchImpl, now: 10 });
   assert.equal(info.canManage, true);
+  assert.equal(info.reachesWaba, true, "Golda's account is among the key's targets");
   assert.equal(info.expiresAt, 0);
   const stored = JSON.stringify(db._data);
   assert.ok(!stored.includes('TOKEN-SECRET-123'), 'never in the clear');
@@ -125,4 +126,27 @@ test('onboard once Meta allows: registers, wires up, switches Golda, tells Lou o
   assert.ok(!s2.some((s) => s.endsWith('/register')));
   assert.equal(notes.length, 1);
   assert.equal(await onboard.shouldRun(db, 9), false, 'live and told: once a day is enough');
+});
+
+test('startUrl: the dialog can ask for a known configuration, never an unknown one', async () => {
+  const db = fakeDb();
+  const env = { URL: 'https://site' };
+  const cfg = async (config) => new URL(await metaAuth.startUrl(db, 'lou@x', { env, config, now: 1 })).searchParams.get('config_id');
+  assert.equal(await cfg(null), '828757043627753', 'default: WhatsApp Embedded Signup, which lets Lou pick the account');
+  assert.equal(await cfg('2506080863235560'), '2506080863235560');
+  assert.equal(await cfg('999'), '828757043627753');
+});
+
+test('onboard with a key that cannot see the number: says so, touches nothing', async () => {
+  metaAuth._resetCacheForTests();
+  const db = fakeDb({ app_secrets: { meta: { token: require('../seal.js').seal('TOKEN') } } });
+  const seen = [];
+  const fetchImpl = async (url, opts = {}) => {
+    seen.push(`${opts.method || 'GET'} ${url}`);
+    return reply({ error: { code: 100, message: "Unsupported get request. Object with ID '1410468102146516' does not exist" } }, 400);
+  };
+  const r = await onboard.run(db, { fetchImpl, now: 3, log: () => {} });
+  assert.equal(r.stage, 'no_access');
+  assert.ok(!seen.some((s) => s.startsWith('POST')));
+  assert.equal(db._data.app_meta.whatsapp, undefined);
 });
