@@ -388,6 +388,7 @@ function WhatsApp({ he }) {
             {row(he ? 'אימות העסק' : 'Business verification', o.account?.businessVerification)}
             {row(he ? 'מצב המספר' : 'Number status', o.phone && !o.phone.error ? `${o.phone.status || ''} · ${o.phone.platform || ''} · ${o.phone.verification || ''}` : '')}
             {row(he ? 'תבניות' : 'Templates', o.templates && !o.templates.error ? Object.entries(o.templates).map(([n, st]) => `${n}: ${st}`).join(' · ') : o.templates?.error)}
+            {row(he ? 'תמונת פרופיל' : 'Profile photo', Object.entries(o.photo || {}).map(([id, p]) => `${id === '1410468102146516' ? '055' : (he ? 'המספר הנוכחי' : 'current number')}: ${p.ok ? (he ? 'הוגדרה' : 'set') : `${p.error?.code || ''} ${p.error?.message || ''}`.trim()}`).join(' · '))}
             {row(he ? 'נבדק לאחרונה' : 'Last checked', o.checkedAt ? ago(new Date(o.checkedAt), he) : '')}
             {row(he ? 'תשובת Meta אחרונה' : 'Meta’s last answer', o.lastError ? `${o.lastError.code}${o.lastError.subcode ? `/${o.lastError.subcode}` : ''}: ${o.lastError.message}${o.lastError.details ? ` (${o.lastError.details})` : ''}` : '')}
           </div>

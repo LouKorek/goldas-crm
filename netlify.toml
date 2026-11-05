@@ -18,3 +18,8 @@
   from = "/*"
   to   = "/index.html"
   status = 200
+
+# Golda's profile photo is resized by Netlify's image CDN before it goes to
+# WhatsApp (lib/golda-photo.js); this is the only remote host it may fetch.
+[images]
+  remote_images = ["https://d8j0ntlcm91z4\\.cloudfront\\.net/.*"]
