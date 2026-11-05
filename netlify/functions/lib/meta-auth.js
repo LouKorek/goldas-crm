@@ -22,23 +22,33 @@ const DIALOG = 'https://www.facebook.com/v21.0/dialog/oauth';
 const APP_ID = '1583709803467223';                 // Meta app "Gold A&S CRM" (public)
 const REAL_WABA = '1564386882158483';              // "Golda - Gold AS"
 const REAL_PHONE = '1410468102146516';             // +972 55-295-9496
-// Facebook Login for Business configuration on that app (public id; the env
-// var only overrides it). Asks for whatsapp_business_management + messaging.
-const LOGIN_CONFIG_ID = '2506080863235560';   // "Golda server key" (created 5.11.2026)
+// Facebook Login for Business configurations on that app (public ids; the env
+// var only overrides the default). The key must reach Golda's WhatsApp
+// account, and only the WhatsApp Embedded Signup variation lets the person
+// pick a WhatsApp account in the dialog: the "General" one ("Golda server
+// key") gave a key that could not see it (5.11.2026, #100 on the number).
+const CONFIGS = {
+  '828757043627753': 'Gold A&S WA Coexistence (WhatsApp Embedded Signup, system user, never expires)',
+  '2506080863235560': 'Golda server key (General: no WhatsApp account in the dialog)',
+};
+const LOGIN_CONFIG_ID = '828757043627753';
 const STATE_TTL_MS = 15 * 60 * 1000;
 const SECRETS = ['app_secrets', 'meta'];           // server-only (not readable by the web app)
 const PUBLIC = ['app_meta', 'metaConnect'];         // status for the admin screen, no secrets
 
 const siteUrl = (env = process.env) => env.URL || 'https://goldas-crm.netlify.app';
 const redirectUri = (env = process.env) => `${siteUrl(env)}/.netlify/functions/meta-connect`;
-const configId = (env = process.env) => String(env.META_LOGIN_CONFIG_ID || LOGIN_CONFIG_ID).trim();
+const configId = (env = process.env, wanted = null) => {
+  if (wanted && CONFIGS[String(wanted)]) return String(wanted);
+  return String(env.META_LOGIN_CONFIG_ID || LOGIN_CONFIG_ID).trim();
+};
 
 /** Facebook dialog address for one sign-in, with a single-use state. */
-async function startUrl(db, email, { env = process.env, now = Date.now() } = {}) {
-  const cfg = configId(env);
+async function startUrl(db, email, { env = process.env, now = Date.now(), config = null } = {}) {
+  const cfg = configId(env, config);
   if (!cfg) throw new Error('the Facebook sign-in is not configured yet');
   const state = crypto.randomBytes(24).toString('hex');
-  await db.collection('meta_oauth_states').doc(state).set({ email: String(email || ''), at: now });
+  await db.collection('meta_oauth_states').doc(state).set({ email: String(email || ''), at: now, config: cfg });
   const qs = new URLSearchParams({
     client_id: APP_ID, redirect_uri: redirectUri(env), response_type: 'code',
     config_id: cfg, override_default_response_type: 'true', state,
@@ -92,6 +102,9 @@ async function finish(db, { code, state }, { env = process.env, fetchImpl = fetc
     tokenType: d.type || null, expiresAt, scopes, targets,
     canManage: scopes.includes('whatsapp_business_management'),
     canMessage: scopes.includes('whatsapp_business_messaging'),
+    // Meta lists the WhatsApp accounts a key may manage; Golda's must be one.
+    reachesWaba: (targets.whatsapp_business_management || []).includes(REAL_WABA),
+    config: who.config || null,
     lastError: null,
   };
   await db.collection(PUBLIC[0]).doc(PUBLIC[1]).set(info, { merge: true });
@@ -124,6 +137,6 @@ const savePublic = (db, data) => db.collection(PUBLIC[0]).doc(PUBLIC[1]).set(dat
 
 module.exports = {
   startUrl, finish, takeState, getToken, getSecret, setSecret, savePublic,
-  APP_ID, REAL_WABA, REAL_PHONE, redirectUri, configId,
+  APP_ID, REAL_WABA, REAL_PHONE, CONFIGS, redirectUri, configId,
   _resetCacheForTests: () => { _cache = null; },
 };

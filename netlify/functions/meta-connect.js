@@ -36,7 +36,9 @@ const status = withAuth({ action: 'manage_settings', secrets: [{ header: 'x-sync
 
 const start = withAuth({ action: 'manage_settings' }, async (event, ctx) => {
   try {
-    const url = await metaAuth.startUrl(getDb(), ctx.auth.user.email);
+    let body = {};
+    try { body = JSON.parse(event.body || '{}'); } catch { /* none */ }
+    const url = await metaAuth.startUrl(getDb(), ctx.auth.user.email, { config: body.config || null });
     return json(200, { url });
   } catch (e) { return json(503, { error: e.message }); }
 });

@@ -55,7 +55,9 @@ async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ens
   } : { error: phone.error };
 
   if (!phone.ok) {
-    out.stage = 'error';
+    // #100 "does not exist / missing permissions" or #200: the key cannot see
+    // Golda's account; Lou signs in again and picks "Golda - Gold AS".
+    out.stage = [100, 200, 10].includes(Number(phone.error?.code)) ? 'no_access' : 'error';
     out.lastError = phone.error;
     await pubRef.set({ onboard: out }, { merge: true });
     log(`[meta-onboard] cannot read the number: ${phone.error?.code} ${phone.error?.message}`);

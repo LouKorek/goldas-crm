@@ -131,7 +131,10 @@
   שולח הודעות בלבד. לניהול החשבון (סטטוס בדיקה, רישום מספר, תבניות) לו לוחץ
   פעם אחת "התחבר עם פייסבוק" במסך ניהול ← וואטסאפ (`meta-connect`, Facebook
   Login for Business על האפליקציה שלנו, תצורה `LOGIN_CONFIG_ID` ב-
-  `lib/meta-auth.js` או `META_LOGIN_CONFIG_ID`). השרת מחליף את הקוד במפתח (עם
+  `lib/meta-auth.js` או `META_LOGIN_CONFIG_ID`). התצורה חייבת להיות מסוג
+  WhatsApp Embedded Signup, כדי שבחלון של פייסבוק בוחרים את "Golda - Gold AS";
+  תצורה מסוג General נותנת מפתח שלא רואה את החשבון (מצב `no_access`, ו-
+  `reachesWaba: false` ב-`app_meta/metaConnect`). השרת מחליף את הקוד במפתח (עם
   `WA_APP_SECRET`), שומר אותו חתום ב-`app_secrets/meta` (לא נקרא מהאפליקציה),
   ותקציר בלי סודות ב-`app_meta/metaConnect`. העבודה `meta-onboard` (כל שעה ב-:45,
   `meta-onboard-cron`) רושמת את 055-295-9496 עם PIN שהשרת מייצר ושומר חתום, מנויה
