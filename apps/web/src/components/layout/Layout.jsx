@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import Icon from 'components/ui/Icons';
 import { signOut } from 'firebase/auth';
@@ -11,6 +11,7 @@ import { t, getLang, setLang } from 'lib/i18n';
 import { useTheme } from 'lib/theme';
 import { useAlertCount } from 'lib/useAlertCount';
 import { ShellContext } from 'lib/shellContext';
+import { Skeleton } from 'components/ui/UI';
 
 // The app shell ("חדר הבקרה"): on the desktop a 76px rail of the eight areas
 // with the brand tile on top and the night switch and user menu at the
@@ -144,7 +145,10 @@ export default function Layout({ user }) {
           </header>
 
           <main className="main-content" style={{ flex: 1, padding: '18px 20px', minHeight: '100vh' }}>
-            <Outlet />
+            {/* Screens load on demand; the shell stays up while one arrives. */}
+            <Suspense fallback={<Skeleton rows={6} />}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from 'lib/firebase';
@@ -9,27 +9,27 @@ import './theme.css';
 
 import Layout        from 'components/layout/Layout';
 import Login         from 'pages/Login';
-import Players       from 'pages/Players';
-import Pipeline      from 'pages/Pipeline';
-import Requirements  from 'pages/Requirements';
-import Matches       from 'pages/Matches';
-import Contacts      from 'pages/Contacts';
-import Notifications from 'pages/Notifications';
-import Team          from 'pages/Team';
-import Tasks         from 'pages/Tasks';
-import TmWatch       from 'pages/TmWatch';
-import Social        from 'pages/Social';
-import Clubs         from 'pages/Clubs';
-import RecycleBin    from 'pages/RecycleBin';
-import Migrations    from 'pages/Migrations';
+const Players = lazy(() => import('pages/Players'));
+const Pipeline = lazy(() => import('pages/Pipeline'));
+const Requirements = lazy(() => import('pages/Requirements'));
+const Matches = lazy(() => import('pages/Matches'));
+const Contacts = lazy(() => import('pages/Contacts'));
+const Notifications = lazy(() => import('pages/Notifications'));
+const Team = lazy(() => import('pages/Team'));
+const Tasks = lazy(() => import('pages/Tasks'));
+const TmWatch = lazy(() => import('pages/TmWatch'));
+const Social = lazy(() => import('pages/Social'));
+const Clubs = lazy(() => import('pages/Clubs'));
+const RecycleBin = lazy(() => import('pages/RecycleBin'));
+const Migrations = lazy(() => import('pages/Migrations'));
 import Home          from 'pages/Home';
-import Player360     from 'pages/Player360';
-import Golda         from 'pages/Golda';
-import Prospects     from 'pages/Prospects';
-import Deals         from 'pages/Deals';
-import Calendar      from 'pages/Calendar';
-import Admin         from 'pages/Admin';
-import DesignSystem  from 'pages/DesignSystem';
+const Player360 = lazy(() => import('pages/Player360'));
+const Golda = lazy(() => import('pages/Golda'));
+const Prospects = lazy(() => import('pages/Prospects'));
+const Deals = lazy(() => import('pages/Deals'));
+const Calendar = lazy(() => import('pages/Calendar'));
+const Admin = lazy(() => import('pages/Admin'));
+const DesignSystem = lazy(() => import('pages/DesignSystem'));
 import ErrorBoundary, { install as installErrorReporting } from 'components/ErrorBoundary';
 
 installErrorReporting();
@@ -85,7 +85,8 @@ export default function App() {
         return;
       }
       // Owner: make sure the user collection is seeded so the Team screen works.
-      if (acc.role === 'admin') { try { await ensureSeedUsers(); } catch (e) {} }
+      // Not awaited: the owner's record check must not hold the shell back.
+      if (acc.role === 'admin') ensureSeedUsers().catch(() => {});
       setSessionAccess({ email: acc.email, name: acc.name, role: acc.role });
       setAccess(acc);
       setUser(u);
@@ -96,7 +97,9 @@ export default function App() {
   // Splash lifecycle: keep visible while auth resolves, with a minimum show time
   useEffect(() => {
     if (user === undefined) return; // auth still resolving - keep splash up
-    const minShownMs = 1500;
+    // Long enough for the fade to read as intentional, short enough not to
+    // add to the wait.
+    const minShownMs = 350;
     const elapsed    = performance.now() - mountedAt;
     const wait       = Math.max(0, minShownMs - elapsed);
     const t1 = setTimeout(() => setSplash(s => ({ ...s, fading: true })), wait);

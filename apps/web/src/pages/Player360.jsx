@@ -65,6 +65,10 @@ export default function Player360() {
   const [tasks, setTasks] = useState([]);
   const [interactions, setInteractions] = useState([]);
   const [note, setNote] = useState('');
+  // Every hook sits above the early returns below: a hook after them ran only
+  // once the players had loaded, so React saw more hooks than on the first
+  // render and the whole card crashed (React error #310).
+  const [docModal, setDocModal] = useState(null); // { field, files, title, idx }
   const he = getLang() === 'he';
 
   useEffect(() => {
@@ -107,7 +111,6 @@ export default function Player360() {
   // Documents open in the in-app viewer (DocViewer): a stored file is a
   // data: URL and Chrome silently refuses to open those in a new tab, which
   // is why a plain window.open here looked like a dead click.
-  const [docModal, setDocModal] = useState(null); // { field, files, title, idx }
   const renameDoc = async (index, name) => {
     const updated = await renameFile(PATHS.PLAYERS, id, docModal.field, docModal.files, index, name);
     setDocModal((m) => ({ ...m, files: updated }));

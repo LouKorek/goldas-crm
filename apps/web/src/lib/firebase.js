@@ -1,7 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBXQSSi_Q5IrGJjwnnWHjMF2UIhiv4WtCw",
@@ -13,9 +12,18 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db      = getFirestore(app);
+// Data is kept on the device (IndexedDB), so opening the app shows the last
+// known lists at once and only the changes come over the network. Where the
+// browser refuses local storage (private mode), it falls back to memory.
+function makeDb() {
+  try {
+    return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch (e) {
+    return getFirestore(app);
+  }
+}
+export const db      = makeDb();
 export const auth    = getAuth(app);
-export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // The browser sync (public/tools/ifa-browser-sync.js) runs inside the signed-in
