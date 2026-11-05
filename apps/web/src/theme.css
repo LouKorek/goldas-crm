@@ -620,6 +620,15 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
   /* No phone top bar any more: the page header starts right under the notch. */
   .main-content { padding: calc(10px + env(safe-area-inset-top, 0px)) 16px calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 20px) !important; }
   .page-header { background: var(--bg); padding: 10px 0 8px; margin-bottom: 8px; }
+  /* The frozen header sticks under the content's top padding (notch + 10px).
+     Without a cover, records scrolled up showed through that strip and could
+     still be tapped. This band paints it with the page ground and takes the
+     taps, so nothing is visible or clickable above the header. */
+  .layout-root::before {
+    content: ''; position: fixed; top: 0; inset-inline: 0; z-index: 41;
+    height: calc(10px + env(safe-area-inset-top, 0px));
+    background: var(--bg);
+  }
   .page-title { font-size: 20px; }
   .page-subtitle { font-size: 12px; }
   .area-tabs { margin-top: 8px; }
