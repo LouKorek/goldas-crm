@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listenCollection, PATHS } from 'lib/db';
-import { listenPlayers } from 'data/players';
 import { fmtDate } from 'lib/constants';
-import { DEFAULT_SETTINGS, loadSettings, persistSettings, unifiedAlerts, alertLink } from 'lib/alerts';
-import { PageHeader, Modal, toast } from 'components/ui/UI';
+import { persistSettings, alertLink } from 'lib/alerts';
+import { useAlerts, setAlertSettings } from 'lib/useAlertCount';
+import { PageHeader, Modal, toast, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { useRole } from 'lib/roleContext';
 import { t, getLang, relDays } from 'lib/i18n';
@@ -83,44 +82,28 @@ function SettingsModal({ settings, onSave, onClose }) {
 
 export default function Notifications() {
   const { canEdit, email } = useRole();
-  const [players, setPlayers] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [deals, setDeals] = useState([]);
-  const [requirements, setRequirements] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [jobs, setJobs] = useState([]);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  // The same shared listeners as the bell badge, so the list always shows
+  // exactly what the bell counts.
+  const { result: r, loaded, settings } = useAlerts(email);
   const [showSettings, setShowSettings] = useState(false);
 
-  useEffect(() => {
-    const u = [
-      listenPlayers({ stage: 'represented' }, setPlayers),
-      listenCollection(PATHS.MATCHES, setMatches),
-      listenCollection(PATHS.DEALS, setDeals),
-      listenCollection(PATHS.CLUB_REQUIREMENTS, setRequirements),
-      listenCollection(PATHS.TASKS, (rows) => setTasks(rows.filter((x) => x.owner === email))),
-      listenCollection('jobs', setJobs),
-    ];
-    loadSettings().then(setSettings);
-    return () => u.forEach((f) => f());
-  }, [email]);
-
   const saveSettings = async (s) => {
-    try { await persistSettings(s); setSettings(s); setShowSettings(false); toast.success(t('Notification settings saved.')); }
+    try { await persistSettings(s); setAlertSettings(s); setShowSettings(false); toast.success(t('Notification settings saved.')); }
     catch (e) { toast.error(e.message || t('Could not save settings.')); }
   };
 
-  const r = useMemo(() => unifiedAlerts({ players, matches, deals, requirements, tasks, jobs, settings }), [players, matches, deals, requirements, tasks, jobs, settings]);
   const order = ['job_failed', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday', 'match'];
 
   return (
     <div>
       <PageHeader
         title={t('Notifications')}
-        subtitle={t('{n} active alerts', { n: r.total })}
+        subtitle={loaded ? t('{n} active alerts', { n: r.total }) : t('Loading…')}
         action={canEdit ? <button className="btn btn-ghost" onClick={() => setShowSettings(true)}><Icon name="bell" size={12} /><span className="btn-text">{t('Alert Settings')}</span></button> : null}
       />
-      {r.alerts.length === 0 ? (
+      {!loaded && r.alerts.length === 0 ? (
+        <Skeleton rows={5} />
+      ) : r.alerts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '44px 20px', color: 'var(--text-3)' }}>
           <div style={{ width: 42, height: 1, background: 'var(--gold-dk)', margin: '0 auto 18px' }} />
           <p style={{ fontSize: 12, letterSpacing: 0, textTransform: 'none' }}>{t('All clear — no active alerts')}</p>
