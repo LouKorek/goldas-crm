@@ -154,3 +154,20 @@ test('onboard with a key that cannot see the number: says so, touches nothing', 
   assert.ok(!seen.some((s) => s.startsWith('POST')));
   assert.equal(db._data.app_meta.whatsapp, undefined);
 });
+
+test('onboard while Meta hides the number (account not verified): waits, never asks to sign in again', async () => {
+  metaAuth._resetCacheForTests();
+  const db = fakeDb({ app_secrets: { meta: { token: require('../seal.js').seal('TOKEN') } } });
+  const seen = [];
+  const notVerified = { code: 100, error_subcode: 2388001, message: 'Invalid parameter', error_user_msg: 'WhatsApp Business account not verified' };
+  const fetchImpl = async (url, opts = {}) => {
+    seen.push(`${opts.method || 'GET'} ${url}`);
+    if (url.includes(`${metaAuth.REAL_WABA}?fields`)) return reply({ account_review_status: 'PENDING', business_verification_status: 'pending' });
+    return reply({ error: notVerified }, 400);
+  };
+  const r = await onboard.run(db, { fetchImpl, now: 4, log: () => {} });
+  assert.equal(r.stage, 'waiting_for_meta');
+  assert.equal(r.phoneError.code, 100);
+  assert.ok(seen.some((s) => s.startsWith('POST') && s.endsWith('/register')), 'still tries to register');
+  assert.equal(db._data.app_meta.whatsapp, undefined);
+});

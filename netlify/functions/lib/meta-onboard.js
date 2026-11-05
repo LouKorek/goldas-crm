@@ -61,7 +61,13 @@ async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ens
     status: phone.body.status || null, platform: phone.body.platform_type || null, quality: phone.body.quality_rating || null,
   } : { error: phone.error };
 
-  if (!phone.ok) {
+  // While Meta still reviews the account, reading the number itself can fail
+  // ("WhatsApp Business account not verified") although the key reads the
+  // account fine. That is Meta's wait, not a missing key: go on and try to
+  // register (Meta refuses until the review ends; retried every hour).
+  const phoneHidden = !phone.ok && waba.ok;
+  if (phoneHidden) out.phoneError = phone.error;
+  if (!phone.ok && !phoneHidden) {
     // #100 "does not exist / missing permissions" or #200: the key cannot see
     // Golda's account; Lou signs in again and picks "Golda - Gold AS".
     out.stage = [100, 200, 10].includes(Number(phone.error?.code)) ? 'no_access' : 'error';
@@ -72,8 +78,8 @@ async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ens
   }
 
   // 2. register
-  if (!registered(phone.body)) {
-    if (phone.body.code_verification_status !== 'VERIFIED') {
+  if (phoneHidden || !registered(phone.body)) {
+    if (!phoneHidden && phone.body.code_verification_status !== 'VERIFIED') {
       out.stage = 'needs_code';   // the SMS code step was never finished
     } else {
       let pin = await auth.getSecret(db, 'pin');
