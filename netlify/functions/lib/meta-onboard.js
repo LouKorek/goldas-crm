@@ -24,7 +24,14 @@ async function call(token, path, { method = 'GET', body, fetchImpl = fetch } = {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const json = await res.json().catch(() => ({}));
-  const err = json.error ? { code: json.error.code || res.status, subcode: json.error.error_subcode || null, message: String(json.error.error_user_msg || json.error.message || '').slice(0, 240) } : null;
+  // Meta's generic "(#100) Invalid parameter" says nothing; the reason sits in
+  // error_data.details / error_user_title, so keep all of it (no secrets in it).
+  const e = json.error || null;
+  const err = e ? {
+    code: e.code || res.status, subcode: e.error_subcode || null,
+    message: String(e.error_user_msg || e.message || '').slice(0, 240),
+    details: String(e.error_data?.details || e.error_user_title || '').slice(0, 300) || null,
+  } : null;
   return { ok: res.ok && !err, status: res.status, body: json, error: err };
 }
 
