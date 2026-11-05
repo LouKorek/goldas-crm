@@ -5,6 +5,8 @@ import { callFunctionJson } from 'lib/api';
 import { resolveFileUrl } from 'lib/db';
 import Icon from './Icons';
 import { t, tv } from 'lib/i18n';
+import { Link, useLocation } from 'react-router-dom';
+import { useShell } from 'lib/shellContext';
 
 // ── Toast ─────────────────────────────────────────────────────────
 let _addToast = null;
@@ -869,20 +871,43 @@ export function FactLine({ items }) {
 // `stacked`: on phones the action strip takes a full row beneath the title,
 // so a long name (a player's) is shown whole instead of sharing its row with
 // five buttons and being clipped.
-export function PageHeader({ title, subtitle, action, children, stacked }) {
+export function PageHeader({ title, subtitle, action, children, stacked, tabs, brand }) {
   const controls = React.isValidElement(action) && action.type === 'div' && !action.props.className
     ? action.props.children
     : action;
+  const shell = useShell();
+  const { pathname } = useLocation();
   return (
     <div className="page-header-wrap">
       <div className="page-header">
         <div className={`page-head-row${stacked ? ' page-head-row--stacked' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-          <div className="page-head-text">
-            <h1 className="page-title">{title}</h1>
-            {subtitle && <p className="page-subtitle">{subtitle}</p>}
+          <div className="page-head-text" style={brand ? { display: 'flex', alignItems: 'center', gap: 10 } : undefined}>
+            {brand && <span className="brand-tile phone-only" style={{ width: 36, height: 36, borderRadius: 9 }}><img src="/brand-mark.png" alt="" style={{ width: 28, height: 28 }} /></span>}
+            <div style={{ minWidth: 0 }}>
+              <h1 className="page-title">{title}</h1>
+              {subtitle && <p className="page-subtitle">{subtitle}</p>}
+            </div>
           </div>
-          {controls && <div className="action-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>{controls}</div>}
+          <div className="action-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {controls}
+            {/* On the phone the search and the bell live here, in the page's own top row. */}
+            <button type="button" className="iconbtn phone-only" onClick={shell.openSearch} aria-label={t('Search')}><Icon name="search" size={18} /></button>
+            <Link to="/notifications" className="iconbtn phone-only" aria-label={shell.alertCount ? t('{n} active alerts', { n: shell.alertCount }) : t('Notifications')}>
+              <Icon name="bell" size={18} />
+              {shell.alertCount > 0 && <span className="dot">{shell.alertCount > 99 ? '99+' : shell.alertCount}</span>}
+            </Link>
+          </div>
         </div>
+        {tabs && tabs.length > 1 && (
+          <nav className="area-tabs" aria-label={t('Sections')}>
+            {tabs.map((tb) => {
+              const on = tb.on !== undefined ? tb.on : (pathname === tb.path || (tb.path && tb.path.length > 1 && pathname.startsWith(tb.path + '/')));
+              return tb.onClick
+                ? <a key={tb.label} href={tb.path || '#'} className={on ? 'on' : undefined} aria-current={on ? 'page' : undefined} onClick={(e) => { e.preventDefault(); tb.onClick(); }}>{tb.label}</a>
+                : <Link key={tb.path} to={tb.path} className={on ? 'on' : undefined} aria-current={on ? 'page' : undefined}>{tb.label}</Link>;
+            })}
+          </nav>
+        )}
       </div>
       {children && <div className="page-filters">{children}</div>}
     </div>

@@ -34,17 +34,8 @@ export default function Home() {
 
   return (
     <div>
-      <PageHeader title={`${greeting()}, ${name?.split(' ')[0] || ''}`} subtitle={fmtDateTime(new Date()).slice(0, 8)}>
-        <div className="tabs" role="tablist" style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-2)', marginTop: 8 }}>
-          {[['today', t('Today')], ['snapshot', t('Snapshot')]].map(([k, label]) => (
-            <Link key={k} to={`/home/${k}`} role="tab" aria-selected={tab === k}
-              style={{
-                padding: '10px 18px', textDecoration: 'none', fontSize: 13, fontWeight: tab === k ? 700 : 500,
-                color: tab === k ? 'var(--gold)' : 'var(--text-3)', borderBottom: `2px solid ${tab === k ? 'var(--gold)' : 'transparent'}`, marginBottom: -1,
-              }}>{label}</Link>
-          ))}
-        </div>
-      </PageHeader>
+      <PageHeader brand title={`${greeting()}, ${name?.split(' ')[0] || ''}`} subtitle={fmtDateTime(new Date()).slice(0, 8)}
+        tabs={[{ label: t('Today'), path: '/home/today', on: tab === 'today' }, { label: t('Snapshot'), path: '/home/snapshot', on: tab === 'snapshot' }]} />
       {tab === 'snapshot' ? <Snapshot /> : <Today />}
     </div>
   );

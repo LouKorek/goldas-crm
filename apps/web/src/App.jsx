@@ -5,6 +5,7 @@ import { auth } from 'lib/firebase';
 import { fetchUserAccess, ensureSeedUsers, setSessionAccess, clearSessionAccess } from 'lib/db';
 import { RoleContext } from 'lib/roleContext';
 import './index.css';
+import './theme.css';
 
 import Layout        from 'components/layout/Layout';
 import Login         from 'pages/Login';
@@ -35,105 +36,32 @@ installErrorReporting();
 import { ToastProvider } from 'components/ui/UI';
 import { t } from 'lib/i18n';
 
-// Animated splash screen shown on app open
+// Splash on app open: the brand tile breathing on the day or night ground,
+// the same tile the rail shows once the shell is up.
 function Splash({ fading }) {
   return (
     <div style={{
       position: 'fixed', inset: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      backgroundImage: 'linear-gradient(rgba(10,21,12,0.78), rgba(10,21,12,0.92)), url("/photos/Hero.jpg")',
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundColor: '#0E1B11',
+      background: 'var(--bg)',
       zIndex: 9999,
       opacity: fading ? 0 : 1,
-      transition: 'opacity 0.5s ease',
+      transition: 'opacity 0.45s ease',
       pointerEvents: fading ? 'none' : 'auto',
     }}>
       <style>{`
-        @keyframes splash-logo-in {
-          0%   { opacity: 0; transform: scale(0.6) rotate(-8deg); }
-          60%  { opacity: 1; transform: scale(1.08) rotate(2deg); }
-          100% { opacity: 1; transform: scale(1) rotate(0); }
-        }
-        @keyframes splash-glow {
-          0%, 100% { box-shadow: 0 0 40px rgba(201,168,76,0.25), 0 0 80px rgba(201,168,76,0.12); }
-          50%      { box-shadow: 0 0 60px rgba(201,168,76,0.55), 0 0 120px rgba(201,168,76,0.25); }
-        }
-        @keyframes splash-shimmer {
-          0%   { transform: translateX(-150%) skewX(-20deg); }
-          100% { transform: translateX(250%) skewX(-20deg); }
-        }
-        @keyframes splash-text-in {
-          0%   { opacity: 0; transform: translateY(14px); letter-spacing: 0.5em; }
-          100% { opacity: 1; transform: translateY(0); letter-spacing: 0.04em; }
-        }
-        @keyframes splash-tagline-in {
-          0%, 50% { opacity: 0; transform: translateY(8px); }
-          100%    { opacity: 0.7; transform: translateY(0); }
-        }
-        @keyframes splash-ring {
-          to { transform: rotate(360deg); }
-        }
+        @keyframes splash-tile-in { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+        @keyframes splash-text-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes splash-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
       `}</style>
-
-      <div style={{ textAlign: 'center', position: 'relative' }}>
-        {/* Orbiting ring around the logo */}
-        <div style={{
-          position: 'absolute', top: 55, insetInlineStart: '50%',
-          width: 150, height: 150,
-          marginInlineStart: -75,
-          borderRadius: '50%',
-          border: '1px solid transparent',
-          borderTopColor: 'rgba(201,168,76,0.55)',
-          borderInlineEndColor: 'rgba(201,168,76,0.15)',
-          animation: 'splash-ring 2.6s linear infinite',
-          pointerEvents: 'none',
-        }} />
-
-        {/* Logo with glow + shimmer */}
-        <div style={{
-          position: 'relative',
-          width: 110, height: 110,
-          margin: '0 auto 26px',
-          borderRadius: 0,
-          overflow: 'hidden',
-          border: '1px solid rgba(201,168,76,0.5)',
-          animation: 'splash-logo-in 0.9s cubic-bezier(0.34,1.56,0.64,1) both, splash-glow 2.4s ease-in-out 0.9s infinite',
-        }}>
-          <img src="/logo.png" alt="Gold A&S"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          {/* Shimmer sweep */}
-          <div style={{
-            position: 'absolute', top: 0, insetInlineStart: 0,
-            width: '40%', height: '100%',
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)',
-            animation: 'splash-shimmer 2.2s ease-in-out 1s infinite',
-            pointerEvents: 'none',
-          }} />
+      <div style={{ textAlign: 'center' }}>
+        <div className="brand-tile" style={{ width: 84, height: 84, borderRadius: 20, margin: '0 auto 18px', animation: 'splash-tile-in 0.6s cubic-bezier(0.2,0,0,1) both', boxShadow: 'var(--shadow-md)' }}>
+          <img src="/brand-mark.png" alt="Gold A&S" style={{ width: 64, height: 64 }} />
         </div>
-
-        {/* Wordmark */}
-        <div style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 22, fontWeight: 700,
-          color: 'var(--text-1)',
-          letterSpacing: '0.2em', textTransform: 'uppercase',
-          animation: 'splash-text-in 0.9s cubic-bezier(0.16,1,0.3,1) 0.25s both',
-          lineHeight: 1,
-        }}>
-          {t("Gold A&S")}
-        </div>
-
-        {/* Tagline */}
-        <div style={{
-          marginTop: 12,
-          fontSize: 9, color: 'var(--text-3)',
-          letterSpacing: '0.28em',
-          textTransform: 'uppercase',
-          animation: 'splash-tagline-in 1.4s ease 0.4s both',
-        }}>
-          {t("Football Agency")}
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-1)', animation: 'splash-text-in 0.6s ease 0.15s both', lineHeight: 1.1 }}>{t('Gold A&S')}</div>
+        <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-2)', animation: 'splash-text-in 0.6s ease 0.3s both' }}>{t('Football Agency')}</div>
+        <div style={{ margin: '22px auto 0', width: 72, height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+          <div style={{ width: '100%', height: '100%', background: 'var(--accent)', transformOrigin: 'inline-start', animation: 'splash-bar 1.4s cubic-bezier(0.2,0,0,1) 0.2s both' }} />
         </div>
       </div>
     </div>

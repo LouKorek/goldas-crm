@@ -6,7 +6,7 @@ import { t } from './i18n';
 
 export const AREAS = [
   {
-    key: 'home', label: t('Home'), icon: 'dashboard', path: '/home',
+    key: 'home', label: t('Home'), icon: 'home', path: '/home',
     items: [
       { label: t('Today'), path: '/home/today' },
       { label: t('Snapshot'), path: '/home/snapshot' },
@@ -19,11 +19,11 @@ export const AREAS = [
     ],
   },
   {
-    key: 'market', label: t('Market'), icon: 'clipboard', path: '/market/prospects',
+    key: 'market', label: t('Market'), icon: 'market', path: '/market/prospects',
     items: [
       { label: t('Candidates'), path: '/market/prospects', icon: 'players' },
       { label: t('Club Requirements'), path: '/market/requirements', icon: 'clipboard' },
-      { label: t('Deals'), path: '/market/deals', icon: 'tasks' },
+      { label: t('Deals'), path: '/market/deals', icon: 'doc' },
       { label: t('Men'), path: '/pipeline/men', icon: 'men' },
       { label: t('Women'), path: '/pipeline/women', icon: 'women' },
       { label: t('Youth'), path: '/pipeline/youth', icon: 'youth' },
@@ -31,19 +31,19 @@ export const AREAS = [
     ],
   },
   {
-    key: 'clubs', label: t('Clubs'), icon: 'contacts', path: '/clubs',
+    key: 'clubs', label: t('Clubs'), icon: 'clubs', path: '/clubs',
     items: [
       { label: t('Clubs'), path: '/clubs' },
       { label: t('Contacts'), path: '/contacts', icon: 'contacts' },
     ],
   },
   {
-    key: 'calendar', label: t('Calendar'), icon: 'matches', path: '/calendar',
+    key: 'calendar', label: t('Calendar'), icon: 'calendar', path: '/calendar',
     // One screen: matches and trainings together, filtered inside it.
     items: [{ label: t('Calendar'), path: '/calendar' }],
   },
   {
-    key: 'scouting', label: t('Scouting'), icon: 'search', path: '/scouting/tm-watch',
+    key: 'scouting', label: t('Scouting'), icon: 'star', path: '/scouting/tm-watch',
     items: [
       { label: t('TM Watch'), path: '/scouting/tm-watch', icon: 'star' },
     ],
@@ -53,7 +53,7 @@ export const AREAS = [
     items: [{ label: t('Golda'), path: '/golda' }],
   },
   {
-    key: 'admin', label: t('Admin'), icon: 'team', path: '/tasks',
+    key: 'admin', label: t('Admin'), icon: 'settings', path: '/tasks',
     items: [
       { label: t('My Tasks'), path: '/tasks', icon: 'tasks' },
       { label: t('Notifications'), path: '/notifications', icon: 'bell' },
@@ -61,7 +61,7 @@ export const AREAS = [
       { label: t('Agency Instagram'), path: '/social', icon: 'social' },
       { label: t('Recycle Bin'), path: '/recycle', icon: 'trash' },
       { label: t('Team'), path: '/team', icon: 'team', adminOnly: true },
-      { label: t('System'), path: '/admin', icon: 'refresh', adminOnly: true },
+      { label: t('System'), path: '/admin', icon: 'settings', adminOnly: true },
       { label: t('Data Migrations'), path: '/admin/migrations', icon: 'refresh', adminOnly: true },
     ],
   },
@@ -69,9 +69,9 @@ export const AREAS = [
 
 /** The five destinations of the phone's bottom bar; "More" opens the index. */
 export const BOTTOM = [
-  { key: 'home', label: t('Home'), icon: 'dashboard', path: '/home' },
+  { key: 'home', label: t('Home'), icon: 'home', path: '/home' },
   { key: 'players', label: t('Players'), icon: 'players', path: '/players' },
-  { key: 'market', label: t('Market'), icon: 'clipboard', path: '/market/prospects' },
+  { key: 'market', label: t('Market'), icon: 'market', path: '/market/prospects' },
   { key: 'golda', label: t('Golda'), icon: 'chat', path: '/golda' },
   { key: 'more', label: t('More'), icon: 'menu', path: '__more__' },
 ];
