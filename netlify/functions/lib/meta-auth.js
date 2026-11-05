@@ -24,7 +24,7 @@ const REAL_WABA = '1564386882158483';              // "Golda - Gold AS"
 const REAL_PHONE = '1410468102146516';             // +972 55-295-9496
 // Facebook Login for Business configuration on that app (public id; the env
 // var only overrides it). Asks for whatsapp_business_management + messaging.
-const LOGIN_CONFIG_ID = '';
+const LOGIN_CONFIG_ID = '2506080863235560';   // "Golda server key" (created 5.11.2026)
 const STATE_TTL_MS = 15 * 60 * 1000;
 const SECRETS = ['app_secrets', 'meta'];           // server-only (not readable by the web app)
 const PUBLIC = ['app_meta', 'metaConnect'];         // status for the admin screen, no secrets
