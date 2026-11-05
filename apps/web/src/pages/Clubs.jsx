@@ -170,7 +170,7 @@ function Section({ title, count, children }) {
   return (
     <div className="card" style={{ padding: 16, marginTop: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{title}</div>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 0, textTransform: 'none', color: 'var(--text-3)' }}>{title}</div>
         <span style={{ fontSize: 11, color: 'var(--text-mute)' }}>{count}</span>
       </div>
       {count === 0 ? <div style={{ fontSize: 12, color: 'var(--text-mute)' }}>—</div> : children}

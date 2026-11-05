@@ -238,6 +238,17 @@ export default function Deals() {
   const counts = useMemo(() => funnel(visible), [visible]);
   const stale = visible.filter((d) => isStale(d)).length;
   const columns = showClosed ? DEAL_STAGES : OPEN_STAGES;
+  // The phone shows one stage at a time: a strip of stage chips with counts
+  // above a single column, instead of eight columns scrolling sideways.
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const on = (e) => setPhone(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const [stageTab, setStageTab] = useState(OPEN_STAGES[0]);
+  const shown = phone ? columns.filter((s) => s === (columns.includes(stageTab) ? stageTab : columns[0])) : columns;
 
   if (!deals) return <Skeleton rows={6} />;
   return (
@@ -255,7 +266,16 @@ export default function Deals() {
 
       {visible.length === 0 ? <Empty message={t('No deals yet. Open one from a candidate or a club requirement.')} /> : (
         <div className="kanban" style={{ display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'minmax(220px, 1fr)', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
-          {columns.map((s) => (
+          {phone && (
+            <div className="stage-strip" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 4, scrollbarWidth: 'none' }}>
+              {columns.map((s) => (
+                <button key={s} type="button" className={`chip${shown.includes(s) ? ' active' : ''}`} onClick={() => setStageTab(s)} style={{ flex: '0 0 auto' }}>
+                  {stageLabel(s)}<span className="chip-count">{counts[s] || 0}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {shown.map((s) => (
             <div key={s} style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8, paddingBottom: 6, borderBottom: '2px solid var(--border-2)' }}>
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{stageLabel(s)}</span>

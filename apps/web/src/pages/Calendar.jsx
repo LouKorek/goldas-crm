@@ -18,13 +18,15 @@ import { SyncReport } from './Matches';
 // collection (manual + the daily Israeli sync); trainings are stored as a
 // rule ("every Sunday and Tuesday 17:30") and expanded here for the range
 // on screen. A single training can be cancelled or moved; the rule stays.
-const VIEWS = ['list', 'week', 'month'];
+const VIEWS = ['day', 'list', 'week', 'month'];
+const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
 const lang = () => (getLang() === 'he' ? 'he' : 'en');
 const startOfWeek = (s) => addDays(s, -weekday(s));
 const monthStart = (s) => `${s.slice(0, 7)}-01`;
 const monthEnd = (s) => { const [y, m] = s.split('-').map(Number); return addDays(`${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`, -1); };
 
 function rangeFor(view, anchor) {
+  if (view === 'day') return [anchor, anchor];
   if (view === 'week') { const s = startOfWeek(anchor); return [s, addDays(s, 6)]; }
   if (view === 'month') return [monthStart(anchor), monthEnd(anchor)];
   return [anchor, addDays(anchor, 60)];
@@ -130,7 +132,7 @@ export default function Calendar() {
   const [syncing, setSyncing] = useState(false);
   const [trainings, setTrainings] = useState([]);
   const [players, setPlayers] = useState([]);
-  const [view, setView] = useState(localStorage.getItem('calendar-view') || 'week');
+  const [view, setView] = useState(localStorage.getItem('calendar-view') || (isPhone() ? 'day' : 'week'));
   const [anchor, setAnchor] = useState(israelDate());
   const [kind, setKind] = useState('all');
   const [scope, setScope] = useState('all');
@@ -179,7 +181,7 @@ export default function Calendar() {
   }, [matches, trainings, from, to, kind, scope, playerFilter, players]); // eslint-disable-line
 
   const byDay = useMemo(() => { const m = new Map(); for (const e of events) { if (!m.has(e.date)) m.set(e.date, []); m.get(e.date).push(e); } return m; }, [events]);
-  const step = (dir) => setAnchor((a) => view === 'month' ? addDays(monthStart(a), dir > 0 ? 32 : -1).slice(0, 7) + '-01' : addDays(a, (view === 'week' ? 7 : 30) * dir));
+  const step = (dir) => setAnchor((a) => view === 'month' ? addDays(monthStart(a), dir > 0 ? 32 : -1).slice(0, 7) + '-01' : addDays(a, (view === 'week' ? 7 : view === 'day' ? 1 : 30) * dir));
   const today = israelDate();
 
   const cancelOcc = async (e) => {
@@ -205,7 +207,7 @@ export default function Calendar() {
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)', minWidth: 38 }}>{e.time || '—'}</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, color: e.type === 'match' ? 'var(--blue)' : 'var(--green-ok)' }}>{e.type === 'match' ? t('MATCH') : t('TRAINING')}</span>
         <span style={{ fontWeight: 600, fontSize: 13.5, flex: 1, minWidth: 0, textDecoration: e.cancelled ? 'line-through' : 'none' }}>{e.title}{e.moved ? <span style={{ fontSize: 10, color: 'var(--amber)' }}> · {t('moved')}</span> : null}</span>
-        {e.youth && <span style={{ fontSize: 9, color: '#4ADE80', border: '1px solid rgba(74,222,128,0.3)', padding: '0 4px' }}>{t('Youth')}</span>}
+        {e.youth && <span style={{ fontSize: 9, color: 'var(--green-ok)', border: '1px solid var(--green-bg)', padding: '0 4px' }}>{t('Youth')}</span>}
         {canEdit && e.type === 'training' && (
           <RowActions onEdit={() => editTraining(e)} onDelete={() => delTraining(e)}>
             {e.occ.recurring && !e.cancelled && <button type="button" className="btn btn-ghost btn-sm" title={t('Cancel this one')} onClick={() => cancelOcc(e)}>✕1</button>}
@@ -220,7 +222,7 @@ export default function Calendar() {
   );
 
   if (!matches) return <Skeleton rows={6} />;
-  const label = view === 'month' ? fmtLongDate(new Date(anchor), { month: 'long', year: 'numeric' }) : view === 'week' ? `${fmtDate(from)} – ${fmtDate(to)}` : `${t('From')} ${fmtDate(from)}`;
+  const label = view === 'month' ? fmtLongDate(new Date(anchor), { month: 'long', year: 'numeric' }) : view === 'day' ? fmtLongDate(new Date(anchor)) : view === 'week' ? `${fmtDate(from)} – ${fmtDate(to)}` : `${t('From')} ${fmtDate(from)}`;
 
   return (
     <div>
@@ -231,7 +233,7 @@ export default function Calendar() {
           {isAdmin && <button className="btn btn-ghost btn-sm" style={{ height: 36, whiteSpace: 'nowrap' }} onClick={syncNow} disabled={syncing} title={t('Pull match fixtures from IFA / 365 / SofaScore for every represented player')}>{syncing ? <><Spinner size={12} /><span className="btn-text">{t('Syncing…')}</span></> : <><Icon name="refresh" size={12} /><span className="btn-text">{t('Sync Now')}</span></>}</button>}
         </div>}>
         <div className="filter-bar" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12, padding: '10px 12px', background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-          <ChipGroup options={VIEWS} labels={[t('List'), t('Week'), t('Month')]} value={view} onChange={setView} required />
+          <ChipGroup options={VIEWS} labels={[t('Day'), t('List'), t('Week'), t('Month')]} value={view} onChange={setView} required />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => step(-1)}>‹</button>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, minWidth: 130, textAlign: 'center' }}>{label}</span>

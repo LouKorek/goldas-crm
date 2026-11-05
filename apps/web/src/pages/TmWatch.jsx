@@ -29,24 +29,24 @@ function Flag({ country, size = 15 }) {
         src={`https://flagcdn.com/w20/${code.toLowerCase()}.png`}
         srcSet={`https://flagcdn.com/w40/${code.toLowerCase()}.png 2x`}
         alt={country} title={country}
-        style={{ width: size + 5, height: 'auto', borderRadius: 0, flexShrink: 0, boxShadow: '0 0 0 1px rgba(255,255,255,0.08)', verticalAlign: 'middle' }}
+        style={{ width: size + 5, height: 'auto', borderRadius: 6, flexShrink: 0, boxShadow: '0 0 0 1px rgba(255,255,255,0.08)', verticalAlign: 'middle' }}
         onError={(e) => { e.currentTarget.style.display = 'none'; }}
       />
     );
   }
   if (!country) return null;
-  return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
+  return <span title={country} style={{ fontSize: 9.5, fontWeight: 700, background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 6, padding: '1px 4px', color: 'var(--text-2)' }}>{country.slice(0, 3).toUpperCase()}</span>;
 }
 const TIER_LABEL = { 1: t('Tier 1'), 2: t('Tier 2'), 3: t('Tier 3'), 4: t('Tier 4'), 5: t('Tier 5'), 6: t('Tier 6') };
 // Inline Israel flag image — flag EMOJI renders as plain letters on Windows.
 const IL = () => (
   <img src="https://flagcdn.com/w20/il.png" alt="Israel"
-    style={{ width: 14, height: 'auto', borderRadius: 0, verticalAlign: '-2px' }} />
+    style={{ width: 14, height: 'auto', borderRadius: 6, verticalAlign: '-2px' }} />
 );
 
 const TIER_BADGE = {
   0: { label: <><IL /> {t("Citizenship")}</>, bg: 'rgba(107,174,245,0.14)', fg: 'var(--blue)',  border: 'rgba(107,174,245,0.4)' },
-  1: { label: t("Strong name"),  bg: 'rgba(212,176,98,0.14)',  fg: 'var(--gold)',  border: 'rgba(212,176,98,0.4)' },
+  1: { label: t("Strong name"),  bg: 'var(--amber-bg)',  fg: 'var(--gold)',  border: 'var(--amber-bg)' },
   2: { label: t("Possible"),     bg: 'rgba(177,156,245,0.12)', fg: 'var(--purple)', border: 'rgba(177,156,245,0.35)' },
 };
 const TABS = ['New', 'All', 'Starred', 'Dismissed'];
@@ -255,11 +255,11 @@ export default function TmWatch() {
                       {p.position && <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{p.position}</span>}
                       <span title={`${p.matchedOn || ''}${p.firstSeen ? ` · first seen ${fmtDate(tsToDate(p.firstSeen).toISOString().slice(0, 10))}` : ''}`} style={{
                         background: badge.bg, color: badge.fg, border: `1px solid ${badge.border}`,
-                        borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
+                        borderRadius: 6, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default',
                       }}>{badge.label}</span>
-                      {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 0, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{t('NEW')}</span>}
-                      {p.israelHistory === 'never' && <span title={t("Career history has no Israeli club — youth or senior")} style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 0, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>{t("Never in Israel")}</span>}
-                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 0, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> {t("Played in IL")}</span>}
+                      {p.status === 'new' && <span style={{ background: 'var(--green-bg)', color: 'var(--green-ok)', borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{t('NEW')}</span>}
+                      {p.israelHistory === 'never' && <span title={t("Career history has no Israeli club — youth or senior")} style={{ background: 'rgba(93,214,138,0.12)', color: 'var(--green-ok)', border: '1px solid rgba(93,214,138,0.35)', borderRadius: 6, padding: '2px 9px', fontSize: 10, fontWeight: 600, cursor: 'default' }}>{t("Never in Israel")}</span>}
+                      {p.israelHistory === 'played' && <span title={`Israeli football history: ${(p.israelClubs || []).join(', ') || '—'}`} style={{ background: 'var(--surface-3)', color: 'var(--text-3)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 9px', fontSize: 10, cursor: 'default' }}><IL /> {t("Played in IL")}</span>}
                       {p.addedToPipeline && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{t("in pipeline")}</span>}
                       {p.activeAbroad === false && <span style={{ fontSize: 10, color: 'var(--amber)' }}>{t("no longer abroad")}</span>}
                     </div>
@@ -284,23 +284,23 @@ export default function TmWatch() {
                   {canEdit && (
                     <div className="action-btns" style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center' }}>
                       <button title={p.starred ? t('Unstar') : t('Star')} onClick={() => toggleStar(p)}
-                        style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: p.starred ? 'rgba(212,176,98,0.25)' : 'rgba(255,255,255,0.05)', color: 'var(--gold)', fontSize: 14 }}>
+                        style={{ width: 30, height: 30, border: 'none', borderRadius: 6, cursor: 'pointer', background: p.starred ? 'var(--amber-bg)' : 'rgba(255,255,255,0.05)', color: 'var(--gold)', fontSize: 14 }}>
                         {p.starred ? '★' : '☆'}
                       </button>
                       {!p.addedToPipeline && p.status !== 'dismissed' && (
                         <button title={t("Add to candidates")} onClick={() => addToPipeline(p)}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 15 }}>＋</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 15 }}>＋</button>
                       )}
                       {p.status === 'new' && (
                         <button title={t("Mark seen")} onClick={() => setStatus(p, 'seen')}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(107,174,245,0.15)', color: 'var(--blue)', fontSize: 14 }}>✓</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(107,174,245,0.15)', color: 'var(--blue)', fontSize: 14 }}>✓</button>
                       )}
                       {p.status !== 'dismissed' ? (
                         <button title={t("Not relevant")} onClick={() => setStatus(p, 'dismissed')}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(240,114,110,0.14)', color: 'var(--red)', fontSize: 14 }}>⊘</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(240,114,110,0.14)', color: 'var(--red)', fontSize: 14 }}>⊘</button>
                       ) : (
                         <button title={t("Restore")} onClick={() => setStatus(p, 'seen')}
-                          style={{ width: 30, height: 30, border: 'none', borderRadius: 0, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 14 }}>↩</button>
+                          style={{ width: 30, height: 30, border: 'none', borderRadius: 6, cursor: 'pointer', background: 'rgba(93,214,138,0.15)', color: 'var(--green-ok)', fontSize: 14 }}>↩</button>
                       )}
                     </div>
                   )}

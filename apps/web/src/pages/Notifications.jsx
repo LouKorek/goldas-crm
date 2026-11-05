@@ -39,10 +39,10 @@ function AlertCard({ a }) {
     }}
     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--card-hover)'}
     onMouseLeave={(e) => e.currentTarget.style.background = 'var(--card)'}>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: c, flexShrink: 0, width: 30, paddingTop: 2 }}>{TYPE[a.type]?.tag}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: 0, color: c, flexShrink: 0, width: 30, paddingTop: 2 }}>{TYPE[a.type]?.tag}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 500, fontSize: 13.5, color: 'var(--text-1)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {a.overdue && a.type !== 'deal_stale' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', background: 'rgba(240,114,110,0.14)', color: 'var(--red)', border: '1px solid rgba(240,114,110,0.4)', padding: '1px 7px' }}>{t('OVERDUE')}</span>}
+          {a.overdue && a.type !== 'deal_stale' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: 0, background: 'rgba(240,114,110,0.14)', color: 'var(--red)', border: '1px solid rgba(240,114,110,0.4)', padding: '1px 7px' }}>{t('OVERDUE')}</span>}
           {a.subject.name}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 3 }}>{a.proof[he ? 'he' : 'en']}</div>
@@ -123,7 +123,7 @@ export default function Notifications() {
       {r.alerts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '44px 20px', color: 'var(--text-3)' }}>
           <div style={{ width: 42, height: 1, background: 'var(--gold-dk)', margin: '0 auto 18px' }} />
-          <p style={{ fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{t('All clear — no active alerts')}</p>
+          <p style={{ fontSize: 12, letterSpacing: 0, textTransform: 'none' }}>{t('All clear — no active alerts')}</p>
           {canEdit && <button className="btn btn-ghost" style={{ marginTop: 18 }} onClick={() => setShowSettings(true)}>{t('Configure alert timing')}</button>}
         </div>
       ) : (

@@ -32,15 +32,15 @@ export const PIPELINE_STATUS = [
 export type PipelineStatus = typeof PIPELINE_STATUS[number];
 
 export const PIPELINE_STATUS_COLORS: Record<PipelineStatus, { bg: string; text: string }> = {
-  'Not Contacted':    { bg:'rgba(139,148,158,0.1)',  text:'#8B949E' },
-  'Waiting Response': { bg:'rgba(96,165,250,0.12)',  text:'#60A5FA' },
-  'Initial Talks':    { bg:'rgba(251,191,36,0.12)',  text:'#FBBF24' },
-  'Mandate Received': { bg:'rgba(74,222,128,0.12)',  text:'#4ADE80' },
-  'Offered to Club':  { bg:'rgba(167,139,250,0.12)', text:'#A78BFA' },
-  'Negotiation':      { bg:'rgba(251,146,60,0.12)',  text:'#FB923C' },
-  'Draft Signed':     { bg:'rgba(34,197,94,0.12)',   text:'#22C55E' },
-  'Contract Signed':  { bg:'rgba(74,222,128,0.2)',   text:'#4ADE80' },
-  'Not Relevant':     { bg:'rgba(248,113,113,0.1)',  text:'#F87171' },
+  'Not Contacted':    { bg:'var(--surface-2)',  text:'var(--text-3)' },
+  'Waiting Response': { bg:'var(--blue-bg)',  text:'var(--blue)' },
+  'Initial Talks':    { bg:'var(--amber-bg)',  text:'var(--amber)' },
+  'Mandate Received': { bg:'var(--green-bg)',  text:'var(--green-ok)' },
+  'Offered to Club':  { bg:'var(--purple-bg)', text:'var(--purple)' },
+  'Negotiation':      { bg:'var(--orange-bg)',  text:'var(--orange)' },
+  'Draft Signed':     { bg:'var(--green-bg)',   text:'var(--green-ok)' },
+  'Contract Signed':  { bg:'var(--green-bg)',   text:'var(--green-ok)' },
+  'Not Relevant':     { bg:'var(--red-bg)',  text:'var(--red)' },
 };
 
 export const CONTACT_ROLES = [

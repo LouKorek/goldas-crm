@@ -86,9 +86,9 @@ export default function DocViewer({ files, title, onClose, onRename, initialInde
               {loadingFile || !url ? (
                 <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>{loadingFile ? 'Loading file…' : 'File unavailable.'}</div>
               ) : file.type?.startsWith('image/') ? (
-                <img src={url} alt={file.name} style={{width:'100%',borderRadius: 0,border:'1px solid var(--border)'}} />
+                <img src={url} alt={file.name} style={{width:'100%',borderRadius: 6,border:'1px solid var(--border)'}} />
               ) : (
-                <iframe src={url} style={{width:'100%',height:480,borderRadius: 0,border:'1px solid var(--border)'}} title={file.name} />
+                <iframe src={url} style={{width:'100%',height:480,borderRadius: 6,border:'1px solid var(--border)'}} title={file.name} />
               )}
             </div>
           )}

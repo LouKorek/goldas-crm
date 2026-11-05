@@ -12,14 +12,14 @@ import Icon from 'components/ui/Icons';
 // Every candidate the agency follows, across the four markets, in one place:
 // a table or a board by pipeline status. Editing stays on the category
 // screens; this is the overview Lou opens to see where everything stands.
-const CAT_COLOR = { men: '#4ADE80', women: '#F472B6', youth: '#60A5FA', jewish: '#A78BFA' };
+const CAT_COLOR = { men: 'var(--green-ok)', women: 'var(--pink)', youth: 'var(--blue)', jewish: 'var(--purple)' };
 const stageLabel = (s) => (getLang() === 'he' ? DEAL_STAGE_LABELS[s] || s : s);
 
 export const AgeGroupChip = ({ player, size = 9 }) => {
   if (!player?.dob || !isYouthAge(player.dob)) return null;
   const g = resolveAgeGroup(player);
   if (!g) return null;
-  return <span title={t('Age group')} style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', color: '#60A5FA', fontSize: size, fontWeight: 700, padding: '1px 5px', whiteSpace: 'nowrap' }}>{getLang() === 'he' ? g.he : g.en}{player.ageGroupOverride ? ' ✎' : ''}</span>;
+  return <span title={t('Age group')} style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-bg)', color: 'var(--blue)', fontSize: size, fontWeight: 700, padding: '1px 5px', whiteSpace: 'nowrap' }}>{getLang() === 'he' ? g.he : g.en}{player.ageGroupOverride ? ' ✎' : ''}</span>;
 };
 
 export default function Prospects() {

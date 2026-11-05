@@ -67,6 +67,10 @@ html[lang="he"] {
   --blue-bg:     #DCE9F7;
   --purple:      #4B3B86;
   --purple-bg:   #ECE4F8;
+  --pink:        #A5366B;
+  --pink-bg:     #F8E1EC;
+  --orange:      #A8511A;
+  --orange-bg:   #F8E4D4;
 
   --radius-sm:   6px;
   --radius-md:   8px;
@@ -128,6 +132,10 @@ html[data-theme="dark"] {
   --blue-bg:     #1B2C40;
   --purple:      #B9A8EE;
   --purple-bg:   #2A2340;
+  --pink:        #EE8FBE;
+  --pink-bg:     #3C2230;
+  --orange:      #F0A06A;
+  --orange-bg:   #3C2816;
 
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.4);
   --shadow-md:   0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.35);
@@ -362,6 +370,13 @@ html[lang="he"] .data-table th { font-size: 12.5px; }
 }
 
 .alert-row { border-radius: var(--radius-md); }
+.row-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; height: 22px; padding: 0 8px; border-radius: 999px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-family: var(--font-num); font-size: 11px; font-weight: 700; letter-spacing: 0;
+}
+.chip-count { margin-inline-start: 6px; font-family: var(--font-num); font-weight: 600; opacity: 0.75; }
 
 /* ── Section headings ── */
 .section-label {
@@ -631,6 +646,8 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
   .modal-grab { display: block; background: var(--border-2); width: 40px; }
   .toast { border-radius: 12px; }
   .desktop-only { display: none !important; }
+  .kanban { display: block !important; overflow-x: visible !important; }
+  .stage-strip::-webkit-scrollbar { display: none; }
 }
 @media (min-width: 769px) {
   .phone-only { display: none !important; }

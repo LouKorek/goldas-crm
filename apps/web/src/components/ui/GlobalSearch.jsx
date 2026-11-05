@@ -119,7 +119,7 @@ export default function GlobalSearch({ open, onClose }) {
             const first = i === 0 || results[i - 1].kind !== r.kind;
             return (
               <React.Fragment key={`${r.kind}-${r.label}-${i}`}>
-                {first && <div style={{ padding: '10px 14px 4px', fontSize: 9.5, fontWeight: 700, color: 'var(--gold-dk)', letterSpacing: he ? 0 : '0.14em', textTransform: 'uppercase' }}>{KIND[r.kind]}</div>}
+                {first && <div style={{ padding: '10px 14px 4px', fontSize: 9.5, fontWeight: 700, color: 'var(--gold-dk)', letterSpacing: he ? 0 : '0.14em', textTransform: 'none' }}>{KIND[r.kind]}</div>}
                 <button onMouseEnter={() => setSel(i)} onClick={() => choose(r)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12, width: '100%', minHeight: 44, padding: '8px 14px',

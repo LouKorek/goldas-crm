@@ -190,11 +190,12 @@ function Bubble({ m, he }) {
     <div style={{ display: 'flex', justifyContent: mine ? 'flex-start' : 'flex-end' }}>
       <div style={{
         maxWidth: '82%', padding: '9px 12px', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
-        background: mine ? 'var(--surface-3)' : 'rgba(201,168,76,0.10)', border: `1px solid ${mine ? 'var(--border)' : 'rgba(201,168,76,0.35)'}`,
-        color: m.error ? 'var(--red)' : 'var(--text-1)',
+        background: mine ? 'var(--accent-fill)' : 'var(--surface-1)', border: `1px solid ${mine ? 'var(--accent-fill)' : 'var(--border)'}`,
+        color: m.error ? 'var(--red)' : mine ? 'var(--on-accent)' : 'var(--text-1)',
+        borderRadius: 14, [mine ? 'borderStartStartRadius' : 'borderStartEndRadius']: 4, boxShadow: 'var(--shadow-sm)',
       }}>
         {m.typing ? <Typing he={he} /> : <Rich text={m.text} />}
-        <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 4, textAlign: 'end' }}>
+        <div style={{ fontSize: 10, color: mine ? 'var(--on-accent)' : 'var(--text-3)', opacity: mine ? 0.75 : 1, marginTop: 4, textAlign: 'end' }}>
           {m.at ? fmtDateTime(new Date(m.at)) : ''}{m.channel === 'whatsapp' && mine ? ' · WhatsApp' : ''}
         </div>
       </div>
