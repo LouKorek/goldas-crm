@@ -9,6 +9,7 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/logo.png',
+  '/brand-mark.png',
   '/manifest.json',
   '/fonts/Heebo-400.ttf',
   '/fonts/Heebo-700.ttf',

@@ -1,21 +1,45 @@
-// Mobile layout harness: the real shell CSS and UI components with sample
-// content, no Firebase. Served by the Vite dev server only (not built).
+// Layout harness: the real shell (Layout, MoreScreen, PageHeader, theme.css)
+// with sample content and a fake signed-in admin, no Firebase auth. Served by
+// the Vite dev server only (not built). Query: s=<screen>, theme=light|dark,
+// login=1 (sign-in screen), more=1 (the phone's "more" screen is opened by the
+// screenshot script).
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import '../src/index.css';
-import { PageHeader, ChipGroup, SearchInput, FilterBar, SortTh, ExportMenu } from 'components/ui/UI';
+import '../src/theme.css';
+import { PageHeader, ChipGroup, SearchInput, FilterBar, ExportMenu } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { SnapshotView } from 'pages/Snapshot';
+import Layout from 'components/layout/Layout';
+import Login from 'pages/Login';
+import { RoleContext } from 'lib/roleContext';
+import { applyTheme } from 'lib/theme';
 import { decodeState, encodeState } from '@goldas/domain';
 
-const Layout = ({ children }) => (
-  <div className="layout-root" style={{ display: 'flex', minHeight: '100vh' }}>
-    <div className="mobile-topbar" style={{ display: 'none', position: 'fixed', top: 0, insetInlineStart: 0, insetInlineEnd: 0, height: 'var(--topbar-h)', background: 'var(--surface-1)', borderBottom: '1px solid var(--border-2)', alignItems: 'center', padding: '0 12px', zIndex: 50 }}>GOLD A&S</div>
-    <main className="main-content" style={{ flex: 1, padding: '18px 20px', minHeight: '100vh' }}>{children}</main>
-    <nav className="bottom-nav">{['בית','שחקנים','שוק','גולדה','עוד'].map((l) => <a key={l} className="bottom-nav-item" href="#"><span className="icon"><Icon name="players" size={17} /></span><span>{l}</span></a>)}</nav>
-  </div>
-);
+function Home() {
+  const [tab, setTab] = useState('today');
+  return (
+    <div>
+      <PageHeader brand title="בוקר טוב, לו" subtitle="יום רביעי, 5 בנובמבר · 3 משחקים היום · 2 חוזים מסתיימים החודש"
+        tabs={[{ label: 'היום', on: tab === 'today', onClick: () => setTab('today') }, { label: 'תמונת מצב', on: tab === 'snapshot', onClick: () => setTab('snapshot') }]}
+        action={<button className="btn btn-primary"><Icon name="plus" size={14} /><span className="btn-text">פעולה חדשה</span></button>} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+        {[['שחקנים מיוצגים', '18'], ['עסקאות פתוחות', '7'], ['משחקים השבוע', '12'], ['התראות', '4']].map(([l, v]) => (
+          <div key={l} className="card kpi-card"><div className="kpi-value">{v}</div><div className="kpi-label">{l}</div></div>
+        ))}
+      </div>
+      <div className="section-label" style={{ marginTop: 22 }}>היום</div>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="card card-body" style={{ marginBottom: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span className="badge">{['20:45', '19:00', '17:30', '15:00'][i]}</span>
+          <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontWeight: 600 }}>מכבי חיפה – הפועל תל אביב</div><div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>סמי עופר · עומרי תקלה, דן רינגל</div></div>
+          <Icon name="chevron" size={14} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Calendar() {
   const [view, setView] = useState('week');
@@ -156,9 +180,22 @@ function Snapshot() {
     saveView={async () => {}} deleteView={async () => {}} />;
 }
 
-const SCREENS = { calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
-const which = new URLSearchParams(location.search).get('s') || 'calendar';
-const light = new URLSearchParams(location.search).get('light');
-if (light) document.body.classList.add('light-mode');
-const S = SCREENS[which];
-createRoot(document.getElementById('root')).render(<MemoryRouter><Layout><S /></Layout></MemoryRouter>);
+const SCREENS = { home: Home, calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
+const q = new URLSearchParams(location.search);
+const which = q.get('s') || 'home';
+applyTheme(q.get('theme') === 'dark' ? 'dark' : 'light');
+const S = SCREENS[which] || Home;
+const PATHS = { home: '/home', calendar: '/calendar', tm: '/scouting/tm-watch', player: '/players/p1', players: '/players', snapshot: '/home/snapshot' };
+const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true };
+const App = () => q.get('login') ? <Login denied={false} /> : (
+  <RoleContext.Provider value={role}>
+    <MemoryRouter initialEntries={[PATHS[which] || '/home']}>
+      <Routes>
+        <Route path="/" element={<Layout user={{ email: role.email }} />}>
+          <Route path="*" element={<S />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>
+  </RoleContext.Provider>
+);
+createRoot(document.getElementById('root')).render(<App />);

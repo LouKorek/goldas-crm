@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
   <!-- PWA / Theme -->
-  <meta name="theme-color" content="#0C1A0E" />
+  <meta name="theme-color" content="#F6F3EC" />
   <meta name="application-name" content="Gold A&S" />
   <meta name="description" content="Gold A&S — מערכת ניהול סוכנות הכדורגל" />
 
@@ -23,12 +23,25 @@
   <meta name="mobile-web-app-capable" content="yes" />
 
   <!-- Favicon -->
-  <link rel="icon" href="/logo.png" />
+  <link rel="icon" href="/brand-mark.png" />
 
   <!-- Hebrew face, served from this site so the UI and the PDFs share one font -->
   <link rel="preload" href="/fonts/Heebo-400.ttf" as="font" type="font/ttf" crossorigin />
 
   <title>Gold A&S — סוכנות כדורגל</title>
+  <!-- Day / night before the first paint (same key as src/lib/theme.js). -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('theme');
+        if (t === 'dark') {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute('content', '#121410');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>
