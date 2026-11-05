@@ -922,6 +922,11 @@ const HE = {
   'Hide records': 'הסתר רשומות',
   'Nothing here for this filter.': 'אין כאן כלום בסינון הזה.',
   'Click any slice, bar or tile to filter the whole board.': 'לחיצה על פלח, עמודה או אריח מסננת את כל הלוח.',
+  'players in this category': 'שחקנים בקטגוריה הזו',
+  'players under representation': 'שחקנים מיוצגים',
+  'open': 'פתוחות',
+  'private to': 'פרטי עבור',
+  'clubs · players, candidates, requirements and contacts in one place': 'מועדונים · שחקנים, מועמדים, דרישות ואנשי קשר במקום אחד',
 };
 
 export default HE;

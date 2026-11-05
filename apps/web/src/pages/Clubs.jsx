@@ -104,7 +104,7 @@ export default function Clubs() {
 
   return (
     <div>
-      <PageHeader title={t("Clubs")} subtitle={`${clubs.length} clubs · players, candidates, requirements and contacts in one place`}
+      <PageHeader title={t("Clubs")} subtitle={`${clubs.length} ${t('clubs · players, candidates, requirements and contacts in one place')}`}
         action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Club")}</span></button>}
           <div style={{ height: 36, display: 'flex', alignItems: 'center' }}><SearchInput value={search} onChange={setSearch} placeholder={t("Search clubs...")} /></div>

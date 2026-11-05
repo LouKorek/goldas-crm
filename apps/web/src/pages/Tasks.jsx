@@ -286,7 +286,7 @@ export default function Tasks() {
     <div className="tasks-page">
       <PageHeader
         title={t("My Tasks")}
-        subtitle={`${open.length} open  ·  ${done.length} done  ·  private to ${name || email}`}
+        subtitle={`${open.length} ${t('open')} · ${done.length} ${t('done')} · ${t('private to')} ${name || email}`}
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {canEdit && (

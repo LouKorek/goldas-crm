@@ -598,7 +598,7 @@ export default function Pipeline({ category }) {
     <div>
       <PageHeader
         title={label}
-        subtitle={`${items.length} player${items.length!==1?'s':''} in this category`}
+        subtitle={`${items.length} ${t('players in this category')}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {category==='jewish'&&(

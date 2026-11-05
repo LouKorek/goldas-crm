@@ -328,7 +328,7 @@ export default function Players() {
     <div>
       <PageHeader
         title={t("Represented Players")}
-        subtitle={`${players.length} player${players.length!==1?'s':''} under representation`}
+        subtitle={`${players.length} ${t('players under representation')}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>}
