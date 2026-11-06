@@ -281,6 +281,8 @@ async function runImport(db, payload, { dryRun = false, via = 'browser' } = {}) 
     staleCopies,
     lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSuccessAt: admin.firestore.FieldValue.serverTimestamp(),
+    // ifa-server-sync stands aside while the live browser read is recent.
+    ...(via === 'browser' ? { lastBrowserSuccessAt: admin.firestore.FieldValue.serverTimestamp() } : {}),
     stats, perPlayer, warnings, merged: mergedNotes.slice(0, 50),
     lastRefused: admin.firestore.FieldValue.delete(),
   }, { merge: true });
