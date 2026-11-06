@@ -69,7 +69,8 @@ function buildUrgent(name, alerts) {
  * Operations alerts for the admins, from what the system already records:
  *   - a job whose last two runs both failed (one failure is an ordinary alert);
  *   - the ScraperAPI quota at 80% or more;
- *   - the IFA browser sync (Lou's computer) silent for 36 hours.
+ *   - the Israeli fixtures sync silent too long (quietHours);
+ *   - a team page whose only readable copy is stale.
  * Each has a key that repeats once a day at most.
  */
 const IFA_QUIET_HOURS = require('./ifa-exa.js').quietHours();
@@ -90,14 +91,20 @@ function opsAlerts({ jobs = [], ifaSync = null, scraper = null, now = new Date()
     const pct = Math.round((scraper.requestCount / scraper.requestLimit) * 100);
     out.push({ key: `scraper80|${scraper.nextReset || today.slice(0, 7)}`, text: `• מכסת ScraperAPI ב-${pct}% (${scraper.requestCount}/${scraper.requestLimit})${scraper.nextReset ? `, מתאפסת ב-${fmtDate(scraper.nextReset)}` : ''}. מעקב TM ייעצר לבד כשיישארו 200 קרדיטים לסנכרון המשחקים.` });
   }
-  // The Israeli fixtures are read by the server every morning (lib/ifa-exa.js)
-  // and, as a fallback, by Chrome on Lou's computer. Either one updates
-  // app_meta/ifaBrowserSync; quiet means neither published.
+  // The Israeli fixtures are read by the server every morning (lib/ifa-exa.js),
+  // which updates app_meta/ifaBrowserSync; quiet means it did not publish.
   const last = ifaSync ? Math.max(ms(ifaSync.lastRunAt), ms(ifaSync.lastSuccessAt)) : 0;
   if (ifaSync && last && now.getTime() - last > IFA_QUIET_HOURS * 3600000) {
     const hours = Math.round((now.getTime() - last) / 3600000);
     const why = ifaSync.lastRefused?.summary?.refused ? ` הסיבה האחרונה: ${String(ifaSync.lastRefused.summary.refused[0] || '').slice(0, 80)}.` : '';
-    out.push({ key: `ifa36|${today}`, text: `• סנכרון ההתאחדות לא פורסם ${hours} שעות (לא מהשרת ולא מהמחשב).${why} פרטים במסך הניהול ← בריאות.` });
+    out.push({ key: `ifa36|${today}`, text: `• סנכרון ההתאחדות לא פורסם ${hours} שעות.${why} פרטים במסך הניהול ← בריאות.` });
+  }
+  // The copy of a team page the server could read stops at an old result, so
+  // that team's dates may be wrong (lib/ifa-exa.js isStaleCopy).
+  const stale = Array.isArray(ifaSync?.staleCopies) ? ifaSync.staleCopies : [];
+  if (stale.length) {
+    const names = [...new Set(stale.map((s) => s.name))];
+    out.push({ key: `ifastale|${today}`, text: `• ייתכן שמועדי המשחקים של ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` ועוד ${names.length - 3}` : ''} לא מעודכנים: העותק של דף ההתאחדות שהשרת הצליח לקרוא ישן (תוצאה אחרונה ${fmtDate(stale[0].lastResult)}). כדאי לבדוק מול אתר ההתאחדות.` });
   }
   return out;
 }

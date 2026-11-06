@@ -151,7 +151,7 @@ function looksLikeFixturesPage(text) {
 // Lines of the form "<label><value>" or "<label> <value>", one cell each; a
 // new row starts at a date line. Labels and dates: Hebrew DD/MM/YYYY on the
 // default pages, English M/D/YYYY under /en/.
-function parseFixturesText(text, isEnglish = false) {
+function parseRows(text, isEnglish = false) {
   const L = isEnglish ? LABELS.en : LABELS.he;
   const keys = ['date', 'game', 'stadium', 'time', 'result'];
   const rows = [];
@@ -182,12 +182,89 @@ function parseFixturesText(text, isEnglish = false) {
     }
     cur[hit.label] = hit.value;
   }
+  return rows;
+}
+
+function parseFixturesText(text, isEnglish = false) {
   const out = [], seen = new Set();
-  for (const cells of rows) {
+  for (const cells of parseRows(text, isEnglish)) {
     const fx = T.ifaFixtureFromCells(cells, '', isEnglish);
     if (fx && !seen.has(fx.sourceMatchId)) { seen.add(fx.sourceMatchId); out.push(fx); }
   }
   return out;
+}
+
+// ───────────────────── which copy is newer ─────────────────────
+// football.org.il blocks datacenters, so Exa hands back the copy of a page it
+// last managed to read, and the Hebrew and English copies of one team page are
+// refreshed at different times: on 6.11.2026 the Hebrew copy of team 2186 was
+// weeks old (no results since 9.10, a game still on 7.11) while the English one
+// already had the game moved to 6.11. A copy is as new as the latest game it
+// shows a result for.
+function latestResultDate(text, isEnglish = false) {
+  const L = isEnglish ? LABELS.en : LABELS.he;
+  let latest = '';
+  for (const cells of parseRows(text, isEnglish)) {
+    if (!/\d+\s*-\s*\d+/.test(cells[L.result] || '')) continue;
+    const fx = T.ifaFixtureFromCells(cells, '', isEnglish);
+    if (fx && fx.date > latest) latest = fx.date;
+  }
+  return latest;
+}
+
+const dayNum = (d) => Math.round(Date.parse(`${d}T00:00:00Z`) / 86400000);
+
+// The team the page belongs to: the name on the most rows.
+function ownTeam(fixtures) {
+  const n = new Map();
+  for (const f of fixtures) for (const t of [f.homeTeam, f.awayTeam]) n.set(t, (n.get(t) || 0) + 1);
+  const [a, b] = [...n.entries()].sort((x, y) => y[1] - x[1]);
+  return a && (!b || a[1] > b[1]) ? a[0] : '';
+}
+
+// Moves the Hebrew fixtures (whose team names the CRM keeps) to the dates and
+// times of the newer English copy. Names differ between the languages, so a
+// Hebrew game is the English game with the team on the same side (home/away)
+// and the nearest date, at most 10 days apart, and only when no other Hebrew
+// game is as near. Returns how many fixtures changed.
+const MAX_SHIFT_DAYS = 10;
+function applyNewerDates(heAll, enAll, todayStr) {
+  const heOwn = ownTeam(heAll), enOwn = ownTeam(enAll);
+  if (!heOwn || !enOwn) return 0;
+  const used = new Set();
+  let changed = 0;
+  for (const e of enAll) {
+    if (e.date < todayStr) continue;
+    const home = e.homeTeam === enOwn;
+    if (!home && e.awayTeam !== enOwn) continue;
+    const near = heAll
+      .map((h, i) => ({ h, i, d: Math.abs(dayNum(h.date) - dayNum(e.date)) }))
+      .filter((c) => !used.has(c.i) && c.d <= MAX_SHIFT_DAYS && (home ? c.h.homeTeam === heOwn : c.h.awayTeam === heOwn))
+      .sort((a, b) => a.d - b.d);
+    if (!near.length || (near[1] && near[1].d === near[0].d)) continue;
+    const { h, i } = near[0];
+    used.add(i);
+    const time = e.time || h.time;
+    if (h.date === e.date && h.time === time) continue;
+    h.date = e.date;
+    h.time = time;
+    h.season = T.deriveSeason(e.date);
+    if (!/^\d+$/.test(String(h.sourceMatchId))) h.sourceMatchId = `${h.date}|${h.homeTeam}|${h.awayTeam}`;
+    changed++;
+  }
+  return changed;
+}
+
+// A copy is stale when games played over a week after its last result still
+// show none (Golda tells Lou, see opsAlerts).
+function isStaleCopy(text, isEnglish, todayStr) {
+  const latest = latestResultDate(text, isEnglish);
+  if (!latest) return false;
+  const today = dayNum(todayStr);
+  return parseFixturesText(text, isEnglish).some((f) => {
+    const d = dayNum(f.date);
+    return f.date > latest && d <= today - 3 && d - dayNum(latest) > 7;
+  });
 }
 
 // ───────────────────── the scrape ─────────────────────
@@ -227,6 +304,28 @@ async function scrapeTargets(targets, { reader, now = new Date(), log = () => {}
     if (isChallenge(text)) { pages.blocked++; results.push({ ...out, gamesOk: false }); continue; }
     if (!looksLikeFixturesPage(text)) { pages.failed++; results.push({ ...out, gamesOk: false, detail: 'no fixture list in page text' }); continue; }
     const all = parseFixturesText(text, isEnglish);
+    let newest = { text, isEnglish };
+    if (!isEnglish) {
+      // The English copy of the same page, when it is newer, has the right
+      // dates (see applyNewerDates).
+      const enUrl = `${IFA_ORIGIN}/en/team-details/team-games/?team_id=${encodeURIComponent(t.teamId)}`;
+      const gap = last + GAP_MS - Date.now();
+      if (gap > 0) await new Promise((r) => setTimeout(r, gap));
+      last = Date.now();
+      pages.count++;
+      try {
+        const r = await reader.fetchText(enUrl);
+        const enText = r.text || '';
+        if (typeof r.cost === 'number') costDollars += r.cost;
+        if (!isChallenge(enText) && looksLikeFixturesPage(enText) && latestResultDate(enText, true) > latestResultDate(text, false)) {
+          out.datesFromEnglish = applyNewerDates(all, parseFixturesText(enText, true), todayStr);
+          newest = { text: enText, isEnglish: true };
+        }
+      } catch (e) {
+        log(`[ifa-exa] ${t.name} (en): ${String(e.message || e).slice(0, 200)}`);
+      }
+    }
+    if (isStaleCopy(newest.text, newest.isEnglish, todayStr)) out.staleCopy = latestResultDate(newest.text, newest.isEnglish);
     const seasons = {};
     all.forEach((f) => { seasons[f.season] = (seasons[f.season] || 0) + 1; });
     out.gamesOk = true;
@@ -244,5 +343,6 @@ async function scrapeTargets(targets, { reader, now = new Date(), log = () => {}
 
 module.exports = {
   SCHEDULE, quietHours, makeReader, scrapeTargets, parseFixturesText, looksLikeFixturesPage,
+  latestResultDate, applyNewerDates, isStaleCopy,
   _internal: { parseRpc, McpClient, fetchViaApi, isChallenge },
 };

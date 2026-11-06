@@ -119,8 +119,11 @@ test('the scrape yields a browser-shaped payload with upcoming fixtures only', a
   assert.equal(payload.stage, 'scraped');
   assert.equal(payload.via, 'exa-api');
   assert.equal(payload.upcomingOnly, true);
-  assert.deepEqual(calls, ['https://www.football.org.il/team-details/team-games/?team_id=1146']);
-  assert.deepEqual(payload.pages, { count: 1, blocked: 0, failed: 0 });
+  assert.deepEqual(calls, [
+    'https://www.football.org.il/team-details/team-games/?team_id=1146',
+    'https://www.football.org.il/en/team-details/team-games/?team_id=1146',
+  ]);
+  assert.deepEqual(payload.pages, { count: 2, blocked: 0, failed: 0 });
   const r1 = payload.results.find((r) => r.id === 'p1');
   assert.equal(r1.gamesOk, true);
   assert.equal(r1.allFixtures, 5);
@@ -129,7 +132,7 @@ test('the scrape yields a browser-shaped payload with upcoming fixtures only', a
   assert.equal(r1.gamesUrl, 'https://www.football.org.il/team-details/team-games/?team_id=1146');
   assert.equal(payload.results.find((r) => r.id === 'p2').error, 'ifa-lookup-needs-browser');
   assert.equal(payload.results.find((r) => r.id === 'p3').error, 'ifa-url-invalid');
-  assert.equal(payload.costDollars, 0.001);
+  assert.equal(payload.costDollars, 0.002, 'the Hebrew and the English page');
   assert.equal(viaOf(payload, 'browser'), 'exa-api');
   assert.equal(viaOf({ via: 'anything-else' }, 'browser'), 'browser');
 });
@@ -206,4 +209,119 @@ test('the cron file carries the schedule as a literal that matches SCHEDULE.cron
   const m = /schedule\('([^']+)'/.exec(src);
   assert.ok(m, 'schedule() is called with a string literal');
   assert.equal(m[1], X.SCHEDULE.cron);
+});
+
+// Exa's copies of team 2186 (הפ' חדרה ש. שוורץ) on 6.11.2026, trimmed: the
+// Hebrew one stopped at 19.10 and still had the Sderot game on 7.11, the
+// English one already had it moved to 6.11 at 12:00.
+const HADERA_HE = `## רשימת המשחקים
+
+תאריך משחק אצטדיון שעה תוצאה
+
+תאריך 09/10/2026
+
+משחקהפ' חדרה ש. שוורץ - מכבי יבנה
+
+שעה 13:30
+
+תוצאה 0-0
+
+תאריך 19/10/2026
+
+משחקמ.כ. צעירי טירה - הפ' חדרה ש. שוורץ
+
+שעה 20:00
+
+תוצאה 1-0
+
+תאריך 23/10/2026
+
+משחקהפ' חדרה ש. שוורץ - מכבי קרית מלאכי עירוני
+
+שעה 12:30
+
+תוצאה
+
+תאריך 30/10/2026
+
+משחקהפ' מחנה יהודה עידן פוקס - הפ' חדרה ש. שוורץ
+
+שעה 12:35
+
+תוצאה
+
+תאריך 07/11/2026
+
+משחקהפ' חדרה ש. שוורץ - מ.כ. שדרות
+
+תאריך 27/11/2026
+
+משחקהפועל אזור - הפ' חדרה ש. שוורץ
+`;
+const HADERA_EN = `## כל המשחקים של קבוצה
+
+Date Game Stadium Time Result
+
+Date 10/30/2026
+
+Game Hapoel Mahane Yehuda - Hapoel Hadera Shulam Shwartz
+
+Stadium Mahane Yehuda
+
+Time 12:35 PM
+
+Result 3-2
+
+Date 11/6/2026
+
+Game Hapoel Hadera Shulam Shwartz - F C Sderot
+
+Stadium Hedera Training
+
+Time 12:00 PM
+
+Result
+`;
+
+const hadera = (en) => ({ via: 'exa-mcp', fetchText: async (url) => ({ text: url.includes('/en/') ? en : HADERA_HE }) });
+const HADERA = [{ id: 'eitan', name: 'Eitan Rosen', prefix: '/', teamId: '2186' }];
+
+test('when the English copy is newer, the Hebrew fixtures take its dates (Hadera, 6.11.2026)', async () => {
+  const now = new Date('2026-11-06T03:00:00Z');
+  const payload = await X.scrapeTargets(HADERA, { reader: hadera(HADERA_EN), now });
+  const r = payload.results[0];
+  assert.equal(r.datesFromEnglish, 1);
+  assert.equal(r.staleCopy, undefined, 'the newer copy is not stale');
+  const sderot = r.fixtures.find((f) => f.awayTeam === 'מ.כ. שדרות');
+  assert.equal(sderot.date, '2026-11-06');
+  assert.equal(sderot.time, '12:00');
+  assert.equal(sderot.homeTeam, "הפ' חדרה ש. שוורץ", 'Hebrew names are kept');
+  assert.equal(sderot.sourceMatchId, "2026-11-06|הפ' חדרה ש. שוורץ|מ.כ. שדרות");
+  assert.equal(r.fixtures.find((f) => f.homeTeam === 'הפועל אזור').date, '2026-11-27', 'games the English copy lacks stay as they are');
+});
+
+test('an older or unreadable English copy changes nothing, and a stale Hebrew copy is flagged', async () => {
+  const now = new Date('2026-11-06T03:00:00Z');
+  const older = HADERA_EN.replace('Result 3-2', 'Result').replace('10/30/2026', '10/09/2026');
+  for (const en of [older, 'Just a moment...']) {
+    const r = (await X.scrapeTargets(HADERA, { reader: hadera(en), now })).results[0];
+    assert.equal(r.datesFromEnglish, undefined);
+    assert.equal(r.fixtures.find((f) => f.awayTeam === 'מ.כ. שדרות').date, '2026-11-07');
+    assert.equal(r.staleCopy, '2026-10-19');
+  }
+});
+
+test('applyNewerDates skips a game two Hebrew fixtures are equally near to', () => {
+  const he = X.parseFixturesText(HADERA_HE, false);
+  const en = X.parseFixturesText(HADERA_EN.replace('11/6/2026', '11/2/2026').replace('Hapoel Hadera Shulam Shwartz - F C Sderot', 'F C Sderot - Hapoel Hadera Shulam Shwartz'), true);
+  // The English away game on 2.11 is 3 days from the away game on 30.10 and
+  // 3 days from one added on 5.11: no guess is made.
+  he.push({ ...he[3], date: '2026-11-05', homeTeam: 'אחרת', sourceMatchId: 'x' });
+  assert.equal(X.applyNewerDates(he, en, '2026-11-01'), 0);
+});
+
+test('isStaleCopy: results that stop more than a week before games already played', () => {
+  assert.equal(X.isStaleCopy(HADERA_HE, false, '2026-11-06'), true);
+  assert.equal(X.isStaleCopy(HADERA_HE, false, '2026-10-28'), false);
+  assert.equal(X.isStaleCopy(HADERA_EN, true, '2026-11-06'), false);
 });
