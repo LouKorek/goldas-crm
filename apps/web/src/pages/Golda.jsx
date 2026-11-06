@@ -80,7 +80,7 @@ export default function Golda() {
   useEffect(() => listenMyUser(email, setMe), [email]);
 
   return (
-    <div>
+    <div className={tab === 'chat' ? 'table-page' : undefined}>
       <PageHeader title={t('Golda')} subtitle={he ? 'העוזרת של הסוכנות. מדברים איתה כאן או בוואטסאפ, וכל שינוי שהיא עושה נרשם עם מי ביקש.' : 'The agency assistant. Talk to her here or on WhatsApp; every change she makes is recorded with who asked.'}>
         <div className="tabs" role="tablist" style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-2)', marginTop: 8 }}>
           {[['chat', t('Chat')], ['actions', t('Actions')], ['settings', t('My briefing')]].map(([k, label]) => (
@@ -156,7 +156,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   const first = (name || '').split(' ')[0];
 
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 'min(72vh, 720px)', padding: 0 }}>
+    <div className="card fill-card" style={{ display: 'flex', flexDirection: 'column', height: 'min(72vh, 720px)', padding: 0 }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 8px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {items.length === 0 && (
           <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-3)', fontSize: 13, maxWidth: 420 }}>

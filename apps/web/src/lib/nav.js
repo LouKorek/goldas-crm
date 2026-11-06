@@ -31,9 +31,10 @@ export const AREAS = [
     ],
   },
   {
-    key: 'clubs', label: t('Clubs'), icon: 'clubs', path: '/clubs',
+    // Lou (6.11.2026): this area is the contacts book. Club pages stay
+    // reachable from players, deals and search, just not as a menu list.
+    key: 'clubs', label: t('Clubs'), icon: 'clubs', path: '/contacts',
     items: [
-      { label: t('Clubs'), path: '/clubs' },
       { label: t('Contacts'), path: '/contacts', icon: 'contacts' },
     ],
   },

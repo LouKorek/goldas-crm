@@ -103,7 +103,7 @@ export default function Clubs() {
   }
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader title={t("Clubs")} subtitle={`${clubs.length} ${t('clubs · players, candidates, requirements and contacts in one place')}`}
         action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Club")}</span></button>}
@@ -204,7 +204,7 @@ function ClubDetail({ club, world, canEdit, onEdit, modal, setModal, form, setFo
         {openDeals.map((d) => <Row key={d.id} to={`/pipeline/${d.category || 'men'}`} main={d.playerName} sub={`${DEAL_STAGE_LABELS[d.stage] || d.stage} · since ${fmtDate((d.enteredStageAt || '').slice(0, 10))}`} />)}
       </Section>
       <Section title={t("Requirements")} count={w.reqs.length}>
-        {w.reqs.map((r) => <Row key={r.id} to="/requirements" main={r.requiredPosition || 'Position?'} sub={[r.gender, r.ageMin || r.ageMax ? `${r.ageMin || '?'}–${r.ageMax || '?'}` : '', r.salary].filter(Boolean).join(' · ')} />)}
+        {w.reqs.map((r) => <Row key={r.id} to={`/market/requirements?req=${r.id}`} main={r.requiredPosition || 'Position?'} sub={[r.gender, r.ageMin || r.ageMax ? `${r.ageMin || '?'}–${r.ageMax || '?'}` : '', r.salary].filter(Boolean).join(' · ')} />)}
       </Section>
       <Section title={t("Contacts")} count={w.contacts.length}>
         {w.contacts.map((c) => <Row key={c.id} to="/contacts" main={c.contactName} sub={[c.contactRole, c.contactPhone].filter(Boolean).join(' · ')} />)}
