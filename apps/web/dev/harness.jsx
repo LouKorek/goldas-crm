@@ -180,12 +180,30 @@ function Snapshot() {
     saveView={async () => {}} deleteView={async () => {}} />;
 }
 
-const SCREENS = { home: Home, calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
+// A table screen shaped like the real ones (Clubs, Players…): header, filters,
+// one card holding a long table.
+function TablePage() {
+  return (
+    <div className="table-page">
+      <PageHeader title="מועדונים" subtitle="389 מועדונים"
+        action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn btn-primary" style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">הוספת מועדון</span></button>
+          <div style={{ height: 36, display: 'flex', alignItems: 'center' }}><SearchInput value="" onChange={() => {}} placeholder="חיפוש מועדונים..." /></div>
+        </div>} />
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}><div className="table-wrap"><table className="data-table">
+        <thead><tr>{['', 'מועדון', 'מיוצגים', 'מועמדים', 'דרישות', 'אנשי קשר', 'משחקים', 'עסקאות'].map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
+        <tbody>{Array.from({ length: 60 }, (_, i) => <tr key={i}>{['…', `מועדון ${i + 1}`, i % 3, 0, i % 2, 1, 4, 0].map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+      </table></div></div>
+    </div>
+  );
+}
+
+const SCREENS = { table: TablePage, home: Home, calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
 const q = new URLSearchParams(location.search);
 const which = q.get('s') || 'home';
 applyTheme(q.get('theme') === 'dark' ? 'dark' : 'light');
 const S = SCREENS[which] || Home;
-const PATHS = { home: '/home', calendar: '/calendar', tm: '/scouting/tm-watch', player: '/players/p1', players: '/players', snapshot: '/home/snapshot' };
+const PATHS = { table: '/clubs', home: '/home', calendar: '/calendar', tm: '/scouting/tm-watch', player: '/players/p1', players: '/players', snapshot: '/home/snapshot' };
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true };
 const App = () => q.get('login') ? <Login denied={false} /> : (
   <RoleContext.Provider value={role}>

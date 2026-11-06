@@ -325,7 +325,7 @@ export default function Players() {
   const alertColor = (days) => days===null?'var(--text-2)':days<=30?'var(--red)':days<=60?'var(--amber)':'var(--text-2)';
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader
         title={t("Represented Players")}
         subtitle={`${players.length} ${t('players under representation')}`}

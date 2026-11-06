@@ -104,7 +104,7 @@ export default function Team() {
   if (!isAdmin) return null;
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader
         title={t("Team")}
         subtitle={t("Manage who can sign in and what they can do")}

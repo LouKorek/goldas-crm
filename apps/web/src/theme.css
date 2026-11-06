@@ -693,3 +693,22 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
 @media (prefers-reduced-motion: reduce) {
   .pop, .more-screen, .modal-box { animation: none !important; }
 }
+
+/* Table screens (.table-page on the page's root): on the computer the page
+   stays put and only the table scrolls. The page fills the pane under the
+   top bar, the table's card takes what the header and filters leave, and
+   the rows scroll inside it with the column headers frozen. Before, the
+   table had a fixed height from the old layout (100vh - 170px) that no
+   longer fit under the top bar and area row, so the pane scrolled too. */
+@media (min-width: 769px) {
+  .main-content:has(> .table-page) { display: flex; flex-direction: column; }
+  .main-content > .table-page { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .table-page > .card:has(> .table-wrap) { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .table-page > .card > .table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
+  /* Golda's chat: the conversation fills the pane and scrolls inside it. */
+  .table-page > .fill-card { flex: 1 1 auto; min-height: 320px; height: auto !important; }
+  /* Screens with several tables or a report (System, Snapshot, migrations)
+     scroll as one page: their tables grow to their rows instead of opening
+     a second scroll inside the page. */
+  .main-content > :not(.table-page) .table-wrap { max-height: none; }
+}

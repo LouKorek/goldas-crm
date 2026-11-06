@@ -25,7 +25,7 @@ export default function RecycleBin() {
   };
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader title={t("Recycle Bin")} subtitle={`Deleted records stay here for ${KEEP_DAYS} days and can be restored with one click.`} />
       {items === null ? <div style={{ display: 'flex', justifyContent: 'center', padding: 60 }}><Spinner size={36} /></div>
         : items.length === 0 ? <Empty message={t("The recycle bin is empty.")} />

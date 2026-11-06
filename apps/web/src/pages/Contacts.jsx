@@ -72,7 +72,7 @@ export default function Contacts() {
   });
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader
         title={t("Contacts")}
         subtitle={`${items.length} ${items.length === 1 ? t('contact') : t('contacts')}`}

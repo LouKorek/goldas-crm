@@ -60,7 +60,7 @@ export default function Prospects() {
   const Status = ({ p }) => p.status ? <span className="badge" style={{ background: 'var(--gold-dim)', color: 'var(--gold)', fontSize: 10 }}>{stageLabel(p.status)}</span> : <span style={{ color: 'var(--text-3)' }}>—</span>;
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader title={t('Candidates')} subtitle={`${rows.length} ${t('candidates across all markets')}`}
         action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {canEdit && <Link to={`/pipeline/${filters.category || 'men'}`} state={{ add: true }} className="btn btn-primary" style={{ height: 36, textDecoration: 'none' }}><Icon name="plus" size={12} /><span className="btn-text">{t('Add Player')}</span></Link>}

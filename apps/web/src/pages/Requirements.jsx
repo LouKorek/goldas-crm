@@ -825,7 +825,7 @@ export default function Requirements() {
   });
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader
         title={t("Club Requirements")}
         subtitle={`${items.filter(isOpenReq).length} ${t('open requirements')}`}

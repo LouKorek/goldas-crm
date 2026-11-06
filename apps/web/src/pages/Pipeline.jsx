@@ -595,7 +595,7 @@ export default function Pipeline({ category }) {
   });
 
   return (
-    <div>
+    <div className="table-page">
       <PageHeader
         title={label}
         subtitle={`${items.length} ${t('players in this category')}`}
