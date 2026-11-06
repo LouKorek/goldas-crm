@@ -57,7 +57,12 @@ html[lang="he"] .form-label, html[lang="he"] th, html[lang="he"] .empty-state p 
   letter-spacing: 0 !important;
   text-transform: none !important;
 }
-html[lang="he"] .btn { font-size: 12.5px; font-weight: 600; }
+html[lang="he"] /* The short label of a button (.btn-text-sm) is shown only in the phone
+   action strip, where it replaces the full .btn-text; everywhere else it
+   stays hidden so a button never reads its name twice. */
+.btn-text-sm { display: none; }
+
+.btn { font-size: 12.5px; font-weight: 600; }
 html[lang="he"] .btn-sm { font-size: 11.5px; }
 html[lang="he"] .form-label, html[lang="he"] th { font-size: 11.5px; }
 
@@ -1141,7 +1146,6 @@ textarea:focus::placeholder {
   }
   .page-header .action-bar .btn:has(.btn-text):not(:has(.btn-text-sm)) { width: 40px !important; padding: 0 !important; }
   .page-header .action-bar .btn svg { flex-shrink: 0; }
-  .btn-text-sm { display: none; }
 
   /* Filters under the band: a quiet block that scrolls with the page. */
   .page-filters { margin-bottom: 12px; }

@@ -9,11 +9,12 @@
 // several times. A run that left players behind doesn't count: the next
 // deploy picks up where it stopped.
 //
-// Two more things happen on a production deploy, before the sync:
+// More happens on a production deploy, before the sync:
 //   1. pending data migrations start in the background (backup first), so a
 //      model change ships with its data in one step and nobody presses anything;
 //   2. Meta's webhook callback for Golda is pointed at production, and her
-//      re-engagement template (lib/wa-templates.js) exists on the WhatsApp accounts.
+//      re-engagement template (lib/wa-templates.js) exists on the WhatsApp accounts;
+//   3. the server's read of the Israeli fixtures (ifa-server-sync) runs again.
 //
 // Same hand-off as sync-matches-cron: a single-use internal nonce, then an
 // HTTP call to the background worker. When Netlify's WEBHOOK_SECRET is set,
@@ -102,6 +103,18 @@ exports.handler = async (event) => {
     const month = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }).slice(0, 7);
     await db.collection('app_meta').doc('deploys').set({ [month]: admin.firestore.FieldValue.increment(1), lastDeployAt: admin.firestore.FieldValue.serverTimestamp(), lastCommit: String(payload.commit_ref || '').slice(0, 10) }, { merge: true });
   } catch (e) { notes.push(`deploy count failed: ${e.message}`); }
+  // The Israeli fixtures (ifa-server-sync, normally at 03:00 UTC) are read
+  // again too, so a fix to that reader reaches today's games at once. Exa's
+  // public server costs nothing; a read in the last hour is left alone.
+  try {
+    const ifa = (await db.collection('app_meta').doc('ifaBrowserSync').get()).data() || {};
+    const lastIfa = ifa.lastRunAt?.toDate?.()?.getTime?.() || 0;
+    if (Date.now() - lastIfa < 3600000) notes.push('ifa sync skipped: ran within the hour');
+    else {
+      const r = await fetch(`${base}/.netlify/functions/ifa-server-sync-background`, { method: 'POST', headers: await internalHeaders('deploy-succeeded') });
+      notes.push(`ifa sync triggered: ${r.status}`);
+    }
+  } catch (e) { notes.push(`ifa sync failed: ${e.message}`); }
   const status = (await db.collection('app_meta').doc('syncStatus').get()).data() || {};
   const finished = status.finishedAt?.toDate?.()?.getTime?.() || 0;
   const complete = status.lastResult && !status.lastResult.partial;

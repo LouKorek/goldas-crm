@@ -293,9 +293,9 @@ export function SnapshotView({ data, state, setState, lang = 'he', now, views = 
           </div>
           <span style={{ flex: 1 }} />
           <div className="snap-export">
-            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('excel')}><Icon name="external" size={12} /><span className="btn-text">Excel</span><span className="btn-text-sm">XLS</span></button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('pdf')}><Icon name="clipboard" size={12} /><span className="btn-text">PDF</span><span className="btn-text-sm">PDF</span></button>
-            <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => exportAs('print')}><Icon name="external" size={12} /><span className="btn-text">{busy ? t('Exporting…') : t('Print')}</span><span className="btn-text-sm">{t('Print')}</span></button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('excel')}><Icon name="external" size={12} /><span className="btn-text">Excel</span></button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => exportAs('pdf')}><Icon name="clipboard" size={12} /><span className="btn-text">PDF</span></button>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => exportAs('print')}><Icon name="external" size={12} /><span className="btn-text">{busy ? t('Exporting…') : t('Print')}</span></button>
           </div>
         </div>
         <div className="snap-filterbar">

@@ -270,8 +270,15 @@ async function runImport(db, payload, { dryRun = false, via = 'browser' } = {}) 
     } catch (err) { console.error('[ifa-import] merge duplicates:', err.message); }
   }
 
-  const stats = { ...summary, written, upserts, removed, merged, durationS: Math.round((Date.now() - t0) / 1000) };
+  // Teams whose newest copy of the page (lib/ifa-exa.js) stops showing results
+  // more than a week before games already played: their dates may be out of
+  // date, and Golda says so (opsAlerts).
+  const staleCopies = (payload.results || []).filter((r) => r.staleCopy)
+    .map((r) => ({ name: r.name, teamId: r.teamId || null, lastResult: r.staleCopy }));
+  const datesFromEnglish = (payload.results || []).reduce((n, r) => n + (r.datesFromEnglish || 0), 0);
+  const stats = { ...summary, written, upserts, removed, merged, datesFromEnglish, durationS: Math.round((Date.now() - t0) / 1000) };
   await ref.set({
+    staleCopies,
     lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSuccessAt: admin.firestore.FieldValue.serverTimestamp(),
     stats, perPlayer, warnings, merged: mergedNotes.slice(0, 50),

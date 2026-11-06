@@ -47,6 +47,7 @@ async function runServerSync({ dryRun = false, now = new Date(), env = process.e
     targets: targets.length, read, fixtures, pages: payload.pages, costDollars: payload.costDollars,
     refused, stats: imp.stats || null,
     errors: payload.results.filter((r) => r.error).map((r) => `${r.name}: ${r.error}`),
+    staleCopies: payload.results.filter((r) => r.staleCopy).map((r) => `${r.name}: ${r.staleCopy}`),
   };
 }
 

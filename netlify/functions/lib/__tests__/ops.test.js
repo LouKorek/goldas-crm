@@ -52,3 +52,14 @@ test('every "run now" job maps to a worker or an ops task that exists', () => {
   for (const t of _internal.OPS) assert.ok(TASKS.includes(t), `${t} has no ops task`);
   for (const w of Object.values(_internal.WORKERS)) assert.match(w, /-background$/);
 });
+
+test('a stale copy of a team page gets one alert a day naming the teams', () => {
+  const now = new Date('2026-11-06T05:00:00Z');
+  const ifaSync = { lastRunAt: now.toISOString(), staleCopies: [{ name: 'Eitan Rosen', teamId: '2186', lastResult: '2026-10-19' }] };
+  const out = opsAlerts({ ifaSync, now });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].key, 'ifastale|2026-11-06');
+  assert.match(out[0].text, /Eitan Rosen/);
+  assert.match(out[0].text, /19\/10/);
+  assert.equal(opsAlerts({ ifaSync: { lastRunAt: now.toISOString(), staleCopies: [] }, now }).length, 0);
+});

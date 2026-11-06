@@ -20,6 +20,7 @@ export const listenJobs = (callback, n = 200) =>
 /** The scheduled jobs the Health tab knows, with their schedule in words. */
 export const JOBS = [
   { name: 'sync-matches', he: 'סנכרון משחקים', when: 'יומי 03:10 UTC', run: 'sync-matches' },
+  { name: 'ifa-server-sync', he: 'משחקי ההתאחדות (ישראל)', when: 'יומי 03:00 UTC', run: 'ifa-server-sync' },
   { name: 'nightly-engines', he: 'מנועי הלילה (התראות, ציונים)', when: 'יומי 03:00 UTC', run: 'nightly-engines' },
   { name: 'send-alerts', he: 'תקציר התראות באימייל', when: 'יומי 05:30 UTC', run: 'send-alerts' },
   { name: 'golda-briefing', he: 'תדריך גולדה והתראות', when: 'כל שעה ב-:30', run: 'golda-briefing' },
