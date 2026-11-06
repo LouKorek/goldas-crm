@@ -28,6 +28,8 @@ const { runJob } = require('./lib/jobs.js');
 const cheerio    = require('cheerio');
 const nodemailer = require('nodemailer');
 const { matchName, buildQueries } = require('./data/jewish-names.js');
+const { scraperAccount } = require('./lib/scraper-account.js');
+const { tmSpendCap } = require('./lib/tm-budget.js');
 
 const TM_BASE        = 'https://www.transfermarkt.com';
 const ISRAEL_LAND_ID = 74;
@@ -84,19 +86,6 @@ async function fetchHtml(targetUrl) {
     { headers: tmHeaders(targetUrl) });
   if (!res.ok) throw new Error(`fetch ${targetUrl} → ${res.status}`);
   return res.text();
-}
-
-// Remaining credits this cycle, or null when it can't be determined.
-async function creditsLeft() {
-  const apiKey = (process.env.SCRAPER_API_KEY || '').trim();
-  if (!apiKey) return null;
-  try {
-    const r = await fetch(`https://api.scraperapi.com/account?api_key=${apiKey}`);
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (j.requestLimit == null) return null;
-    return Math.max(0, Number(j.requestLimit) - Number(j.requestCount || 0));
-  } catch (e) { return null; }
 }
 
 const tmIdFromHref = (href) => {
@@ -377,24 +366,23 @@ async function run() {
   const t0 = Date.now();
   const RUN_BUDGET_MS = 11 * 60 * 1000;
 
-  // Credit budget. A run may spend at most `creditBudget` proxy credits
-  // (default 150) and never dips below `creditReserve` remaining for the
-  // month, so a single chained scan can no longer swallow the whole
-  // allowance and leave the daily citizenship check with nothing.
-  const remaining = await creditsLeft();
-  const creditBudget  = meta.creditBudget  ?? 150;
-  // The key is shared with the matches sync, which cannot run at all without
-  // credits for football.org.il. TM Watch keeps its hands off the last
-  // MATCHES_RESERVE of every month, whatever tmWatchMeta says, so it stops on
-  // its own when the account runs low and starts again after the reset.
-  const MATCHES_RESERVE = 200;
-  const creditReserve = Math.max(meta.creditReserve ?? 40, MATCHES_RESERVE);
-  const spendCap = remaining == null
-    ? creditBudget
-    : Math.max(0, Math.min(creditBudget, remaining - creditReserve));
+  // Credit budget: what is left on the ScraperAPI account is spread evenly
+  // over the days until its monthly reset (lib/tm-budget.js), shared by every
+  // run and chain link of the day, so the watch keeps working all month
+  // instead of emptying the free plan in a week. Only TM Watch uses the key.
+  const acct = await scraperAccount();
+  const remaining = acct.requestLimit == null ? null
+    : Math.max(0, Number(acct.requestLimit) - Number(acct.requestCount || 0));
+  const today = new Date().toISOString().slice(0, 10);
+  const spentBefore = meta.creditDay === today ? (meta.creditSpentToday || 0) : 0;
+  const spendCap = tmSpendCap({
+    remaining, spentToday: spentBefore, nextReset: acct.nextReset || null, today,
+    reserve: meta.creditReserve ?? 20, perRunMax: meta.creditBudget ?? 150,
+  });
+  const creditFields = () => ({ creditDay: today, creditSpentToday: spentBefore + REQUEST_COUNT });
   const budgetUp = () => REQUEST_COUNT >= spendCap;
   const timeUp = () => Date.now() - t0 > RUN_BUDGET_MS || budgetUp();
-  log.push(`Budget: ${remaining == null ? 'unknown' : remaining} credits left, spending up to ${spendCap} this run`);
+  log.push(`Budget: ${remaining == null ? 'unknown' : remaining} credits left (reset ${acct.nextReset || '?'}), ${spentBefore} spent today, up to ${spendCap} this run`);
 
   try {
     const chainDepth = meta.chainDepth || 0;
@@ -638,6 +626,7 @@ async function run() {
         : (meta.cycleStartedAt || admin.firestore.Timestamp.fromMillis(cycleStartedAt)),
       historyRemaining,
       lastRunAt: now, lastRunLog: log.slice(0, 40).join(' | '),
+      ...creditFields(),
       lastRunRequests: REQUEST_COUNT, lastRunDirect: DIRECT_COUNT, lastRunNew: newOnes.length,
       lastRunSeconds: Math.round((Date.now() - t0) / 1000),
       totalTracked: existingIds.size + newOnes.filter(p => !p.upgraded).length,
@@ -652,7 +641,7 @@ async function run() {
     console.log(log.join('\n'));
     return { statusCode: 200, body: `ok: ${newOnes.length} new, ${REQUEST_COUNT} credits (+${DIRECT_COUNT} free), chain=${shouldChain}` };
   } catch (e) {
-    await metaRef.set({ running: false, lastError: String(e), lastRunAt: admin.firestore.Timestamp.now() }, { merge: true });
+    await metaRef.set({ running: false, lastError: String(e), lastRunAt: admin.firestore.Timestamp.now(), ...creditFields() }, { merge: true });
     console.error('tm-watch failed:', e);
     return { statusCode: 500, body: String(e) };
   }
