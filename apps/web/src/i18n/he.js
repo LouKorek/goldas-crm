@@ -87,7 +87,7 @@ const HE = {
   'Notifications': 'התראות',
   'Alerts': 'התראות',
   'Recycle Bin': 'סל מחזור',
-  'Team': 'צוות',
+  'Team': 'משתמשים והרשאות',
   'Data Migrations': 'מיגרציות נתונים',
   'Deals': 'עסקאות',
   'Design System': 'מערכת העיצוב',

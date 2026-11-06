@@ -435,6 +435,12 @@ html[lang="he"] .section-label { letter-spacing: 0; }
 .area-tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
 
 @media (min-width: 769px) {
+  /* The column under the top bar is exactly the viewport tall and the
+     content pane takes what the top bar leaves, so scrolling to the end
+     shows the last row in full (a 100vh pane under a 56px bar used to hang
+     56px below the window, cutting the bottom off every screen). */
+  .app-col { height: 100vh; min-height: 0; }
+  .main-content { flex: 1 1 0 !important; height: auto !important; min-height: 0 !important; }
   .main-content { padding: 0 28px 40px !important; }
   .page-header-wrap {
     background: var(--bg);
