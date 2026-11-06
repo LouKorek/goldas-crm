@@ -610,9 +610,9 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
 }
 
 /* "More" screen on the phone: a menu of every area. */
-.more-screen { position: fixed; inset: 0; z-index: 220; background: var(--bg); display: flex; flex-direction: column; overflow-y: auto; animation: navIndexIn 0.2s var(--ease-out); padding-top: env(safe-area-inset-top, 0px); }
+.more-screen { position: fixed; inset: 0; z-index: 220; background: var(--bg); display: flex; flex-direction: column; overflow-y: auto; animation: navIndexIn 0.2s var(--ease-out); }
 @keyframes navIndexIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
-.more-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: var(--surface-1); border-bottom: 1px solid var(--border); }
+.more-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; background: var(--surface-1); border-bottom: 1px solid var(--border); }
 .more-me { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
 .more-me .me-btn { width: 44px; height: 44px; font-size: 15px; cursor: default; }
 .more-body { display: flex; flex-direction: column; gap: 14px; padding: 0 16px calc(28px + env(safe-area-inset-bottom, 0px)); }
@@ -710,5 +710,20 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
   /* Screens with several tables or a report (System, Snapshot, migrations)
      scroll as one page: their tables grow to their rows instead of opening
      a second scroll inside the page. */
+  .main-content > :not(.table-page) .table-wrap { max-height: none; }
+}
+
+/* The same on the phone. The pane under the top bar is the scroller there;
+   a screen whose table (or Golda's chat) is on show fills it and only the
+   table or the conversation scrolls. Phone lists drawn as cards (players,
+   candidates…) hide the desktop table and keep scrolling as one page. */
+@media (max-width: 768px) {
+  .main-content:has(> .table-page > .card:not(.desktop-table) > .table-wrap),
+  .main-content:has(> .table-page > .fill-card) { display: flex; flex-direction: column; }
+  .main-content > .table-page:has(> .card:not(.desktop-table) > .table-wrap),
+  .main-content > .table-page:has(> .fill-card) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .table-page > .card:not(.desktop-table):has(> .table-wrap) { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .table-page > .card:not(.desktop-table) > .table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
+  .table-page > .fill-card { flex: 1 1 auto; min-height: 260px; height: auto !important; }
   .main-content > :not(.table-page) .table-wrap { max-height: none; }
 }
