@@ -198,12 +198,29 @@ function TablePage() {
   );
 }
 
-const SCREENS = { table: TablePage, home: Home, calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
+// Golda's chat tab: header with tabs, then the chat card that fills the pane.
+function GoldaChat() {
+  return (
+    <div className="table-page">
+      <PageHeader title="גולדה" subtitle="העוזרת של הסוכנות. מדברים איתה כאן או בוואטסאפ, וכל שינוי שהיא עושה נרשם עם מי ביקש.">
+        <div className="tabs" style={{ display: 'flex', marginTop: 8 }}>{['צ׳אט', 'פעולות', 'התדריך שלי'].map((l) => <button key={l} style={{ background: 'none', border: 0, padding: '8px 14px' }}>{l}</button>)}</div>
+      </PageHeader>
+      <div className="card fill-card" style={{ display: 'flex', flexDirection: 'column', height: 'min(72vh, 720px)', padding: 0 }}>
+        <div className="chat-scroll" style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {Array.from({ length: 30 }, (_, i) => <div key={i} className="card card-body" style={{ alignSelf: i % 2 ? 'flex-start' : 'flex-end', maxWidth: '80%' }}>הודעה מספר {i + 1} בשיחה עם גולדה</div>)}
+        </div>
+        <div style={{ borderTop: '1px solid var(--border)', padding: 10, display: 'flex', gap: 8 }}><textarea rows={1} style={{ flex: 1, minHeight: 42 }} /><button className="btn btn-primary">שלח</button></div>
+      </div>
+    </div>
+  );
+}
+
+const SCREENS = { golda: GoldaChat, table: TablePage, home: Home, calendar: Calendar, tm: TmWatch, player: Player, players: Players, snapshot: Snapshot };
 const q = new URLSearchParams(location.search);
 const which = q.get('s') || 'home';
 applyTheme(q.get('theme') === 'dark' ? 'dark' : 'light');
 const S = SCREENS[which] || Home;
-const PATHS = { table: '/clubs', home: '/home', calendar: '/calendar', tm: '/scouting/tm-watch', player: '/players/p1', players: '/players', snapshot: '/home/snapshot' };
+const PATHS = { golda: '/golda', table: '/clubs', home: '/home', calendar: '/calendar', tm: '/scouting/tm-watch', player: '/players/p1', players: '/players', snapshot: '/home/snapshot' };
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true };
 const App = () => q.get('login') ? <Login denied={false} /> : (
   <RoleContext.Provider value={role}>
