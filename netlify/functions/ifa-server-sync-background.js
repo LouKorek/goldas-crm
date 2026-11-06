@@ -26,8 +26,28 @@ const { makeReader, scrapeTargets } = require('./lib/ifa-exa.js');
 
 const { getDb } = _lib;
 
-async function runServerSync({ dryRun = false, now = new Date(), env = process.env, fetchImpl = fetch, log = console.log } = {}) {
+// The Chrome routine on Lou's computer (restored 6 Nov 2026 as a backup) reads
+// the live site; the server only gets Exa's copy, which can be weeks old. While
+// the browser has published within BROWSER_FRESH_HOURS, the server leaves the
+// fixtures alone so an old copy never overwrites fresher data. A day the
+// computer is off, the gap passes 30h and the server publishes as before.
+const BROWSER_FRESH_HOURS = 30;
+function browserFresh(meta, now = new Date(), hours = BROWSER_FRESH_HOURS) {
+  const t = meta?.lastBrowserSuccessAt;
+  const ms = t?.toMillis ? t.toMillis() : (t ? Date.parse(t) : NaN);
+  return Number.isFinite(ms) && now.getTime() - ms < hours * 3600000;
+}
+
+async function runServerSync({ dryRun = false, force = false, now = new Date(), env = process.env, fetchImpl = fetch, log = console.log } = {}) {
   const db = getDb();
+  if (!dryRun && !force) {
+    const meta = (await db.collection('app_meta').doc('ifaBrowserSync').get()).data() || {};
+    if (browserFresh(meta, now)) {
+      const message = 'skipped: the computer\'s browser sync published within 30h (fresher than the Exa copy)';
+      log(`[ifa-server-sync] ${message}`);
+      return { ok: true, skipped: true, message, staleCopies: [] };
+    }
+  }
   const { targets } = await buildTargets(db);
   const reader = makeReader({ env, fetchImpl });
   log(`[ifa-server-sync] ${targets.length} targets via ${reader.via}${dryRun ? ' (dry run)' : ''}`);
@@ -56,9 +76,10 @@ exports.handler = withAuth({ action: 'run_sync', internal: true, secrets: [{ hea
   let body = {};
   try { body = event.body ? JSON.parse(event.body) : {}; } catch { body = {}; }
   const dryRun = q.dryRun === '1' || q.dryRun === 'true' || !!body.dryRun;
+  const force = q.force === '1' || !!body.force;
   try {
     const result = await runJob('ifa-server-sync', async (job) => {
-      const r = await runServerSync({ dryRun });
+      const r = await runServerSync({ dryRun, force });
       job.note(r.message);
       if (!r.ok) throw Object.assign(new Error(r.message), { result: r });
       return r;
@@ -71,3 +92,4 @@ exports.handler = withAuth({ action: 'run_sync', internal: true, secrets: [{ hea
 });
 
 exports.runServerSync = runServerSync;
+exports.browserFresh = browserFresh;
