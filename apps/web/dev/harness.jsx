@@ -189,7 +189,7 @@ const PATHS = { home: '/home', calendar: '/calendar', tm: '/scouting/tm-watch', 
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true };
 const App = () => q.get('login') ? <Login denied={false} /> : (
   <RoleContext.Provider value={role}>
-    <MemoryRouter initialEntries={[PATHS[which] || '/home']}>
+    <MemoryRouter initialEntries={[q.get('path') || PATHS[which] || '/home']}>
       <Routes>
         <Route path="/" element={<Layout user={{ email: role.email }} />}>
           <Route path="*" element={<S />} />

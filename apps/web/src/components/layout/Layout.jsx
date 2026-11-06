@@ -144,6 +144,27 @@ export default function Layout({ user }) {
             {bell()}
           </header>
 
+          {/* Desktop: the area's own screens, one row under the top bar. The
+              rail opens an area at its first screen; this row reaches the
+              others (on the phone the "More" index lists them all). Home
+              draws its tabs in its own header. */}
+          {areaDef && area !== 'home' && (() => {
+            const items = visibleItems(areaDef.items, { isAdmin });
+            if (items.length < 2) return null;
+            return (
+              <nav className="area-subnav desktop-only" aria-label={t('Sections')}>
+                {items.map((i) => {
+                  const on = here ? here.path === i.path : location.pathname === i.path;
+                  return (
+                    <Link key={i.path} to={i.path} className={on ? 'on' : undefined} aria-current={on ? 'page' : undefined}>
+                      {i.icon && <Icon name={i.icon} size={15} />}{i.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            );
+          })()}
+
           <main className="main-content" style={{ flex: 1, padding: '18px 20px', minHeight: '100vh' }}>
             {/* Screens load on demand; the shell stays up while one arrives. */}
             <Suspense fallback={<Skeleton rows={6} />}>
