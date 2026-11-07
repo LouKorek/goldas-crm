@@ -156,7 +156,7 @@ export default function Player360() {
           <Fact k={t('Foot')} v={tv(p.foot)} />
           <Fact k={t('Height (cm)')} v={p.height} />
           <Fact k={t('National Team Status')} v={[tv(p.natTeamStatus), p.natTeamCountry].filter(Boolean).join(' · ')} />
-          <Fact k={t('Agent')} v={[p.agentName, p.agentPhone].filter(Boolean).join(' · ')} />
+          <Fact k={t('Agent')} v={(p.agentName || p.agentPhone) ? <>{p.agentName && <span className="bidi">{p.agentName}</span>}{p.agentName && p.agentPhone && ' · '}{p.agentPhone && <span className="ltr">{p.agentPhone}</span>}</> : ''} />
           <Fact k={t('Profile Link')} v={p.profileLink ? <a href={p.profileLink} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{t('Open ↗')}</a> : ''} />
           <Fact k={t('Video Link')} v={p.videoLink ? <a href={p.videoLink} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{t('Open ↗')}</a> : ''} />
           <Fact k={t('Notes')} v={p.notes} />
