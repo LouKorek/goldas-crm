@@ -727,3 +727,9 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
   .table-page > .fill-card { flex: 1 1 auto; min-height: 260px; height: auto !important; }
   .main-content > :not(.table-page) .table-wrap { max-height: none; }
 }
+
+/* Hebrew screens, English data (Lou 7.11.2026). Each value on a card line
+   is its own bidi island, so a height never wraps around a Latin name and
+   "€1,000/mo" never reorders. Phone numbers always read left to right. */
+.m-meta > span, .m-sub, .bidi { unicode-bidi: plaintext; }
+.ltr { direction: ltr; unicode-bidi: isolate; }

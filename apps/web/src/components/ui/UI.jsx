@@ -340,7 +340,7 @@ export function PhoneDisplay({ phone }) {
   if (!phone) return <span style={{ color: 'var(--text-3)' }}>—</span>;
   return (
     <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-      <span style={{ color: 'var(--text-1)', fontSize: 13 }}>{formatPhone(phone)}</span>
+      <span className="ltr" style={{ color: 'var(--text-1)', fontSize: 13 }}>{formatPhone(phone)}</span>
       <PhoneActions phone={phone} />
     </div>
   );

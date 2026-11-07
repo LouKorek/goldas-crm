@@ -162,7 +162,7 @@ export default function Team() {
                         )}
                       </td>
                       <td style={{ fontSize: 12.5, color: 'var(--text-2)' }} dir="ltr">
-                        {showPhone(u.whatsapp) || <span style={{ color: 'var(--text-3)' }}>—</span>}
+                        {showPhone(u.whatsapp) ? <span className="ltr">{showPhone(u.whatsapp)}</span> : <span style={{ color: 'var(--text-3)' }}>—</span>}
                         {u.whatsapp && (Array.isArray(u.channels) && u.channels.includes('whatsapp')) && <div style={{ fontSize: 10, color: 'var(--text-3)' }}>{t('briefing at')} {String(Number.isInteger(u.briefingHour) ? u.briefingHour : 7).padStart(2, '0')}:30</div>}
                       </td>
                       <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>

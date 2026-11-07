@@ -696,7 +696,7 @@ function RequirementView({ req, players, onClose }) {
           <Row label={t("Position")}     value={req.requiredPosition} />
           <Row label={t("Age Range")}    value={ageDisplay} />
           <Row label={t("Max Transfer")} value={feeDisplay} />
-          <Row label={t("Max Salary")}   value={salDisplay} />
+          <Row label={t("Max Salary")}   value={<span className="bidi">{salDisplay}</span>} />
         </div>
       </div>
 
@@ -1007,9 +1007,9 @@ export default function Requirements() {
 
                     {/* Max salary */}
                     <td style={{ color: 'var(--text-2)', fontSize: 12 }}>
-                      {p.salary && p.salary !== 'Not specified'
+                      <span className="bidi">{p.salary && p.salary !== 'Not specified'
                         ? `€${Number(p.salary).toLocaleString()}/mo`
-                        : (p.salary === 'Not specified' ? '—' : p.salary || '—')}
+                        : (p.salary === 'Not specified' ? '—' : p.salary || '—')}</span>
                     </td>
                     <td style={{ textAlign: 'center' }}>{matchCount[p.id] ? <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--green-ok)', fontWeight: 700 }}>{matchCount[p.id]}</span> : <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
                     <td style={{ fontSize: 11 }}>

@@ -675,7 +675,7 @@ export default function Pipeline({ category }) {
                 <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
                     <span style={{fontWeight:600,fontSize:14.5}}>{p.playerName}</span>
-                    {p.height&&<span className="m-sub" style={{marginInlineStart:6}}>{p.height}{t("cm")}</span>}
+                    {p.height&&<span className="m-sub" style={{marginInlineStart:6}}>{p.height} {t("cm")}</span>}
                   </div>
                   {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius: 6,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{p.status}</span>}
                 </div>
@@ -697,7 +697,7 @@ export default function Pipeline({ category }) {
                 {(p.agentName||p.agentPhone)&&(
                   <div className="m-meta" style={{marginTop:5}} onClick={e=>e.stopPropagation()}>
                     <span>{p.agentName||'—'}</span>
-                    {p.agentPhone&&<span className="m-sub">{formatPhone(p.agentPhone)}</span>}
+                    {p.agentPhone&&<span className="m-sub ltr">{formatPhone(p.agentPhone)}</span>}
                     {p.agentPhone&&<PhoneActions phone={p.agentPhone} />}
                   </div>
                 )}
@@ -764,7 +764,7 @@ export default function Pipeline({ category }) {
                     {/* Name */}
                     <td>
                       <span style={{fontWeight:600}}>{p.playerName}</span>
-                      {p.height && <div style={{fontSize:11,color:'var(--text-3)'}}>{p.height}{t("cm")}</div>}
+                      {p.height && <div className="bidi" style={{fontSize:11,color:'var(--text-3)'}}>{p.height} {t("cm")}</div>}
                     </td>
                     {/* DOB + age */}
                     <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}{category==='youth'&&<div style={{marginTop:2}}><AgeGroupChip player={p} /></div>}</td>
@@ -814,7 +814,7 @@ export default function Pipeline({ category }) {
                     <td>
                       <div style={{fontWeight:500,fontSize:13,whiteSpace:'nowrap'}}>{p.agentName||'—'}</div>
                       {p.agentPhone && (<>
-                        <div style={{fontSize:11,color:'var(--text-3)',whiteSpace:'nowrap',marginTop:2}}>{formatPhone(p.agentPhone)}</div>
+                        <div style={{fontSize:11,color:'var(--text-3)',whiteSpace:'nowrap',marginTop:2}}><span className="ltr">{formatPhone(p.agentPhone)}</span></div>
                         <div style={{marginTop:3}}><PhoneActions phone={p.agentPhone} /></div>
                       </>)}
                     </td>
@@ -824,7 +824,7 @@ export default function Pipeline({ category }) {
                     </td>
                     {/* Salary */}
                     <td style={{color:'var(--text-2)',fontSize:12}}>
-                      {p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary||'—')}
+                      <span className="bidi">{p.salary && p.salary!=='Not specified' ? `€${Number(p.salary).toLocaleString()}/mo` : (p.salary||'—')}</span>
                     </td>
                     {/* National team */}
                     <td style={{fontSize:12,color:'var(--text-3)'}}>{natTeamStatusOf(p.natTeamStatus)||'—'}</td>

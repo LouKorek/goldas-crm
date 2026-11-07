@@ -134,7 +134,7 @@ export default function Contacts() {
                 <div className="m-meta" style={{ marginTop: 8 }}>
                   {c.contactName && <span>{c.contactName}</span>}
                   {c.contactRole && <span className="m-sub">{c.contactRole}</span>}
-                  {c.contactPhone && <span>{formatPhone(c.contactPhone)}</span>}
+                  {c.contactPhone && <span className="ltr">{formatPhone(c.contactPhone)}</span>}
                   {c.contactPhone && <PhoneActions phone={c.contactPhone} />}
                 </div>
               )}
@@ -181,7 +181,7 @@ export default function Contacts() {
                     <td style={{ textAlign: 'center' }}>
                       {c.contactPhone ? (
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, justifyContent: 'center' }}>
-                          <span style={{ fontSize: 12 }}>{formatPhone(c.contactPhone)}</span>
+                          <span className="ltr" style={{ fontSize: 12 }}>{formatPhone(c.contactPhone)}</span>
                           <PhoneActions phone={c.contactPhone} />
                         </div>
                       ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
