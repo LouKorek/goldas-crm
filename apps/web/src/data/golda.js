@@ -46,6 +46,10 @@ export const sendToGolda = async (text) => {
   return clientId;
 };
 
+/** My 👍 (1) / 👎 (-1) on one of Golda's answers, or 0 to take it back. */
+export const sendGoldaFeedback = (inboxId, rating) =>
+  callFunctionJson('golda-feedback', { method: 'POST', body: { inboxId, rating } });
+
 /** One queued app message: state and reply. */
 export const listenInboxMessage = (id, callback) =>
   onSnapshot(doc(db, 'wa_inbox', id), (s) => callback(s.exists() ? { id: s.id, ...s.data() } : null), (e) => console.error('inbox listen error:', e));

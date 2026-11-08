@@ -215,6 +215,8 @@ function extractMessages(payload) {
           // Forwarded from another chat (WhatsApp marks it; "frequently" = forwarded many times).
           forwarded: Boolean(m.context?.forwarded || m.context?.frequently_forwarded),
           voice: Boolean(m.audio?.voice),
+          // A reaction names the message it is on; an empty emoji means it was removed.
+          reaction: m.reaction ? { messageId: m.reaction.message_id || '', emoji: m.reaction.emoji || '' } : null,
           mediaId: media?.id || null,
           filename: m.document?.filename || (m.image ? `photo_${m.id.slice(-6)}.jpg` : null),
           timestamp: Number(m.timestamp) || 0,

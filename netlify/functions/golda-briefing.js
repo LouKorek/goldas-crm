@@ -25,6 +25,9 @@ const { dedupeKey } = require('./lib/alert-keys.js');
 const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
 const { writeBriefing } = require('./lib/golda-briefing-ai.js');
 const { opportunitiesOf } = require('./lib/golda-briefs.js');
+const { writeRecap, buildRecap } = require('./lib/golda-briefing-ai.js');
+const pro = require('./lib/golda-proactive.js');
+const tw = require('./lib/transfer-windows.js');
 const { visibleMemories } = require('./lib/golda-memory.js');
 const { changesFrom } = require('./lib/golda-insights.js');
 const { internalHeaders } = require('./lib/auth.js');
@@ -39,7 +42,7 @@ const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 
 async function loadAll(db) {
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
   const dayAgo = new Date(Date.now() - 86400000);
-  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp, recent, memories, meetings] = await Promise.all([
+  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp, recent, memories, meetings, feedback] = await Promise.all([
     listRepresented(db),
     db.collection('matches').get().then(rows),
     db.collection('deals').get().then(rows),
@@ -59,11 +62,47 @@ async function loadAll(db) {
     db.collection('golda_memory').get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => []),
     // Lou's meetings (kept in sync with his agency calendar "Gold A&S").
     db.collection('meetings').get().then(rows).catch(() => []),
+    // The team's 👍/👎 on Golda's answers, for the weekly quality review.
+    db.collection('golda_feedback').where('at', '>=', new Date(Date.now() - 8 * 86400000)).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => []),
   ]);
   return { players, matches, deals, requirements, tasks, jobs, trainings, users,
     settings: mergeSettings({ ...(settingsSnap.exists ? settingsSnap.data() : {}), matchDays: [0] }),
     sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper, whatsapp, recent, memories,
-    meetings };
+    meetings, feedback };
+}
+
+// Messages between briefings wait for the day: nothing is sent at night.
+const QUIET = (hour) => hour < 8 || hour >= 22;
+
+/** Opens follow-up tasks for deals that wait too long and closes the ones that are moot. */
+// At most this many new follow-up tasks a day, so the first run on a full
+// pipeline does not bury the task list: the longest waits go first.
+const FOLLOWUPS_PER_DAY = 5;
+
+async function syncFollowups(db, data, now, job, budget = FOLLOWUPS_PER_DAY) {
+  const created = [];
+  const FieldValue = admin.firestore.FieldValue;
+  for (const t of pro.dealFollowups({ deals: data.deals, tasks: data.tasks, now, owner: OWNER_EMAIL }).slice(0, Math.max(0, budget))) {
+    const ref = await db.collection('tasks').add({ ...t, source: 'golda', deletedAt: null, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      createdBy: 'golda', lastEditedBy: 'golda', lastEditedByName: 'גולדה', lastEditedAt: FieldValue.serverTimestamp() });
+    await db.collection('audit').add({ action: 'create', collection: 'tasks', docId: ref.id, after: { title: t.title, dueDate: t.dueDate }, fields: Object.keys(t),
+      by: 'golda', byName: 'גולדה', via: 'golda', actor: 'golda-auto', at: FieldValue.serverTimestamp(), undone: false }).catch(() => {});
+    created.push({ ...t, id: ref.id });
+  }
+  const closed = pro.followupsToClose({ deals: data.deals, tasks: data.tasks });
+  for (const t of closed) {
+    await db.collection('tasks').doc(t.id).update({ done: true, doneAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), lastEditedBy: 'golda', lastEditedByName: 'גולדה',
+      notes: `${(data.tasks.find((x) => x.id === t.id) || {}).notes || ''}\nנסגרה אוטומטית: העסקה ${t.dealStage ? `עברה לשלב "${t.dealStage}"` : 'כבר לא פעילה'}.`.trim() });
+  }
+  if (created.length || closed.length) job.note(`follow-ups: ${created.length} opened, ${closed.length} closed`);
+  return created;
+}
+
+function buildFollowupMessage(first, tasks) {
+  const lines = [`*פתחתי משימות מעקב, ${first}* ✅`];
+  for (const t of tasks.slice(0, 10)) lines.push(`• ${t.title}`);
+  lines.push('', 'הן במסך המשימות, ונסגרות לבד כשהעסקה זזה. https://goldas-crm.netlify.app/tasks');
+  return lines.join('\n');
 }
 
 function todaysGames({ matches, trainings, players }, today) {
@@ -90,6 +129,14 @@ function todaysMeetings(meetings, players, today) {
     date: today, time: m.date === today ? (m.time || '') : '', title: `פגישה: ${m.title}`,
     sub: [m.endTime && m.date === today ? `עד ${m.endTime}` : '', m.location, (m.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
   }));
+}
+
+const safe = (fn, fallback) => { try { return fn(); } catch (e) { console.warn('[briefing]', e.message); return fallback; } };
+
+/** The last week's audit, only when the recap is due. */
+async function loadWeek(db) {
+  const snap = await db.collection('audit').where('at', '>=', new Date(Date.now() - 7 * 86400000)).get();
+  return { audit: snap.docs.map((d) => d.data()) };
 }
 
 /** The week's strongest requirement × player matches; a failure only drops them from the briefing. */
@@ -121,7 +168,20 @@ async function run(job, now = new Date(), { force = false, send, write } = {}) {
   const recipients = whatsappRecipients(data.users);
   if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
 
-  const sent = { briefings: { ...(data.sent.briefings || {}) }, alerts: pruneSent(data.sent.alerts, today), ops: pruneSent(data.sent.ops, today) };
+  const sent = { briefings: { ...(data.sent.briefings || {}) }, alerts: pruneSent(data.sent.alerts, today), ops: pruneSent(data.sent.ops, today), recaps: { ...(data.sent.recaps || {}) },
+    eventsAt: Number(data.sent.eventsAt) || now.getTime() - 3600000,
+    followups: data.sent.followups?.date === today ? { ...data.sent.followups } : { date: today, n: 0 } };
+  const quiet = QUIET(hour);
+  const since = sent.eventsAt;
+  // Follow-up tasks are opened in the day only, so the message about them goes out with them.
+  const followups = quiet ? [] : await syncFollowups(db, data, now, job, FOLLOWUPS_PER_DAY - sent.followups.n).catch((e) => { job.note(`follow-ups failed: ${e.message}`); return []; });
+  sent.followups.n += followups.length;
+  const newReqs = quiet ? [] : safe(() => pro.newRequirementFits({ requirements: data.requirements, players: data.players, deals: data.deals, since, now }), []);
+  const userNames = Object.fromEntries((data.users || []).map((u) => [String(u.email || u.id || '').toLowerCase(), (u.name || '').split(' ')[0] || u.email]));
+  const windowsNow = safe(() => tw.windowStatus(now), null);
+  const marks = quiet ? [] : safe(() => tw.windowMarks(now), []);
+  const recapTime = pro.isRecapTime(now);
+  const recapData = recapTime ? await loadWeek(db).catch(() => ({ audit: [] })) : null;
   const ops = opsAlerts({ jobs: data.jobs, ifaSync: data.ifaSync, scraper: data.scraper, now });
   const dayMs = 86400000;
   const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
@@ -140,6 +200,8 @@ async function run(job, now = new Date(), { force = false, send, write } = {}) {
         const b = await (write || writeBriefing)({
           name: first, today, games, alerts: r.alerts, changes24h, deals: data.deals, requirements: data.requirements,
           opportunities: safeOpportunities(data, now),
+          weekAhead: pro.israelClock(now).weekday === 0 ? safe(() => pro.weekAhead(data, now), []) : [],
+          transferWindows: windowsNow,
           memories: visibleMemories(data.memories || [], { email: u.email, phone: u.phone }), fallbackText,
         });
         if (!b.ai) job.note(`briefing ${u.email}: template (${b.reason})`);
@@ -154,6 +216,33 @@ async function run(job, now = new Date(), { force = false, send, write } = {}) {
         count++;
         job.note(`${urgent.length} urgent → ${u.email}`);
       }
+      const team = u.role === 'admin' || u.role === 'manager';
+      // Between briefings: a new requirement with its best fits, the team's deal moves, the follow-ups opened for me.
+      if (!quiet && sent.briefings[u.email] === today) {
+        const reqs = team ? newReqs.filter((r) => String(r.by).toLowerCase() !== u.email) : [];
+        if (reqs.length) { await say(u, pro.buildRequirementMessage(first, reqs), 'update'); count++; job.note(`${reqs.length} new requirement(s) → ${u.email}`); }
+        const moves = u.role === 'admin' ? pro.teamDealMoves({ deals: data.deals, since, email: u.email, names: userNames }) : [];
+        if (moves.length) { await say(u, pro.buildMovesMessage(first, moves), 'update'); count++; job.note(`${moves.length} deal move(s) → ${u.email}`); }
+        const mineF = followups.filter((t) => String(t.owner || OWNER_EMAIL).toLowerCase() === u.email);
+        if (mineF.length) { await say(u, buildFollowupMessage(first, mineF), 'update'); count++; }
+        const myMarks = team ? marks.filter((m) => !sent.alerts[`${u.email}|${m.key}`]) : [];
+        if (myMarks.length) {
+          await say(u, tw.buildWindowMessage(first, myMarks), 'update');
+          myMarks.forEach((m) => { sent.alerts[`${u.email}|${m.key}`] = today; });
+          count++;
+        }
+      }
+      // Thursday evening: the week that was.
+      if (recapTime && sent.recaps[u.email] !== today) {
+        const facts = pro.recapFacts({ ...data, audit: recapData.audit, feedback: data.feedback || [] }, now);
+        const quality = u.role === 'admin' ? facts.quality : null;
+        const nextWeek = safe(() => pro.weekAhead(data, new Date(now.getTime() + 3 * 86400000)), []);
+        const b = await (write?.recap || writeRecap)({ name: first, facts, nextWeek, quality, fallbackText: buildRecap(first, facts, quality) });
+        if (!b.ai) job.note(`recap ${u.email}: template (${b.reason})`);
+        await say(u, b.text, 'recap');
+        sent.recaps[u.email] = today; count++;
+        job.note(`recap → ${u.email}`);
+      }
       const mineOps = u.role === 'admin' ? ops.filter((o) => !sent.ops[`${u.email}|${o.key}`]) : [];
       if (mineOps.length) {
         await say(u, buildOps(first, mineOps), 'ops');
@@ -166,6 +255,7 @@ async function run(job, now = new Date(), { force = false, send, write } = {}) {
       console.error('[golda-briefing] send failed:', u.email, e.message);
     }
   }
+  if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning
   await db.collection('app_meta').doc('goldaSent').set({ ...sent, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   return { sent: count, recipients: recipients.length, hour };
 }
@@ -188,4 +278,4 @@ exports.handler = schedule('30 * * * *', async () => {
     return { statusCode: 500, body: String(e.message || e) };
   }
 });
-exports._internal = { todaysGames, todaysMeetings, pruneSent, israelHour, run };
+exports._internal = { todaysGames, todaysMeetings, pruneSent, israelHour, run, buildFollowupMessage, QUIET, syncFollowups, FOLLOWUPS_PER_DAY };

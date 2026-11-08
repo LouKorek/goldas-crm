@@ -105,10 +105,10 @@ async function identityFor(db, msg) {
 
 /** Deliver a reply on the message's channel. Throws when WhatsApp refuses. */
 async function deliver(msg, reply, { buttons = [], list = null } = {}) {
-  if (msg.channel === 'app') return;                       // the app reads the reply from the inbox document
+  if (msg.channel === 'app') return [];                    // the app reads the reply from the inbox document
   if (list) return wa.sendList(msg.from, reply, list.button, list.rows, msg.phoneId);
   if (buttons.length) return wa.sendButtons(msg.from, reply, buttons, msg.phoneId);
-  await wa.sendText(msg.from, reply, msg.phoneId);
+  return wa.sendText(msg.from, reply, msg.phoneId);
 }
 
 /** A voice note in, its words out; the service state is kept for the Golda screen. */
@@ -233,7 +233,7 @@ async function processMessage(messageId) {
 
     // Record the turn before sending, so a failed send never loses the history.
     const now = Date.now();
-    const turn = [{ role: 'user', text: userText, at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1, ...(buttons.length ? { buttons } : {}) }];
+    const turn = [{ role: 'user', text: userText, at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1, id: String(messageId), ...(buttons.length ? { buttons } : {}) }];
     const patch = {
       topic: current, turn: session.turn, pendingDeletes: pendingDeletes || [], pendingDelete: admin.firestore.FieldValue.delete(), lastAt: now, lockUntil: 0, lockedBy: null,
       email: identity.email || '', name: identity.name, phone: identity.phone || '',
@@ -248,8 +248,8 @@ async function processMessage(messageId) {
     const done = { reply, buttons, menu: Boolean(list), changed, topic: current, doneAt: admin.firestore.FieldValue.serverTimestamp(), durationMs: Date.now() - t0,
       usage: agentUsage ? { ...agentUsage, model: MODEL } : null };
     try {
-      await deliver(msg, reply, { buttons: parsed.buttons, list });
-      await inboxRef.update({ ...done, state: 'done' });
+      const ids = await deliver(msg, reply, { buttons: parsed.buttons, list });
+      await inboxRef.update({ ...done, state: 'done', sentIds: (ids || []).filter(Boolean) });
     } catch (e) {
       console.error('[golda] reply delivery failed:', e.message);
       await inboxRef.update({ ...done, state: 'reply_pending', error: String(e.message || e) });
@@ -270,8 +270,8 @@ async function processMessage(messageId) {
 /** A reply that was computed but never delivered. */
 async function resendReply(db, inboxRef, msg) {
   try {
-    await deliver(msg, msg.reply || '', msg.menu ? { list: { button: 'מה לעשות?', rows: MENU_ROWS } } : { buttons: Array.isArray(msg.buttons) ? msg.buttons : [] });
-    await inboxRef.update({ state: 'done', error: admin.firestore.FieldValue.delete(), resentAt: admin.firestore.FieldValue.serverTimestamp() });
+    const ids = await deliver(msg, msg.reply || '', msg.menu ? { list: { button: 'מה לעשות?', rows: MENU_ROWS } } : { buttons: Array.isArray(msg.buttons) ? msg.buttons : [] });
+    await inboxRef.update({ state: 'done', error: admin.firestore.FieldValue.delete(), resentAt: admin.firestore.FieldValue.serverTimestamp(), sentIds: (ids || []).filter(Boolean) });
     return { status: 200, body: 'resent' };
   } catch (e) {
     await inboxRef.update({ attempts: admin.firestore.FieldValue.increment(1), error: String(e.message || e) });

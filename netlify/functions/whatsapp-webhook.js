@@ -14,6 +14,7 @@ const { internalHeaders } = require('./lib/auth.js');
 const wa = require('./lib/wa-api.js');
 const outbox = require('./lib/wa-outbox.js');
 const { resolveSender } = require('./lib/golda-identity.js');
+const feedback = require('./lib/golda-feedback.js');
 
 const PENDING_WORDS = /^(שלחי את העדכון|שלחי את הפירוט|שלחי לי את העדכון|שלחי|send the update)$/i;
 
@@ -51,6 +52,14 @@ exports.handler = async (event) => {
   for (const m of msgs) {
     const who = await resolveSender(db, m.from).catch((e) => { console.error('[wa] identity lookup failed:', e.message); return null; });
     if (!who) { console.warn('[wa] ignored sender who is not a CRM user'); continue; }
+    // A reaction on Golda's answer is a 👍/👎, not a request: record it and move on.
+    if (m.type === 'reaction') {
+      try {
+        const inbox = m.reaction?.messageId ? await feedback.inboxForSentId(db, m.reaction.messageId) : null;
+        if (inbox) await feedback.recordFeedback(db, { who: m.from, email: who.email || '', name: who.name || '', answerId: m.reaction.messageId, inbox, rating: feedback.ratingOf(m.reaction.emoji), emoji: m.reaction.emoji, channel: 'whatsapp' });
+      } catch (e) { console.error('[wa] reaction failed:', e.message); }
+      continue;
+    }
     // Meta can deliver the same message more than once; create() fails on a repeat.
     try {
       await db.collection('wa_inbox').doc(m.id).create({ ...m, channel: 'whatsapp', email: who.email || '', receivedAt: admin.firestore.FieldValue.serverTimestamp(), state: 'queued', attempts: 0 });
