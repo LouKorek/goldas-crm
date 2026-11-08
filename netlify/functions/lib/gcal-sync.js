@@ -468,6 +468,23 @@ function api(client, calendarId) {
   };
 }
 
+/**
+ * Try to switch the Calendar API on with the service account itself (works
+ * when its roles allow it). Returns { ok, status, message }.
+ */
+async function enableCalendarApi(svc, projectId) {
+  const { JWT } = require('google-auth-library');
+  const jwt = new JWT({ email: svc.client_email, key: svc.private_key, scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  try {
+    await jwt.request({ url: `https://serviceusage.googleapis.com/v1/projects/${projectId}/services/calendar-json.googleapis.com:enable`, method: 'POST', data: {} });
+    return { ok: true };
+  } catch (e) {
+    const status = e.response ? e.response.status : 0;
+    const message = e.response && e.response.data && e.response.data.error ? e.response.data.error.message : e.message;
+    return { ok: false, status, message: String(message || '').slice(0, 300) };
+  }
+}
+
 /** Plain words for what is missing, kept in app_meta/calendarSync. */
 function accessProblem(e, serviceAccount) {
   if (e.status === 403 && /accessNotConfigured|SERVICE_DISABLED|disabled/i.test(`${e.reason} ${e.message}`)) {
@@ -488,5 +505,5 @@ module.exports = {
   DEFAULT_CALENDAR_ID, FOOTER, TBC, TZ,
   eventIdFor, keyFor, plusMinutes, plainText, notesFromDescription, eventLocal, parseSummary, findPlayers,
   desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile,
-  calendarClient, api, accessProblem, windowRange, millis,
+  calendarClient, api, accessProblem, enableCalendarApi, windowRange, millis,
 };

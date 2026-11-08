@@ -246,6 +246,14 @@ async function runSync({ force = false } = {}, job) {
     return result;
   } catch (e) {
     const problem = G.accessProblem(e, client.email);
+    if (problem && problem.state === 'needs_api' && (!meta.apiEnableTriedAt || Date.now() - meta.apiEnableTriedAt > 864e5)) {
+      const en = await G.enableCalendarApi(svc, svc.project_id || 'gold-as-crm');
+      problem.serverEnable = en;
+      await metaRef.set({ apiEnableTriedAt: Date.now() }, { merge: true });
+      job.note(en.ok ? 'switched the Calendar API on by itself; the next run continues' : `could not switch the Calendar API on by itself: ${en.status} ${en.message}`);
+      if (en.ok) { problem.state = 'needs_share'; problem.hint = `Share the calendar with ${client.email} ("Make changes to events")`; }
+    }
+    if (problem) console.log(`[calendar-sync] ${problem.state}: ${problem.hint}`);
     await metaRef.set({ state: problem ? problem.state : 'error', serviceAccount: client.email, problem: problem || { state: 'error', hint: String(e.message).slice(0, 300) }, lastCheckAt: Date.now() }, { merge: true });
     if (problem) { job.note(problem.hint); return { blocked: problem.state, newProblem: meta.state !== problem.state }; }
     throw e;
