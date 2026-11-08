@@ -127,7 +127,7 @@ async function transcribe(buffer, mimeType, { svc, client, sleep = (ms) => new P
 /** What the writer hears when a voice note could not be transcribed, by state. */
 function excuse(state) {
   switch (state) {
-    case 'needs_billing': case 'needs_api': case 'needs_permission': return 'התמלול של הודעות קוליות עוד לא פעיל אצלי';
+    case 'needs_billing': case 'needs_api': case 'needs_permission': return 'התמלול של הודעות קוליות עוד לא פעיל אצלי (מנהל מפעיל אותו בלחיצה במסך גולדה, בלשונית ההגדרות)';
     case 'unsupported': return 'את הקובץ הקולי הזה אני לא יודעת לקרוא';
     case 'empty': return 'לא הצלחתי לשמוע מילים בהודעה הקולית';
     default: return 'לא הצלחתי לתמלל את ההודעה הקולית הפעם';
