@@ -24,6 +24,7 @@ const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, 
 const { dedupeKey } = require('./lib/alert-keys.js');
 const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
 const { writeBriefing } = require('./lib/golda-briefing-ai.js');
+const { opportunitiesOf } = require('./lib/golda-briefs.js');
 const { visibleMemories } = require('./lib/golda-memory.js');
 const { changesFrom } = require('./lib/golda-insights.js');
 const { internalHeaders } = require('./lib/auth.js');
@@ -91,6 +92,11 @@ function todaysMeetings(meetings, players, today) {
   }));
 }
 
+/** The week's strongest requirement × player matches; a failure only drops them from the briefing. */
+function safeOpportunities(data, now) {
+  try { return opportunitiesOf({ players: data.players, requirements: data.requirements, deals: data.deals, now, n: 3 }); } catch (e) { console.warn('[briefing] opportunities failed:', e.message); return []; }
+}
+
 function pruneSent(keys, today) {
   const out = {};
   for (const [k, v] of Object.entries(keys || {})) if (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) && daysBetween(String(v), today) <= KEEP_DAYS) out[k] = v;
@@ -133,6 +139,7 @@ async function run(job, now = new Date(), { force = false, send, write } = {}) {
         const changes24h = changesFrom(data.recent || [], { since: '24h', limit: 150 }, {}, now.getTime()).changes;
         const b = await (write || writeBriefing)({
           name: first, today, games, alerts: r.alerts, changes24h, deals: data.deals, requirements: data.requirements,
+          opportunities: safeOpportunities(data, now),
           memories: visibleMemories(data.memories || [], { email: u.email, phone: u.phone }), fallbackText,
         });
         if (!b.ai) job.note(`briefing ${u.email}: template (${b.reason})`);
