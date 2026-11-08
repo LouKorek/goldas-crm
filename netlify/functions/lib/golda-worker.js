@@ -233,7 +233,7 @@ async function processMessage(messageId) {
 
     // Record the turn before sending, so a failed send never loses the history.
     const now = Date.now();
-    const turn = [{ role: 'user', text: userText, at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1, id: String(messageId), ...(buttons.length ? { buttons } : {}) }];
+    const turn = [{ role: 'user', text: typeof userText === 'string' ? userText : String(userText ?? ''), at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1, id: String(messageId), ...(buttons.length ? { buttons } : {}) }];
     const patch = {
       topic: current, turn: session.turn, pendingDeletes: pendingDeletes || [], pendingDelete: admin.firestore.FieldValue.delete(), lastAt: now, lockUntil: 0, lockedBy: null,
       email: identity.email || '', name: identity.name, phone: identity.phone || '',
