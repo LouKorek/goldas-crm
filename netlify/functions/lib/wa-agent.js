@@ -277,7 +277,7 @@ Buttons: on WhatsApp the writer can tap instead of typing. When your answer ends
 - You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
 CRM data (field names are exact; values in lists must match exactly; dates are YYYY-MM-DD):
-- players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
+- players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), goldaAccess (bool) + goldaPhone (digits): admins only, lets this represented player ask you about himself on WhatsApp (read-only, his own data; you never write to him first), contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
 - pipeline_men / pipeline_women / pipeline_youth / pipeline_jewish (prospects, NOT linked to players): playerName*, status (${C.PIPELINE_STATUS.join('|')}), profileLink, videoLink, agentName, agentPhone, nationalities, dob, primaryPosition, secondaryPositions, height (cm, 130-225, as a string), foot, currentClub, currentClubIsYouth, natTeamStatus, natTeamCountry, transferFee, salary (digits or "Not specified"), notes, league fields, linkedClubs [{clubName, linkedAt ISO}].
 - club_requirements: clubName*, gender*, clubIsYouth, tablePosition, contactName, contactRole, contactPhone, requiredPosition (position), ageMin, ageMax, ageNotSpecified (bool), transferFee, salary, notes, league fields.
 - contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, league fields.
@@ -400,6 +400,12 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   const FieldValue = admin.firestore.FieldValue;
   const sender = identity.name || 'לו';
   const role = identity.role || 'viewer';
+  // Only an admin switches a player's own Golda access on or off.
+  const guardGolda = (col, d) => {
+    if (col !== 'players' || role !== 'admin') { delete d.goldaAccess; delete d.goldaPhone; return; }
+    if ('goldaPhone' in d) d.goldaPhone = String(d.goldaPhone || '').replace(/\D/g, '');
+    if ('goldaAccess' in d) d.goldaAccess = d.goldaAccess === true;
+  };
   // Writes are stamped with the person Golda acts for; the name says it was Golda.
   const who = { email: identity.email || OWNER_EMAIL, name: `${sender} (${assistantName})` };
   const audit = (entry) => db.collection('audit').add({
@@ -524,6 +530,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     need('edit');
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
+    guardGolda(collection, d);
     if (collection === 'tasks') d = { priority: 'Normal', done: false, owner: who.email, ...d };
     if (collection === 'meetings') d = { time: '', endTime: '', allDay: !d.time, location: '', notes: '', linkedPlayers: [], source: 'manual', owner: who.email, ...d };
     if (collection === 'matches') d = { source: 'manual', ...d };
@@ -556,6 +563,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     const before = s.data();
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
+    guardGolda(collection, d);
     const confirmed = d.confirmed === true;
     delete d.confirmed;
     for (const k of [...(collection === 'deals' ? [] : ['stage']), 'category', 'legacy', 'migratedAt', 'deletedAt', 'deletedBy']) delete d[k];

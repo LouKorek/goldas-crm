@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { listenCollection, PATHS, renameFile } from 'lib/db';
+import { listenCollection, PATHS, renameFile, updateDoc_ } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { listenDeals } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
@@ -54,6 +54,48 @@ function AgeGroupFact({ p }) {
 
 // What the contract itself says, as Golda read it (contractTerms on the player).
 const money = (n, cur) => (typeof n === 'number' ? `${n.toLocaleString('en-US')}${cur ? ` ${cur}` : ''}` : '');
+/** Admin only: let this player ask Golda about himself on WhatsApp (read-only, his own data). */
+function GoldaAccess({ p, he }) {
+  const [phone, setPhone] = useState(p.goldaPhone || '');
+  const [busy, setBusy] = useState(false);
+  const on = p.goldaAccess === true;
+  const digits = phone.replace(/\D/g, '');
+  const valid = digits.length >= 9 && digits.length <= 15;
+  const save = async (access) => {
+    if (access && !valid) { toast.error(he ? 'צריך מספר וואטסאפ של השחקן' : "Enter the player's WhatsApp number"); return; }
+    setBusy(true);
+    try {
+      await updateDoc_(PATHS.PLAYERS, p.id, { goldaAccess: access, goldaPhone: digits });
+      toast.success(access ? (he ? 'השחקן יכול לכתוב לגולדה' : 'The player can now write to Golda') : (he ? 'הגישה לגולדה נסגרה' : 'Golda access turned off'));
+    } catch (e) { toast.error(e.message || t('Save failed.')); }
+    setBusy(false);
+  };
+  const btn = { border: '1px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' };
+  return (
+    <Card title={he ? 'גולדה לשחקן' : 'Golda for the player'}>
+      <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 10 }}>
+        {he ? 'השחקן יוכל לשאול את גולדה בוואטסאפ על המשחקים, האימונים, תאריכי החוזה והמסמכים שלו, ולבקש את דף השחקן שלו. היא רק עונה, אף פעם לא כותבת אליו ראשונה, ולא רואה עסקאות, שחקנים אחרים או הערות פנימיות. מה שהוא מדווח מגיע אליך.'
+          : "The player can ask Golda on WhatsApp about his games, trainings, contract and document dates, and get his own player sheet. She only answers, never writes first, and never shows deals, other players or internal notes. What he reports comes to you."}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} inputMode="tel" dir="ltr" placeholder="05x-xxxxxxx"
+          style={{ flex: '1 1 160px', minWidth: 0, padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: 13 }} />
+        {on ? (
+          <>
+            {digits !== (p.goldaPhone || '') && <button type="button" disabled={busy} onClick={() => save(true)} style={{ ...btn, background: 'var(--gold)', color: 'var(--on-accent)', borderColor: 'var(--gold)' }}>{he ? 'שמירה' : 'Save'}</button>}
+            <button type="button" disabled={busy} onClick={() => save(false)} style={{ ...btn, background: 'var(--surface-2)', color: 'var(--text-1)' }}>{he ? 'לכבות' : 'Turn off'}</button>
+          </>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => save(true)} style={{ ...btn, background: 'var(--gold)', color: 'var(--on-accent)', borderColor: 'var(--gold)' }}>{he ? 'להפעיל' : 'Turn on'}</button>
+        )}
+      </div>
+      <div style={{ fontSize: 11, marginTop: 8, color: on ? 'var(--green-ok)' : 'var(--text-3)' }}>
+        {on ? (he ? '● פעיל: השחקן יכול לכתוב לגולדה' : '● On: the player can write to Golda') : (he ? 'כבוי' : 'Off')}
+      </div>
+    </Card>
+  );
+}
+
 function ContractTerms({ terms, he, onAsk }) {
   const period = { month: he ? 'לחודש' : 'a month', year: he ? 'לשנה' : 'a year', season: he ? 'לעונה' : 'a season' };
   const holder = { club: he ? 'המועדון' : 'club', player: he ? 'השחקן' : 'player', both: he ? 'שני הצדדים' : 'both' };
@@ -90,7 +132,7 @@ export default function Player360() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { canEdit, email } = useRole();
+  const { canEdit, email, isAdmin } = useRole();
   const [players, setPlayers] = useState(null);
   const [matches, setMatches] = useState([]);
   const [meetings, setMeetings] = useState([]);
@@ -214,6 +256,8 @@ export default function Player360() {
         {(p.contractTerms || (p.contractStatus !== 'Free' && (p.contractFiles || []).length > 0)) && (
           <ContractTerms terms={p.contractTerms} he={he} onAsk={() => navigate('/golda', { state: { tab: 'chat', prefill: he ? `קראי את החוזה של ${playerName(p)} ושמרי את התנאים שלו (שכר, אופציה, סעיף שחרור ותאריכים).` : `Read ${playerName(p)}'s contract and save its terms (salary, option, release clause and dates).` } })} />
         )}
+
+        {isAdmin && stage === 'represented' && <GoldaAccess key={p.id} p={p} he={he} />}
 
         <Card title={t('Documents')} action={docs.some(([k]) => (p[k] || []).length) ? (
           <button type="button" onClick={() => navigate('/golda', { state: { tab: 'chat', prefill: he ? `קראי את המסמכים של ${playerName(p)} ובדקי אם תאריכי החוזה, הדרכון והייצוג במערכת תואמים למה שכתוב בהם.` : `Read ${playerName(p)}'s documents and check whether the contract, passport and representation dates in the CRM match them.` } })}

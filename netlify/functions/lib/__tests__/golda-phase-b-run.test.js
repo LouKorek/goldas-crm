@@ -166,3 +166,23 @@ test('Sunday 10:00: scouting runs once, the team hears about it once, candidates
   assert.equal(searches, 1);
   assert.ok(!out.some((m) => /סקאוטינג/.test(m.body)));
 });
+
+test('what a player told Golda reaches the admins only, once, in the day', async () => {
+  const s = seed({ golda_player_notes: { n1: { playerId: 'p1', playerName: 'Assaf Cohen', summary: 'קיבל הצעה ממכבי', urgent: false, delivered: false, atMs: 1 } } });
+  const night = new Date('2026-11-12T21:30:00Z');
+  DB = makeDb(s); NOW_MS = night.getTime();
+  const out = [];
+  const send = async (u, body, kind) => { out.push({ to: u.email, body }); return { state: 'sent' }; };
+  await run(job(), night, { send, write });
+  assert.ok(!out.some((m) => /עדכונים משחקנים/.test(m.body)), 'not at night');
+  assert.equal(DB.data.golda_player_notes.n1.delivered, false);
+  NOW_MS = thu.getTime();
+  await run(job(), thu, { send, write });
+  const notes = out.filter((m) => /עדכונים משחקנים/.test(m.body));
+  assert.deepEqual(notes.map((m) => m.to), ['lou.korek@gmail.com']);
+  assert.match(notes[0].body, /קיבל הצעה ממכבי/);
+  assert.equal(DB.data.golda_player_notes.n1.delivered, true);
+  out.length = 0;
+  await run(job(), new Date(thu.getTime() + 3600000), { send, write });
+  assert.ok(!out.some((m) => /עדכונים משחקנים/.test(m.body)));
+});

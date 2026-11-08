@@ -17,6 +17,7 @@ const { admin, getDb } = require('./firestore.js');
 const wa = require('./wa-api.js');
 const { runAgent, MAIN_TOPIC, MODEL, _internal: { norm } } = require('./wa-agent.js');
 const { resolveSender, userForApp, sessionKey } = require('./golda-identity.js');
+const playerGolda = require('./golda-player.js');
 const speech = require('./golda-speech.js');
 
 const ASSISTANT_NAME = process.env.WA_ASSISTANT_NAME || 'גולדה';
@@ -227,12 +228,14 @@ async function processMessage(messageId) {
 
     const topics = { ...(session.topics || {}) };
     let current = session.topic && topics[session.topic] ? session.topic : MAIN_TOPIC;
-    const cmd = topicCommand(text);
+    const isPlayer = identity.role === 'player';           // a player gets the read-only Golda: no menu, no topics, no CRM tools
+    const cmd = isPlayer ? null : topicCommand(text);
     let direct = null;   // a reply that needs no model call
     let list = null;
-    if (usage.count > DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות היומית (${DAILY_LIMIT}). נמשיך מחר, או שלו יכול להגדיל אותה.`;
+    if (isPlayer && usage.count > playerGolda.DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות להיום. נמשיך מחר 🙂`;
+    else if (usage.count > DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות היומית (${DAILY_LIMIT}). נמשיך מחר, או שלו יכול להגדיל אותה.`;
     else if (voiceFailed) direct = `${first}, ${speech.excuse(voiceFailed)}. אפשר לכתוב לי את זה במילים?`;
-    else if (isMenuCommand(text)) {
+    else if (!isPlayer && isMenuCommand(text)) {
       direct = menuText(first);
       list = { button: 'מה לעשות?', rows: MENU_ROWS };
     }
@@ -257,7 +260,9 @@ async function processMessage(messageId) {
         ack = setTimeout(() => { wa.sendText(msg.from, `רגע, ${first}, אני על זה 🔎`, msg.phoneId).catch(() => {}); }, ACK_AFTER_MS);
       }
       try {
-        const out = await runAgent({ db, admin, identity, text, media, session: { ...session, history: thread.history }, assistantName: ASSISTANT_NAME, topic, topics: Object.keys(topics), channel: msg.channel || 'whatsapp' });
+        const out = isPlayer
+          ? await playerGolda.runPlayerAgent({ db, admin, identity, text, media, history: thread.history })
+          : await runAgent({ db, admin, identity, text, media, session: { ...session, history: thread.history }, assistantName: ASSISTANT_NAME, topic, topics: Object.keys(topics), channel: msg.channel || 'whatsapp' });
         ({ reply, pendingDeletes, changed, userText } = out);
         agentUsage = out.usage;
         outFiles = Array.isArray(out.files) ? out.files : [];

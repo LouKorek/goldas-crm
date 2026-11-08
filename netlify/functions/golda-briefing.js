@@ -29,6 +29,7 @@ const { writeRecap, buildRecap } = require('./lib/golda-briefing-ai.js');
 const pro = require('./lib/golda-proactive.js');
 const tw = require('./lib/transfer-windows.js');
 const scouting = require('./lib/golda-scouting.js');
+const { buildPlayerNotesMessage } = require('./lib/golda-player.js');
 const { visibleMemories } = require('./lib/golda-memory.js');
 const { changesFrom } = require('./lib/golda-insights.js');
 const { internalHeaders } = require('./lib/auth.js');
@@ -190,6 +191,11 @@ async function run(job, now = new Date(), { force = false, send, write, scout } 
     scouted = await scouting.runScouting(db, data, now, job, { scout }).catch((e) => { job.note(`scouting failed: ${e.message}`); return []; });
     job.note(`scouting: ${scouted.length} requirement(s), ${scouted.reduce((n, x) => n + x.candidates.length, 0)} candidate(s)`);
   }
+  // What players told Golda: to the admins in the day; at night it waits for the morning.
+  const playerNotes = quiet ? [] : await db.collection('golda_player_notes').where('delivered', '==', false).get()
+    .then((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.atMs || 0) - (b.atMs || 0)))
+    .catch((e) => { job.note(`player notes failed: ${e.message}`); return []; });
+  let notesHeard = false;
   const ops = opsAlerts({ jobs: data.jobs, ifaSync: data.ifaSync, scraper: data.scraper, now });
   const dayMs = 86400000;
   const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
@@ -234,6 +240,7 @@ async function run(job, now = new Date(), { force = false, send, write, scout } 
         const mineF = followups.filter((t) => String(t.owner || OWNER_EMAIL).toLowerCase() === u.email);
         if (mineF.length) { await say(u, buildFollowupMessage(first, mineF), 'update'); count++; }
         if (team && scouted.some((x) => x.candidates.length)) { await say(u, scouting.buildScoutingMessage(first, scouted), 'update'); count++; job.note(`scouting → ${u.email}`); }
+        if (u.role === 'admin' && playerNotes.length) { await say(u, buildPlayerNotesMessage(first, playerNotes), 'update'); count++; notesHeard = true; job.note(`${playerNotes.length} player note(s) → ${u.email}`); }
         const myMarks = team ? marks.filter((m) => !sent.alerts[`${u.email}|${m.key}`]) : [];
         if (myMarks.length) {
           await say(u, tw.buildWindowMessage(first, myMarks), 'update');
@@ -264,6 +271,7 @@ async function run(job, now = new Date(), { force = false, send, write, scout } 
       console.error('[golda-briefing] send failed:', u.email, e.message);
     }
   }
+  if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning
   await db.collection('app_meta').doc('goldaSent').set({ ...sent, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   return { sent: count, recipients: recipients.length, hour };
