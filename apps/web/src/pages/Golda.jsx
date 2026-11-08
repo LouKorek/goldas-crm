@@ -9,7 +9,7 @@ import Icon from 'components/ui/Icons';
 import { DEAL_STAGE_LABELS } from '@goldas/domain';
 import {
   PHYSICAL, listenGoldaAudit, undoGoldaAction, sendToGolda, listenInboxMessage, listenGoldaThread, sessionKeyFor,
-  listenMyUser, saveMyPrefs, listenMyDelivery, listenWhatsappMeta,
+  listenMyUser, saveMyPrefs, listenMyDelivery, listenWhatsappMeta, sendGoldaFeedback,
 } from 'data/golda';
 
 // Golda's area, three tabs. "Chat" talks to the same Golda as WhatsApp (and
@@ -107,6 +107,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   const [pending, setPending] = useState([]);     // messages sent from here and not yet in the thread
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [rated, setRated] = useState({});        // answer id → 1 | -1 (my 👍/👎 this visit)
   const endRef = useRef(null);
   const taRef = useRef(null);
 
@@ -129,10 +130,10 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   }, [history]);
 
   const items = useMemo(() => {
-    const out = (history || []).map((h, i) => ({ id: `h${i}`, role: h.role, text: h.text, at: h.at, channel: h.channel, buttons: h.buttons }));
+    const out = (history || []).map((h, i) => ({ id: `h${i}`, role: h.role, text: h.text, at: h.at, channel: h.channel, buttons: h.buttons, answerId: h.role === 'assistant' ? h.id : null }));
     for (const p of pending) {
       out.push({ id: p.id, role: 'user', text: p.text, at: p.sentAt, mine: true });
-      if (p.state === 'done' || p.state === 'error' || p.state === 'reply_pending') out.push({ id: `${p.id}_r`, role: 'assistant', text: p.reply || (he ? 'משהו השתבש.' : 'Something went wrong.'), at: p.sentAt + 1, error: p.state === 'error', buttons: p.buttons });
+      if (p.state === 'done' || p.state === 'error' || p.state === 'reply_pending') out.push({ id: `${p.id}_r`, role: 'assistant', text: p.reply || (he ? 'משהו השתבש.' : 'Something went wrong.'), at: p.sentAt + 1, error: p.state === 'error', buttons: p.buttons, answerId: p.state === 'error' ? null : p.id });
       else out.push({ id: `${p.id}_typing`, role: 'assistant', typing: true, at: p.sentAt + 1 });
     }
     return out;
@@ -153,6 +154,16 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
     } finally { setSending(false); taRef.current?.focus(); }
   };
 
+  // 👍/👎 under an answer: it teaches Golda (the 👎 cases go into her prompt) and feeds the weekly recap.
+  const rate = async (answerId, v) => {
+    const next = rated[answerId] === v ? 0 : v;
+    setRated((r) => ({ ...r, [answerId]: next }));
+    try { await sendGoldaFeedback(answerId, next); if (next < 0) toast.success(he ? 'תודה, גולדה תלמד מזה.' : 'Thanks, Golda will learn from this.'); } catch (e) {
+      setRated((r) => ({ ...r, [answerId]: rated[answerId] || 0 }));
+      toast.error(e.message || t('Could not send.'));
+    }
+  };
+
   if (!me || history === null) return <Skeleton rows={6} />;
   const first = (name || '').split(' ')[0];
 
@@ -165,7 +176,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
             {he ? 'שאלו אותי על השחקנים, המועדונים והעסקאות, או בקשו ממני לעדכן משהו. אפשר להתחיל מאחת השאלות למטה.' : 'Ask me about players, clubs and deals, or ask me to update something.'}
           </div>
         )}
-        {items.map((m) => <Bubble key={m.id} m={m} he={he} />)}
+        {items.map((m) => <Bubble key={m.id} m={m} he={he} rating={m.answerId ? rated[m.answerId] || 0 : 0} onRate={m.answerId ? (v) => rate(m.answerId, v) : null} />)}
         {(() => {
           // Golda's last answer may offer taps (the same buttons WhatsApp shows).
           const last = items[items.length - 1];
@@ -195,8 +206,12 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   );
 }
 
-function Bubble({ m, he }) {
+function Bubble({ m, he, rating = 0, onRate = null }) {
   const mine = m.role === 'user';
+  const thumb = (v, glyph, label) => (
+    <button type="button" onClick={() => onRate(v)} aria-label={label} aria-pressed={rating === v} title={label}
+      style={{ background: 'none', border: 'none', padding: '2px 4px', cursor: 'pointer', fontSize: 13, lineHeight: 1, opacity: rating === v ? 1 : 0.45, filter: rating === v ? 'none' : 'grayscale(1)' }}>{glyph}</button>
+  );
   return (
     <div style={{ display: 'flex', justifyContent: mine ? 'flex-start' : 'flex-end' }}>
       <div style={{
@@ -207,6 +222,11 @@ function Bubble({ m, he }) {
       }}>
         {m.typing ? <Typing he={he} /> : <Rich text={m.text} />}
         <div style={{ fontSize: 10, color: mine ? 'var(--on-accent)' : 'var(--text-3)', opacity: mine ? 0.75 : 1, marginTop: 4, textAlign: 'end' }}>
+          {!mine && !m.typing && onRate && (
+            <span style={{ float: 'inline-start', marginTop: -3 }}>
+              {thumb(1, '👍', he ? 'תשובה טובה' : 'Good answer')}{thumb(-1, '👎', he ? 'תשובה לא טובה' : 'Bad answer')}
+            </span>
+          )}
           {m.at ? fmtDateTime(new Date(m.at)) : ''}{m.channel === 'whatsapp' && mine ? ' · WhatsApp' : ''}
         </div>
       </div>

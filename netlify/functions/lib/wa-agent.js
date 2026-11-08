@@ -17,6 +17,8 @@ const { internalHeaders } = require('./auth.js');
 const { loadMemories, memorySection, memoryTools } = require('./golda-memory.js');
 const { insightTools } = require('./golda-insights.js');
 const { briefTools, BRIEF_TOOL_DEFS } = require('./golda-briefs.js');
+const { windowStatus, TRANSFER_TOOL_DEF } = require('./transfer-windows.js');
+const { recentMistakes, mistakesSection } = require('./golda-feedback.js');
 const { keepDuration } = require('./agency-calendar.js');
 
 // Since the model unification every person lives in `players` with a stage
@@ -196,7 +198,7 @@ const ROLE_LINE = {
   viewer: 'a viewer: they may read and ask anything, but you must NOT change the CRM for them (the write tools are not available in this chat; say so politely if asked)',
 };
 
-function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = []) {
+function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = [], mistakes = []) {
   const sender = identity.name || 'לו';
   const where = channel === 'app' ? 'in the chat screen inside the CRM app' : 'on WhatsApp (each in their own private chat; the same conversation continues in the app)';
   return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you ${where}. You know the agency's CRM inside out: you read and analyse everything in it, including the documents stored in it, give recommendations, and carry out changes yourself using the tools. You can also search the web. The person writing is ${sender}, ${ROLE_LINE[identity.role] || ROLE_LINE.viewer}. Every change you make is recorded in their name.
@@ -229,6 +231,8 @@ How you work:
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
+- "חלון העברות" / "מתי נסגר החלון" / "מי מתאים לחלון" → transfer_windows (exact dates and deadline times; Israel is not in it yet, so check the web for the IFA dates and say where you found them), then connect it to players who need a club (free agents, contracts ending, loans ending) and the open requirements.
+- Golda opens follow-up tasks by herself for deals that sit too long in a stage (they say "מעקב:" and close by themselves when the deal moves). When asked what to do with a deal, mention its open follow-up.
 - "הזדמנויות" / "מה כדאי לקדם" / "את מי להציע" → opportunities: for each, the player, the club and position, the score and the main reason, and the concrete next step (open a deal, call the contact).
 - "מי מתאים לדרישה…" / who fits a club's requirement → suggest_matches (live scores from the matching engine). "מה דורש פעולה" / "מה יש היום" → alerts_today. "סנכרני משחקים" → sync_fixtures (admin/manager).
 - Moving a deal: update its stage. The deal engine enforces the rules: "Mandate Received" needs a document on the deal or the writer's explicit confirmation (pass confirmed=true in data after they confirm), "Contract Signed" and "Not Relevant" close the deal (reopening a closed deal also needs confirmed=true), and "Not Relevant" frees the linked requirement. Tell the writer when a transition offers a follow-up (e.g. promote the candidate to a represented player: update the player's stage? No: say that the app offers it on the deal board).
@@ -259,7 +263,8 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 Free agents (contractStatus "Free") automatically lose club, contract dates and league.
 Today's date: ${israelDate(new Date())} (Israel time zone).
 
-${memorySection(memories)}`;
+${memorySection(memories)}
+${mistakesSection(mistakes)}`;
 }
 
 const TOOLS = [
@@ -320,10 +325,10 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -684,7 +689,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
 
   const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
     suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
-    ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }) };
+    ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }), transfer_windows: async () => windowStatus(new Date()) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -717,7 +722,8 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   const history = (topic ? topic.history || [] : session.history || []).slice(-HISTORY_TURNS);
   // Long-term memory is read once per message; a failed read never blocks the reply.
   const remembered = memories || await loadMemories(db, identity).catch((e) => { console.warn('[golda] memory read failed:', e.message); return []; });
-  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered);
+  const mistakes = await recentMistakes(db).catch(() => []);
+  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered, mistakes);
   const messages = [];
   for (const h of history) {
     const role = h.role === 'assistant' ? 'assistant' : 'user';
