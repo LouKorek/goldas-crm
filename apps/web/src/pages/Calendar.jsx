@@ -175,7 +175,7 @@ export default function Calendar() {
       if (scope === 'youth' && !youth) continue; if (scope === 'senior' && youth) continue;
       if (playerFilter && !(tr.linkedPlayers || []).includes(playerFilter)) continue;
       const g = AGE_GROUPS.find((x) => x.id === tr.ageGroup);
-      out.push({ key: `t${o.trainingId}${o.sourceDate}`, type: 'training', date: o.date, time: o.time, cancelled: o.cancelled, moved: o.date !== o.sourceDate, title: tr.title || t('Training'), sub: [g ? g[lang()] : '', tr.place, (tr.linkedPlayers || []).map(nameOf).filter(Boolean).join(', '), o.recurring ? describeRule(tr, lang()) : ''].filter(Boolean).join(' · '), youth, occ: o, record: tr });
+      out.push({ key: `t${o.trainingId}${o.sourceDate}`, type: 'training', date: o.date, time: o.time, cancelled: o.cancelled, moved: o.date !== o.sourceDate, title: tr.title || t('Training'), sub: [g ? g[lang()] : '', tr.place, (tr.linkedPlayers || []).map(nameOf).filter(Boolean).join(', '), o.recurring ? describeRule(tr, lang()) : '', ((tr.exceptions || []).find((x) => x.date === o.sourceDate) || {}).notes || ''].filter(Boolean).join(' · '), youth, occ: o, record: tr });
     }
     return out.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   }, [matches, trainings, from, to, kind, scope, playerFilter, players]); // eslint-disable-line

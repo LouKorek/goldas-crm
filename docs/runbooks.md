@@ -234,3 +234,21 @@ CI (`.github/workflows/ci.yml`) מריץ את כולם על כל PR. מיזוג 
   דוגמה), ו-`scripts/mobile-shots.mjs` לצילומי טלפון.
 - עברית ב-PDF: `lib/pdfHebrew.js` (Heebo + סידור חזותי). טקסט הפוך בקובץ
   פירושו ש-`bidiVisual` לא זיהה את הריצה; מוסיפים מקרה לבדיקה שם.
+
+## Google calendar sync ("Gold A&S Player Schedule")
+
+What: `calendar-sync-cron` (every 10 min) calls `calendar-sync-background`, which keeps CRM
+matches and trainings and Lou's Google calendar in step, both ways (rules in
+`netlify/functions/lib/gcal-sync.js`). Golda's writes to matches/trainings trigger it at once.
+
+Setup (once): the calendar is shared with the Firebase service account's `client_email`
+("Make changes to events"), and the Google Calendar API is enabled on the `gold-as-crm`
+project. Until then each run stores `state: needs_share | needs_api` and the email to share
+with in `app_meta/calendarSync`.
+
+Settings in `app_meta/calendarSync`: `enabled: false` stops it; `mode: "push"` makes it
+CRM -> calendar only; `calendarId` points it at another calendar. Run it now with
+`POST /.netlify/functions/calendar-sync-background {"force": true}` (admin / manager token).
+
+Safety: a pass stops without touching anything when the CRM returns no games or trainings
+while the calendar has synced events, or when more than 40 events would be removed.

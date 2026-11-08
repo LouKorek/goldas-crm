@@ -240,6 +240,7 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - igDaily (read-only): date, followers, newFollowers. igPosts (read-only): Instagram posts and their stats.
 - matches: date*, time (HH:MM), homeTeam*, awayTeam*, homeTeamIsYouth, awayTeamIsYouth, stadiumName, notes, linkedPlayers* [player ids], source "manual". (Israeli league fixtures also arrive automatically every morning.)
 - trainings: title*, time (HH:MM), place, notes, linkedPlayers [player ids], ageGroup (noar|nearim_a|nearim_b|nearim_c|yeladim_a|yeladim_b|yeladim_c|trom_a|trom_b|trom_c, for youth groups), and EITHER date (one-off, YYYY-MM-DD) OR rule {freq:"weekly", byWeekday:[0=Sunday…6=Saturday], start: YYYY-MM-DD, until: YYYY-MM-DD or null}. To skip or move one session of a weekly training, update exceptions: [{date, cancelled:true}] or [{date, date2, time}] (date = the original session's date).
+- Games and trainings are kept in sync, both ways, with Lou's Google calendar "Gold A&S Player Schedule": what you create, move or cancel here appears there within a minute, and what Lou adds or moves there ("אימון — <שחקן>", "משחק — <שחקן>") arrives here within ten minutes. The time of a training is the time the player has to be there (Lou's marker); put start times and other details in notes. So you never need to tell anyone to update the calendar by hand.
 - deals (a player or candidate against one club): playerId*, playerName, clubName*, stage (${C.PIPELINE_STATUS.join('|')}), requirementId, notes. To move a deal, update its stage; "Contract Signed" and "Not Relevant" close it. A deal that waits more than 14 days in a stage shows as an alert.
 - club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id).
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
@@ -672,8 +673,24 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...insightTools({ db }), ...memoryTools({ db, identity }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
-    return impl[name](input || {});
+    const out = await impl[name](input || {});
+    // A game or training she wrote shows in Lou's Google calendar at once
+    // instead of at the next ten-minute check.
+    const col = input && input.collection;
+    if ((name === 'undo_last' || (['create', 'update', 'delete'].includes(name) && CALENDAR_COLLECTIONS.has(col)))) kickCalendarSync();
+    return out;
   } };
+}
+
+const CALENDAR_COLLECTIONS = new Set(['matches', 'trainings']);
+let calendarKicked = 0;
+function kickCalendarSync() {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY || Date.now() - calendarKicked < 5000) return;
+  calendarKicked = Date.now();
+  const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  internalHeaders('golda-calendar')
+    .then((headers) => fetch(`${base}/.netlify/functions/calendar-sync-background`, { method: 'POST', headers, body: JSON.stringify({ reason: 'golda' }) }))
+    .catch((e) => console.warn('[golda] calendar sync kick failed:', e.message));
 }
 
 // One WhatsApp message in, one reply out. history is a list of prior

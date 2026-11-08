@@ -1,0 +1,166 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { occurrences } = require('@goldas/domain');
+const G = require('../gcal-sync.js');
+
+const players = [
+  { id: 'p1', fullName: 'נווה סלנט', stage: 'represented', currentClub: 'הפועל באר שבע' },
+  { id: 'p2', fullName: 'אסף אקרמן', stage: 'represented', currentClub: 'מכבי נתניה' },
+  { id: 'p3', fullName: 'נועם ברזילי', stage: 'represented' },
+];
+const win = { from: '2026-11-05', to: '2027-01-07' };
+const items = (matches, trainings) => G.crmItems({ matches, trainings, players, ...win, occurrences });
+const foreign = (over) => ({ id: 'lou1', status: 'confirmed', updated: '2026-11-08T17:57:00Z', created: '2026-11-08T17:57:00Z', ...over });
+
+test('parses the titles Lou uses', () => {
+  assert.deepEqual(G.parseSummary('אימון — נווה סלנט'), { kind: 'training', label: 'אימון', names: ['נווה סלנט'], home: '', away: '' });
+  const m = G.parseSummary('משחק — אסף אקרמן — שעה לאישור');
+  assert.equal(m.kind, 'match'); assert.deepEqual(m.names, ['אסף אקרמן']);
+  const f = G.parseSummary('משחק אימון — רפאל ליבסמן — הפועל ראשון נגד מכבי');
+  assert.equal(f.label, 'משחק אימון'); assert.equal(f.home, 'הפועל ראשון'); assert.equal(f.away, 'מכבי');
+  assert.equal(G.parseSummary('פגישה עם סוכן'), null);
+});
+
+test('a timed training is a one-minute marker with an hour reminder', () => {
+  const [it] = items([], [{ id: 't1', title: 'אימון', date: '2026-11-09', time: '14:30', place: 'לכיש', linkedPlayers: ['p1'] }]);
+  const b = G.desiredEvent(it);
+  assert.equal(b.summary, 'אימון — נווה סלנט');
+  assert.deepEqual(b.start, { dateTime: '2026-11-09T14:30:00', timeZone: 'Asia/Jerusalem' });
+  assert.deepEqual(b.end, { dateTime: '2026-11-09T14:31:00', timeZone: 'Asia/Jerusalem' });
+  assert.deepEqual(b.reminders.overrides, [{ method: 'popup', minutes: 60 }]);
+  assert.equal(b.transparency, 'transparent'); assert.equal(b.visibility, 'private');
+  assert.equal(b.location, 'לכיש');
+  assert.equal(b.extendedProperties.private.goldasKey, 't_t1_2026-11-09');
+});
+
+test('a game without a time is all-day, "שעה לאישור", no reminder', () => {
+  const [it] = items([{ id: 'm1', date: '2026-11-10', time: '', homeTeam: 'מכבי נתניה', awayTeam: 'הפועל חיפה', linkedPlayers: ['p2'] }], []);
+  const b = G.desiredEvent(it);
+  assert.equal(b.summary, 'משחק — אסף אקרמן — מכבי נתניה נגד הפועל חיפה — שעה לאישור');
+  assert.deepEqual(b.start, { date: '2026-11-10' }); assert.deepEqual(b.end, { date: '2026-11-11' });
+  assert.deepEqual(b.reminders.overrides, []);
+});
+
+test('23:59 marker ends on the next day', () => {
+  assert.deepEqual(G.plusMinutes('2026-12-31', '23:59', 1), { date: '2027-01-01', time: '00:00' });
+});
+
+test('weekly training: one event per session, outside the window skipped', () => {
+  const list = items([], [{ id: 't2', title: 'אימון', time: '17:00', linkedPlayers: ['p3'], rule: { freq: 'weekly', byWeekday: [0], start: '2026-11-01', until: '2026-11-30' } }]);
+  assert.deepEqual(list.map((i) => i.date), ['2026-11-08', '2026-11-15', '2026-11-22', '2026-11-29']);
+});
+
+test('new CRM item with nothing in the calendar is inserted', () => {
+  const its = items([], [{ id: 't1', date: '2026-11-09', time: '14:30', linkedPlayers: ['p1'] }]);
+  const acts = G.plan({ items: its, events: [], links: new Map(), players });
+  assert.equal(acts[0].type, 'insert');
+});
+
+test("Lou's own event for the same player and day is adopted, not duplicated; the newer side wins", () => {
+  const its = items([], [{ id: 't1', date: '2026-11-09', time: '17:00', linkedPlayers: ['p1'], updatedAt: '2026-10-01T00:00:00Z' }]);
+  const ev = foreign({ summary: 'אימון — נווה סלנט', start: { dateTime: '2026-11-09T14:30:00+02:00' }, location: 'לכיש', description: '<p>הגעה 14:30</p>' });
+  const acts = G.plan({ items: its, events: [ev], links: new Map(), players });
+  assert.equal(acts.length, 1);
+  assert.equal(acts[0].type, 'adopt');
+  assert.deepEqual(acts[0].patch, { time: '14:30', place: 'לכיש', notes: 'הגעה 14:30' });
+});
+
+test("Lou's event with no CRM record is imported and linked to the player", () => {
+  const ev = foreign({ summary: 'משחק — אסף אקרמן — שעה לאישור', start: { date: '2026-11-10' }, end: { date: '2026-11-11' }, description: '<p>משחק; פרטים יימסרו בהמשך.</p>' });
+  const acts = G.plan({ items: [], events: [ev], links: new Map(), players });
+  assert.equal(acts[0].type, 'import');
+  assert.equal(acts[0].record.collection, 'matches');
+  assert.deepEqual(acts[0].record.data.linkedPlayers, ['p2']);
+  assert.equal(acts[0].record.data.homeTeam, 'מכבי נתניה');
+  assert.equal(acts[0].record.data.time, '');
+  assert.equal(acts[0].record.data.notes, 'משחק; פרטים יימסרו בהמשך.');
+});
+
+test('an imported friendly keeps its label in the title', () => {
+  const ev = foreign({ summary: 'משחק אימון — נווה סלנט — שעה לאישור', start: { date: '2026-11-13' }, location: 'ראשון לציון' });
+  const [a] = G.plan({ items: [], events: [ev], links: new Map(), players });
+  const rec = { id: 'new', ...a.record.data };
+  const [it] = items([rec], []);
+  assert.equal(G.desiredEvent(it).summary, 'משחק אימון — נווה סלנט — שעה לאישור');
+});
+
+test('an unknown name is left alone', () => {
+  const ev = foreign({ summary: 'אימון — שחקן לא קיים', start: { date: '2026-11-13' } });
+  const [a] = G.plan({ items: [], events: [ev], links: new Map(), players });
+  assert.equal(a.type, 'ignore');
+});
+
+const synced = (tr, over = {}) => {
+  const [it] = items([], [tr]);
+  const body = G.desiredEvent(it);
+  const ev = { id: 'gasx', status: 'confirmed', updated: '2026-11-08T10:00:00Z', ...body, start: { dateTime: `${it.date}T${it.time}:00+02:00` }, ...over };
+  const links = new Map([[it.key, { key: it.key, hash: G.bodyHash(body), eventUpdated: '2026-11-08T10:00:00Z', eventId: 'gasx' }]]);
+  return { it, ev, links };
+};
+
+test('nothing changed on either side: nothing to do', () => {
+  const tr = { id: 't1', date: '2026-11-09', time: '14:30', linkedPlayers: ['p1'] };
+  const { ev, links } = synced(tr);
+  const acts = G.plan({ items: items([], [tr]), events: [ev], links, players });
+  assert.deepEqual(acts.map((a) => a.type), ['none']);
+});
+
+test('changed in the CRM: pushed to the calendar', () => {
+  const tr = { id: 't1', date: '2026-11-09', time: '14:30', linkedPlayers: ['p1'] };
+  const { ev, links } = synced(tr);
+  const acts = G.plan({ items: items([], [{ ...tr, time: '15:00' }]), events: [ev], links, players });
+  assert.equal(acts[0].type, 'push');
+  assert.equal(acts[0].body.start.dateTime, '2026-11-09T15:00:00');
+});
+
+test('moved in the calendar: one session of a weekly training becomes an exception', () => {
+  const tr = { id: 't2', time: '17:00', linkedPlayers: ['p3'], rule: { freq: 'weekly', byWeekday: [0], start: '2026-11-08', until: '2026-11-08' } };
+  const { ev, links } = synced(tr);
+  const moved = { ...ev, updated: '2026-11-08T12:00:00Z', start: { dateTime: '2026-11-08T18:15:00+02:00' } };
+  const acts = G.plan({ items: items([], [tr]), events: [moved], links, players });
+  assert.equal(acts[0].type, 'pull');
+  assert.deepEqual(acts[0].patch, { exceptions: [{ date: '2026-11-08', date2: '2026-11-08', time: '18:15' }] });
+});
+
+test('deleted in the calendar: the session is cancelled, the rule stays', () => {
+  const tr = { id: 't2', time: '17:00', linkedPlayers: ['p3'], rule: { freq: 'weekly', byWeekday: [0], start: '2026-11-08', until: '2026-11-08' } };
+  const { ev, links } = synced(tr);
+  const acts = G.plan({ items: items([], [tr]), events: [{ ...ev, status: 'cancelled' }], links, players });
+  assert.equal(acts[0].type, 'deleted_in_calendar');
+  assert.deepEqual(acts[0].patch, { exceptions: [{ date: '2026-11-08', cancelled: true }] });
+});
+
+test('an IFA fixture deleted in the calendar is only hidden, never deleted', () => {
+  const [it] = items([{ id: 'm9', date: '2026-11-10', time: '19:00', homeTeam: 'א', awayTeam: 'ב', linkedPlayers: ['p2'], source: 'ifa' }], []);
+  assert.deepEqual(G.deletionPatch(it), { calendarSkip: true });
+});
+
+test('push-only mode never writes the CRM', () => {
+  const ev = foreign({ summary: 'אימון — נווה סלנט', start: { date: '2026-11-13' } });
+  const acts = G.plan({ items: [], events: [ev], links: new Map(), players, mode: 'push' });
+  assert.equal(acts.length, 0);
+});
+
+test('a synced event whose CRM item is gone is removed', () => {
+  const tr = { id: 't1', date: '2026-11-09', time: '14:30', linkedPlayers: ['p1'] };
+  const { ev, links } = synced(tr);
+  const acts = G.plan({ items: [], events: [ev], links, players });
+  assert.deepEqual(acts.map((a) => a.type), ['remove']);
+});
+
+test('Israel local time from an event, both offsets', () => {
+  assert.deepEqual(G.eventLocal({ start: { dateTime: '2026-11-09T12:30:00Z' } }), { date: '2026-11-09', time: '14:30' });
+  assert.deepEqual(G.eventLocal({ start: { dateTime: '2026-07-01T22:30:00Z' } }), { date: '2026-07-02', time: '01:30' });
+});
+
+test('notes survive the footer round trip', () => {
+  const [it] = items([], [{ id: 't1', date: '2026-11-09', time: '14:30', linkedPlayers: ['p1'], notes: 'הגעה 14:30\nסט שחור' }]);
+  const b = G.desiredEvent(it);
+  assert.equal(G.notesFromDescription(b.description), 'הגעה 14:30\nסט שחור');
+  assert.equal(G.notesFromDescription(`<p>${b.description.replace(/\n/g, '<br>')}</p>`), 'הגעה 14:30\nסט שחור');
+});
+
+test('the access problem says what to do', () => {
+  assert.equal(G.accessProblem({ status: 403, reason: 'accessNotConfigured', message: '' }, 'sa@x').state, 'needs_api');
+  assert.equal(G.accessProblem({ status: 404, reason: 'notFound', message: '' }, 'sa@x').state, 'needs_share');
+});
