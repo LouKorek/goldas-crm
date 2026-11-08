@@ -66,10 +66,27 @@ async function graph(path, opts = {}, phoneId = null) {
 // the same number; the default number (above) is the fallback.
 // Returns Meta's message ids (one per part), so delivery statuses coming back
 // through the webhook can be matched to what was sent (lib/wa-outbox.js).
+// Long replies (a report, a briefing) are split between paragraphs, else
+// between lines, else between words, so no part ends mid-sentence.
+function splitText(body, max = 4000) {
+  const parts = [];
+  let s = String(body ?? '');
+  while (s.length > max) {
+    const head = s.slice(0, max);
+    let cut = head.lastIndexOf('\n\n');
+    if (cut < max * 0.5) cut = head.lastIndexOf('\n');
+    if (cut < max * 0.5) cut = head.lastIndexOf(' ');
+    if (cut <= 0) cut = max;
+    parts.push(s.slice(0, cut).trimEnd());
+    s = s.slice(cut).replace(/^\s+/, '');
+  }
+  if (s.length || !parts.length) parts.push(s);
+  return parts;
+}
+
 async function sendText(to, body, via) {
   const from = via || await defaultPhoneId();
-  const parts = [];
-  for (let s = String(body); s.length; s = s.slice(4000)) parts.push(s.slice(0, 4000));
+  const parts = splitText(body);
   const ids = [];
   for (const text of parts) {
     const res = await graph(`${from}/messages`, {
@@ -161,4 +178,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, sendTemplate, markRead, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, downloadMedia, extractMessages, extractStatuses, digits };
