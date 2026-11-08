@@ -389,8 +389,13 @@ function plan({ items, events, links, players, mode = 'two_way' }) {
     const p = parseSummary(x.summary);
     if (!p || p.kind !== item.kind) return false;
     if (eventLocal(x).date !== item.date) return false;
+    // Look among this game's own players first: another record with a
+    // similar name (a prospect, a duplicate) must not hide the match.
+    const linked = item.record.linkedPlayers || [];
+    const mine = players.filter((pl) => linked.includes(pl.id));
+    if (findPlayers(p.names, mine).length) return true;
     const ids = findPlayers(p.names, players);
-    return ids.some((id) => (item.record.linkedPlayers || []).includes(id));
+    return ids.some((id) => linked.includes(id));
   });
 
   for (const item of items) {

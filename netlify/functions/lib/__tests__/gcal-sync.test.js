@@ -212,3 +212,16 @@ test("Lou's placeholder takes over from the server's copy of the same game", () 
   const next = G.plan({ items: [item], events: [{ ...ours, status: 'cancelled' }, adopted], links: new Map([[item.key, { hash: G.bodyHash(body), eventId: 'lou-ph', eventUpdated: adopted.updated }]]), players: en });
   assert.ok(next.every((a) => a.type === 'none'), JSON.stringify(next.map((a) => a.type)));
 });
+
+test("a second record with a similar name does not stop Lou's placeholder from taking over", () => {
+  const twins = [...en, { id: 'x1', fullName: 'Asaf Akerman', stage: 'prospect' }];
+  assert.deepEqual(G.findPlayers(['אסף אקרמן'], twins), []);   // ambiguous on the whole list
+  const m = { id: 'm1', date: '2026-11-10', time: '18:30', homeTeam: 'הפועל חדרה', awayTeam: 'הפ\' ירושלים', linkedPlayers: ['e1'], source: 'ifa', updatedAt: '2026-11-01T00:00:00Z' };
+  const [item] = G.crmItems({ matches: [m], trainings: [], players: twins, ...win, occurrences });
+  const body = G.desiredEvent(item);
+  const ours = { id: G.eventIdFor(item.key), status: 'confirmed', ...body, updated: '2026-11-08T18:58:59Z' };
+  const lou = foreign({ id: 'lou-ph', summary: 'משחק — אסף אקרמן — שעה לאישור', start: { date: '2026-11-10' }, end: { date: '2026-11-11' } });
+  const links = new Map([[item.key, { hash: G.bodyHash(body), eventId: ours.id }]]);
+  const acts = G.plan({ items: [item], events: [ours, lou], links, players: twins });
+  assert.equal(acts[0].type, 'adopt'); assert.equal(acts[0].event.id, 'lou-ph'); assert.equal(acts[0].replaces.id, ours.id);
+});

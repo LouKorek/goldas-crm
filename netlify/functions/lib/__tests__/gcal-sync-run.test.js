@@ -51,7 +51,7 @@ test('real-looking data: Lou\'s events are adopted or imported once, then everyt
   const d = (n) => require('@goldas/domain').addDays(today, n);
   const db = fakeDb({
     players: { p1: { fullName: 'נווה סלנט', stage: 'represented', currentClub: 'הפועל באר שבע' }, p2: { fullName: 'אסף אקרמן', stage: 'represented', currentClub: 'מכבי נתניה' } },
-    trainings: { t1: { title: 'אימון', time: '15:15', linkedPlayers: ['p1'], rule: { freq: 'weekly', byWeekday: [0, 1, 2, 3, 4], start: d(0), until: d(13) }, exceptions: [], updatedAt: '2026-10-01T00:00:00Z' } },
+    trainings: { t1: { title: 'אימון', time: '15:15', linkedPlayers: ['p1'], rule: { freq: 'weekly', byWeekday: [0, 1, 2, 3, 4, 5, 6], start: d(0), until: d(13) }, exceptions: [], updatedAt: '2026-10-01T00:00:00Z' } },
     matches: { m1: { date: d(2), time: '19:00', homeTeam: 'מכבי נתניה', awayTeam: 'הפועל חיפה', linkedPlayers: ['p2'], source: 'ifa', updatedAt: '2026-10-01T00:00:00Z' } },
   });
   const cal = fakeCal([
