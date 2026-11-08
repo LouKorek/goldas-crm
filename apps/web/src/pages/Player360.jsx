@@ -52,6 +52,38 @@ function AgeGroupFact({ p }) {
   );
 }
 
+// What the contract itself says, as Golda read it (contractTerms on the player).
+const money = (n, cur) => (typeof n === 'number' ? `${n.toLocaleString('en-US')}${cur ? ` ${cur}` : ''}` : '');
+function ContractTerms({ terms, he, onAsk }) {
+  const period = { month: he ? 'לחודש' : 'a month', year: he ? 'לשנה' : 'a year', season: he ? 'לעונה' : 'a season' };
+  const holder = { club: he ? 'המועדון' : 'club', player: he ? 'השחקן' : 'player', both: he ? 'שני הצדדים' : 'both' };
+  const ask = <button type="button" onClick={onAsk} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{terms ? (he ? 'לקרוא שוב' : 'Read again') : t('Ask Golda')}</button>;
+  if (!terms) {
+    return (
+      <Card title={he ? 'תנאי החוזה' : 'Contract terms'} action={ask}>
+        <p style={{ color: 'var(--text-3)', fontSize: 12.5, margin: 0 }}>{he ? 'החוזה מצורף, אבל התנאים שלו עוד לא נקראו. גולדה יכולה לקרוא אותו ולשמור כאן שכר, אופציה ותאריכים, עם התראה לפני כל מועד.' : 'The contract is attached but its terms were not read yet. Golda can read it and keep salary, option and dates here, with an alert before each.'}</p>
+      </Card>
+    );
+  }
+  const dates = [...(terms.optionDeadline ? [{ date: terms.optionDeadline, label: he ? 'מועד הפעלת האופציה' : 'Option deadline' }] : []), ...(terms.keyDates || [])]
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return (
+    <Card title={he ? 'תנאי החוזה' : 'Contract terms'} action={ask}>
+      <Fact k={he ? 'שכר' : 'Salary'} v={terms.salary !== undefined ? `${money(terms.salary, terms.currency)} ${period[terms.salaryPeriod] || ''}`.trim() : ''} />
+      <Fact k={he ? 'דמי חתימה' : 'Signing fee'} v={money(terms.signingFee, terms.currency)} />
+      <Fact k={he ? 'סעיף שחרור' : 'Release clause'} v={money(terms.releaseClause, terms.currency)} />
+      <Fact k={he ? 'אופציה' : 'Option'} v={terms.optionYears || terms.optionHolder ? [terms.optionYears ? (he ? `${terms.optionYears} שנים` : `${terms.optionYears} years`) : '', terms.optionHolder ? (he ? `בידי ${holder[terms.optionHolder]}` : `held by ${holder[terms.optionHolder]}`) : ''].filter(Boolean).join(' · ') : ''} />
+      <Fact k={he ? 'בונוסים' : 'Bonuses'} v={terms.bonuses} />
+      {dates.map((x, i) => {
+        const d = daysAway(x.date);
+        return <Fact key={i} k={x.label || (he ? 'מועד' : 'Date')} v={<span style={{ color: d !== null && d < 0 ? 'var(--text-3)' : d !== null && d <= 30 ? 'var(--amber)' : undefined }}>{fmtDate(x.date)} · {relDays(d)}</span>} />;
+      })}
+      <Fact k={t('Notes')} v={terms.notes} />
+      <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 6 }}>{he ? 'נקרא מתוך' : 'Read from'} {terms.source || (he ? 'החוזה' : 'the contract')}{terms.extractedAt ? ` · ${fmtDate(terms.extractedAt)}` : ''}</div>
+    </Card>
+  );
+}
+
 const Fact = ({ k, v }) => (v ? <div style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--rule)' }}><span style={{ color: 'var(--text-3)', minWidth: 110 }}>{k}</span><span style={{ flex: 1 }}>{v}</span></div> : null);
 
 export default function Player360() {
@@ -178,6 +210,10 @@ export default function Player360() {
           <Fact k={t('Passport Expiry')} v={p.passportExpiry ? fmtDate(p.passportExpiry) : ''} />
           <Fact k={t('IFA Player Profile')} v={p.ifaTeamUrl ? <a href={p.ifaTeamUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{t('Open ↗')}</a> : ''} />
         </Card>
+
+        {(p.contractTerms || (p.contractStatus !== 'Free' && (p.contractFiles || []).length > 0)) && (
+          <ContractTerms terms={p.contractTerms} he={he} onAsk={() => navigate('/golda', { state: { tab: 'chat', prefill: he ? `קראי את החוזה של ${playerName(p)} ושמרי את התנאים שלו (שכר, אופציה, סעיף שחרור ותאריכים).` : `Read ${playerName(p)}'s contract and save its terms (salary, option, release clause and dates).` } })} />
+        )}
 
         <Card title={t('Documents')} action={docs.some(([k]) => (p[k] || []).length) ? (
           <button type="button" onClick={() => navigate('/golda', { state: { tab: 'chat', prefill: he ? `קראי את המסמכים של ${playerName(p)} ובדקי אם תאריכי החוזה, הדרכון והייצוג במערכת תואמים למה שכתוב בהם.` : `Read ${playerName(p)}'s documents and check whether the contract, passport and representation dates in the CRM match them.` } })}

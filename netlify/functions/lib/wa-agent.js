@@ -146,12 +146,41 @@ function withLeague(col, data, before = {}) {
 function freeAgentRules(col, data, before = {}) {
   const status = data.contractStatus ?? before.contractStatus;
   if (col !== 'players' || status !== 'Free') return data;
-  return { ...data, currentClub: '', currentClubIsYouth: false, loanFrom: '', contractStart: '', contractEnd: '',
+  return { ...data, currentClub: '', currentClubIsYouth: false, loanFrom: '', contractStart: '', contractEnd: '', contractTerms: null,
     league: '', leagueCountry: '', leagueTier: '', leagueManual: '' };
+}
+
+// What Golda read from a player's contract (salary, option, release clause,
+// dated clauses), kept on the player as contractTerms. Only known keys are
+// kept; dates must be YYYY-MM-DD; money is a number in the given currency.
+const TERM_TEXT = ['currency', 'salaryPeriod', 'optionHolder', 'bonuses', 'notes', 'source'];
+const TERM_MONEY = ['salary', 'signingFee', 'releaseClause'];
+function cleanContractTerms(t) {
+  if (t === null) return null;
+  if (!t || typeof t !== 'object' || Array.isArray(t)) throw new Error('contractTerms must be an object');
+  const out = {};
+  for (const k of TERM_MONEY) if (t[k] !== undefined && t[k] !== '' && t[k] !== null) {
+    const n = Number(String(t[k]).replace(/[,\s]/g, ''));
+    if (!Number.isFinite(n) || n < 0) throw new Error(`contractTerms.${k} must be a number`);
+    out[k] = n;
+  }
+  for (const k of TERM_TEXT) if (t[k]) out[k] = String(t[k]).slice(0, k === 'notes' || k === 'bonuses' ? 1500 : 120);
+  if (out.salaryPeriod && !['month', 'year', 'season'].includes(out.salaryPeriod)) throw new Error('contractTerms.salaryPeriod must be month, year or season');
+  if (out.optionHolder && !['club', 'player', 'both'].includes(out.optionHolder)) throw new Error('contractTerms.optionHolder must be club, player or both');
+  const day = (v, k) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v))) throw new Error(`${k} must be YYYY-MM-DD`); return String(v); };
+  if (t.optionDeadline) out.optionDeadline = day(t.optionDeadline, 'contractTerms.optionDeadline');
+  if (t.optionYears !== undefined && t.optionYears !== '' && t.optionYears !== null) out.optionYears = Number(t.optionYears) || 0;
+  if (t.keyDates) {
+    if (!Array.isArray(t.keyDates)) throw new Error('contractTerms.keyDates must be a list of { date, label }');
+    out.keyDates = t.keyDates.slice(0, 12).map((k, i) => ({ date: day(k && k.date, `contractTerms.keyDates[${i}].date`), label: String((k && k.label) || '').slice(0, 120) }));
+  }
+  out.extractedAt = new Date().toISOString();
+  return out;
 }
 
 function validate(col, data, isCreate) {
   const bad = (m) => { throw new Error(m); };
+  if (col === 'players' && 'contractTerms' in data) data.contractTerms = cleanContractTerms(data.contractTerms);
   const inList = (k, list) => { if (data[k] && !list.includes(data[k])) bad(`${k} must be one of: ${list.join(', ')}`); };
   inList('primaryPosition', C.POSITIONS);
   inList('foot', C.FOOT_OPTIONS);
@@ -220,6 +249,7 @@ How you think:
 - Connect the dots like an experienced agent would: a contract ending soon and an open club requirement that fits the player → suggest a deal; a deal stuck in a stage → suggest the next step; a requirement with no good candidates → say what profile is missing. Point out anything important you notice (an expired passport, a missing document), in one line.
 - When asked for a recommendation or opinion, give a clear one with the reasons, based on the CRM data and, when useful, a web search (club news, league tables, transfer windows, player stats). Say what you checked.
 - To know what a document says (contract dates, salary, clauses, passport expiry), read it with read_file. When a file or photo is sent with the message you can see it directly. Offer to update the CRM from what you read (e.g. contractEnd from the contract), and do it if asked.
+- A player's contract (sent now, or in contractFiles): read it, then offer in one message to save its terms: contractStart/contractEnd plus contractTerms (salary, option and its deadline, release clause, signing fee, bonuses, and every other dated obligation as keyDates with a short Hebrew label). List what you found and what you could not find; after a yes, save it with one update. Dated terms then raise alerts before they fall due, like the contract end. Salary and terms are confidential: share them only with the person asking, never in a group.
 - Be honest about uncertainty: if the data is missing or contradictory, say so and what would settle it, instead of guessing.
 
 Your memory: you have a long-term memory shared across all topics and conversations (listed at the end of this prompt). When the writer states something that should last (a preference about how they want things, a decision, a standing instruction, context about a player, a club or a contact that isn't a CRM field), or says "תזכרי"/"תזכור", save it with remember, in one clear sentence, then mention it in one line ("שמרתי בזיכרון: …"). CRM facts and decisions are shared with the team (shared=true); personal preferences of the writer are personal (shared=false). Never save passwords, codes, ID or passport numbers, bank details or anything secret. If a memory turns out wrong or the writer asks you to forget it, use forget (and remember the corrected version). Use what you remember without being asked, and never contradict it silently: if the data now disagrees with a memory, say so.
@@ -247,7 +277,7 @@ Buttons: on WhatsApp the writer can tap instead of typing. When your answer ends
 - You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
 CRM data (field names are exact; values in lists must match exactly; dates are YYYY-MM-DD):
-- players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
+- players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
 - pipeline_men / pipeline_women / pipeline_youth / pipeline_jewish (prospects, NOT linked to players): playerName*, status (${C.PIPELINE_STATUS.join('|')}), profileLink, videoLink, agentName, agentPhone, nationalities, dob, primaryPosition, secondaryPositions, height (cm, 130-225, as a string), foot, currentClub, currentClubIsYouth, natTeamStatus, natTeamCountry, transferFee, salary (digits or "Not specified"), notes, league fields, linkedClubs [{clubName, linkedAt ISO}].
 - club_requirements: clubName*, gender*, clubIsYouth, tablePosition, contactName, contactRole, contactPhone, requiredPosition (position), ageMin, ageMax, ageNotSpecified (bool), transferFee, salary, notes, league fields.
 - contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, league fields.
@@ -800,4 +830,4 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: current.content, usage, files: tools.state.outFiles };
 }
 
-module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
+module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, cleanContractTerms, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };

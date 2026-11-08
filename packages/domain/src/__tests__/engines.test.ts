@@ -46,6 +46,18 @@ describe('alerts engine', () => {
     expect(r.byType.contract).toHaveLength(0);
     expect(r.byType.passport).toHaveLength(1); // overdue always shows while the type is on
   });
+  it('warns before dates read from the contract (option deadline, other clauses), not twice for the end date', () => {
+    const r = computeAlerts({ now: noon, players: [
+      { id: 'e', fullName: 'Eli', contractStatus: 'Under Contract', contractEnd: '2027-06-30',
+        contractTerms: { optionDeadline: '2026-11-01', optionHolder: 'club', keyDates: [{ date: '2026-10-14', label: 'תשלום חתימה שני' }, { date: '2027-06-30', label: 'end' }, { date: '2027-03-01', label: 'far' }] } },
+      { id: 'f', fullName: 'Free', contractStatus: 'Free', contractTerms: { optionDeadline: '2026-10-15' } },
+    ] });
+    const c = r.byType.contract;
+    expect(c.map((a) => a.dueDate)).toEqual(['2026-10-14', '2026-11-01']);
+    expect(c[0].proof.he).toBe('תשלום חתימה שני בעוד 2 ימים');
+    expect(c[1].proof.he).toContain('האופציה של המועדון');
+    expect(c[1].days).toBe(20);
+  });
   it('flags stale deals, expired requirements, overdue tasks and failed jobs', () => {
     const r = computeAlerts({
       now: noon,
