@@ -136,11 +136,15 @@ async function fullPass(db, cal, meta, job, { force }) {
       }
       case 'pull': await pullAndRedraw(a.item, a.event); job.note(`calendar -> CRM: ${a.item.key} ${JSON.stringify(a.patch).slice(0, 160)}`); return;
       case 'adopt': {
-        if (a.patch) { await pullAndRedraw(a.item, a.event); job.note(`adopted (calendar newer): ${a.event.summary}`); return; }
-        const ev = await cal.patch(a.event.id, a.body);
-        touched.add(ev.id);
-        await saveLink(a.item, ev, a.hash);
-        job.note(`adopted: ${a.event.summary}`);
+        if (a.patch) await pullAndRedraw(a.item, a.event);
+        else {
+          const ev = await cal.patch(a.event.id, a.body);
+          touched.add(ev.id);
+          await saveLink(a.item, ev, a.hash);
+        }
+        // Lou's own event took over from the server's copy: remove the copy.
+        if (a.replaces) { await cal.remove(a.replaces.id); touched.add(a.replaces.id); }
+        job.note(`adopted${a.patch ? ' (calendar newer)' : ''}${a.replaces ? ', replacing the server copy' : ''}: ${a.event.summary}`);
         return;
       }
       case 'deleted_in_calendar': {
