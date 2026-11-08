@@ -103,12 +103,47 @@ async function identityFor(db, msg) {
   return resolveSender(db, msg.from);
 }
 
-/** Deliver a reply on the message's channel. Throws when WhatsApp refuses. */
-async function deliver(msg, reply, { buttons = [], list = null } = {}) {
-  if (msg.channel === 'app') return [];                    // the app reads the reply from the inbox document
-  if (list) return wa.sendList(msg.from, reply, list.button, list.rows, msg.phoneId);
-  if (buttons.length) return wa.sendButtons(msg.from, reply, buttons, msg.phoneId);
-  return wa.sendText(msg.from, reply, msg.phoneId);
+/** Deliver a reply on the message's channel. Throws when WhatsApp refuses the text. */
+async function deliver(msg, reply, { buttons = [], list = null, files = [] } = {}) {
+  if (msg.channel === 'app') return [];                    // the app reads the reply (and its files) from the inbox document
+  let ids;
+  if (list) ids = await wa.sendList(msg.from, reply, list.button, list.rows, msg.phoneId);
+  else if (buttons.length) ids = await wa.sendButtons(msg.from, reply, buttons, msg.phoneId);
+  else ids = await wa.sendText(msg.from, reply, msg.phoneId);
+  // Documents go right after the text. The text is what counts: a document
+  // WhatsApp refuses is logged, and the text is not sent a second time for it.
+  for (const f of files) {
+    try { ids = [...(ids || []), ...(await wa.sendDocument(msg.from, f, msg.phoneId))]; }
+    catch (e) { console.error('[golda] document delivery failed:', f.filename, e.message); }
+  }
+  return ids;
+}
+
+// A document Golda made is kept like any CRM file (files/{id} + chunks), so the
+// app can open it and a delayed reply can still send it. Nothing points at it
+// from a player, so the nightly cleanup removes it after a week.
+const FILE_CHUNK = 600 * 1024;
+async function storeOutFile(db, file, who) {
+  const dataUrl = `data:${file.mimeType};base64,${file.buffer.toString('base64')}`;
+  const fileId = `golda_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const parts = [];
+  for (let i = 0; i < dataUrl.length; i += FILE_CHUNK) parts.push(dataUrl.slice(i, i + FILE_CHUNK));
+  await Promise.all(parts.map((data, i) => db.collection('files').doc(fileId).collection('chunks').doc(String(i)).set({ data })));
+  const uploadedAt = new Date().toISOString();
+  await db.collection('files').doc(fileId).set({ name: file.filename, originalName: file.filename, type: file.mimeType, size: file.buffer.length,
+    parts: parts.length, uploadedAt, uploadedBy: who.email || 'golda', madeBy: 'golda' });
+  return { fileId, name: file.filename, type: file.mimeType, size: file.buffer.length, uploadedAt };
+}
+
+/** A stored document back as { buffer, filename, mimeType }, for a reply sent later. */
+async function loadOutFile(db, ref) {
+  const meta = await db.collection('files').doc(ref.fileId).get();
+  if (!meta.exists) return null;
+  const n = meta.data().parts || 1;
+  const chunks = await Promise.all(Array.from({ length: n }, (_, i) => db.collection('files').doc(ref.fileId).collection('chunks').doc(String(i)).get()));
+  if (chunks.some((c) => !c.exists)) return null;
+  const dataUrl = chunks.map((c) => c.data().data).join('');
+  return { buffer: Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'), filename: ref.name, mimeType: ref.type || 'application/pdf' };
 }
 
 /** A voice note in, its words out; the service state is kept for the Golda screen. */
@@ -213,7 +248,7 @@ async function processMessage(messageId) {
 
     const thread = await loadThread(sessRef, session, current);
     const topic = current === MAIN_TOPIC ? null : { name: current, ...topics[current], history: thread.history };
-    let pendingDeletes = Array.isArray(session.pendingDeletes) ? session.pendingDeletes : (session.pendingDelete ? [session.pendingDelete] : []), changed = false, userText = text || '', agentUsage = null;
+    let pendingDeletes = Array.isArray(session.pendingDeletes) ? session.pendingDeletes : (session.pendingDelete ? [session.pendingDelete] : []), changed = false, userText = text || '', agentUsage = null, outFiles = [];
     if (direct) reply = direct;
     else {
       // A long task gets one "still on it" line, so the writer knows it was received.
@@ -225,15 +260,22 @@ async function processMessage(messageId) {
         const out = await runAgent({ db, admin, identity, text, media, session: { ...session, history: thread.history }, assistantName: ASSISTANT_NAME, topic, topics: Object.keys(topics), channel: msg.channel || 'whatsapp' });
         ({ reply, pendingDeletes, changed, userText } = out);
         agentUsage = out.usage;
+        outFiles = Array.isArray(out.files) ? out.files : [];
       } finally { if (ack) clearTimeout(ack); }
     }
     const parsed = parseButtons(reply);
     reply = parsed.text;
     const buttons = list ? list.rows.map((r) => r.title) : parsed.buttons;
 
+    // Documents she made are stored first, so the app and a later resend can reach them.
+    const fileRefs = [];
+    for (const f of outFiles) {
+      try { fileRefs.push(await storeOutFile(db, f, identity)); } catch (e) { console.error('[golda] storing a document failed:', e.message); }
+    }
+
     // Record the turn before sending, so a failed send never loses the history.
     const now = Date.now();
-    const turn = [{ role: 'user', text: userText, at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1, id: String(messageId), ...(buttons.length ? { buttons } : {}) }];
+    const turn = [{ role: 'user', text: userText, at: now, channel: msg.channel || 'whatsapp' }, { role: 'assistant', text: reply, at: now + 1, id: String(messageId), ...(buttons.length ? { buttons } : {}), ...(fileRefs.length ? { files: fileRefs } : {}) }];
     const patch = {
       topic: current, turn: session.turn, pendingDeletes: pendingDeletes || [], pendingDelete: admin.firestore.FieldValue.delete(), lastAt: now, lockUntil: 0, lockedBy: null,
       email: identity.email || '', name: identity.name, phone: identity.phone || '',
@@ -245,10 +287,10 @@ async function processMessage(messageId) {
     if (!direct) await thread.ref.set({ topic: current, history: [...thread.history, ...turn].slice(-HISTORY_KEEP), updatedAt: now }, { merge: true });
     await sessRef.set(patch, { merge: true });
 
-    const done = { reply, buttons, menu: Boolean(list), changed, topic: current, doneAt: admin.firestore.FieldValue.serverTimestamp(), durationMs: Date.now() - t0,
+    const done = { reply, buttons, menu: Boolean(list), changed, topic: current, files: fileRefs, doneAt: admin.firestore.FieldValue.serverTimestamp(), durationMs: Date.now() - t0,
       usage: agentUsage ? { ...agentUsage, model: MODEL } : null };
     try {
-      const ids = await deliver(msg, reply, { buttons: parsed.buttons, list });
+      const ids = await deliver(msg, reply, { buttons: parsed.buttons, list, files: outFiles });
       await inboxRef.update({ ...done, state: 'done', sentIds: (ids || []).filter(Boolean) });
     } catch (e) {
       console.error('[golda] reply delivery failed:', e.message);
@@ -270,7 +312,8 @@ async function processMessage(messageId) {
 /** A reply that was computed but never delivered. */
 async function resendReply(db, inboxRef, msg) {
   try {
-    const ids = await deliver(msg, msg.reply || '', msg.menu ? { list: { button: 'מה לעשות?', rows: MENU_ROWS } } : { buttons: Array.isArray(msg.buttons) ? msg.buttons : [] });
+    const files = msg.channel === 'app' ? [] : (await Promise.all((Array.isArray(msg.files) ? msg.files : []).map((r) => loadOutFile(db, r).catch(() => null)))).filter(Boolean);
+    const ids = await deliver(msg, msg.reply || '', { ...(msg.menu ? { list: { button: 'מה לעשות?', rows: MENU_ROWS } } : { buttons: Array.isArray(msg.buttons) ? msg.buttons : [] }), files });
     await inboxRef.update({ state: 'done', error: admin.firestore.FieldValue.delete(), resentAt: admin.firestore.FieldValue.serverTimestamp(), sentIds: (ids || []).filter(Boolean) });
     return { status: 200, body: 'resent' };
   } catch (e) {
@@ -296,4 +339,4 @@ function pickRetries(rows, now = Date.now(), { maxAttempts = 3, staleMs = LOCK_M
   });
 }
 
-module.exports = { processMessage, pickRetries, topicCommand, findTopic, nextUsage, threadKey, parseButtons, isMenuCommand, inboundText, MENU_ROWS, ASSISTANT_NAME, DAILY_LIMIT };
+module.exports = { processMessage, deliver, storeOutFile, loadOutFile, pickRetries, topicCommand, findTopic, nextUsage, threadKey, parseButtons, isMenuCommand, inboundText, MENU_ROWS, ASSISTANT_NAME, DAILY_LIMIT };

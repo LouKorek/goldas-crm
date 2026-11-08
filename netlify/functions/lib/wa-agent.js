@@ -283,6 +283,8 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(ALL) }, id: { type: 'string' } }, required: ['collection', 'id'], additionalProperties: false } },
   { name: 'read_file', description: "Open a document stored on a player (contract, passport, representation agreement) and see its contents. PDFs and images are shown to you in full. Omit name when the player has a single document in that field.",
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Display name of the document' } }, required: ['playerId', 'field'], additionalProperties: false } },
+  { name: 'player_pdf', description: "Make the branded one-page player CV (PDF with the Gold A&S logo: age, position, foot, club, nationality, national team, notes, video and Transfermarkt links) and send it to the writer with your answer. English for clubs abroad (default), Hebrew for Israeli clubs. The writer forwards it; you never send it to anyone else.",
+    input_schema: { type: 'object', properties: { playerId: { type: 'string' }, lang: { type: 'string', enum: ['en', 'he'] } }, required: ['playerId'], additionalProperties: false } },
   { name: 'rename_file', description: "Change a stored document's display name without re-uploading it.",
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Current display name' }, newName: { type: 'string' } }, required: ['playerId', 'field', 'name', 'newName'], additionalProperties: false } },
   { name: 'create', description: 'Create a new record. Pass only the fields the user gave (plus required ones). Returns the new id.',
@@ -328,7 +330,7 @@ const TOOLS = [
   ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -380,7 +382,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   // The documents of a (virtual) collection: live records that belong to it.
   const docsOf = async (c) => (await readOk(c).get()).docs.filter((d) => belongs(c, d.data()));
   const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; return o; };
-  const state = { pendingDeletes: normalizePending(session), changed: false };
+  const state = { pendingDeletes: normalizePending(session), changed: false, outFiles: [] };
 
   async function search({ query, collection }) {
     const cols = collection ? [collection] : Object.keys(ALL);
@@ -436,6 +438,16 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       return { snap: s, files, idx: partial };
     }
     return { snap: s, files, idx };
+  }
+
+  // A document Golda made goes out with her answer (WhatsApp document / app attachment).
+  async function playerPdf({ playerId, lang = 'en' }) {
+    const snap = await db.collection('players').doc(playerId).get();
+    if (!snap.exists || snap.data().deletedAt) throw new Error('player not found');
+    if (state.outFiles.length >= 3) throw new Error('at most three documents per answer');
+    const file = await require('./golda-pdf.js').playerCvPdf({ id: snap.id, ...snap.data() }, { lang });
+    state.outFiles.push(file);
+    return { made: true, filename: file.filename, sizeKB: Math.round(file.buffer.length / 1024), note: 'The PDF goes out right after your text answer; just say it is attached.' };
   }
 
   async function readFile({ playerId, field, name }) {
@@ -687,7 +699,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     return { started: true, note: 'Runs in the background for a few minutes; the Calendar shows the report when it finishes.' };
   }
 
-  const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
+  const impl = { search, list, get, read_file: readFile, player_pdf: playerPdf, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
     suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
     ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }), transfer_windows: async () => windowStatus(new Date()) };
   return { state, run: async (name, input) => {
@@ -784,7 +796,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     messages.push({ role: 'user', content: results });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
-  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: current.content, usage };
+  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: current.content, usage, files: tools.state.outFiles };
 }
 
 module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };

@@ -6,6 +6,7 @@ import { useRole } from 'lib/roleContext';
 import { t, fmtDateTime, getLang } from 'lib/i18n';
 import { PageHeader, Skeleton, Empty, ChipGroup, Field, toast, useConfirm } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import DocViewer from 'components/DocViewer';
 import { DEAL_STAGE_LABELS } from '@goldas/domain';
 import {
   PHYSICAL, listenGoldaAudit, undoGoldaAction, sendToGolda, listenInboxMessage, listenGoldaThread, sessionKeyFor,
@@ -108,6 +109,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [rated, setRated] = useState({});        // answer id → 1 | -1 (my 👍/👎 this visit)
+  const [docs, setDocs] = useState(null);        // documents Golda attached, open in the viewer
   const endRef = useRef(null);
   const taRef = useRef(null);
 
@@ -118,7 +120,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   useEffect(() => {
     const unsubs = pending.filter((p) => !p.state || p.state === 'queued' || p.state === 'processing').map((p) => listenInboxMessage(p.id, (m) => {
       if (!m) return;
-      setPending((list) => list.map((x) => (x.id === p.id ? { ...x, state: m.state, reply: m.reply, buttons: m.buttons, error: m.error } : x)));
+      setPending((list) => list.map((x) => (x.id === p.id ? { ...x, state: m.state, reply: m.reply, buttons: m.buttons, files: m.files, error: m.error } : x)));
     }));
     return () => unsubs.forEach((u) => u());
   }, [pending.map((p) => `${p.id}:${p.state}`).join('|')]); // eslint-disable-line
@@ -130,10 +132,10 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   }, [history]);
 
   const items = useMemo(() => {
-    const out = (history || []).map((h, i) => ({ id: `h${i}`, role: h.role, text: h.text, at: h.at, channel: h.channel, buttons: h.buttons, answerId: h.role === 'assistant' ? h.id : null }));
+    const out = (history || []).map((h, i) => ({ id: `h${i}`, role: h.role, text: h.text, at: h.at, channel: h.channel, buttons: h.buttons, files: h.files, answerId: h.role === 'assistant' ? h.id : null }));
     for (const p of pending) {
       out.push({ id: p.id, role: 'user', text: p.text, at: p.sentAt, mine: true });
-      if (p.state === 'done' || p.state === 'error' || p.state === 'reply_pending') out.push({ id: `${p.id}_r`, role: 'assistant', text: p.reply || (he ? 'משהו השתבש.' : 'Something went wrong.'), at: p.sentAt + 1, error: p.state === 'error', buttons: p.buttons, answerId: p.state === 'error' ? null : p.id });
+      if (p.state === 'done' || p.state === 'error' || p.state === 'reply_pending') out.push({ id: `${p.id}_r`, role: 'assistant', text: p.reply || (he ? 'משהו השתבש.' : 'Something went wrong.'), at: p.sentAt + 1, error: p.state === 'error', buttons: p.buttons, files: p.files, answerId: p.state === 'error' ? null : p.id });
       else out.push({ id: `${p.id}_typing`, role: 'assistant', typing: true, at: p.sentAt + 1 });
     }
     return out;
@@ -176,7 +178,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
             {he ? 'שאלו אותי על השחקנים, המועדונים והעסקאות, או בקשו ממני לעדכן משהו. אפשר להתחיל מאחת השאלות למטה.' : 'Ask me about players, clubs and deals, or ask me to update something.'}
           </div>
         )}
-        {items.map((m) => <Bubble key={m.id} m={m} he={he} rating={m.answerId ? rated[m.answerId] || 0 : 0} onRate={m.answerId ? (v) => rate(m.answerId, v) : null} />)}
+        {items.map((m) => <Bubble key={m.id} m={m} he={he} rating={m.answerId ? rated[m.answerId] || 0 : 0} onRate={m.answerId ? (v) => rate(m.answerId, v) : null} onOpenFile={(i) => setDocs({ files: m.files, idx: i })} />)}
         {(() => {
           // Golda's last answer may offer taps (the same buttons WhatsApp shows).
           const last = items[items.length - 1];
@@ -206,7 +208,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   );
 }
 
-function Bubble({ m, he, rating = 0, onRate = null }) {
+function Bubble({ m, he, rating = 0, onRate = null, onOpenFile = null }) {
   const mine = m.role === 'user';
   const thumb = (v, glyph, label) => (
     <button type="button" onClick={() => onRate(v)} aria-label={label} aria-pressed={rating === v} title={label}
@@ -221,6 +223,17 @@ function Bubble({ m, he, rating = 0, onRate = null }) {
         borderRadius: 14, [mine ? 'borderStartStartRadius' : 'borderStartEndRadius']: 4, boxShadow: 'var(--shadow-sm)',
       }}>
         {m.typing ? <Typing he={he} /> : <Rich text={m.text} />}
+        {!m.typing && Array.isArray(m.files) && m.files.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {m.files.map((f, i) => (
+              <button key={f.fileId || i} type="button" className="chip" onClick={() => onOpenFile?.(i)} title={f.name}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%', minWidth: 0 }}>
+                <span aria-hidden="true">📄</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 10, color: mine ? 'var(--on-accent)' : 'var(--text-3)', opacity: mine ? 0.75 : 1, marginTop: 4, textAlign: 'end' }}>
           {!mine && !m.typing && onRate && (
             <span style={{ float: 'inline-start', marginTop: -3 }}>
