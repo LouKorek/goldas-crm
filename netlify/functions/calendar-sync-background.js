@@ -11,10 +11,14 @@
 const { admin, getDb } = require('./lib/firestore.js');
 const { withAuth } = require('./lib/auth.js');
 const { runJob } = require('./lib/jobs.js');
+const { OWNER_EMAIL: OWNER } = require('./lib/firestore.js');
+const { addDays: addDaysIso } = require('@goldas/domain');
 const { occurrences } = require('@goldas/domain');
 const G = require('./lib/gcal-sync.js');
+const A = require('./lib/agency-calendar.js');
 
 const META = ['app_meta', 'calendarSync'];
+const AGENCY = ['app_meta', 'agencyCalendar'];
 const LINKS = 'calendar_links';
 const LOCK_MS = 10 * 60 * 1000;
 const MAX_REMOVALS = 40;
@@ -24,8 +28,7 @@ const stamp = () => ({ updatedAt: FV.serverTimestamp(), lastEditedAt: FV.serverT
 const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 const linkId = (key) => key.replace(/[/]/g, '_');
 
-async function lock(db) {
-  const ref = db.collection(META[0]).doc(META[1]);
+async function lock(db, ref = db.collection(META[0]).doc(META[1])) {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const m = snap.exists ? snap.data() : {};
@@ -35,12 +38,12 @@ async function lock(db) {
   });
 }
 
-async function crmChangedSince(db, ms) {
+async function crmChangedSince(db, ms, cols = ['matches', 'trainings']) {
   if (!ms) return true;
   const since = admin.firestore.Timestamp.fromMillis(ms);
   const probes = [];
-  for (const col of ['matches', 'trainings']) {
-    for (const f of ['updatedAt', 'deletedAt']) probes.push(db.collection(col).where(f, '>', since).limit(1).get());
+  for (const col of cols) {
+    for (const f of ['updatedAt', 'deletedAt', 'restoredAt']) probes.push(db.collection(col).where(f, '>', since).limit(1).get());
   }
   const res = await Promise.all(probes);
   return res.some((s) => !s.empty);
@@ -199,7 +202,7 @@ async function fullPass(db, cal, meta, job, { force }) {
   return { counts, touched, window: win, items: items.length, events: events.length };
 }
 
-async function runSync({ force = false } = {}, job) {
+async function runPlayerSync({ force = false } = {}, job) {
   const db = getDb();
   const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}');
   const client = G.calendarClient(svc);
@@ -262,6 +265,184 @@ async function runSync({ force = false } = {}, job) {
   }
 }
 
+/**
+ * The agency calendar "Gold A&S" <-> the meetings collection (rules in
+ * lib/agency-calendar.js). Own lock and meta in app_meta/agencyCalendar,
+ * same cheap check as the player schedule.
+ */
+async function agencyPass(db, cal, meta, job, { force }) {
+  const win = A.windowRange();
+  const timeMin = new Date(Date.parse(`${win.from}T00:00:00Z`) - 3 * 3600e3).toISOString();
+  const timeMax = new Date(Date.parse(`${addDaysIso(win.to, 1)}T00:00:00Z`) + 3 * 3600e3).toISOString();
+  const [events, meetSnap, playerSnap, linkSnap] = await Promise.all([
+    cal.listWindow(timeMin, timeMax),
+    db.collection('meetings').get(),
+    db.collection('players').get(),
+    db.collection(LINKS).where('kind', '==', 'meeting').get(),
+  ]);
+  const players = rows(playerSnap).filter((p) => !p.deletedAt);
+  const meetings = rows(meetSnap);
+  const linkRows = rows(linkSnap);
+  const links = new Map(linkRows.map((l) => [l.key, l]));
+  const mode = meta.mode === 'push' ? 'push' : 'two_way';
+  const actions = A.plan({ meetings, events, links, from: win.from, to: win.to, mode });
+  const live = meetings.filter((m) => !m.deletedAt).length;
+  const removals = actions.filter((x) => x.type === 'remove_event' || x.type === 'remove_orphan' || x.type === 'cancel_meeting').length;
+  if (!live && linkRows.length > 5) throw new Error(`safety stop: no meetings in the CRM but ${linkRows.length} synced events`);
+  if (removals > MAX_REMOVALS && !force) throw new Error(`safety stop: ${removals} meetings would be removed; run with force after checking`);
+
+  const saveLink = (m, ev, hash) => db.collection(LINKS).doc(linkId(A.keyFor(m.id))).set({
+    key: A.keyFor(m.id), kind: 'meeting', crmId: m.id, eventId: ev.id, hash, eventUpdated: ev.updated || '', date: m.date || '', at: Date.now(),
+  });
+  const dropLink = (key) => db.collection(LINKS).doc(linkId(key)).delete().catch(() => {});
+  const writeMeeting = (id, patch) => db.collection('meetings').doc(id).update({ ...patch, ...stamp() });
+  const counts = {};
+
+  async function push(m, ev) {
+    const saved = ev ? await cal.patch(ev.id, A.eventBody(m, ev)) : await cal.insertAt(A.eventIdFor(m.id), A.eventBody(m));
+    const extras = A.extrasFromEvent(saved);
+    const patch = {};
+    if (m.calendarEventId !== saved.id) patch.calendarEventId = saved.id;
+    if (m.calendarLink !== extras.calendarLink) patch.calendarLink = extras.calendarLink;
+    if (Object.keys(patch).length) await db.collection('meetings').doc(m.id).update(patch);   // no stamp: not an edit
+    await saveLink(m, saved, A.fieldsHash(A.normalize(m)));
+  }
+  async function pull(m, ev) {
+    const patch = A.meetingPatch(ev, players, m);
+    await writeMeeting(m.id, patch);
+    await saveLink({ ...m, ...patch }, ev, A.fieldsHash(A.fromEvent(ev)));
+    job.note(`calendar -> CRM meeting: ${ev.summary}`);
+  }
+  async function run(x) {
+    switch (x.type) {
+      case 'none': return;
+      case 'link': {
+        const extras = A.extrasFromEvent(x.event);
+        const m = x.meeting;
+        const stale = ['guests', 'meetUrl', 'calendarLink'].some((k) => JSON.stringify(m[k] || (k === 'guests' ? [] : '')) !== JSON.stringify(extras[k]));
+        if (stale || m.calendarEventId !== x.event.id) await db.collection('meetings').doc(m.id).update({ ...extras, calendarEventId: x.event.id });
+        await saveLink(m, x.event, x.hash);
+        return;
+      }
+      case 'insert': await push(x.meeting, null); return;
+      case 'revive': {
+        // Same event id again: Google brings the deleted event back.
+        const saved = await cal.insertAt(x.eventId, A.eventBody(x.meeting));
+        await saveLink(x.meeting, saved, A.fieldsHash(A.normalize(x.meeting)));
+        job.note(`meeting restored -> back in the calendar: ${x.meeting.title}`);
+        return;
+      }
+      case 'push': await push(x.meeting, x.event); job.note(`CRM -> calendar meeting: ${x.meeting.title}`); return;
+      case 'pull': await pull(x.meeting, x.event); return;
+      case 'fetch': {
+        let ev = null;
+        try { ev = await cal.get(x.eventId); } catch (e) { if (e.status !== 404 && e.status !== 410) throw e; }
+        if (!ev) ev = { id: x.eventId, status: 'cancelled' };
+        const next = A.reconcile(x.meeting, ev, x.link, x.key, mode !== 'push');
+        counts[next.type] = (counts[next.type] || 0) + 1;
+        await run(next);
+        return;
+      }
+      case 'cancel_meeting':
+        await writeMeeting(x.meeting.id, { deletedAt: FV.serverTimestamp(), deletedBy: 'calendar' });
+        await dropLink(x.key);
+        job.note(`deleted in calendar -> meeting deleted: ${x.meeting.title}`);
+        return;
+      case 'remove_event':
+        await cal.remove(x.eventId);
+        await dropLink(x.key);
+        job.note(`meeting deleted -> removed from calendar: ${x.meeting.title}`);
+        return;
+      case 'drop_link': await dropLink(x.key); return;
+      case 'remove_orphan':
+        await cal.remove(x.event.id);
+        job.note(`removed calendar event of a purged meeting: ${x.event.summary}`);
+        return;
+      case 'import': {
+        const data = A.meetingPatch(x.event, players);
+        const ref = await db.collection('meetings').add({
+          ...data, source: 'calendar', owner: OWNER, deletedAt: null,
+          createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(), createdBy: 'calendar', createdByName: 'יומן Google',
+        });
+        // Tag the event with its meeting so a later purge can clean it up.
+        const saved = await cal.patch(x.event.id, { extendedProperties: { private: { goldasMeeting: ref.id, goldasPlayers: (data.linkedPlayers || []).join(',') } } });
+        await saveLink({ id: ref.id, ...data }, saved, A.fieldsHash(A.fromEvent(saved)));
+        job.note(`imported meeting from calendar: ${x.event.summary}`);
+        return;
+      }
+      default: return;
+    }
+  }
+  for (const x of actions) {
+    counts[x.type] = (counts[x.type] || 0) + 1;
+    try { await run(x); } catch (e) {
+      counts.errors = (counts.errors || 0) + 1;
+      job.note(`meeting ${x.type} ${(x.meeting && x.meeting.title) || (x.event && x.event.summary) || ''}: ${e.message}`.slice(0, 400));
+      if (e.status === 401 || e.status === 403) throw e;
+    }
+  }
+  delete counts.fetch;
+  return { counts, meetings: live, events: events.length };
+}
+
+async function syncAgency({ force = false } = {}, job, client) {
+  const db = getDb();
+  const ref = db.collection(AGENCY[0]).doc(AGENCY[1]);
+  const meta = await lock(db, ref);
+  if (!meta) { job.note('agency calendar: another run is in progress'); return { skipped: 'busy' }; }
+  if (meta.enabled === false) { await ref.set({ lockUntil: 0 }, { merge: true }); return { skipped: 'disabled' }; }
+  const cal = A.agencyApi(client, meta.calendarId || A.AGENCY_CALENDAR_ID);
+  const today = A.windowRange().today;
+  try {
+    let token = meta.syncToken || null;
+    let lastFullMs = meta.lastFullMs || 0;
+    let again = force;
+    let result = { changed: false };
+    let loops = 0;
+    do {
+      if (!again) {
+        const probe = await cal.changesSince(token);
+        const crm = await crmChangedSince(db, lastFullMs, ['meetings']);
+        if (!probe.changed && !crm && meta.lastFullDay === today && meta.state === 'ok') {
+          await ref.set({ lastCheckAt: Date.now(), syncToken: probe.token || token }, { merge: true });
+          return { changed: false };
+        }
+      }
+      const startedMs = Date.now();
+      const r = await agencyPass(db, cal, meta, job, { force });
+      token = (await cal.changesSince(null)).token;
+      lastFullMs = startedMs;
+      result = { changed: true, ...r.counts, meetings: r.meetings, events: r.events };
+      const m = (await ref.get()).data() || {};
+      again = !!m.dirty && loops < 1;
+      if (again) await ref.set({ dirty: false }, { merge: true });
+      loops += 1;
+    } while (again);
+    await ref.set({
+      state: 'ok', serviceAccount: client.email, lastCheckAt: Date.now(), lastFullMs, lastFullDay: today, syncToken: token,
+      lastResult: result, problem: FV.delete(), events: FV.delete(),
+    }, { merge: true });
+    return result;
+  } catch (e) {
+    const problem = G.accessProblem(e, client.email);
+    const st = problem ? problem.state : 'error';
+    await ref.set({ state: st, serviceAccount: client.email, problem: problem || { state: 'error', hint: String(e.message).slice(0, 300) }, lastCheckAt: Date.now() }, { merge: true });
+    job.note(`agency calendar: ${problem ? problem.hint : e.message}`);
+    return { blocked: st, newProblem: meta.state !== st };
+  } finally {
+    await ref.set({ lockUntil: 0 }, { merge: true }).catch(() => {});
+  }
+}
+
+/** Both calendars; the player schedule decides the job's outcome. */
+async function runSync(opts = {}, job) {
+  const svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}');
+  const agency = await syncAgency(opts, job, G.calendarClient(svc)).catch((e) => ({ error: e.message }));
+  const r = await runPlayerSync(opts, job);
+  const changed = !!((r && r.changed) || agency.changed);
+  return { ...r, changed, newProblem: !!((r && r.newProblem) || agency.newProblem), agency };
+}
+
 exports.handler = withAuth({ action: 'run_sync', internal: true }, async (event) => {
   let body = {};
   try { body = event.body ? JSON.parse(event.body) : {}; } catch { body = {}; }
@@ -279,4 +460,4 @@ exports.handler = withAuth({ action: 'run_sync', internal: true }, async (event)
   return { statusCode: 200, body: JSON.stringify(r) };
 });
 
-exports._internal = { runSync, fullPass, crmChangedSince };
+exports._internal = { runSync, runPlayerSync, syncAgency, agencyPass, fullPass, crmChangedSince };

@@ -14,6 +14,13 @@ import { callFunctionJson } from 'lib/api';
 
 export const CALENDAR_ID = '5d6f4890e0c176670656fdbd875703d81565708942bb1f4ada0922702210d66b@group.calendar.google.com';
 export const CALENDAR_URL = 'https://calendar.google.com/calendar/u/0/r';
+// "Gold A&S": Lou's agency calendar (meetings). Google keeps it; the server
+// mirrors the coming weeks into app_meta/agencyCalendar for the screens.
+export const AGENCY_CALENDAR_ID = '7dd7e90d8fff0061bf3a20caee6bbb419964f6a202a727e70547a9f89c6de68f@group.calendar.google.com';
+
+/** app_meta/agencyCalendar: state, events [{ id, title, date, time, endTime, allDay, location, playerIds, playerNames, link }]. */
+export const listenAgencyCalendar = (callback) =>
+  onSnapshot(doc(db, 'app_meta', 'agencyCalendar'), (s) => callback(s.exists() ? s.data() : {}), (e) => { console.error('agencyCalendar error:', e); callback({}); });
 
 /** app_meta/calendarSync: state, serviceAccount, lastResult, problem (no secrets). */
 export const listenCalendarSync = (callback) =>
@@ -32,10 +39,10 @@ async function googleFetch(token, url, init = {}) {
 }
 
 /**
- * Share the calendar with the server and start the first sync.
- * Returns { ok, step, message } for the screen.
+ * Share the calendars with the server and start the first sync, all from
+ * one Google popup. Returns { ok, step, message } for the screen.
  */
-export async function connectCalendar({ serviceAccount, needsApi, calendarId = CALENDAR_ID }) {
+export async function connectCalendar({ serviceAccount, needsApi, calendarIds = [CALENDAR_ID, AGENCY_CALENDAR_ID] }) {
   if (!serviceAccount) return { ok: false, step: 'prepare', message: 'השרת עוד לא מוכן. נסה שוב בעוד דקה.' };
   const provider = new GoogleAuthProvider();
   provider.addScope('https://www.googleapis.com/auth/calendar.acls');
@@ -51,14 +58,16 @@ export async function connectCalendar({ serviceAccount, needsApi, calendarId = C
     await sleep(8000);   // the switch takes a few seconds to reach the Calendar API
   }
 
-  const acl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/acl?sendNotifications=false`;
-  let share = { ok: false };
-  for (let i = 0; i < 4 && !share.ok; i++) {
-    share = await googleFetch(token, acl, { method: 'POST', body: JSON.stringify({ role: 'writer', scope: { type: 'user', value: serviceAccount } }) });
-    if (!share.ok && share.status === 403 && i < 3) await sleep(6000); else break;
+  for (const calendarId of calendarIds) {
+    const acl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/acl?sendNotifications=false`;
+    let share = { ok: false };
+    for (let i = 0; i < 4 && !share.ok; i++) {
+      share = await googleFetch(token, acl, { method: 'POST', body: JSON.stringify({ role: 'writer', scope: { type: 'user', value: serviceAccount } }) });
+      if (!share.ok && share.status === 403 && i < 3) await sleep(6000); else break;
+    }
+    if (!share.ok) return { ok: false, step: 'share', message: share.data?.error?.message || `שיתוף לוח השנה נכשל (${share.status})` };
   }
-  if (!share.ok) return { ok: false, step: 'share', message: share.data?.error?.message || `שיתוף לוח השנה נכשל (${share.status})` };
 
   await runCalendarSync(true).catch(() => {});
-  return { ok: true, step: 'done', message: 'לוח השנה חובר. הסנכרון הראשון רץ עכשיו.' };
+  return { ok: true, step: 'done', message: calendarIds.length > 1 ? 'לוחות השנה חוברו. הסנכרון הראשון רץ עכשיו.' : 'לוח השנה חובר. הסנכרון הראשון רץ עכשיו.' };
 }

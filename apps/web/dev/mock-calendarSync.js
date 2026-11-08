@@ -9,3 +9,6 @@ export const listenCalendarSync = (cb) => {
 };
 export const runCalendarSync = async () => ({});
 export const connectCalendar = async () => ({ ok: true, message: 'ok' });
+export const CALENDAR_ID = 'player-cal';
+export const AGENCY_CALENDAR_ID = 'agency-cal';
+export const listenAgencyCalendar = (cb) => { setTimeout(() => cb(ok ? { state: 'ok', lastCheckAt: Date.now() - 3 * 60000, lastResult: { import: 3, none: 0 } } : { state: 'needs_share' }), 50); return () => {}; };
