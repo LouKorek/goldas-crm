@@ -1,14 +1,15 @@
 // The unified players collection. Every person the agency touches is one
 // document with a stage (relationship) and a category (market).
 import { listenCollection, addDoc_, updateDoc_, PATHS, currentUserMeta } from 'lib/db';
-import { stageFromStatus, categoryFromPlayer, playerName } from '@goldas/domain';
+import { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName } from '@goldas/domain';
 import { addInteraction } from './interactions';
 import { syncDealsForPlayer } from './deals';
 
 // Every record leaves here with its name and its market resolved, so no
 // screen ever has to guess (older records carry no category field and
 // were missing from some filters but not others).
-const withName = (p) => ({ ...p, name: playerName(p), category: categoryFromPlayer(p) });
+// ...and its stage: a candidate's stage follows its status (stageOfPlayer).
+const withName = (p) => ({ ...p, name: playerName(p), category: categoryFromPlayer(p), stage: stageOfPlayer(p) });
 export const categoryOf = categoryFromPlayer;
 
 /**

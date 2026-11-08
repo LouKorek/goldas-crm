@@ -11,7 +11,7 @@
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
-const { computeAlerts, topMatches, mergeSettings } = require('@goldas/domain');
+const { computeAlerts, topMatches, mergeSettings, stageOfPlayer } = require('@goldas/domain');
 
 const FILE_FIELDS = ['contractFiles', 'passportFiles', 'reprFiles', 'mandateFiles', 'files'];
 const ORPHAN_MIN_AGE_MS = 7 * 86400000;
@@ -36,7 +36,7 @@ async function loadAll(db) {
 async function runMatching(db, data, job) {
   const now = new Date();
   const open = data.requirements.filter((r) => !r.status || r.status === 'open');
-  const candidates = data.players.filter((p) => (p.stage || 'represented') !== 'not_relevant');
+  const candidates = data.players.filter((p) => stageOfPlayer(p) !== 'not_relevant');
   const batch = db.batch();
   let n = 0;
   for (const r of open) {

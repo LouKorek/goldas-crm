@@ -9,6 +9,9 @@ const players = [
     agentName: 'Agent X', agentPhone: '+380950663545', salary: '1000', nationalities: ['Israel'], leagueCountry: 'Israel', leagueTier: 'Tier 1', league: 'Israel 1' })),
   // Older candidates saved before the market field existed.
   { id: 'old1', stage: 'tracking', playerName: 'Legacy Man', gender: 'Men', status: 'Not Contacted', primaryPosition: 'CB' },
+  // A stale stored stage (status says in talks) and a real "Not relevant".
+  { id: 'stale1', stage: 'not_relevant', category: 'men', playerName: 'Stale Stage', gender: 'Men', status: 'Initial Talks', primaryPosition: 'RW' },
+  { id: 'gone1', stage: 'not_relevant', category: 'men', playerName: 'Gone Player', gender: 'Men', status: 'Not Relevant', primaryPosition: 'LB' },
   { id: 'old2', stage: 'in_process', playerName: 'Legacy Woman', gender: 'Women', status: 'Initial Talks', primaryPosition: 'ST' },
   ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01' })),
 ];

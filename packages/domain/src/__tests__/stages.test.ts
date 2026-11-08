@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stageFromStatus, categoryFromPlayer, playerName, clubKey, isYouthName, playerSchema, dealSchema } from '../index';
+import { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName, clubKey, isYouthName, playerSchema, dealSchema } from '../index';
 
 describe('stage and category mapping', () => {
   it('maps pipeline statuses', () => {
@@ -53,5 +53,15 @@ describe('schemas', () => {
   it('deal needs a club and a known stage', () => {
     expect(() => dealSchema.parse({ playerId: 'p', playerName: 'X', category: 'men', clubName: '', stage: 'Negotiation' })).toThrow();
     expect(dealSchema.parse({ playerId: 'p', playerName: 'X', category: 'men', clubName: 'C', stage: 'Negotiation' }).history).toEqual([]);
+  });
+});
+
+describe('stageOfPlayer', () => {
+  it('follows the status for candidates, keeps represented', () => {
+    expect(stageOfPlayer({ stage: 'not_relevant', status: 'Initial Talks' })).toBe('in_process');
+    expect(stageOfPlayer({ stage: 'tracking', status: 'Not Relevant' })).toBe('not_relevant');
+    expect(stageOfPlayer({ stage: 'in_process' })).toBe('in_process');
+    expect(stageOfPlayer({ stage: 'represented', status: 'Not Relevant' })).toBe('represented');
+    expect(stageOfPlayer({})).toBe('represented');
   });
 });
