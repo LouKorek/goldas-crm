@@ -9,7 +9,7 @@ import Icon from 'components/ui/Icons';
 import { DEAL_STAGE_LABELS } from '@goldas/domain';
 import {
   PHYSICAL, listenGoldaAudit, undoGoldaAction, sendToGolda, listenInboxMessage, listenGoldaThread, sessionKeyFor,
-  listenMyUser, saveMyPrefs, listenMyDelivery, listenWhatsappMeta, sendGoldaFeedback,
+  listenMyUser, saveMyPrefs, listenMyDelivery, listenWhatsappMeta, sendGoldaFeedback, enableVoiceNotes, checkVoiceNotes,
 } from 'data/golda';
 
 // Golda's area, three tabs. "Chat" talks to the same Golda as WhatsApp (and
@@ -446,6 +446,40 @@ function Delivery({ phone, he }) {
       {c.lastReengageAt ? <Row label={he ? 'תבנית התנעה נשלחה' : 'Re-engagement sent'}>{fmtDateTime(new Date(c.lastReengageAt))}{c.lastReengageTemplate ? ` · ${c.lastReengageTemplate}` : ''}{c.lastReengageError ? ` · ${he ? 'נכשלה' : 'failed'}` : ''}</Row> : null}
       <Row label={he ? 'התבניות של גולדה' : 'Golda\'s templates'}>{tplState}</Row>
       <Row label={he ? 'הודעות קוליות' : 'Voice notes'}>{speechState(meta?.speech, he)}</Row>
+      {meta?.speech?.state && meta.speech.state !== 'ok' ? <VoiceFix he={he} state={meta.speech.state} /> : null}
+    </div>
+  );
+}
+
+/** One button that switches voice-note transcription on (admins). */
+function VoiceFix({ he, state }) {
+  const { isAdmin } = useRole();
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState(null);
+  if (!isAdmin || !['needs_api', 'needs_billing', 'needs_permission', 'error'].includes(state)) return null;
+  const run = async (fn) => {
+    setBusy(true); setOut(null);
+    try { setOut(await fn()); } catch (e) { setOut({ ok: false, message: e.message }); } finally { setBusy(false); }
+  };
+  return (
+    <div style={{ padding: '8px 0', borderTop: '1px solid var(--border-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => run(enableVoiceNotes)}>
+          {busy ? (he ? 'מפעיל…' : 'Switching on…') : (he ? 'הפעל תמלול הודעות קוליות' : 'Switch on voice notes')}
+        </button>
+        <button type="button" className="btn" disabled={busy} onClick={() => run(async () => { const r = await checkVoiceNotes(); return { ok: r.state === 'ok', message: r.state === 'ok' ? (he ? 'התמלול פעיל.' : 'Transcription works.') : r.message || r.state }; })}>
+          {he ? 'בדוק שוב' : 'Check again'}
+        </button>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+        {he ? 'חלון אחד של Google נפתח ומפעיל את שירות התמלול בפרויקט. Google נותנת 60 דקות בחודש בחינם, ואחר כך פחות מ-10 אגורות לדקה.'
+          : 'One Google window switches the transcription service on. Google gives 60 free minutes a month, then a few cents a minute.'}
+      </div>
+      {out && (
+        <div style={{ fontSize: 12.5, color: out.ok ? 'var(--green-ok)' : 'var(--amber)' }}>
+          {out.message}{out.link ? <> · <a href={out.link} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{he ? 'פתח את Google' : 'Open Google'}</a></> : null}
+        </div>
+      )}
     </div>
   );
 }

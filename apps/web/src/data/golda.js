@@ -96,3 +96,61 @@ export const listenRecentInbox = (email, callback) =>
   onSnapshot(query(collection(db, 'wa_inbox'), where('email', '==', String(email || '').toLowerCase())),
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 50)),
     (e) => { console.error('inbox list error:', e); callback([]); });
+
+// ── Voice notes ───────────────────────────────────────────────────
+// Golda transcribes WhatsApp voice notes with Google Speech-to-Text on the
+// gold-as-crm project. The server cannot switch that service on by itself, so
+// an admin does it once from their own browser: one Google popup (Cloud
+// scope), the API is enabled, the project's billing is linked when Google
+// requires it (Speech-to-Text has 60 free minutes a month, then a few cents a
+// minute), and the server checks that it now answers. No token leaves the browser.
+const PROJECT = 'gold-as-crm';
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+async function gFetch(token, url, init = {}) {
+  const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers || {}) } });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+const billingProblem = (r) => /billing/i.test(`${r.data?.error?.message || ''} ${JSON.stringify(r.data?.error?.details || [])}`);
+
+export const checkVoiceNotes = () => callFunctionJson('golda-speech-check', { method: 'POST', body: {} });
+
+/** Returns { ok, step, message, link? } for the screen. */
+export async function enableVoiceNotes() {
+  const { GoogleAuthProvider, reauthenticateWithPopup } = await import('firebase/auth');
+  const { auth } = await import('lib/firebase');
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/cloud-platform');
+  if (auth.currentUser?.email) provider.setCustomParameters({ login_hint: auth.currentUser.email });
+  const result = await reauthenticateWithPopup(auth.currentUser, provider);
+  const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+  if (!token) return { ok: false, step: 'signin', message: 'Google לא החזיר הרשאה. נסה שוב.' };
+
+  const enableUrl = `https://serviceusage.googleapis.com/v1/projects/${PROJECT}/services/speech.googleapis.com:enable`;
+  let en = await gFetch(token, enableUrl, { method: 'POST', body: '{}' });
+  if (!en.ok && en.status !== 409 && billingProblem(en)) {
+    // Speech-to-Text needs a billing account on the project.
+    const info = await gFetch(token, `https://cloudbilling.googleapis.com/v1/projects/${PROJECT}/billingInfo`);
+    if (!info.data?.billingEnabled) {
+      const list = await gFetch(token, 'https://cloudbilling.googleapis.com/v1/billingAccounts');
+      const open = (list.data?.billingAccounts || []).filter((a) => a.open);
+      if (!open.length) {
+        return { ok: false, step: 'billing', message: 'ל-Google חסר אמצעי תשלום בפרויקט. פתח את הקישור, הוסף כרטיס, ואז לחץ שוב על הכפתור.',
+          link: `https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT}` };
+      }
+      const link = await gFetch(token, `https://cloudbilling.googleapis.com/v1/projects/${PROJECT}/billingInfo`, { method: 'PUT', body: JSON.stringify({ billingAccountName: open[0].name }) });
+      if (!link.ok) return { ok: false, step: 'billing', message: link.data?.error?.message || `חיבור החיוב נכשל (${link.status})`, link: `https://console.cloud.google.com/billing/linkedaccount?project=${PROJECT}` };
+    }
+    en = await gFetch(token, enableUrl, { method: 'POST', body: '{}' });
+  }
+  if (!en.ok && en.status !== 409) return { ok: false, step: 'api', message: en.data?.error?.message || `הפעלת שירות התמלול נכשלה (${en.status})` };
+
+  // The switch takes a little while to reach the service; check a few times.
+  let r = null;
+  for (let i = 0; i < 4; i++) {
+    await sleepMs(i ? 10000 : 6000);
+    r = await checkVoiceNotes().catch((e) => ({ state: 'error', message: e.message }));
+    if (r.state === 'ok') return { ok: true, step: 'done', message: 'התמלול פעיל. אפשר לשלוח לגולדה הודעה קולית.' };
+  }
+  return { ok: false, step: 'check', message: `השירות הופעל אבל עוד לא עונה (${r?.message || r?.state}). נסה "בדוק שוב" בעוד דקה.` };
+}
