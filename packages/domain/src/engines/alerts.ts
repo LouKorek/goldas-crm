@@ -111,6 +111,30 @@ export function computeAlerts(input: AlertsInput): AlertsResult {
         proof: { he: `החוזה${p.currentClub ? ` ב${str(p.currentClub)}` : ''} מסתיים ${whenHe(d)}`, en: `Contract${p.currentClub ? ` at ${str(p.currentClub)}` : ''} ends ${whenEn(d)}` },
       });
     }
+    // Dates read from the contract itself (Golda fills contractTerms from the
+    // attached contract): the option deadline and any other dated clause.
+    // They are contract alerts, so every screen, the email and Golda show them.
+    const terms = p.contractTerms as Record<string, unknown> | undefined;
+    if (terms && typeof terms === 'object' && p.contractStatus !== 'Free') {
+      const dated: Array<{ date: unknown; he: string; en: string }> = [];
+      if (terms.optionDeadline) {
+        const holder = str(terms.optionHolder);
+        const whoHe = holder === 'club' ? ' של המועדון' : holder === 'player' ? ' של השחקן' : '';
+        const whoEn = holder === 'club' ? "club's " : holder === 'player' ? "player's " : '';
+        dated.push({ date: terms.optionDeadline, he: `המועד להפעלת האופציה${whoHe}`, en: `Deadline for the ${whoEn}option` });
+      }
+      for (const k of Array.isArray(terms.keyDates) ? terms.keyDates as Array<Record<string, unknown>> : []) {
+        if (k && k.date) dated.push({ date: k.date, he: str(k.label) || 'מועד בחוזה', en: str(k.labelEn || k.label) || 'Contract date' });
+      }
+      for (const x of dated) {
+        const d = daysAway(x.date, now);
+        if (d === null || toDateStr(x.date) === toDateStr(p.contractEnd)) continue;
+        if (due(d, s.contractDays)) alerts.push({
+          type: 'contract', severity: sev(d, 7, 30), days: d, dueDate: toDateStr(x.date), overdue: d < 0, subject, record: p,
+          proof: { he: `${x.he} ${d < 0 ? 'עבר' : ''} ${whenHe(d)}`.replace(/\s+/g, ' ').trim(), en: `${x.en} ${d < 0 ? 'passed' : 'is'} ${whenEn(d)}` },
+        });
+      }
+    }
     if (p.reprEnd) {
       const d = daysAway(p.reprEnd, now);
       if (due(d, s.reprDays)) alerts.push({

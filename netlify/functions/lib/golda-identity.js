@@ -8,7 +8,7 @@
 //   userForApp(user)           → the same shape for a signed-in app user (lib/auth.js resolveUser)
 //   sessionKey(identity)       → the wa_sessions document the conversation lives in
 const { OWNER_EMAIL } = require('./firestore.js');
-const { normalizeRole } = require('@goldas/domain');
+const { normalizeRole, playerName } = require('@goldas/domain');
 
 // International digits. A number saved the Israeli way (05x-...) is the same
 // person Meta reports as 9725x..., so both spellings compare equal.
@@ -36,8 +36,14 @@ function fromUser(u, phone) {
   };
 }
 
-/** Pure part of resolveSender: match a phone against loaded users, then the env list. */
-function matchSender(phone, users, env = process.env.WA_ALLOWED_NUMBERS) {
+/** A represented player an admin let talk to Golda (read-only, his own data). */
+function playerIdentity(p, phone) {
+  return { email: '', phone: digits(phone || p.goldaPhone), name: playerName(p) || 'שחקן', role: 'player', playerId: p.id, active: true,
+    channels: [], locale: 'he', briefingHour: null, source: 'player' };
+}
+
+/** Pure part of resolveSender: match a phone against loaded users, then the env list, then players with access. */
+function matchSender(phone, users, env = process.env.WA_ALLOWED_NUMBERS, players = []) {
   const p = digits(phone);
   if (!p) return null;
   const u = users.find((x) => digits(x.whatsapp) === p);
@@ -46,7 +52,11 @@ function matchSender(phone, users, env = process.env.WA_ALLOWED_NUMBERS) {
     return id.active ? { ...id, source: 'app_users' } : null;
   }
   const e = legacyEntries(env).find((x) => x.num === p);
-  if (!e) return null;
+  if (!e) {
+    // The team always wins: a number on a staff record is never treated as a player.
+    const pl = players.find((x) => x.goldaAccess === true && !x.deletedAt && (x.stage || 'represented') === 'represented' && digits(x.goldaPhone) === p);
+    return pl ? playerIdentity(pl, p) : null;
+  }
   if (!e.name) {
     const owner = users.find((x) => String(x.email || x.id || '').toLowerCase() === OWNER_EMAIL) || { email: OWNER_EMAIL, name: 'לו' };
     return { ...fromUser({ ...owner, role: 'admin' }, p), source: 'env' };
@@ -64,8 +74,16 @@ async function loadUsers(db) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+async function loadGoldaPlayers(db) {
+  const snap = await db.collection('players').where('goldaAccess', '==', true).get();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 async function resolveSender(db, phone) {
-  return matchSender(phone, await loadUsers(db));
+  const users = await loadUsers(db);
+  const team = matchSender(phone, users);
+  if (team) return team;
+  return matchSender(phone, users, undefined, await loadGoldaPlayers(db).catch((e) => { console.warn('[golda] player lookup failed:', e.message); return []; }));
 }
 
 /** A signed-in app user (from withAuth) as a Golda identity; reads their record for prefs and number. */
@@ -89,4 +107,4 @@ function whatsappRecipients(users) {
  */
 const sessionKey = (identity) => (identity.phone ? identity.phone : `u_${String(identity.email || 'anon').replace(/[^a-z0-9]/gi, '_')}`);
 
-module.exports = { resolveSender, matchSender, userForApp, whatsappRecipients, sessionKey, legacyEntries, digits, fromUser, DEFAULT_PREFS };
+module.exports = { resolveSender, matchSender, playerIdentity, userForApp, whatsappRecipients, sessionKey, legacyEntries, digits, fromUser, DEFAULT_PREFS };

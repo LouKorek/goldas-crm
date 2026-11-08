@@ -146,12 +146,41 @@ function withLeague(col, data, before = {}) {
 function freeAgentRules(col, data, before = {}) {
   const status = data.contractStatus ?? before.contractStatus;
   if (col !== 'players' || status !== 'Free') return data;
-  return { ...data, currentClub: '', currentClubIsYouth: false, loanFrom: '', contractStart: '', contractEnd: '',
+  return { ...data, currentClub: '', currentClubIsYouth: false, loanFrom: '', contractStart: '', contractEnd: '', contractTerms: null,
     league: '', leagueCountry: '', leagueTier: '', leagueManual: '' };
+}
+
+// What Golda read from a player's contract (salary, option, release clause,
+// dated clauses), kept on the player as contractTerms. Only known keys are
+// kept; dates must be YYYY-MM-DD; money is a number in the given currency.
+const TERM_TEXT = ['currency', 'salaryPeriod', 'optionHolder', 'bonuses', 'notes', 'source'];
+const TERM_MONEY = ['salary', 'signingFee', 'releaseClause'];
+function cleanContractTerms(t) {
+  if (t === null) return null;
+  if (!t || typeof t !== 'object' || Array.isArray(t)) throw new Error('contractTerms must be an object');
+  const out = {};
+  for (const k of TERM_MONEY) if (t[k] !== undefined && t[k] !== '' && t[k] !== null) {
+    const n = Number(String(t[k]).replace(/[,\s]/g, ''));
+    if (!Number.isFinite(n) || n < 0) throw new Error(`contractTerms.${k} must be a number`);
+    out[k] = n;
+  }
+  for (const k of TERM_TEXT) if (t[k]) out[k] = String(t[k]).slice(0, k === 'notes' || k === 'bonuses' ? 1500 : 120);
+  if (out.salaryPeriod && !['month', 'year', 'season'].includes(out.salaryPeriod)) throw new Error('contractTerms.salaryPeriod must be month, year or season');
+  if (out.optionHolder && !['club', 'player', 'both'].includes(out.optionHolder)) throw new Error('contractTerms.optionHolder must be club, player or both');
+  const day = (v, k) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v))) throw new Error(`${k} must be YYYY-MM-DD`); return String(v); };
+  if (t.optionDeadline) out.optionDeadline = day(t.optionDeadline, 'contractTerms.optionDeadline');
+  if (t.optionYears !== undefined && t.optionYears !== '' && t.optionYears !== null) out.optionYears = Number(t.optionYears) || 0;
+  if (t.keyDates) {
+    if (!Array.isArray(t.keyDates)) throw new Error('contractTerms.keyDates must be a list of { date, label }');
+    out.keyDates = t.keyDates.slice(0, 12).map((k, i) => ({ date: day(k && k.date, `contractTerms.keyDates[${i}].date`), label: String((k && k.label) || '').slice(0, 120) }));
+  }
+  out.extractedAt = new Date().toISOString();
+  return out;
 }
 
 function validate(col, data, isCreate) {
   const bad = (m) => { throw new Error(m); };
+  if (col === 'players' && 'contractTerms' in data) data.contractTerms = cleanContractTerms(data.contractTerms);
   const inList = (k, list) => { if (data[k] && !list.includes(data[k])) bad(`${k} must be one of: ${list.join(', ')}`); };
   inList('primaryPosition', C.POSITIONS);
   inList('foot', C.FOOT_OPTIONS);
@@ -220,6 +249,7 @@ How you think:
 - Connect the dots like an experienced agent would: a contract ending soon and an open club requirement that fits the player → suggest a deal; a deal stuck in a stage → suggest the next step; a requirement with no good candidates → say what profile is missing. Point out anything important you notice (an expired passport, a missing document), in one line.
 - When asked for a recommendation or opinion, give a clear one with the reasons, based on the CRM data and, when useful, a web search (club news, league tables, transfer windows, player stats). Say what you checked.
 - To know what a document says (contract dates, salary, clauses, passport expiry), read it with read_file. When a file or photo is sent with the message you can see it directly. Offer to update the CRM from what you read (e.g. contractEnd from the contract), and do it if asked.
+- A player's contract (sent now, or in contractFiles): read it, then offer in one message to save its terms: contractStart/contractEnd plus contractTerms (salary, option and its deadline, release clause, signing fee, bonuses, and every other dated obligation as keyDates with a short Hebrew label). List what you found and what you could not find; after a yes, save it with one update. Dated terms then raise alerts before they fall due, like the contract end. Salary and terms are confidential: share them only with the person asking, never in a group.
 - Be honest about uncertainty: if the data is missing or contradictory, say so and what would settle it, instead of guessing.
 
 Your memory: you have a long-term memory shared across all topics and conversations (listed at the end of this prompt). When the writer states something that should last (a preference about how they want things, a decision, a standing instruction, context about a player, a club or a contact that isn't a CRM field), or says "תזכרי"/"תזכור", save it with remember, in one clear sentence, then mention it in one line ("שמרתי בזיכרון: …"). CRM facts and decisions are shared with the team (shared=true); personal preferences of the writer are personal (shared=false). Never save passwords, codes, ID or passport numbers, bank details or anything secret. If a memory turns out wrong or the writer asks you to forget it, use forget (and remember the corrected version). Use what you remember without being asked, and never contradict it silently: if the data now disagrees with a memory, say so.
@@ -231,6 +261,7 @@ How you work:
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
+- "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
 - "חלון העברות" / "מתי נסגר החלון" / "מי מתאים לחלון" → transfer_windows (exact dates and deadline times; Israel is not in it yet, so check the web for the IFA dates and say where you found them), then connect it to players who need a club (free agents, contracts ending, loans ending) and the open requirements.
 - Golda opens follow-up tasks by herself for deals that sit too long in a stage (they say "מעקב:" and close by themselves when the deal moves). When asked what to do with a deal, mention its open follow-up.
 - "הזדמנויות" / "מה כדאי לקדם" / "את מי להציע" → opportunities: for each, the player, the club and position, the score and the main reason, and the concrete next step (open a deal, call the contact).
@@ -246,7 +277,7 @@ Buttons: on WhatsApp the writer can tap instead of typing. When your answer ends
 - You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
 CRM data (field names are exact; values in lists must match exactly; dates are YYYY-MM-DD):
-- players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
+- players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), goldaAccess (bool) + goldaPhone (digits): admins only, lets this represented player ask you about himself on WhatsApp (read-only, his own data; you never write to him first), contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
 - pipeline_men / pipeline_women / pipeline_youth / pipeline_jewish (prospects, NOT linked to players): playerName*, status (${C.PIPELINE_STATUS.join('|')}), profileLink, videoLink, agentName, agentPhone, nationalities, dob, primaryPosition, secondaryPositions, height (cm, 130-225, as a string), foot, currentClub, currentClubIsYouth, natTeamStatus, natTeamCountry, transferFee, salary (digits or "Not specified"), notes, league fields, linkedClubs [{clubName, linkedAt ISO}].
 - club_requirements: clubName*, gender*, clubIsYouth, tablePosition, contactName, contactRole, contactPhone, requiredPosition (position), ageMin, ageMax, ageNotSpecified (bool), transferFee, salary, notes, league fields.
 - contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, league fields.
@@ -258,7 +289,7 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - Games and trainings are kept in sync, both ways, with Lou's Google calendar "Gold A&S Player Schedule": what you create, move or cancel here appears there within a minute, and what Lou adds or moves there ("אימון — <שחקן>", "משחק — <שחקן>") arrives here within ten minutes. The time of a training is the time the player has to be there (Lou's marker); put start times and other details in notes. So you never need to tell anyone to update the calendar by hand.
 - meetings: title*, date*, time (HH:MM start; empty = all day), endTime (HH:MM; default one hour after time), endDate (only for an item longer than a day), allDay (bool), location, notes, linkedPlayers [player ids the meeting is about]. Read-only, from Google: guests, meetUrl, calendarLink. These are Lou's meetings with players, business meetings and everything of the agency that is not a game or training, kept in sync both ways with his Google calendar "Gold A&S" exactly like games and trainings with the player schedule (what Lou adds, moves or deletes there arrives here within ten minutes; what you write appears there within a minute). Games and trainings never go into meetings. You cannot invite guests: if the writer wants invitations sent, they add the guests in Google Calendar. When the writer asks what they have today or this week, include meetings next to games and trainings.
 - deals (a player or candidate against one club): playerId*, playerName, clubName*, stage (${C.PIPELINE_STATUS.join('|')}), requirementId, notes. To move a deal, update its stage; "Contract Signed" and "Not Relevant" close it. A deal that waits more than 14 days in a stage shows as an alert.
-- club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id).
+- club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id). On Sunday morning you scout up to 3 open requirements on the web; what you found is in the requirement's scouting field ({ at, candidates [{ name, age, position, club, why, link }] }): outside players, not ours, never contacted.
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
 Free agents (contractStatus "Free") automatically lose club, contract dates and league.
 Today's date: ${israelDate(new Date())} (Israel time zone).
@@ -283,6 +314,8 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(ALL) }, id: { type: 'string' } }, required: ['collection', 'id'], additionalProperties: false } },
   { name: 'read_file', description: "Open a document stored on a player (contract, passport, representation agreement) and see its contents. PDFs and images are shown to you in full. Omit name when the player has a single document in that field.",
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Display name of the document' } }, required: ['playerId', 'field'], additionalProperties: false } },
+  { name: 'player_pdf', description: "Make the branded one-page player CV (PDF with the Gold A&S logo: age, position, foot, club, nationality, national team, notes, video and Transfermarkt links) and send it to the writer with your answer. English for clubs abroad (default), Hebrew for Israeli clubs. The writer forwards it; you never send it to anyone else.",
+    input_schema: { type: 'object', properties: { playerId: { type: 'string' }, lang: { type: 'string', enum: ['en', 'he'] } }, required: ['playerId'], additionalProperties: false } },
   { name: 'rename_file', description: "Change a stored document's display name without re-uploading it.",
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Current display name' }, newName: { type: 'string' } }, required: ['playerId', 'field', 'name', 'newName'], additionalProperties: false } },
   { name: 'create', description: 'Create a new record. Pass only the fields the user gave (plus required ones). Returns the new id.',
@@ -328,7 +361,7 @@ const TOOLS = [
   ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -367,6 +400,12 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   const FieldValue = admin.firestore.FieldValue;
   const sender = identity.name || 'לו';
   const role = identity.role || 'viewer';
+  // Only an admin switches a player's own Golda access on or off.
+  const guardGolda = (col, d) => {
+    if (col !== 'players' || role !== 'admin') { delete d.goldaAccess; delete d.goldaPhone; return; }
+    if ('goldaPhone' in d) d.goldaPhone = String(d.goldaPhone || '').replace(/\D/g, '');
+    if ('goldaAccess' in d) d.goldaAccess = d.goldaAccess === true;
+  };
   // Writes are stamped with the person Golda acts for; the name says it was Golda.
   const who = { email: identity.email || OWNER_EMAIL, name: `${sender} (${assistantName})` };
   const audit = (entry) => db.collection('audit').add({
@@ -380,7 +419,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   // The documents of a (virtual) collection: live records that belong to it.
   const docsOf = async (c) => (await readOk(c).get()).docs.filter((d) => belongs(c, d.data()));
   const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; return o; };
-  const state = { pendingDeletes: normalizePending(session), changed: false };
+  const state = { pendingDeletes: normalizePending(session), changed: false, outFiles: [] };
 
   async function search({ query, collection }) {
     const cols = collection ? [collection] : Object.keys(ALL);
@@ -438,6 +477,16 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     return { snap: s, files, idx };
   }
 
+  // A document Golda made goes out with her answer (WhatsApp document / app attachment).
+  async function playerPdf({ playerId, lang = 'en' }) {
+    const snap = await db.collection('players').doc(playerId).get();
+    if (!snap.exists || snap.data().deletedAt) throw new Error('player not found');
+    if (state.outFiles.length >= 3) throw new Error('at most three documents per answer');
+    const file = await require('./golda-pdf.js').playerCvPdf({ id: snap.id, ...snap.data() }, { lang });
+    state.outFiles.push(file);
+    return { made: true, filename: file.filename, sizeKB: Math.round(file.buffer.length / 1024), note: 'The PDF goes out right after your text answer; just say it is attached.' };
+  }
+
   async function readFile({ playerId, field, name }) {
     const { snap, files, idx } = await findDoc(playerId, field, name);
     const ref = files[idx];
@@ -481,6 +530,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     need('edit');
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
+    guardGolda(collection, d);
     if (collection === 'tasks') d = { priority: 'Normal', done: false, owner: who.email, ...d };
     if (collection === 'meetings') d = { time: '', endTime: '', allDay: !d.time, location: '', notes: '', linkedPlayers: [], source: 'manual', owner: who.email, ...d };
     if (collection === 'matches') d = { source: 'manual', ...d };
@@ -513,6 +563,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     const before = s.data();
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
+    guardGolda(collection, d);
     const confirmed = d.confirmed === true;
     delete d.confirmed;
     for (const k of [...(collection === 'deals' ? [] : ['stage']), 'category', 'legacy', 'migratedAt', 'deletedAt', 'deletedBy']) delete d[k];
@@ -687,7 +738,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     return { started: true, note: 'Runs in the background for a few minutes; the Calendar shows the report when it finishes.' };
   }
 
-  const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
+  const impl = { search, list, get, read_file: readFile, player_pdf: playerPdf, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
     suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
     ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }), transfer_windows: async () => windowStatus(new Date()) };
   return { state, run: async (name, input) => {
@@ -786,7 +837,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     messages.push({ role: 'user', content: results });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
-  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage };
+  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles };
 }
 
-module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
+module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, cleanContractTerms, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };

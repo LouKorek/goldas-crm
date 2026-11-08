@@ -168,6 +168,36 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
     import('jspdf'),
     import('./pdfFonts'),
   ]);
+  const { doc, filename } = await buildPlayerCv(jsPDF, fonts, player, category, { lang, logo: await loadLogo() });
+
+  // Sharing hands over the file itself. The browser's own share of a
+  // downloaded PDF passes its blob: URL as text instead, which is what was
+  // arriving in WhatsApp beside the document; no title or text is passed
+  // here, so nothing but the PDF goes across.
+  if (share) {
+    try {
+      const blob = doc.output('blob');
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return;
+      }
+    } catch (e) {
+      // Dismissing the sheet is a completed action, not a failure — don't
+      // fall through and download a copy he didn't ask for.
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+
+  doc.save(filename);
+}
+
+/**
+ * The sheet itself, with no browser in it: the app downloads or shares it,
+ * and Golda builds the same sheet on the server and sends it on WhatsApp
+ * (netlify/functions/lib/golda-pdf.js). `logo` is a data: URL or null.
+ */
+export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { lang = 'en', logo = null } = {}) {
   const L = LABELS[lang] || LABELS.en;
   const footWord = (f) => L.foot_[FOOT_WORD[f] || f] || FOOT_WORD[f] || f || '';
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -207,7 +237,6 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
   doc.rect(0, BAND, W, 3, 'F');
 
   let textX = M;
-  const logo = await loadLogo();
   if (logo) {
     try {
       // The artwork ships with its own opaque dark background, so it is set
@@ -402,25 +431,5 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
 
   const safe = (player.playerName || 'player').replace(/[^\w\s-]/g, '').trim() || 'player';
   const filename = `${safe} - Gold A&S.pdf`;
-
-  // Sharing hands over the file itself. The browser's own share of a
-  // downloaded PDF passes its blob: URL as text instead, which is what was
-  // arriving in WhatsApp beside the document; no title or text is passed
-  // here, so nothing but the PDF goes across.
-  if (share) {
-    try {
-      const blob = doc.output('blob');
-      const file = new File([blob], filename, { type: 'application/pdf' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file] });
-        return;
-      }
-    } catch (e) {
-      // Dismissing the sheet is a completed action, not a failure — don't
-      // fall through and download a copy he didn't ask for.
-      if (e && e.name === 'AbortError') return;
-    }
-  }
-
-  doc.save(filename);
+  return { doc, filename };
 }

@@ -188,6 +188,27 @@ async function sendList(to, body, button, rows, via) {
   return [json.messages?.[0]?.id || null];
 }
 
+/**
+ * A file Golda made (a PDF), sent as a WhatsApp document: uploaded to Meta
+ * first, then sent by its media id. Returns [message id].
+ */
+async function sendDocument(to, { buffer, filename, mimeType = 'application/pdf', caption = '' }, via) {
+  const from = via || await defaultPhoneId();
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mimeType);
+  form.append('file', new Blob([buffer], { type: mimeType }), filename);
+  const up = await fetch(`${GRAPH}/${from}/media`, { method: 'POST', headers: { Authorization: `Bearer ${await tokenFor(from)}` }, body: form });
+  if (!up.ok) throw new Error(`WhatsApp media upload ${up.status}: ${(await up.text()).slice(0, 300)}`);
+  const { id } = await up.json();
+  const res = await graph(`${from}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: digits(to), type: 'document', document: { id, filename, ...(caption ? { caption: clip(caption, 1024) } : {}) } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  return [json.messages?.[0]?.id || null];
+}
+
 // Media arrives as an id: one call for the short-lived URL, one for the bytes.
 // `via` is the number the media arrived on, which decides the key.
 async function downloadMedia(mediaId, via = null) {
@@ -246,4 +267,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };

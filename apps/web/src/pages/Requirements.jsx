@@ -635,6 +635,34 @@ export function MatchesPanel({ req, players, compact }) {
 }
 
 // ── Requirement view card ────────────────────────────────────────
+/** Outside players Golda found for this requirement on her Sunday web search. */
+export function ScoutingPanel({ scouting }) {
+  const he = getLang() === 'he';
+  if (!scouting?.at) return null;
+  const list = scouting.candidates || [];
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div className="form-section-title">{he ? 'סקאוטינג של גולדה' : "Golda's scouting"}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+        {he ? 'שחקנים מבחוץ שגולדה מצאה ברשת' : 'Outside players Golda found on the web'} · {fmtDate(String(scouting.at).slice(0, 10))}
+      </div>
+      {!list.length && <div style={{ fontSize: 13, color: 'var(--text-2)' }}>{he ? 'לא נמצאה התאמה טובה בחיפוש האחרון.' : 'No good fit in the last search.'}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {list.map((c, i) => (
+          <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--surface-2)', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)' }}>{c.name}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{[c.age, c.position, c.club].filter(Boolean).join(' · ')}</span>
+            </div>
+            {c.why && <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 4, lineHeight: 1.6 }}>{c.why}</div>}
+            {c.link && <a href={c.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: 'var(--gold)', wordBreak: 'break-all' }}>{he ? 'מקור' : 'Source'} ↗</a>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RequirementView({ req, players, onClose }) {
   const Row = ({ label, value }) => value && value !== '—' ? (
     <div style={{ display: 'flex', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
@@ -674,6 +702,7 @@ function RequirementView({ req, players, onClose }) {
         <div className="form-section-title">{t('Best matches')}</div>
         <MatchesPanel req={req} players={players} />
       </div>
+      <ScoutingPanel scouting={req.scouting} />
 
       <div className="view-grid-2">
         <div>
