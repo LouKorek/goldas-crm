@@ -164,3 +164,51 @@ test('the access problem says what to do', () => {
   assert.equal(G.accessProblem({ status: 403, reason: 'accessNotConfigured', message: '' }, 'sa@x').state, 'needs_api');
   assert.equal(G.accessProblem({ status: 404, reason: 'notFound', message: '' }, 'sa@x').state, 'needs_share');
 });
+
+// Real shape: the CRM keeps names in English, Lou writes them in Hebrew.
+const en = [
+  { id: 'e1', fullName: 'Assaf Ackerman', stage: 'represented' },
+  { id: 'e2', fullName: 'Naveh Salant', stage: 'represented' },
+  { id: 'e3', fullName: 'Noam Barzilai', stage: 'represented' },
+  { id: 'e4', fullName: 'Raphael Libesman', stage: 'represented' },
+  { id: 'e5', fullName: 'Eyal Perchitsky', stage: 'represented' },
+  { id: 'e6', fullName: 'Eitan Rosen', stage: 'represented' },
+  { id: 'e7', fullName: 'Omri Shalom Takala', stage: 'represented' },
+  { id: 'e8', fullName: 'Shay Dubinsky', stage: 'represented' },
+];
+const enItems = (matches, trainings = []) => G.crmItems({ matches, trainings, players: en, ...win, occurrences });
+
+test('Hebrew names in the calendar find the English names in the CRM', () => {
+  const ids = (n) => G.findPlayers([n], en);
+  assert.deepEqual(ids('אסף אקרמן'), ['e1']);
+  assert.deepEqual(ids('נווה סלנט'), ['e2']);
+  assert.deepEqual(ids('נועם ברזילי'), ['e3']);
+  assert.deepEqual(ids('רפאל ליבסמן'), ['e4']);
+  assert.deepEqual(ids('אייל פרשיצקי'), ['e5']);
+  assert.deepEqual(ids('איתן רוזן'), ['e6']);
+  assert.deepEqual(ids('עומרי טקלה'), ['e7']);
+  assert.deepEqual(ids('שי דובינסקי'), ['e8']);
+  assert.deepEqual(ids('יוסי כהן'), []);
+});
+
+test('the same game twice in the CRM gets one event', () => {
+  const g = { date: '2026-11-20', time: '12:00', homeTeam: 'הפ\' חדרה', awayTeam: 'מ.כ. שדרות', linkedPlayers: ['e6'], source: 'ifa' };
+  const its = enItems([{ id: 'b', ...g, createdAt: '2026-11-02T00:00:00Z' }, { id: 'a', ...g, createdAt: '2026-11-01T00:00:00Z' }]);
+  assert.equal(its.length, 1); assert.equal(its[0].crmId, 'a');
+});
+
+test("Lou's placeholder takes over from the server's copy of the same game", () => {
+  const m = { id: 'm1', date: '2026-11-10', time: '18:30', homeTeam: 'הפועל חדרה', awayTeam: 'הפ\' ירושלים', linkedPlayers: ['e1'], source: 'ifa', updatedAt: '2026-11-01T00:00:00Z' };
+  const [item] = enItems([m]);
+  const body = G.desiredEvent(item);
+  const ours = { id: G.eventIdFor(item.key), status: 'confirmed', ...body, updated: '2026-11-08T18:58:59Z' };
+  const lou = foreign({ id: 'lou-ph', summary: 'משחק — אסף אקרמן — שעה לאישור', start: { date: '2026-11-10' }, end: { date: '2026-11-11' }, description: 'משחק; פרטים יימסרו בהמשך.' });
+  const links = new Map([[item.key, { hash: G.bodyHash(body), eventId: ours.id }]]);
+  const acts = G.plan({ items: [item], events: [ours, lou], links, players: en });
+  assert.equal(acts.length, 1);
+  assert.equal(acts[0].type, 'adopt'); assert.equal(acts[0].event.id, 'lou-ph'); assert.equal(acts[0].replaces.id, ours.id);
+  // Next pass: Lou's event carries the key, the copy is cancelled; nothing more to do.
+  const adopted = { ...lou, ...body, id: 'lou-ph', status: 'confirmed', updated: '2026-11-08T19:10:00Z' };
+  const next = G.plan({ items: [item], events: [{ ...ours, status: 'cancelled' }, adopted], links: new Map([[item.key, { hash: G.bodyHash(body), eventId: 'lou-ph', eventUpdated: adopted.updated }]]), players: en });
+  assert.ok(next.every((a) => a.type === 'none'), JSON.stringify(next.map((a) => a.type)));
+});

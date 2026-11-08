@@ -109,15 +109,61 @@ function parseSummary(summary) {
   return { kind, label: head, names, home, away };
 }
 
-/** Player ids whose name appears in the parsed names. */
+/**
+ * The sound skeleton of one name, the same for Hebrew and Latin spellings:
+ * consonant classes only, vowels and silent letters dropped, repeats merged.
+ * "אסף אקרמן" and "Assaf Ackerman" both give ["sp", "krmn"]. Lou writes
+ * names in Hebrew in his calendar; the CRM keeps them in English.
+ */
+const HE = { 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ז': 's', 'ח': 'k', 'ט': 't', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm', 'ם': 'm', 'נ': 'n', 'ן': 'n',
+  'ס': 's', 'פ': 'p', 'ף': 'p', 'צ': 's', 'ץ': 's', 'ק': 'k', 'ר': 'r', 'ש': 's', 'ת': 't' };
+const LAT = { b: 'b', v: 'b', w: 'b', c: 'k', k: 'k', q: 'k', g: 'g', j: 'g', d: 'd', t: 't', z: 's', s: 's', l: 'l', m: 'm', n: 'n', p: 'p', f: 'p', r: 'r', x: 'ks' };
+function skeletonWord(w) {
+  let t = String(w || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  t = t.replace(/וו/g, 'ב').replace(/ph/g, 'f').replace(/th/g, 't').replace(/(sch|sh|tz|ts)/g, 's').replace(/(ch|kh|ck)/g, 'k');
+  let out = '';
+  for (const ch of t) {
+    const c = HE[ch] || LAT[ch] || '';
+    if (c && !out.endsWith(c)) out += c;
+  }
+  return out;
+}
+const skeleton = (name) => normName(name).split(' ').map(skeletonWord).filter(Boolean);
+function nearWord(a, b) {
+  if (a === b) return true;
+  if (Math.min(a.length, b.length) < 3 || Math.abs(a.length - b.length) > 1) return false;
+  let i = 0; let j = 0; let edits = 0;           // one insertion, deletion or change
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i += 1; j += 1; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i += 1; else if (b.length > a.length) j += 1; else { i += 1; j += 1; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+/** Every word of `name` sounds like a different word of the player's name. */
+function soundsLike(name, player) {
+  const want = skeleton(name);
+  const have = skeleton(playerName(player));
+  if (!want.length || !have.length) return false;
+  const used = new Set();
+  return want.every((w) => {
+    const k = have.findIndex((h, idx) => !used.has(idx) && nearWord(w, h));
+    if (k < 0) return false;
+    used.add(k);
+    return true;
+  });
+}
+
+/** Player ids whose name appears in the parsed names (in Hebrew or English). */
 function findPlayers(names, players) {
   const out = [];
   for (const raw of names) {
     const n = normName(raw);
     if (!n) continue;
     const exact = players.filter((p) => normName(playerName(p)) === n);
-    const hit = exact.length === 1 ? exact
+    let hit = exact.length === 1 ? exact
       : players.filter((p) => { const pn = normName(playerName(p)); return pn && (pn.includes(n) || n.includes(pn)); });
+    if (hit.length !== 1) hit = players.filter((p) => soundsLike(raw, p));
     if (hit.length === 1 && !out.includes(hit[0].id)) out.push(hit[0].id);
   }
   return out;
@@ -179,10 +225,18 @@ function crmItems({ matches, trainings, players, from, to, occurrences }) {
   const byId = new Map(players.map((p) => [p.id, p]));
   const namesOf = (ids) => (ids || []).map((id) => byId.get(id)).filter(Boolean).map((p) => playerName(p)).filter(Boolean);
   const items = [];
-  for (const m of matches) {
+  // The same game can sit in the CRM twice (two fixture sources): it gets
+  // one event, the record created first.
+  const seen = new Set();
+  const gameKey = (m) => [m.date, (validTime(m.time) ? normTime(m.time) : ''), normName(m.homeTeam), normName(m.awayTeam), [...(m.linkedPlayers || [])].sort().join(',')].join('|');
+  const ordered = [...matches].sort((a, b) => (millis(a.createdAt) - millis(b.createdAt)) || String(a.id).localeCompare(String(b.id)));
+  for (const m of ordered) {
     if (m.deletedAt || m.calendarSkip || !m.date || m.date < from || m.date > to) continue;
     const playerNames = namesOf(m.linkedPlayers);
     if (!playerNames.length && !(m.homeTeam && m.awayTeam)) continue;
+    const gk = gameKey(m);
+    if (seen.has(gk)) continue;
+    seen.add(gk);
     items.push({
       kind: 'match', crmId: m.id, occ: '', key: keyFor('match', m.id), date: m.date, time: m.time || '',
       label: m.calendarLabel || '', home: m.homeTeam || '', away: m.awayTeam || '', place: m.stadiumName || '',
@@ -308,12 +362,22 @@ function plan({ items, events, links, players, mode = 'two_way' }) {
   const foreign = [];
   for (const ev of events) {
     const k = ev.extendedProperties && ev.extendedProperties.private && ev.extendedProperties.private.goldasKey;
-    if (k) ours.set(k, ev);
+    // A live event wins over a cancelled one carrying the same key (the
+    // server's copy that Lou's own event replaced).
+    if (k) { if (!ours.has(k) || ours.get(k).status === 'cancelled') ours.set(k, ev); }
     else if (ev.status !== 'cancelled') foreign.push(ev);
   }
   const actions = [];
   const usedForeign = new Set();
   const wanted = new Set();
+  const findOwn = (item) => foreign.find((x) => {
+    if (usedForeign.has(x.id)) return false;
+    const p = parseSummary(x.summary);
+    if (!p || p.kind !== item.kind) return false;
+    if (eventLocal(x).date !== item.date) return false;
+    const ids = findPlayers(p.names, players);
+    return ids.some((id) => (item.record.linkedPlayers || []).includes(id));
+  });
 
   for (const item of items) {
     wanted.add(item.key);
@@ -324,14 +388,7 @@ function plan({ items, events, links, players, mode = 'two_way' }) {
 
     if (!ev && !link) {
       // Lou may already have this one in the calendar by hand: adopt it.
-      const f = foreign.find((x) => {
-        if (usedForeign.has(x.id)) return false;
-        const p = parseSummary(x.summary);
-        if (!p || p.kind !== item.kind) return false;
-        if (eventLocal(x).date !== item.date) return false;
-        const ids = findPlayers(p.names, players);
-        return ids.some((id) => (item.record.linkedPlayers || []).includes(id));
-      });
+      const f = findOwn(item);
       if (f) {
         usedForeign.add(f.id);
         const evMs = Date.parse(f.updated || f.created || 0) || 0;
@@ -356,6 +413,17 @@ function plan({ items, events, links, players, mode = 'two_way' }) {
     if (!ev) {
       // Linked, but not in the window listing: moved far away or gone.
       actions.push({ type: 'fetch_and_reconcile', item, body, hash, link });
+      continue;
+    }
+    // Lou has his own event for this game or session (often a "שעה לאישור"
+    // placeholder he wants filled in, not doubled): it takes over and the
+    // server's copy goes.
+    const own = twoWay ? findOwn(item) : null;
+    if (own) {
+      usedForeign.add(own.id);
+      const evMs = Date.parse(own.updated || own.created || 0) || 0;
+      const patch = twoWay && evMs > item.updatedMs ? pullPatch(item, own) : null;
+      actions.push({ type: 'adopt', item, event: own, patch, body: patch ? null : body, hash, replaces: ev });
       continue;
     }
     actions.push(reconcile(item, ev, body, hash, link, twoWay));
@@ -503,7 +571,7 @@ const windowRange = (now = new Date()) => {
 
 module.exports = {
   DEFAULT_CALENDAR_ID, FOOTER, TBC, TZ,
-  eventIdFor, keyFor, plusMinutes, plainText, notesFromDescription, eventLocal, parseSummary, findPlayers,
-  desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile,
+  eventIdFor, keyFor, plusMinutes, plainText, notesFromDescription, eventLocal, parseSummary,
+  findPlayers, soundsLike, desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile,
   calendarClient, api, accessProblem, enableCalendarApi, windowRange, millis,
 };
