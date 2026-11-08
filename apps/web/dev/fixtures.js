@@ -1,0 +1,20 @@
+const CLUBS = ['מכבי חיפה', 'הפועל באר שבע', 'בית"ר ירושלים', 'מכבי תל אביב', 'Real Betis', 'FC Porto'];
+const POS = ['GK', 'CB', 'RB', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
+const ST = ['Not Contacted', 'Waiting Response', 'Initial Talks', 'Mandate Received', 'Offered to Club', 'Negotiation'];
+const CATS = ['men', 'women', 'youth', 'jewish'];
+const NAMES = ['Daniel de la Cruz', 'עומרי תקלה', 'Lucas Silva', 'דן רינגל', 'Maya Cohen', 'נועה לוי', 'Ethan Gold', 'יואב מזרחי'];
+const players = [
+  ...Array.from({ length: 40 }, (_, i) => ({ id: `c${i}`, stage: 'tracking', category: CATS[i % 4], playerName: `${NAMES[i % 8]} ${i}`, gender: i % 4 === 1 ? 'Women' : 'Men',
+    status: ST[i % ST.length], primaryPosition: POS[i % 10], dob: `${1998 + (i % 12)}-0${1 + (i % 9)}-1${i % 9}`, currentClub: CLUBS[i % 6], height: String(170 + i), foot: 'Right',
+    agentName: 'Agent X', agentPhone: '+380950663545', salary: '1000', nationalities: ['Israel'], leagueCountry: 'Israel', leagueTier: 'Tier 1', league: 'Israel 1' })),
+  // Older candidates saved before the market field existed.
+  { id: 'old1', stage: 'tracking', playerName: 'Legacy Man', gender: 'Men', status: 'Not Contacted', primaryPosition: 'CB' },
+  { id: 'old2', stage: 'in_process', playerName: 'Legacy Woman', gender: 'Women', status: 'Initial Talks', primaryPosition: 'ST' },
+  ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01' })),
+];
+export const FIXTURES = {
+  players,
+  deals: Array.from({ length: 8 }, (_, i) => ({ id: `d${i}`, playerId: `c${i}`, playerName: players[i].playerName, clubName: CLUBS[(i + 2) % 6], stage: ST[i % 6], enteredStageAt: '2026-10-01', createdAt: '2026-09-01' })),
+  club_requirements: Array.from({ length: 6 }, (_, i) => ({ id: `r${i}`, clubName: CLUBS[i], gender: i % 2 ? 'Women' : 'Men', requiredPosition: POS[i], status: 'open', validUntil: '2026-12-31', ageMin: 18, ageMax: 28, salary: '2000' })),
+  contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567' })),
+};

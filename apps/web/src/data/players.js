@@ -5,7 +5,11 @@ import { stageFromStatus, categoryFromPlayer, playerName } from '@goldas/domain'
 import { addInteraction } from './interactions';
 import { syncDealsForPlayer } from './deals';
 
-const withName = (p) => ({ ...p, name: playerName(p) });
+// Every record leaves here with its name and its market resolved, so no
+// screen ever has to guess (older records carry no category field and
+// were missing from some filters but not others).
+const withName = (p) => ({ ...p, name: playerName(p), category: categoryFromPlayer(p) });
+export const categoryOf = categoryFromPlayer;
 
 /**
  * listenPlayers({ stage, stages, category, notStage }, cb)
@@ -20,7 +24,7 @@ export const listenPlayers = (filter, callback) => {
       if (stage && st !== stage) return false;
       if (stages && !stages.includes(st)) return false;
       if (notStage && st === notStage) return false;
-      if (category && (p.category || categoryFromPlayer(p)) !== category) return false;
+      if (category && p.category !== category) return false;
       return true;
     });
     callback(out);

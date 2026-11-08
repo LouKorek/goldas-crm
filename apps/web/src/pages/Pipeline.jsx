@@ -11,8 +11,8 @@ import { Modal, Field, ChipGroup, CountrySelect, DateInput, SortTh, SearchInput,
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
-import { t } from 'lib/i18n';
-import { AgeGroupChip } from './Prospects';
+import { t, tv, getLang } from 'lib/i18n';
+import { DEAL_STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge } from '@goldas/domain';
 import AgeGroupField from 'components/ui/AgeGroupField';
 
 // ── Nationality flags (matches the Represented screen) ────────────
@@ -30,7 +30,22 @@ function NatFlags({ nats=[] }) {
   );
 }
 
-const CAT = { men:'Men', women:'Women', youth:'Youth', jewish:'Jewish' };
+const CAT = { men:'Men', women:'Women', youth:'Youth', jewish:'Jewish abroad' };
+// The market's scopes. "All" is /market/prospects; each market has its own
+// route. Every way into the market (rail, sub-menu, phone "More", these
+// chips, search) lands on this one screen, so a market always looks the same.
+export const SCOPES = ['all', 'men', 'women', 'youth', 'jewish'];
+export const scopePath = (c) => (!c || c === 'all' ? '/market/prospects' : `/pipeline/${c}`);
+const stageLabel = (s) => (getLang() === 'he' ? DEAL_STAGE_LABELS[s] || s : s);
+
+export const AgeGroupChip = ({ player, size = 9 }) => {
+  if (!player?.dob || !isYouthAge(player.dob)) return null;
+  const g = resolveAgeGroup(player);
+  if (!g) return null;
+  return <span title={t('Age group')} style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-bg)', color: 'var(--blue)', fontSize: size, fontWeight: 700, padding: '1px 5px', whiteSpace: 'nowrap' }}>{getLang() === 'he' ? g.he : g.en}{player.ageGroupOverride ? ' ✎' : ''}</span>;
+};
+
+const MarketTag = ({ p }) => <span style={{ fontSize: 10, fontWeight: 700, color: CAT_COLOR[p.category] || 'var(--text-3)', whiteSpace: 'nowrap' }}>{CATEGORY_LABELS[p.category]?.[getLang() === 'he' ? 'he' : 'en'] || p.category}</span>;
 const CAT_EMOJI = { men:'🏃', women:'🏃‍♀️', youth:'🌱', jewish:'✡️' };
 const CAT_COLOR = { men:'var(--green-ok)', women:'var(--pink)', youth:'var(--blue)', jewish:'var(--purple)' };
 
@@ -444,7 +459,8 @@ function LinkedClubsCell({ player, path, clubOptions, canEdit }) {
   );
 }
 
-export default function Pipeline({ category }) {
+export default function Pipeline({ category = null }) {
+  const all = !category;
   const path     = PATHS.PLAYERS;   // one collection; this screen shows the category's candidates
 
   // TM Watch badge (Jewish screen only) — count of new Transfermarkt candidates.
@@ -453,7 +469,7 @@ export default function Pipeline({ category }) {
     if (category !== 'jewish') { setTmNew(0); return; }
     return listenCollection(PATHS.TM_WATCH, (d) => setTmNew(d.filter(x => x.status === 'new').length));
   }, [category]);
-  const label    = CAT[category];
+  const label    = all ? t('Candidates') : t(CAT[category]);
   const color    = CAT_COLOR[category];
 
   const [items, setItems]   = useState([]);
@@ -466,6 +482,8 @@ export default function Pipeline({ category }) {
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
   const [sort, setSort]     = useState({ field:'primaryPosition', dir:'asc' });
+  const [view, setView] = useState(() => { try { return localStorage.getItem('market-view') || 'table'; } catch { return 'table'; } });
+  useEffect(() => { try { localStorage.setItem('market-view', view); } catch { /* private mode */ } }, [view]);
   const { confirm, dialog } = useConfirm();
   const { canEdit, isAdmin } = useRole();
   const [searchParams] = useSearchParams();
@@ -480,7 +498,7 @@ export default function Pipeline({ category }) {
 
   useEffect(() => {
     setLoading(true);
-    return listenPlayers({ category, notStage: 'represented' }, (data) => {
+    return listenPlayers({ category: category || undefined, notStage: 'represented' }, (data) => {
       setItems(data); setLoading(false);
     });
   }, [category]);
@@ -506,7 +524,7 @@ export default function Pipeline({ category }) {
   const league = form.leagueMode==='manual' ? form.leagueManual
     : (form.leagueCountry&&form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ','')}` : '');
 
-  const openAdd  = () => { setForm({...EMPTY}); setModal('add'); setIsDirty(false); };
+  const openAdd  = () => { setForm({...EMPTY, category: category || 'men'}); setModal('add'); setIsDirty(false); };
   // Legacy 'None' is dropped on the way into the form, so simply
   // re-saving a candidate clears it for good.
   const openEdit = (p) => { setForm({...EMPTY,...p,natTeamStatus:natTeamStatusOf(p.natTeamStatus)}); setModal({edit:p}); setIsDirty(false); };
@@ -553,7 +571,7 @@ export default function Pipeline({ category }) {
     try {
       const data = {...form, league};
       if (modal==='add') {
-        await addPlayer(data, { category, stage: 'tracking' });
+        await addPlayer(data, { category: form.category || category || 'men', stage: 'tracking' });
         toast.success(`"${form.playerName}" added!`);
       } else {
         await updatePlayer(modal.edit.id, data, modal.edit);
@@ -584,6 +602,9 @@ export default function Pipeline({ category }) {
 
   // Sort order: Position → Name
   let data = items.filter(p => {
+    if (p.deletedAt) return false;
+    // "Not relevant" candidates stay out of the way unless asked for.
+    if (!filters.showGone && p.stage === 'not_relevant' && filters.status !== 'Not Relevant') return false;
     if (search && !`${p.playerName} ${p.currentClub} ${p.primaryPosition} ${p.agentName}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (filters.status && p.status !== filters.status) return false;
     if (filters.position && p.primaryPosition !== filters.position) return false;
@@ -598,7 +619,7 @@ export default function Pipeline({ category }) {
     <div className="table-page">
       <PageHeader
         title={label}
-        subtitle={`${items.length} ${t('players in this category')}`}
+        subtitle={all ? `${data.length} ${t('candidates across all markets')}` : `${data.length} ${t('players in this category')}`}
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {category==='jewish'&&(
@@ -650,19 +671,44 @@ export default function Pipeline({ category }) {
           </div>
         }
       >
-        <div style={{marginTop:14}}>
+        <div className="market-toolbar">
+          <div className="mt-scopes"><ChipGroup options={SCOPES} labels={SCOPES.map(c => c==='all' ? t('All') : t(CAT[c]))} value={category||'all'}
+            onChange={(c) => navigate(scopePath(c) + location.search)} required /></div>
+          <div className="mt-view"><ChipGroup options={['table','board']} labels={[t('Table'),t('Board')]} value={view} onChange={setView} required /></div>
           <FilterBar filters={filters} setFilters={setFilters} options={[
             { key:'status', label:t("Status"), values:PIPELINE_STATUS },
             { key:'position', label:t("Position"), values:POSITIONS },
           ]} />
+          <button type="button" className={`chip mt-gone${filters.showGone ? ' active' : ''}`} onClick={() => setFilters((x) => ({ ...x, showGone: !x.showGone }))}>{t('Show not relevant')}</button>
         </div>
       </PageHeader>
 
       {loading ? (
         <div style={{display:'flex',justifyContent:'center',padding:60}}><Spinner size={36}/></div>
       ) : data.length === 0 ? (
-        <Empty  message={search||Object.values(filters).some(Boolean)?'No players match your search.':'No players in this category yet.'}
+        <Empty  message={search||Object.values(filters).some(Boolean)?t('No players match your search.'):(all?t('No candidates match.'):t('No players in this category yet.'))}
           action={canEdit&&!search&&!Object.values(filters).some(Boolean)&&<button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Player")}</span></button>} />
+      ) : view === 'board' ? (
+        <div style={{ display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'minmax(210px, 1fr)', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
+          {PIPELINE_STATUS.map((st) => {
+            const col = data.filter((p) => (p.status || 'Not Contacted') === st);
+            if (!col.length && st === 'Not Relevant') return null;
+            return (
+              <div key={st}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 8, paddingBottom: 6, borderBottom: '2px solid var(--border-2)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700 }}>{stageLabel(st)}</span><span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--gold)' }}>{col.length}</span>
+                </div>
+                {col.map((p) => (
+                  <button key={p.id} type="button" className="card" onClick={() => setCardFor(p)} style={{ display: 'block', width: '100%', textAlign: 'start', padding: '9px 11px', marginBottom: 8, cursor: 'pointer', borderInlineStart: `3px solid ${CAT_COLOR[p.category] || 'var(--gold)'}`, background: 'var(--card)', color: 'inherit', font: 'inherit' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.playerName}</div>
+                    <div className="bidi" style={{ fontSize: 11.5, color: 'var(--text-2)', marginTop: 2 }}>{[tv(p.primaryPosition), p.dob ? calcAge(p.dob) : null, p.currentClub].filter(Boolean).join(' · ')}</div>
+                    <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>{all && <MarketTag p={p} />}<AgeGroupChip player={p} /></div>
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <>
         <div className="mobile-cards">
@@ -676,14 +722,15 @@ export default function Pipeline({ category }) {
                   <div style={{flex:1,minWidth:0}}>
                     <span style={{fontWeight:600,fontSize:14.5}}>{p.playerName}</span>
                     {p.height&&<span className="m-sub" style={{marginInlineStart:6}}>{p.height} {t("cm")}</span>}
+                    {all&&<span style={{marginInlineStart:6}}><MarketTag p={p} /></span>}
                   </div>
-                  {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius: 6,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{p.status}</span>}
+                  {p.status&&<span style={{background:sc.bg,color:sc.text,borderRadius: 6,fontSize:10,fontWeight:600,lineHeight:1.25,padding:'3px 8px',flexShrink:0,textAlign:'center',maxWidth:110}}>{stageLabel(p.status)}</span>}
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
                   {p.primaryPosition&&<span style={{color:'var(--gold)',fontWeight:600}}>{p.primaryPosition}</span>}
                   {Array.isArray(p.secondaryPositions)&&p.secondaryPositions.length>0&&<span className="m-sub">({p.secondaryPositions.join(', ')})</span>}
                   {dobDisplay&&<span>{dobDisplay}</span>}
-                  {category==='youth'&&<AgeGroupChip player={p} />}
+                  {p.category==='youth'&&<AgeGroupChip player={p} />}
                   {p.foot&&<span>{p.foot}</span>}
                   <span className="badge" style={{background:pIsEU?'var(--blue-bg)':'var(--red-bg)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
@@ -726,6 +773,7 @@ export default function Pipeline({ category }) {
                 <tr>
                   <th style={{width:66}}></th>
                   <SortTh label={t("Name")} field="playerName"      sort={sort} setSort={setSort} />
+                  {all && <SortTh label={t("Market")} field="category" sort={sort} setSort={setSort} />}
                   <SortTh label={t("Born")}  field="dob"             sort={sort} setSort={setSort} />
                   <th style={{textAlign:'center'}}>{t("Nat")}</th>
                   <SortTh label={t("Pos")}  field="primaryPosition" sort={sort} setSort={setSort} />
@@ -766,8 +814,9 @@ export default function Pipeline({ category }) {
                       <span style={{fontWeight:600}}>{p.playerName}</span>
                       {p.height && <div className="bidi" style={{fontSize:11,color:'var(--text-3)'}}>{p.height} {t("cm")}</div>}
                     </td>
+                    {all && <td><MarketTag p={p} /></td>}
                     {/* DOB + age */}
-                    <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}{category==='youth'&&<div style={{marginTop:2}}><AgeGroupChip player={p} /></div>}</td>
+                    <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}{p.category==='youth'&&<div style={{marginTop:2}}><AgeGroupChip player={p} /></div>}</td>
                     {/* Nationalities + EU */}
                     <td>
                       <NatFlags nats={p.nationalities} />
@@ -800,7 +849,7 @@ export default function Pipeline({ category }) {
                         const c = PIPELINE_STATUS_COLORS[p.status] || { bg:'var(--surface-3)', text:'var(--text-2)' };
                         return (
                           <span style={{display:'inline-block',background:c.bg,color:c.text,borderRadius: 6,fontSize:10,fontWeight:600,lineHeight:1.2,padding:'3px 7px',whiteSpace:'normal',textAlign:'center',maxWidth:72}}>
-                            {p.status}
+                            {stageLabel(p.status)}
                           </span>
                         );
                       })()}
@@ -841,17 +890,22 @@ export default function Pipeline({ category }) {
       {/* Add/Edit Modal */}
       {modal && (
         <Modal
-          title={modal==='add'?`Add — ${label}`:`Edit: ${form.playerName}`}
+          title={modal==='add'?`${t('Add Player')} · ${all ? t(CAT[form.category||'men']) : label}`:`${t('Edit')}: ${form.playerName}`}
           onClose={closeModal} wide isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={closeModal}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save} disabled={saving}
              >
-              {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:'Save Player'}
+              {saving?<><span className="spinner" style={{width:14,height:14}}/> {t("Saving...")}</>:t('Save Player')}
             </button>
           </>}
         >
           <div className="form-section-title">{t("Status & Basic Info")}</div>
+          {modal==='add' && all && (
+            <Field label={t("Market")}>
+              <ChipGroup options={SCOPES.slice(1)} labels={SCOPES.slice(1).map(c => t(CAT[c]))} value={form.category||'men'} onChange={s('category')} required />
+            </Field>
+          )}
           <Field label={t("Status")}>
             <ChipGroup options={PIPELINE_STATUS} value={f('status')} onChange={s('status')} />
           </Field>
@@ -957,7 +1011,7 @@ export default function Pipeline({ category }) {
       )}
 
       {/* Player Card Modal */}
-      {cardFor && <PlayerCardModal player={cardFor} category={category} onClose={()=>setCardFor(null)} />}
+      {cardFor && <PlayerCardModal player={cardFor} category={cardFor.category || category || 'men'} onClose={()=>setCardFor(null)} />}
 
       {dialog}
     </div>

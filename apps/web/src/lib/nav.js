@@ -24,10 +24,14 @@ export const AREAS = [
       { label: t('Candidates'), path: '/market/prospects', icon: 'players' },
       { label: t('Club Requirements'), path: '/market/requirements', icon: 'clipboard' },
       { label: t('Deals'), path: '/market/deals', icon: 'doc' },
-      { label: t('Men'), path: '/pipeline/men', icon: 'men' },
-      { label: t('Women'), path: '/pipeline/women', icon: 'women' },
-      { label: t('Youth'), path: '/pipeline/youth', icon: 'youth' },
-      { label: t('Jewish abroad'), path: '/pipeline/jewish', icon: 'star' },
+      // The four markets are scopes of the Candidates screen, not screens
+      // of their own: one screen, with All/Men/Women/Youth/Jewish chips.
+      // The computer's sub-menu leaves them to those chips; the phone's
+      // "More" index and the search still list them as shortcuts.
+      { label: t('Men'), path: '/pipeline/men', icon: 'men', scopeOf: '/market/prospects' },
+      { label: t('Women'), path: '/pipeline/women', icon: 'women', scopeOf: '/market/prospects' },
+      { label: t('Youth'), path: '/pipeline/youth', icon: 'youth', scopeOf: '/market/prospects' },
+      { label: t('Jewish abroad'), path: '/pipeline/jewish', icon: 'star', scopeOf: '/market/prospects' },
     ],
   },
   {

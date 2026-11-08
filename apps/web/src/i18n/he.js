@@ -927,6 +927,9 @@ const HE = {
   'open': 'פתוחות',
   'private to': 'פרטי עבור',
   'clubs · players, candidates, requirements and contacts in one place': 'מועדונים · שחקנים, מועמדים, דרישות ואנשי קשר במקום אחד',
+  'No players match your search.': 'אין שחקנים שמתאימים לחיפוש.',
+  'No players in this category yet.': 'אין עדיין שחקנים בשוק הזה.',
+  'Save Player': 'שמירת שחקן',
 };
 
 export default HE;
