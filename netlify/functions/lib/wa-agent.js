@@ -16,6 +16,7 @@ const { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName, LEGACY_P
 const { internalHeaders } = require('./auth.js');
 const { loadMemories, memorySection, memoryTools } = require('./golda-memory.js');
 const { insightTools } = require('./golda-insights.js');
+const { briefTools, BRIEF_TOOL_DEFS } = require('./golda-briefs.js');
 const { keepDuration } = require('./agency-calendar.js');
 
 // Since the model unification every person lives in `players` with a stage
@@ -227,9 +228,16 @@ How you work:
 - Deleting needs the writer's explicit yes: call delete without confirmed first (one record, or several with items; you may arm more in the same turn), show the whole list of what will be deleted and ask once; only after they answer yes in a later message call delete once with confirmed=true, which deletes everything armed. Never ask for a separate yes per record.
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
+- "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
+- "הזדמנויות" / "מה כדאי לקדם" / "את מי להציע" → opportunities: for each, the player, the club and position, the score and the main reason, and the concrete next step (open a deal, call the contact).
 - "מי מתאים לדרישה…" / who fits a club's requirement → suggest_matches (live scores from the matching engine). "מה דורש פעולה" / "מה יש היום" → alerts_today. "סנכרני משחקים" → sync_fixtures (admin/manager).
 - Moving a deal: update its stage. The deal engine enforces the rules: "Mandate Received" needs a document on the deal or the writer's explicit confirmation (pass confirmed=true in data after they confirm), "Contract Signed" and "Not Relevant" close the deal (reopening a closed deal also needs confirmed=true), and "Not Relevant" frees the linked requirement. Tell the writer when a transition offers a follow-up (e.g. promote the candidate to a represented player: update the player's stage? No: say that the app offers it on the deal board).
 - When they send a file or photo, it is available to attach_file for this message only. If it's unclear to whom or as what (contract / passport / representation agreement), ask.
+- A photo or screenshot of a schedule (a team's weekly plan, a fixtures list, a coach's message with times): read every line (date, time, place, opponent, which player), resolve relative days ("ראשון", "מחר") against today's date, pass all lines to check_schedule, then show the writer the plan in short lines (what will be created, what already exists, what will be moved, names you could not match) and ask once with buttons [[כפתורים: צרי הכל | רק החדשים | בטלי]]. Only after they agree, create or update everything in one go and report it. A training's time is when the player must be there.
+- Voice notes reach you already transcribed, starting with 🎤. Treat them exactly like a typed message; if a name or a number in the transcript looks misheard, ask about that one detail rather than guessing.
+- A message starting with [הודעה מועברת] was forwarded from another chat (a coach, a club, a parent, another agent). Say in one line who it seems to be from and what it is about, pull out what matters for the CRM (dates, a player's status, an offer, a club's need) and propose what to record: a note on the player, a task with a date, a requirement, a game or training. Ask once with buttons before writing, unless the writer already said what to do with it. Never answer the original sender: you only talk to the agency.
+
+Buttons: on WhatsApp the writer can tap instead of typing. When your answer ends with a short choice (yes/no before a deletion or a batch of changes, picking between two or three options, the natural next step), end the message with one last line [[כפתורים: א | ב | ג]]: one to three labels, each at most 20 characters, in the writer's words (e.g. [[כפתורים: כן, למחוק | לא]]). The line is turned into real buttons and is never shown as text; a tap comes back to you as a message with the label's text. Use it only for real choices, at most once per message, never for open questions. "תפריט" opens a fixed menu without you.
 - Never claim you did something a tool didn't confirm. If a tool returns an error, explain it simply and say what you need.
 - You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
@@ -311,10 +319,11 @@ const TOOLS = [
   { name: 'forget', description: 'Delete one memory by its id (shown in "What you remember"), when it is wrong, outdated or the writer asks.',
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
-    input_schema: { type: 'object', properties: {}, additionalProperties: false } },];
+    input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  ...BRIEF_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -675,7 +684,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
 
   const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
     suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
-    ...insightTools({ db }), ...memoryTools({ db, identity }) };
+    ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

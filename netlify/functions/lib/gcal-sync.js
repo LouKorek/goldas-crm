@@ -129,6 +129,20 @@ function skeletonWord(w) {
   return out;
 }
 const skeleton = (name) => normName(name).split(' ').map(skeletonWord).filter(Boolean);
+// A single Hebrew ו is a vowel (נועם, Noam) or a v (לוי, Levi; נוה, Naveh); try both.
+function wordVariants(w) {
+  const t = String(w || '');
+  if (!/[א-ת]/.test(t) || !/(^|[^ו])ו(?!ו)/.test(t)) return [skeletonWord(t)];
+  let forms = [''];
+  const chars = [...t];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const single = ch === 'ו' && chars[i - 1] !== 'ו' && chars[i + 1] !== 'ו';
+    if (single && forms.length < 8) forms = forms.flatMap((f) => [f, `${f}וו`]);
+    else forms = forms.map((f) => f + ch);
+  }
+  return [...new Set(forms.map(skeletonWord).filter(Boolean))];
+}
 function nearWord(a, b) {
   if (a === b) return true;
   if (Math.min(a.length, b.length) < 3 || Math.abs(a.length - b.length) > 1) return false;
@@ -142,12 +156,12 @@ function nearWord(a, b) {
 }
 /** Every word of `name` sounds like a different word of the player's name. */
 function soundsLike(name, player) {
-  const want = skeleton(name);
+  const want = normName(name).split(' ').filter(Boolean).map(wordVariants).filter((v) => v.length);
   const have = skeleton(playerName(player));
   if (!want.length || !have.length) return false;
   const used = new Set();
-  return want.every((w) => {
-    const k = have.findIndex((h, idx) => !used.has(idx) && nearWord(w, h));
+  return want.every((forms) => {
+    const k = have.findIndex((h, idx) => !used.has(idx) && forms.some((w) => nearWord(w, h)));
     if (k < 0) return false;
     used.add(k);
     return true;

@@ -64,6 +64,7 @@ const linkFor = (a) => {
 
 const QUICK = [
   'מה דורש פעולה היום?',
+  '3 הזדמנויות השבוע',
   'מי מתאים לדרישות המועדונים הפתוחות?',
   'אילו חוזים מסתיימים בחודשיים הקרובים?',
   'מה עשית ב-24 השעות האחרונות?',
@@ -116,7 +117,7 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   useEffect(() => {
     const unsubs = pending.filter((p) => !p.state || p.state === 'queued' || p.state === 'processing').map((p) => listenInboxMessage(p.id, (m) => {
       if (!m) return;
-      setPending((list) => list.map((x) => (x.id === p.id ? { ...x, state: m.state, reply: m.reply, error: m.error } : x)));
+      setPending((list) => list.map((x) => (x.id === p.id ? { ...x, state: m.state, reply: m.reply, buttons: m.buttons, error: m.error } : x)));
     }));
     return () => unsubs.forEach((u) => u());
   }, [pending.map((p) => `${p.id}:${p.state}`).join('|')]); // eslint-disable-line
@@ -128,10 +129,10 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   }, [history]);
 
   const items = useMemo(() => {
-    const out = (history || []).map((h, i) => ({ id: `h${i}`, role: h.role, text: h.text, at: h.at, channel: h.channel }));
+    const out = (history || []).map((h, i) => ({ id: `h${i}`, role: h.role, text: h.text, at: h.at, channel: h.channel, buttons: h.buttons }));
     for (const p of pending) {
       out.push({ id: p.id, role: 'user', text: p.text, at: p.sentAt, mine: true });
-      if (p.state === 'done' || p.state === 'error' || p.state === 'reply_pending') out.push({ id: `${p.id}_r`, role: 'assistant', text: p.reply || (he ? 'משהו השתבש.' : 'Something went wrong.'), at: p.sentAt + 1, error: p.state === 'error' });
+      if (p.state === 'done' || p.state === 'error' || p.state === 'reply_pending') out.push({ id: `${p.id}_r`, role: 'assistant', text: p.reply || (he ? 'משהו השתבש.' : 'Something went wrong.'), at: p.sentAt + 1, error: p.state === 'error', buttons: p.buttons });
       else out.push({ id: `${p.id}_typing`, role: 'assistant', typing: true, at: p.sentAt + 1 });
     }
     return out;
@@ -165,6 +166,16 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
           </div>
         )}
         {items.map((m) => <Bubble key={m.id} m={m} he={he} />)}
+        {(() => {
+          // Golda's last answer may offer taps (the same buttons WhatsApp shows).
+          const last = items[items.length - 1];
+          if (!last || last.role !== 'assistant' || last.typing || !Array.isArray(last.buttons) || !last.buttons.length) return null;
+          return (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {last.buttons.map((b) => <button key={b} type="button" className="chip" disabled={sending} onClick={() => send(b)}>{b}</button>)}
+            </div>
+          );
+        })()}
         <div ref={endRef} />
       </div>
       {items.length < 4 && (
@@ -414,8 +425,22 @@ function Delivery({ phone, he }) {
       {c.lastFailure?.at ? <Row label={he ? 'כישלון אחרון' : 'Last failure'}>{fmtDateTime(new Date(c.lastFailure.at))}{c.lastFailure.code === 131047 ? (he ? ' · מחוץ לחלון 24 השעות' : ' · outside the 24h window') : c.lastFailure.message ? ` · ${c.lastFailure.message}` : ''}</Row> : null}
       {c.lastReengageAt ? <Row label={he ? 'תבנית התנעה נשלחה' : 'Re-engagement sent'}>{fmtDateTime(new Date(c.lastReengageAt))}{c.lastReengageTemplate ? ` · ${c.lastReengageTemplate}` : ''}{c.lastReengageError ? ` · ${he ? 'נכשלה' : 'failed'}` : ''}</Row> : null}
       <Row label={he ? 'התבניות של גולדה' : 'Golda\'s templates'}>{tplState}</Row>
+      <Row label={he ? 'הודעות קוליות' : 'Voice notes'}>{speechState(meta?.speech, he)}</Row>
     </div>
   );
+}
+
+/** How the voice-note transcription service stands, from app_meta/whatsapp.speech. */
+function speechState(sp, he) {
+  if (!sp || !sp.state) return he ? 'עוד לא נשלחה הודעה קולית' : 'no voice note yet';
+  const when = sp.at ? ` · ${fmtDateTime(new Date(sp.at))}` : '';
+  if (sp.state === 'ok') return <span style={{ color: 'var(--green-ok)' }}>{he ? 'פעיל, גולדה מתמללת' : 'on, Golda transcribes'}{when}</span>;
+  const why = {
+    needs_billing: he ? 'צריך להפעיל חיוב בפרויקט Google' : 'billing must be enabled on the Google project',
+    needs_api: he ? 'שירות התמלול של Google עוד לא מופעל' : 'Google Speech-to-Text is not enabled yet',
+    needs_permission: he ? 'אין הרשאה לשירות התמלול' : 'no permission for the transcription service',
+  }[sp.state] || (he ? 'תקלה זמנית בתמלול' : 'a transient transcription error');
+  return <span style={{ color: 'var(--amber)' }}>{why}{when}</span>;
 }
 
 // An Israeli local number becomes international; anything else is kept as digits.

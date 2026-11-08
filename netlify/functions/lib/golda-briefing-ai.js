@@ -21,8 +21,9 @@ const SYSTEM = [
   '3. *היום:* today\'s games, trainings and meetings with the time, one line each (skip if none, say so in one line).',
   '4. *מה השתנה מאתמול:* the team\'s changes in the last 24 hours, grouped by who and what, the important ones by name (skip the section if nothing changed).',
   '5. *לטיפול:* the remaining alerts, grouped, most urgent first; merge similar ones ("3 חוזים מסתיימים החודש: …").',
-  '6. *המלצות:* 1 to 3 concrete next steps that connect the facts (for example a club requirement that matches a free player, a deal stuck in the same stage).',
-  `7. The last line: הכל בבית: ${APP_LINK}`,
+  '6. *המלצות:* 1 to 3 concrete next steps that connect the facts (for example a club requirement that matches a free player, a deal stuck in the same stage). The opportunities list (open requirements × players with no deal yet, scored by the matching engine) is the best source for these.',
+  '7. Only when isSunday is true and there are opportunities: *3 הזדמנויות השבוע:* up to three of them, one line each: the player, the club and position, the score and the main reason, and the next step (open a deal, call the contact). Then do not repeat them in המלצות.',
+  `8. The last line: הכל בבית: ${APP_LINK}`,
   'WhatsApp formatting only: *bold* for section titles, • for items, no markdown headings, no tables. Short lines. No greeting beyond the first line, no sign-off.',
   'Use what you remember (the memories) to decide what matters to this person, but do not quote them.',
 ].join('\n');
@@ -42,12 +43,13 @@ function shapeBriefing(text, name, today) {
 }
 
 /** The facts the model sees, kept small. */
-function briefingFacts({ name, today, games = [], alerts = [], changes24h = [], deals = [], requirements = [], memories = [] }) {
+function briefingFacts({ name, today, games = [], alerts = [], changes24h = [], deals = [], requirements = [], memories = [], opportunities = [] }) {
   const openDeals = deals.filter((d) => !d.closedAt && !isClosedStage(d.stage));
   const openReqs = requirements.filter((r) => (r.status || 'open') === 'open');
   return {
     person: name,
     today,
+    isSunday: new Date(`${today}T12:00:00Z`).getUTCDay() === 0,
     gamesToday: games.slice(0, 30).map((g) => ({ time: g.time, title: g.title, details: g.sub })),
     alerts: alerts.slice(0, 60).map((a) => ({
       type: a.type, severity: a.severity, who: a.subject?.name, what: a.proof?.he, due: a.dueDate,
@@ -56,7 +58,8 @@ function briefingFacts({ name, today, games = [], alerts = [], changes24h = [], 
       by: c.byName || c.by || '', via: c.via || '', action: c.action, collection: c.collection, record: c.name || '', fields: (c.fields || []).slice(0, 8),
     })),
     openDeals: openDeals.slice(0, 40).map((d) => ({ player: d.playerName || '', club: d.clubName || d.club || '', stage: d.stage || '', updated: d.updatedAt?.toDate?.()?.toISOString?.().slice(0, 10) || '' })),
-    openRequirements: openReqs.slice(0, 40).map((r) => ({ club: r.clubName || '', position: r.position || (Array.isArray(r.positions) ? r.positions.join(', ') : ''), gender: r.gender || '', validUntil: r.validUntil || '', notes: String(r.notes || '').slice(0, 200) })),
+    openRequirements: openReqs.slice(0, 40).map((r) => ({ club: r.clubName || '', position: r.requiredPosition || r.position || (Array.isArray(r.positions) ? r.positions.join(', ') : ''), gender: r.gender || '', validUntil: r.validUntil || '', notes: String(r.notes || '').slice(0, 200) })),
+    opportunities: opportunities.slice(0, 5).map((o) => ({ player: o.player, club: o.club, position: o.position || '', score: o.score, why: String(o.why || '').slice(0, 300), playerStage: o.stage || '' })),
     memories: memories.slice(0, 40).map((m) => (m.about ? `(${m.about}) ${m.text}` : m.text)),
   };
 }

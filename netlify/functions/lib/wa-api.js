@@ -116,13 +116,76 @@ async function sendTemplate(to, name, language, via, components = []) {
   return json.messages?.[0]?.id || null;
 }
 
-async function markRead(messageId, via) {
+// Marks the message read; with typing=true the writer also sees "typing…"
+// until Golda answers (WhatsApp keeps it up to 25 seconds). A number or API
+// version that refuses the indicator still gets the plain read receipt.
+async function markRead(messageId, via, { typing = false } = {}) {
+  const from = via || await defaultPhoneId();
+  const body = { messaging_product: 'whatsapp', status: 'read', message_id: messageId };
   try {
-    await graph(`${via || await defaultPhoneId()}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: messageId }),
-    });
-  } catch (e) { console.warn('[wa] markRead failed:', e.message); }
+    await graph(`${from}/messages`, { method: 'POST', body: JSON.stringify(typing ? { ...body, typing_indicator: { type: 'text' } } : body) });
+  } catch (e) {
+    if (typing) return markRead(messageId, via);
+    console.warn('[wa] markRead failed:', e.message);
+  }
+}
+
+// WhatsApp's limits for interactive messages.
+const BUTTON_TITLE_MAX = 20;
+const INTERACTIVE_BODY_MAX = 1024;
+const clip = (s, n) => { const t = String(s || '').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+
+/** A long text before buttons: the last paragraph that fits rides with the buttons. */
+function splitForButtons(text, max = INTERACTIVE_BODY_MAX) {
+  const cut = text.lastIndexOf('\n\n');
+  if (cut > 0 && text.length - cut - 2 <= max && text.slice(cut + 2).trim()) return { head: text.slice(0, cut).trimEnd(), tail: text.slice(cut + 2).trim() };
+  return { head: text, tail: '👇' };
+}
+
+/**
+ * Reply buttons: up to three taps under a message. A tap comes back as an
+ * ordinary message whose text is the button's title. A body longer than an
+ * interactive message allows goes first as text, the buttons follow under
+ * its last paragraph.
+ */
+async function sendButtons(to, body, buttons, via) {
+  const from = via || await defaultPhoneId();
+  const titles = [...new Set((buttons || []).map((b) => clip(b, BUTTON_TITLE_MAX)).filter(Boolean))].slice(0, 3);
+  if (!titles.length) return sendText(to, body, via);
+  const ids = [];
+  let text = String(body || '').trim();
+  if (text.length > INTERACTIVE_BODY_MAX) {
+    const { head, tail } = splitForButtons(text);
+    ids.push(...await sendText(to, head, via));
+    text = tail;
+  }
+  const res = await graph(`${from}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({
+      messaging_product: 'whatsapp', to: digits(to), type: 'interactive',
+      interactive: { type: 'button', body: { text: text || '…' }, action: { buttons: titles.map((title, i) => ({ type: 'reply', reply: { id: `b${i}`, title } })) } },
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  ids.push(json.messages?.[0]?.id || null);
+  return ids;
+}
+
+/** A list menu (one button that opens up to ten rows). A choice comes back as its row title. */
+async function sendList(to, body, button, rows, via) {
+  const from = via || await defaultPhoneId();
+  const res = await graph(`${from}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({
+      messaging_product: 'whatsapp', to: digits(to), type: 'interactive',
+      interactive: {
+        type: 'list', body: { text: clip(body, INTERACTIVE_BODY_MAX) },
+        action: { button: clip(button, 20), sections: [{ title: clip(button, 24), rows: rows.slice(0, 10).map((r, i) => ({ id: r.id || `r${i}`, title: clip(r.title, 24), ...(r.description ? { description: clip(r.description, 72) } : {}) })) }] },
+      },
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  return [json.messages?.[0]?.id || null];
 }
 
 // Media arrives as an id: one call for the short-lived URL, one for the bytes.
@@ -146,9 +209,12 @@ function extractMessages(payload) {
           id: m.id,
           from: m.from,
           type: m.type,
-          text: m.text?.body || m.document?.caption || m.image?.caption || m.video?.caption || m.button?.text || m.interactive?.button_reply?.title || '',
-          // A tap on a template's quick-reply button or an interactive button.
-          payload: m.button?.payload || m.interactive?.button_reply?.id || null,
+          text: m.text?.body || m.document?.caption || m.image?.caption || m.video?.caption || m.button?.text || m.interactive?.button_reply?.title || m.interactive?.list_reply?.title || '',
+          // A tap on a template's quick-reply button, an interactive button or a menu row.
+          payload: m.button?.payload || m.interactive?.button_reply?.id || m.interactive?.list_reply?.id || null,
+          // Forwarded from another chat (WhatsApp marks it; "frequently" = forwarded many times).
+          forwarded: Boolean(m.context?.forwarded || m.context?.frequently_forwarded),
+          voice: Boolean(m.audio?.voice),
           mediaId: media?.id || null,
           filename: m.document?.filename || (m.image ? `photo_${m.id.slice(-6)}.jpg` : null),
           timestamp: Number(m.timestamp) || 0,
@@ -178,4 +244,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };
