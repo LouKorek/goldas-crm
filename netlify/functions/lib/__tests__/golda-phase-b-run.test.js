@@ -145,3 +145,24 @@ test('no more than five follow-up tasks a day, longest waits first', async () =>
   await run(job(), later, { send: async () => ({ state: 'sent' }), write });
   assert.equal(Object.keys(DB.data.tasks).length, 5);
 });
+
+test('Sunday 10:00: scouting runs once, the team hears about it once, candidates are saved on the requirement', async () => {
+  const sun = new Date('2026-11-15T08:30:00Z');   // Sunday 10:30 Israel
+  const s = seed();
+  s.app_meta.goldaSent = { briefings: { 'lou.korek@gmail.com': '2026-11-15', 'dani@x.com': '2026-11-15' }, eventsAt: sun.getTime() - 3600000 };
+  DB = makeDb(s); NOW_MS = sun.getTime();
+  let searches = 0;
+  const scout = async () => { searches++; return { ai: true, candidates: [{ name: 'Ido Levi', age: 23, club: 'Hapoel X', why: 'חוזה נגמר', link: 'https://tm/x' }] }; };
+  const out = [];
+  const send = async (u, body, kind) => { out.push({ to: u.email, kind, body }); return { state: 'sent' }; };
+  await run(job(), sun, { send, write, scout });
+  assert.equal(searches, 1);
+  const msgs = out.filter((m) => /סקאוטינג שבועי/.test(m.body));
+  assert.deepEqual(msgs.map((m) => m.to).sort(), ['dani@x.com', 'lou.korek@gmail.com']);
+  assert.equal(DB.data.club_requirements.r1.scouting.candidates[0].name, 'Ido Levi');
+  // Same hour again (a retry): no second search, no second message.
+  out.length = 0;
+  await run(job(), new Date(sun.getTime() + 60000), { send, write, scout });
+  assert.equal(searches, 1);
+  assert.ok(!out.some((m) => /סקאוטינג/.test(m.body)));
+});
