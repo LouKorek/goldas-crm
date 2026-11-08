@@ -1,8 +1,23 @@
 // A deal is one candidate (or player) against one club. The stage machine
 // lives in the domain package (engines/deals.ts); this file does the writes.
 import { listenCollection, addDoc_, updateDoc_, PATHS, currentUserMeta } from 'lib/db';
-import { clubKey, isDealStage, playerName, canTransition, applyTransition } from '@goldas/domain';
+import { clubKey, isDealStage, playerName, canTransition, applyTransition, categoryFromPlayer } from '@goldas/domain';
 import { addInteraction } from './interactions';
+
+/**
+ * A deal stores its player's market as a copy taken when it opened, which goes
+ * stale when the player's market changes (and older players had none). Every
+ * screen reads the market from the live player instead, through this.
+ */
+export const withPlayerMarket = (deals, players) => {
+  if (!deals) return deals;
+  const byId = new Map((players || []).map((p) => [p.id, p]));
+  return deals.map((d) => {
+    const p = byId.get(d.playerId);
+    const category = p ? p.category : (d.category || 'men');
+    return category === d.category ? d : { ...d, category };
+  });
+};
 
 export const listenDeals = (filter, callback) => {
   const { playerId, clubId, clubName, open } = filter || {};
@@ -22,7 +37,7 @@ export const openDeal = async (player, club, stage, extra = {}) => {
   const { email } = currentUserMeta();
   const st = isDealStage(stage) ? stage : (isDealStage(player.status) ? player.status : 'Not Contacted');
   const ref = await addDoc_(PATHS.DEALS, {
-    playerId: player.id, playerName: playerName(player), category: player.category || 'men',
+    playerId: player.id, playerName: playerName(player), category: categoryFromPlayer(player),
     clubId: club.clubId || club.id || '', clubName: club.clubName || club.name || '', clubKey: clubKey(club.clubName || club.name),
     stage: st, history: [entry(st, email, 'נפתח')], enteredStageAt: new Date().toISOString(),
     transferFee: player.transferFee || '', salary: player.salary || '', owner: email, source: 'manual', closedAt: null,

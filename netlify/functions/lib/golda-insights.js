@@ -4,7 +4,7 @@
 //   overview  the agency at a glance: players, prospects, deals, requirements,
 //             tasks, this week's games and Golda's own recent work.
 // The pure parts (changesFrom, overviewOf) take plain rows so they are tested.
-const { israelDate, addDays, expandTrainings, isClosedStage } = require('@goldas/domain');
+const { israelDate, addDays, expandTrainings, isClosedStage, categoryFromPlayer } = require('@goldas/domain');
 
 const DAY = 86400000;
 const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : typeof v === 'number' ? v : v ? Date.parse(v) || 0 : 0);
@@ -70,7 +70,7 @@ function overviewOf({ players = [], deals = [], requirements = [], tasks = [], m
   const prospects = players.filter((p) => p.stage && p.stage !== 'represented');
   const prospectsBy = {};
   for (const p of prospects) {
-    const cat = p.category || 'other';
+    const cat = categoryFromPlayer(p);
     prospectsBy[cat] = prospectsBy[cat] || { total: 0, byStatus: {} };
     prospectsBy[cat].total++;
     const st = p.status || p.stage;

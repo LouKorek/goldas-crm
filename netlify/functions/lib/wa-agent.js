@@ -23,7 +23,7 @@ const { insightTools } = require('./golda-insights.js');
 // onto the physical collection plus the filter that selects its records.
 const VIRTUAL = { players: { col: 'players', match: (d) => !d.stage || d.stage === 'represented' } };
 for (const [category, legacy] of Object.entries(LEGACY_PIPELINE_COLLECTIONS)) {
-  VIRTUAL[legacy] = { col: 'players', category, match: (d) => d.category === category && d.stage && d.stage !== 'represented' };
+  VIRTUAL[legacy] = { col: 'players', category, match: (d) => categoryFromPlayer(d) === category && d.stage && d.stage !== 'represented' };
 }
 const physical = (c) => (VIRTUAL[c] ? VIRTUAL[c].col : c);
 const belongs = (c, d) => !d.deletedAt && (!VIRTUAL[c] || VIRTUAL[c].match(d));

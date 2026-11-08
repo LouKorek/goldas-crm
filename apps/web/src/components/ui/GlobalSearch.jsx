@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { listenCollection, PATHS } from 'lib/db';
 import { listenPlayers } from 'data/players';
+import { withPlayerMarket } from 'data/deals';
 import { useRole } from 'lib/roleContext';
 import { playerName, STAGE_LABELS } from '@goldas/domain';
 import { DESTINATIONS } from 'lib/nav';
@@ -24,7 +25,8 @@ export default function GlobalSearch({ open, onClose }) {
   const [players, setPlayers] = useState([]);
   const [clubs, setClubs] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [deals, setDeals] = useState([]);
+  const [rawDeals, setDeals] = useState([]);
+  const deals = useMemo(() => withPlayerMarket(rawDeals, players), [rawDeals, players]);
   const [tasks, setTasks] = useState([]);
   const inputRef = useRef(null);
   const he = getLang() === 'he';

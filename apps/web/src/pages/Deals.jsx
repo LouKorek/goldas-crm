@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { listenCollection, PATHS } from 'lib/db';
 import { listenPlayers, promoteToRepresented } from 'data/players';
-import { listenDeals, openDeal, advanceDeal, checkTransition, reopenDeal } from 'data/deals';
+import { listenDeals, openDeal, advanceDeal, checkTransition, reopenDeal, withPlayerMarket } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
 import { fmtDate } from 'lib/constants';
 import { useRole } from 'lib/roleContext';
@@ -205,8 +205,9 @@ function NewDealModal({ players, clubs, requirements, onClose }) {
 
 export default function Deals() {
   const { canEdit } = useRole();
-  const [deals, setDeals] = useState(null);
+  const [rawDeals, setDeals] = useState(null);
   const [players, setPlayers] = useState([]);
+  const deals = useMemo(() => withPlayerMarket(rawDeals, players), [rawDeals, players]);
   const [clubs, setClubs] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [open, setOpen] = useState(null);
