@@ -733,3 +733,20 @@ html[data-theme="dark"] .iconbtn .dot { color: #1A0B0A; }
    "€1,000/mo" never reorders. Phone numbers always read left to right. */
 .m-meta > span, .m-sub, .bidi { unicode-bidi: plaintext; }
 .ltr { direction: ltr; unicode-bidi: isolate; }
+
+/* The market screen's toolbar: market scopes, table/board, filters. On the
+   computer one wrapping row; on the phone the scopes take the first row,
+   the view switch and "not relevant" share the second, filters below. */
+.market-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+@media (max-width: 768px) {
+  .market-toolbar { gap: 8px; }
+  .market-toolbar > .mt-scopes { flex: 1 1 100%; min-width: 0; }
+  .market-toolbar > .mt-scopes > .chip-group { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .market-toolbar > .mt-scopes > .chip-group::-webkit-scrollbar { display: none; }
+  .market-toolbar > .mt-scopes .chip { flex: 1 1 auto; }
+  .market-toolbar > .mt-view { flex: 0 0 auto; }
+  .market-toolbar > .mt-view > .chip-group { flex-wrap: nowrap; width: auto; }
+  .market-toolbar > .mt-view .chip { flex: 0 0 auto; }
+  .market-toolbar > .mt-gone { flex: 0 0 auto; order: 1; }
+  .market-toolbar > :not(.mt-scopes):not(.mt-view):not(.mt-gone) { flex: 1 1 100%; min-width: 0; order: 2; }
+}

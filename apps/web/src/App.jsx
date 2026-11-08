@@ -25,7 +25,6 @@ const Migrations = lazy(() => import('pages/Migrations'));
 import Home          from 'pages/Home';
 const Player360 = lazy(() => import('pages/Player360'));
 const Golda = lazy(() => import('pages/Golda'));
-const Prospects = lazy(() => import('pages/Prospects'));
 const Deals = lazy(() => import('pages/Deals'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Admin = lazy(() => import('pages/Admin'));
@@ -132,7 +131,7 @@ export default function App() {
                 <Route path="matches"        element={<Matches />} />
                 <Route path="calendar"       element={<Calendar />} />
                 <Route path="market"         element={<Navigate to="/market/prospects" replace />} />
-                <Route path="market/prospects"    element={<Prospects />} />
+                <Route path="market/prospects"    element={<Pipeline />} />
                 <Route path="market/requirements" element={<Requirements />} />
                 <Route path="market/deals"        element={<Deals />} />
                 <Route path="requirements"   element={<Navigate to="/market/requirements" replace />} />

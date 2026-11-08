@@ -149,12 +149,12 @@ export default function Layout({ user }) {
               others (on the phone the "More" index lists them all). Home
               draws its tabs in its own header. */}
           {areaDef && area !== 'home' && (() => {
-            const items = visibleItems(areaDef.items, { isAdmin });
+            const items = visibleItems(areaDef.items, { isAdmin }).filter((i) => !i.scopeOf);
             if (items.length < 2) return null;
             return (
               <nav className="area-subnav desktop-only" aria-label={t('Sections')}>
                 {items.map((i) => {
-                  const on = here ? here.path === i.path : location.pathname === i.path;
+                  const on = here ? (here.path === i.path || here.scopeOf === i.path) : location.pathname === i.path;
                   return (
                     <Link key={i.path} to={i.path} className={on ? 'on' : undefined} aria-current={on ? 'page' : undefined}>
                       {i.icon && <Icon name={i.icon} size={15} />}{i.label}
