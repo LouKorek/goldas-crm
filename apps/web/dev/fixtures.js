@@ -13,7 +13,7 @@ const players = [
   { id: 'stale1', stage: 'not_relevant', category: 'men', playerName: 'Stale Stage', gender: 'Men', status: 'Initial Talks', primaryPosition: 'RW' },
   { id: 'gone1', stage: 'not_relevant', category: 'men', playerName: 'Gone Player', gender: 'Men', status: 'Not Relevant', primaryPosition: 'LB' },
   { id: 'old2', stage: 'in_process', playerName: 'Legacy Woman', gender: 'Women', status: 'Initial Talks', primaryPosition: 'ST' },
-  ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01' })),
+  ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567' } : {}) })),
 ];
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 export const FIXTURES = {
@@ -24,6 +24,10 @@ export const FIXTURES = {
     { id: 'm3', title: 'כנס סוכנים', date: day(2), endDate: day(3), allDay: true, location: 'תל אביב' },
   ],
   deals: Array.from({ length: 8 }, (_, i) => ({ id: `d${i}`, playerId: `c${i}`, playerName: players[i].playerName, clubName: CLUBS[(i + 2) % 6], stage: ST[i % 6], enteredStageAt: '2026-10-01', createdAt: '2026-09-01' })),
-  club_requirements: Array.from({ length: 6 }, (_, i) => ({ id: `r${i}`, clubName: CLUBS[i], gender: i % 2 ? 'Women' : 'Men', requiredPosition: POS[i], status: 'open', validUntil: '2026-12-31', ageMin: 18, ageMax: 28, salary: '2000' })),
+  club_requirements: Array.from({ length: 6 }, (_, i) => ({ id: `r${i}`, clubName: CLUBS[i], gender: i % 2 ? 'Women' : 'Men', requiredPosition: POS[i], status: 'open', validUntil: '2026-12-31', ageMin: 18, ageMax: 28, salary: '2000',
+    ...(i === 0 ? { scouting: { at: '2026-11-15T08:31:00Z', candidates: [
+      { name: 'Ido Shahar', age: 24, position: 'GK', club: 'Hapoel Hadera', why: 'חוזה מסתיים ביוני 2027, שוער ראשון בליגת העל, 11 שערים נקיים העונה', link: 'https://www.transfermarkt.com/ido-shahar/profil/spieler/1' },
+      { name: 'Tomer Levi', age: 21, position: 'GK', club: 'Maccabi Petah Tikva U21', why: 'שוער שני, מחפש דקות; מועמד להשאלה', link: 'https://www.transfermarkt.com/tomer-levi/profil/spieler/2' },
+    ] } } : {}) })),
   contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567' })),
 };

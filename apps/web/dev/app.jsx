@@ -17,6 +17,7 @@ const Deals = lazy(() => import('pages/Deals'));
 const Players = lazy(() => import('pages/Players'));
 const Contacts = lazy(() => import('pages/Contacts'));
 const Calendar = lazy(() => import('pages/Calendar'));
+const Player360 = lazy(() => import('pages/Player360'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
 setSessionAccess(role);
@@ -27,6 +28,7 @@ const App = () => (
       <Routes>
         <Route path="/" element={<Layout user={{ email: role.email }} />}>
           <Route path="players" element={<Players />} />
+          <Route path="players/:id" element={<Player360 />} />
           <Route path="market" element={<Navigate to="/market/prospects" replace />} />
           <Route path="market/prospects" element={<Prospects />} />
           <Route path="market/requirements" element={<Requirements />} />
