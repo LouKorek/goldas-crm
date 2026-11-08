@@ -9,6 +9,10 @@
 //      that failed twice in a row, a quota past 80%, the IFA browser sync
 //      silent for 36 hours. Once a day each.
 // All of it comes from the alerts engine the app uses; nothing is computed here.
+// The morning briefing's text is written by the model from those facts plus
+// the last day's audit and the person's memories (lib/golda-briefing-ai.js);
+// it falls back to the template briefing if the model is unavailable.
+// Urgent and ops messages stay template-based.
 // Every message goes through lib/wa-outbox.js: inside WhatsApp's 24-hour window
 // it is sent; outside it, it waits in wa_outbox and the person gets Golda's
 // digest template instead (the update's title and summary, a button for the
@@ -16,10 +20,13 @@
 // re-checks it hourly.
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
-const { runJob } = require('./lib/jobs.js');
 const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS } = require('@goldas/domain');
 const { dedupeKey } = require('./lib/alert-keys.js');
 const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
+const { writeBriefing } = require('./lib/golda-briefing-ai.js');
+const { visibleMemories } = require('./lib/golda-memory.js');
+const { changesFrom } = require('./lib/golda-insights.js');
+const { internalHeaders } = require('./lib/auth.js');
 const { scraperAccount } = require('./lib/scraper-account.js');
 const { whatsappRecipients } = require('./lib/golda-identity.js');
 const outbox = require('./lib/wa-outbox.js');
@@ -30,7 +37,8 @@ const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 
 
 async function loadAll(db) {
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
-  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp] = await Promise.all([
+  const dayAgo = new Date(Date.now() - 86400000);
+  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp, recent, memories] = await Promise.all([
     listRepresented(db),
     db.collection('matches').get().then(rows),
     db.collection('deals').get().then(rows),
@@ -45,10 +53,13 @@ async function loadAll(db) {
     db.collection('app_meta').doc('ifaBrowserSync').get().then((s) => (s.exists ? s.data() : null)),
     scraperAccount().catch(() => null),
     db.collection('app_meta').doc('whatsapp').get().then((s) => (s.exists ? s.data() : {})),
+    // Everything the team changed in the last day, for "what changed since yesterday".
+    db.collection('audit').where('at', '>=', dayAgo).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => []),
+    db.collection('golda_memory').get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => []),
   ]);
   return { players, matches, deals, requirements, tasks, jobs, trainings, users,
     settings: mergeSettings({ ...(settingsSnap.exists ? settingsSnap.data() : {}), matchDays: [0] }),
-    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper, whatsapp };
+    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper, whatsapp, recent, memories };
 }
 
 function todaysGames({ matches, trainings, players }, today) {
@@ -74,7 +85,7 @@ function pruneSent(keys, today) {
   return out;
 }
 
-async function run(job, now = new Date(), { force = false, send } = {}) {
+async function run(job, now = new Date(), { force = false, send, write } = {}) {
   const db = getDb();
   const data = await loadAll(db);
   if (needsRecheck(data.whatsapp, now.getTime())) {
@@ -104,7 +115,15 @@ async function run(job, now = new Date(), { force = false, send } = {}) {
     const first = (u.name || '').split(' ')[0] || u.name;
     try {
       if ((force || hour === u.briefingHour) && sent.briefings[u.email] !== today) {
-        await say(u, buildBriefing({ name: first, alerts: r.alerts, games: todaysGames(data, today), goldaActions, now }), 'briefing');
+        const games = todaysGames(data, today);
+        const fallbackText = buildBriefing({ name: first, alerts: r.alerts, games, goldaActions, now });
+        const changes24h = changesFrom(data.recent || [], { since: '24h', limit: 150 }, {}, now.getTime()).changes;
+        const b = await (write || writeBriefing)({
+          name: first, today, games, alerts: r.alerts, changes24h, deals: data.deals, requirements: data.requirements,
+          memories: visibleMemories(data.memories || [], { email: u.email, phone: u.phone }), fallbackText,
+        });
+        if (!b.ai) job.note(`briefing ${u.email}: template (${b.reason})`);
+        await say(u, b.text, 'briefing');
         sent.briefings[u.email] = today; count++;
         job.note(`briefing → ${u.email}`);
       }
@@ -133,12 +152,19 @@ async function run(job, now = new Date(), { force = false, send } = {}) {
 
 // Every hour at :30. Israel is UTC+2/+3, so "07" Israel time is reached once
 // a day whatever the season; the state above makes each briefing one-a-day.
+// The briefing is written by the model, which takes longer than a scheduled
+// function may run, so the cron only kicks golda-briefing-background (up to
+// 15 minutes) over HTTP with a single-use internal nonce, like sync-matches-cron.
 exports.handler = schedule('30 * * * *', async () => {
+  const base = process.env.URL || 'https://goldas-crm.netlify.app';
   try {
-    const r = await runJob('golda-briefing', run);
-    return { statusCode: 200, body: JSON.stringify(r) };
+    const res = await fetch(`${base}/.netlify/functions/golda-briefing-background`, {
+      method: 'POST',
+      headers: await internalHeaders('golda-briefing-cron'),
+    });
+    return { statusCode: 200, body: `triggered: ${res.status}` };
   } catch (e) {
-    console.error('[golda-briefing] failed:', e);
+    console.error('[golda-briefing] trigger failed:', e);
     return { statusCode: 500, body: String(e.message || e) };
   }
 });

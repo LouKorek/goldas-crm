@@ -14,6 +14,8 @@ const { OWNER_EMAIL } = require('./firestore.js');
 const { stageFromStatus, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
   computeAlerts, mergeSettings, topMatches, explainMatch, israelDate } = require('@goldas/domain');
 const { internalHeaders } = require('./auth.js');
+const { loadMemories, memorySection, memoryTools } = require('./golda-memory.js');
+const { insightTools } = require('./golda-insights.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -29,7 +31,12 @@ const belongs = (c, d) => !d.deletedAt && (!VIRTUAL[c] || VIRTUAL[c].match(d));
 const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings']);
 const FILE_CHUNK = 600 * 1024;
 const FILE_MAX = 15 * 1024 * 1024;
-const MAX_STEPS = 25;
+const MAX_STEPS = 60;
+const MAX_TOKENS = 64000;
+// Golda's depth of thought. Opus 5.5 always thinks; effort sets how hard.
+// xhigh suits multi-step agent work (cross-checking, planning, verifying).
+const EFFORT = 'xhigh';
+const HISTORY_TURNS = 60;   // history entries replayed (user + assistant lines)
 const READ_MAX = 20 * 1024 * 1024;   // largest stored file Golda will read (bytes)
 
 const COLLECTIONS = {
@@ -185,27 +192,38 @@ const ROLE_LINE = {
   viewer: 'a viewer: they may read and ask anything, but you must NOT change the CRM for them (the write tools are not available in this chat; say so politely if asked)',
 };
 
-function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp') {
+function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = []) {
   const sender = identity.name || 'לו';
   const where = channel === 'app' ? 'in the chat screen inside the CRM app' : 'on WhatsApp (each in their own private chat; the same conversation continues in the app)';
   return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you ${where}. You know the agency's CRM inside out: you read and analyse everything in it, including the documents stored in it, give recommendations, and carry out changes yourself using the tools. You can also search the web. The person writing is ${sender}, ${ROLE_LINE[identity.role] || ROLE_LINE.viewer}. Every change you make is recorded in their name.
 
 ${topicSection(topic)}
-The chat is split into topics, each with its own separate memory; you only see the current topic's history. Topics in this chat: ${[MAIN_TOPIC, ...topics.filter((t) => t !== MAIN_TOPIC)].join(', ')}. The writer switches with "גולדה, נושא חדש: <name>", "גולדה, חזרה לנושא <name>" and "גולדה, חזרה למערכת" (the system handles the switch before you see the message). If asked how topics work, explain these three phrases.
+The chat is split into topics, each with its own conversation history; you only see the current topic's history (your long-term memory below is the same in every topic). Topics in this chat: ${[MAIN_TOPIC, ...topics.filter((t) => t !== MAIN_TOPIC)].join(', ')}. The writer switches with "גולדה, נושא חדש: <name>", "גולדה, חזרה לנושא <name>" and "גולדה, חזרה למערכת" (the system handles the switch before you see the message). If asked how topics work, explain these three phrases.
 
-How you talk: always in Hebrew, in the feminine form about yourself ("הוספתי", "עדכנתי", "אני בודקת"), addressing ${sender} by name, friendly and to the point. WhatsApp formatting only: *bold*, short lines, no markdown headers or tables. When you changed something, end with a link to it when one exists: a player → https://goldas-crm.netlify.app/players/<id>, a deal → https://goldas-crm.netlify.app/market/deals?deal=<id>, a requirement → https://goldas-crm.netlify.app/market/requirements?req=<id>, a training or match → https://goldas-crm.netlify.app/calendar, a task → https://goldas-crm.netlify.app/tasks. After acting, say exactly what changed (record, fields, old → new values). Keep replies short.
+How you talk: always in Hebrew, in the feminine form about yourself ("הוספתי", "עדכנתי", "אני בודקת"), addressing ${sender} by name, warm and precise. WhatsApp formatting only: *bold*, _italic_, line breaks, "•" or "1." items; never markdown headers (#), tables or code blocks.
+Match the length and shape of the answer to the ask:
+- A quick question or a small change → one or two lines with the answer itself.
+- An update, a report, an analysis or a multi-part request → organized writing: a first line that sums up the answer, then *bold* section titles, each with short numbered or • items carrying concrete names, dates, numbers and amounts (no vague "a few players"). Close with "*מה עכשיו:*" and one to three recommended actions, the most important first.
+- Never pad: no repeating the question, no filler, no generic advice that the data doesn't support.
+When you changed something, say exactly what changed (record, fields, old → new values) and end with a link to it when one exists: a player → https://goldas-crm.netlify.app/players/<id>, a deal → https://goldas-crm.netlify.app/market/deals?deal=<id>, a requirement → https://goldas-crm.netlify.app/market/requirements?req=<id>, a training or match → https://goldas-crm.netlify.app/calendar, a task → https://goldas-crm.netlify.app/tasks.
 
 How you think:
-- For questions about the data ("who…", "how many…", "which players…", "what's missing…"), use list with filters over the whole collection, cross-check collections when needed (e.g. players vs club_requirements vs matches vs tasks), and answer with concrete names and numbers. Don't stop at the first 15 search results when the question is about everything.
-- When asked for a recommendation or opinion, give a clear one with the reasons, based on the CRM data and, when useful, a quick web search (club news, league tables, transfer windows, player stats). Say what you checked.
+- Understand what the writer is really after before acting. For a complex or multi-step request, plan the steps first, then gather everything you need: list whole collections (not just the first search results), cross-check players, deals, club requirements, matches, trainings, tasks, recent changes (changes) and what you remember. For a broad question ("מה המצב", "תני לי תמונה") start with overview.
+- For questions about the data ("who…", "how many…", "which players…", "what's missing…"), answer with concrete names and numbers from the whole collection.
+- Act, then verify: after changing records, read them back (get) to confirm the change landed as intended before you report it. If several changes were asked for, do all of them and report each one.
+- Connect the dots like an experienced agent would: a contract ending soon and an open club requirement that fits the player → suggest a deal; a deal stuck in a stage → suggest the next step; a requirement with no good candidates → say what profile is missing. Point out anything important you notice (an expired passport, a missing document), in one line.
+- When asked for a recommendation or opinion, give a clear one with the reasons, based on the CRM data and, when useful, a web search (club news, league tables, transfer windows, player stats). Say what you checked.
 - To know what a document says (contract dates, salary, clauses, passport expiry), read it with read_file. When a file or photo is sent with the message you can see it directly. Offer to update the CRM from what you read (e.g. contractEnd from the contract), and do it if asked.
-- Proactively point out something important you notice (an expired passport, a contract ending soon, a missing document), in one line.
+- Be honest about uncertainty: if the data is missing or contradictory, say so and what would settle it, instead of guessing.
+
+Your memory: you have a long-term memory shared across all topics and conversations (listed at the end of this prompt). When the writer states something that should last (a preference about how they want things, a decision, a standing instruction, context about a player, a club or a contact that isn't a CRM field), or says "תזכרי"/"תזכור", save it with remember, in one clear sentence, then mention it in one line ("שמרתי בזיכרון: …"). CRM facts and decisions are shared with the team (shared=true); personal preferences of the writer are personal (shared=false). Never save passwords, codes, ID or passport numbers, bank details or anything secret. If a memory turns out wrong or the writer asks you to forget it, use forget (and remember the corrected version). Use what you remember without being asked, and never contradict it silently: if the data now disagrees with a memory, say so.
 
 How you work:
 - Find records before changing them (search or list). Never guess an id. If several records match, list them briefly and ask which one. If nothing matches, say so and offer to create it.
 - If an instruction is missing something required, ask for it in one short question rather than inventing it. Don't ask about optional fields.
 - Deleting needs the writer's explicit yes: call delete without confirmed first (one record, or several with items; you may arm more in the same turn), show the whole list of what will be deleted and ask once; only after they answer yes in a later message call delete once with confirmed=true, which deletes everything armed. Never ask for a separate yes per record.
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
+- "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "מי מתאים לדרישה…" / who fits a club's requirement → suggest_matches (live scores from the matching engine). "מה דורש פעולה" / "מה יש היום" → alerts_today. "סנכרני משחקים" → sync_fixtures (admin/manager).
 - Moving a deal: update its stage. The deal engine enforces the rules: "Mandate Received" needs a document on the deal or the writer's explicit confirmation (pass confirmed=true in data after they confirm), "Contract Signed" and "Not Relevant" close the deal (reopening a closed deal also needs confirmed=true), and "Not Relevant" frees the linked requirement. Tell the writer when a transition offers a follow-up (e.g. promote the candidate to a represented player: update the player's stage? No: say that the app offers it on the deal board).
 - When they send a file or photo, it is available to attach_file for this message only. If it's unclear to whom or as what (contract / passport / representation agreement), ask.
@@ -226,7 +244,9 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id).
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
 Free agents (contractStatus "Free") automatically lose club, contract dates and league.
-Today's date: ${israelDate(new Date())} (Israel time zone).`;
+Today's date: ${israelDate(new Date())} (Israel time zone).
+
+${memorySection(memories)}`;
 }
 
 const TOOLS = [
@@ -266,11 +286,31 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { requirementId: { type: 'string' }, n: { type: 'integer', description: 'How many, default 5, max 10' } }, required: ['requirementId'], additionalProperties: false } },
   { name: 'alerts_today', description: "Everything that needs action now, from the CRM's alerts engine: contracts, representation and passports ending, birthdays, upcoming matches, stale deals, expired requirements, overdue tasks, failed night jobs. Same list as the app's Home screen.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'changes', description: 'What changed in the CRM over a period: every create, update and delete by the team in the app or through you, newest first, with who did it, the record and the fields (old → new values for your own changes). Defaults to the last 7 days.',
+    input_schema: { type: 'object', properties: {
+      since: { type: 'string', description: 'YYYY-MM-DD, an ISO time, or relative like "24h" / "7d" / "30d"' },
+      until: { type: 'string', description: 'Same formats; default now' },
+      collection: { type: 'string', description: 'Only this collection (players, deals, club_requirements, matches, tasks, trainings, contacts…)' },
+      docId: { type: 'string', description: 'Only this record' },
+      by: { type: 'string', description: 'Only changes by this person (part of the name or email)' },
+      limit: { type: 'integer', description: 'Max rows, default 100, max 300' },
+    }, additionalProperties: false } },
+  { name: 'overview', description: "The agency at a glance: represented players (by gender and contract status), prospects per category and status, open deals by stage, open and expired club requirements, open and overdue tasks, this week's matches and training sessions, and how many changes you made in the last 7 days. Start here for broad questions.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'remember', description: 'Save something to your long-term memory so you know it in every future conversation: a preference, a decision, a standing instruction, or context about a player, club or contact. One clear sentence. Never secrets, passwords or ID numbers.',
+    input_schema: { type: 'object', properties: {
+      text: { type: 'string', description: 'The fact, in one or two sentences' },
+      about: { type: 'string', description: 'Who or what it is about (a player, club, person or "preference"), short' },
+      shared: { type: 'boolean', description: 'true (default): the whole team sees it; false: only the writer (personal preferences)' },
+    }, required: ['text'], additionalProperties: false } },
+  { name: 'forget', description: 'Delete one memory by its id (shown in "What you remember"), when it is wrong, outdated or the writer asks.',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today']);
+// Reading, the big picture and her own memory are open to every role.
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -628,7 +668,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   }
 
   const impl = { search, list, get, read_file: readFile, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
-    suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures };
+    suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
+    ...insightTools({ db }), ...memoryTools({ db, identity }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     return impl[name](input || {});
@@ -637,12 +678,15 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
 
 // One WhatsApp message in, one reply out. history is a list of prior
 // {role, text} turns (plain text only, so no thinking blocks are replayed).
-async function runAgent({ db, admin, identity, text, media, session, assistantName, client, topic = null, topics = [], channel = 'whatsapp' }) {
+async function runAgent({ db, admin, identity, text, media, session, assistantName, client, topic = null, topics = [], channel = 'whatsapp', memories }) {
   const anthropic = client || new Anthropic();
   const sender = identity.name || 'לו';
   const tools = createTools({ db, admin, identity, media, session, assistantName, channel });
-  const usage = { inputTokens: 0, outputTokens: 0, steps: 0 };
-  const history = (topic ? topic.history || [] : session.history || []).slice(-20);
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, steps: 0 };
+  const history = (topic ? topic.history || [] : session.history || []).slice(-HISTORY_TURNS);
+  // Long-term memory is read once per message; a failed read never blocks the reply.
+  const remembered = memories || await loadMemories(db, identity).catch((e) => { console.warn('[golda] memory read failed:', e.message); return []; });
+  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered);
   const messages = [];
   for (const h of history) {
     const role = h.role === 'assistant' ? 'assistant' : 'user';
@@ -663,19 +707,25 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
 
   let reply = '';
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await anthropic.beta.messages.create({
+    // Streamed, so a long report or a deep analysis never hits an HTTP timeout.
+    // The automatic cache breakpoint keeps every step of the loop reading the
+    // tools, the system prompt and the conversation so far from the cache.
+    const res = await anthropic.beta.messages.stream({
       model: MODEL,
-      max_tokens: 16000,
+      max_tokens: MAX_TOKENS,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: 'high' },
-      system: systemPrompt(assistantName, identity, topic, topics, channel),
+      output_config: { effort: EFFORT },
+      cache_control: { type: 'ephemeral' },
+      system,
       tools: [...toolsFor(identity.role), ...SERVER_TOOLS],
       messages,
-    });
+    }).finalMessage();
     usage.steps++;
     usage.inputTokens += res.usage?.input_tokens || 0;
     usage.outputTokens += res.usage?.output_tokens || 0;
+    usage.cacheReadTokens += res.usage?.cache_read_input_tokens || 0;
+    usage.cacheWriteTokens += res.usage?.cache_creation_input_tokens || 0;
     if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
     messages.push({ role: 'assistant', content: res.content });
     // A long web search pauses server-side; resend as-is and it resumes.
@@ -700,4 +750,4 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: current.content, usage };
 }
 
-module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
+module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };

@@ -21,7 +21,7 @@ const { resolveSender, userForApp, sessionKey } = require('./golda-identity.js')
 const ASSISTANT_NAME = process.env.WA_ASSISTANT_NAME || 'גולדה';
 const LOCK_MS = 15 * 60 * 1000;               // a background function's whole budget
 const DAILY_LIMIT = Number(process.env.GOLDA_DAILY_LIMIT) || 150;
-const HISTORY_KEEP = 40;
+const HISTORY_KEEP = 80;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const threadKey = (topic) => (topic === MAIN_TOPIC ? 'main' : `t_${norm(topic).replace(/\s+/g, '_').slice(0, 80)}`);
