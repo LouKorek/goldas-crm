@@ -53,6 +53,16 @@ export const stageFromStatus = (status: unknown): Stage => {
   return 'in_process';
 };
 
+/**
+ * The stage a player is in now. A candidate's stage follows its pipeline
+ * status (the status is what everyone edits), so a stale stored stage never
+ * hides a candidate. Records from before the merge carry no stage: represented.
+ */
+export const stageOfPlayer = (p: { stage?: unknown; status?: unknown }): Stage => {
+  const st = (p.stage || 'represented') as Stage;
+  return st !== 'represented' && p.status ? stageFromStatus(p.status) : st;
+};
+
 /** Category of a represented player from the fields the old form kept. */
 export const categoryFromPlayer = (p: { gender?: unknown; currentClubIsYouth?: unknown; category?: unknown }): Category => {
   if (p.category && (CATEGORIES as readonly string[]).includes(String(p.category))) return p.category as Category;

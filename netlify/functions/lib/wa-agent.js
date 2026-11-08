@@ -11,11 +11,12 @@ const C = require('../data/crm-constants.js');
 
 const MODEL = 'claude-opus-5-5';
 const { OWNER_EMAIL } = require('./firestore.js');
-const { stageFromStatus, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
+const { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
   computeAlerts, mergeSettings, topMatches, explainMatch, israelDate } = require('@goldas/domain');
 const { internalHeaders } = require('./auth.js');
 const { loadMemories, memorySection, memoryTools } = require('./golda-memory.js');
 const { insightTools } = require('./golda-insights.js');
+const { keepDuration } = require('./agency-calendar.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -23,12 +24,12 @@ const { insightTools } = require('./golda-insights.js');
 // onto the physical collection plus the filter that selects its records.
 const VIRTUAL = { players: { col: 'players', match: (d) => !d.stage || d.stage === 'represented' } };
 for (const [category, legacy] of Object.entries(LEGACY_PIPELINE_COLLECTIONS)) {
-  VIRTUAL[legacy] = { col: 'players', category, match: (d) => d.category === category && d.stage && d.stage !== 'represented' };
+  VIRTUAL[legacy] = { col: 'players', category, match: (d) => categoryFromPlayer(d) === category && d.stage && d.stage !== 'represented' };
 }
 const physical = (c) => (VIRTUAL[c] ? VIRTUAL[c].col : c);
 const belongs = (c, d) => !d.deletedAt && (!VIRTUAL[c] || VIRTUAL[c].match(d));
 // Records deleted by Golda go to the recycle bin, like the app's deletes.
-const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings']);
+const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings', 'meetings']);
 const FILE_CHUNK = 600 * 1024;
 const FILE_MAX = 15 * 1024 * 1024;
 const MAX_STEPS = 60;
@@ -50,6 +51,7 @@ const COLLECTIONS = {
   contacts: { label: 'contact', nameField: 'contactName' },
   tasks: { label: 'task', nameField: 'title' },
   trainings: { label: 'training (one-off or weekly)', nameField: 'title' },
+  meetings: { label: "meeting in Lou's agency calendar", nameField: 'title' },
   deals: { label: 'deal (player ↔ club)', nameField: 'playerName' },
   tmWatch: { label: 'TM Watch find (Jewish player spotted on Transfermarkt)', nameField: 'name' },
 };
@@ -62,7 +64,8 @@ const READ_ONLY = {
 const ALL = { ...COLLECTIONS, ...READ_ONLY };
 const FILE_FIELDS = ['contractFiles', 'passportFiles', 'reprFiles'];
 // Fields a tool may never set directly; the server owns them.
-const PROTECTED = ['createdAt', 'createdBy', 'updatedAt', 'lastEditedAt', 'lastEditedBy', 'lastEditedByName', 'id'];
+const PROTECTED = ['createdAt', 'createdBy', 'updatedAt', 'lastEditedAt', 'lastEditedBy', 'lastEditedByName', 'id',
+  'calendarEventId', 'calendarLink', 'guests', 'meetUrl', 'recurring'];   // the last five belong to the Google calendar
 
 const MAIN_TOPIC = 'מערכת';
 
@@ -171,7 +174,7 @@ function validate(col, data, isCreate) {
   for (const k of ['nationalities']) if (data[k] && (!Array.isArray(data[k]) || data[k].some((p) => !C.COUNTRIES.includes(p)))) bad(`${k} must be a list of country names exactly as in the CRM (e.g. "Israel", "United States")`);
   for (const k of Object.keys(data)) if (/(^dob$|Date$|Start$|End$|Expiry$|^date$)/.test(k) && data[k] && !/^\d{4}-\d{2}-\d{2}$/.test(data[k])) bad(`${k} must be YYYY-MM-DD`);
   if (isCreate) {
-    const req = { players: ['fullName', 'gender'], club_requirements: ['clubName', 'gender'], matches: ['date', 'homeTeam', 'awayTeam', 'linkedPlayers'], tasks: ['title'], trainings: ['title'], deals: ['playerId', 'clubName'] };
+    const req = { players: ['fullName', 'gender'], club_requirements: ['clubName', 'gender'], matches: ['date', 'homeTeam', 'awayTeam', 'linkedPlayers'], tasks: ['title'], trainings: ['title'], meetings: ['title', 'date'], deals: ['playerId', 'clubName'] };
     for (const k of req[col] || (col.startsWith('pipeline_') ? ['playerName'] : [])) {
       if (data[k] === undefined || data[k] === '' || (Array.isArray(data[k]) && !data[k].length)) bad(`${k} is required for a new ${COLLECTIONS[col].label}`);
     }
@@ -240,6 +243,8 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - igDaily (read-only): date, followers, newFollowers. igPosts (read-only): Instagram posts and their stats.
 - matches: date*, time (HH:MM), homeTeam*, awayTeam*, homeTeamIsYouth, awayTeamIsYouth, stadiumName, notes, linkedPlayers* [player ids], source "manual". (Israeli league fixtures also arrive automatically every morning.)
 - trainings: title*, time (HH:MM), place, notes, linkedPlayers [player ids], ageGroup (noar|nearim_a|nearim_b|nearim_c|yeladim_a|yeladim_b|yeladim_c|trom_a|trom_b|trom_c, for youth groups), and EITHER date (one-off, YYYY-MM-DD) OR rule {freq:"weekly", byWeekday:[0=Sunday…6=Saturday], start: YYYY-MM-DD, until: YYYY-MM-DD or null}. To skip or move one session of a weekly training, update exceptions: [{date, cancelled:true}] or [{date, date2, time}] (date = the original session's date).
+- Games and trainings are kept in sync, both ways, with Lou's Google calendar "Gold A&S Player Schedule": what you create, move or cancel here appears there within a minute, and what Lou adds or moves there ("אימון — <שחקן>", "משחק — <שחקן>") arrives here within ten minutes. The time of a training is the time the player has to be there (Lou's marker); put start times and other details in notes. So you never need to tell anyone to update the calendar by hand.
+- meetings: title*, date*, time (HH:MM start; empty = all day), endTime (HH:MM; default one hour after time), endDate (only for an item longer than a day), allDay (bool), location, notes, linkedPlayers [player ids the meeting is about]. Read-only, from Google: guests, meetUrl, calendarLink. These are Lou's meetings with players, business meetings and everything of the agency that is not a game or training, kept in sync both ways with his Google calendar "Gold A&S" exactly like games and trainings with the player schedule (what Lou adds, moves or deletes there arrives here within ten minutes; what you write appears there within a minute). Games and trainings never go into meetings. You cannot invite guests: if the writer wants invitations sent, they add the guests in Google Calendar. When the writer asks what they have today or this week, include meetings next to games and trainings.
 - deals (a player or candidate against one club): playerId*, playerName, clubName*, stage (${C.PIPELINE_STATUS.join('|')}), requirementId, notes. To move a deal, update its stage; "Contract Signed" and "Not Relevant" close it. A deal that waits more than 14 days in a stage shows as an alert.
 - club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id).
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
@@ -306,8 +311,7 @@ const TOOLS = [
   { name: 'forget', description: 'Delete one memory by its id (shown in "What you remember"), when it is wrong, outdated or the writer asks.',
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
-    input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-];
+    input_schema: { type: 'object', properties: {}, additionalProperties: false } },];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget']);
@@ -464,6 +468,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
     if (collection === 'tasks') d = { priority: 'Normal', done: false, owner: who.email, ...d };
+    if (collection === 'meetings') d = { time: '', endTime: '', allDay: !d.time, location: '', notes: '', linkedPlayers: [], source: 'manual', owner: who.email, ...d };
     if (collection === 'matches') d = { source: 'manual', ...d };
     if (collection.startsWith('pipeline_')) d = { status: 'Not Contacted', ...d };
     if (collection === 'players') d = { contractStatus: 'Under Contract', ...d };
@@ -513,6 +518,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       if (r.effects.freeRequirement && before.requirementId) await db.collection('club_requirements').doc(before.requirementId).update({ status: 'open' }).catch(() => {});
     }
     d = freeAgentRules(collection, withLeague(collection, d, before), before);
+    if (collection === 'meetings') d = keepDuration(before, d);
     if (!Object.keys(d).length) throw new Error('nothing to change');
     // Keep the unified fields in step with what Golda changed.
     if (VIRTUAL[collection] && collection !== 'players' && 'status' in d && d.status !== before.status) d.stage = stageFromStatus(d.status);
@@ -641,7 +647,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     const s = await db.collection('club_requirements').doc(requirementId).get();
     if (!s.exists || s.data().deletedAt) throw new Error('requirement not found');
     const req = { id: s.id, ...plain(s.data()) };
-    const players = (await db.collection('players').get()).docs.map((d) => ({ id: d.id, ...plain(d.data()) })).filter((p) => !p.deletedAt && p.stage !== 'not_relevant');
+    const players = (await db.collection('players').get()).docs.map((d) => ({ id: d.id, ...plain(d.data()) })).filter((p) => !p.deletedAt && stageOfPlayer(p) !== 'not_relevant');
     const top = topMatches(req, players, { n: Math.max(1, Math.min(Number(n) || 5, 10)) });
     return { requirement: summarize('club_requirements', req.id, req), matches: top.map((m) => ({ playerId: m.playerId, name: m.name, score: m.score, why: explainMatch(m, 'he'), link: `https://goldas-crm.netlify.app/players/${m.playerId}` })) };
   }
@@ -672,8 +678,24 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...insightTools({ db }), ...memoryTools({ db, identity }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
-    return impl[name](input || {});
+    const out = await impl[name](input || {});
+    // A game or training she wrote shows in Lou's Google calendar at once
+    // instead of at the next ten-minute check.
+    const col = input && input.collection;
+    if ((name === 'undo_last' || (['create', 'update', 'delete'].includes(name) && CALENDAR_COLLECTIONS.has(col)))) kickCalendarSync();
+    return out;
   } };
+}
+
+const CALENDAR_COLLECTIONS = new Set(['matches', 'trainings', 'meetings']);
+let calendarKicked = 0;
+function kickCalendarSync() {
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY || Date.now() - calendarKicked < 5000) return;
+  calendarKicked = Date.now();
+  const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  internalHeaders('golda-calendar')
+    .then((headers) => fetch(`${base}/.netlify/functions/calendar-sync-background`, { method: 'POST', headers, body: JSON.stringify({ reason: 'golda' }) }))
+    .catch((e) => console.warn('[golda] calendar sync kick failed:', e.message));
 }
 
 // One WhatsApp message in, one reply out. history is a list of prior

@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { listenClubs, saveClubLogo } from 'data/clubs';
 import { listenPlayers } from 'data/players';
-import { listenDeals } from 'data/deals';
+import { listenDeals, withPlayerMarket } from 'data/deals';
 import { clubKey, playerName, DEAL_STAGE_LABELS, isYouthName } from '@goldas/domain';
 import { PageHeader, Empty, Spinner, SearchInput, Modal, Field, RowActions, useConfirm, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar } from 'pages/Requirements';
@@ -21,7 +21,8 @@ function useClubWorld() {
   const [reqs, setReqs] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [matches, setMatches] = useState([]);
-  const [deals, setDeals] = useState([]);
+  const [rawDeals, setDeals] = useState([]);
+  const deals = useMemo(() => withPlayerMarket(rawDeals, players), [rawDeals, players]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     const u = [

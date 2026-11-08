@@ -18,7 +18,7 @@ const SYSTEM = [
   'Write it organized and easy to scan on a phone:',
   '1. The first line is given to you; write it exactly.',
   '2. *הכי חשוב היום:* 1 to 3 items: what needs the agent today and why it matters (a game of a represented player, a contract ending, a requirement that fits a player, an overdue task).',
-  '3. *היום:* today\'s games and trainings with the time, one line each (skip if none, say so in one line).',
+  '3. *היום:* today\'s games, trainings and meetings with the time, one line each (skip if none, say so in one line).',
   '4. *מה השתנה מאתמול:* the team\'s changes in the last 24 hours, grouped by who and what, the important ones by name (skip the section if nothing changed).',
   '5. *לטיפול:* the remaining alerts, grouped, most urgent first; merge similar ones ("3 חוזים מסתיימים החודש: …").',
   '6. *המלצות:* 1 to 3 concrete next steps that connect the facts (for example a club requirement that matches a free player, a deal stuck in the same stage).',

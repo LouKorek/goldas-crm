@@ -38,7 +38,7 @@ const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 
 async function loadAll(db) {
   const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter(isLive);
   const dayAgo = new Date(Date.now() - 86400000);
-  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp, recent, memories] = await Promise.all([
+  const [players, matches, deals, requirements, tasks, jobs, trainings, users, settingsSnap, sentSnap, audit, ifaSync, scraper, whatsapp, recent, memories, meetings] = await Promise.all([
     listRepresented(db),
     db.collection('matches').get().then(rows),
     db.collection('deals').get().then(rows),
@@ -56,10 +56,13 @@ async function loadAll(db) {
     // Everything the team changed in the last day, for "what changed since yesterday".
     db.collection('audit').where('at', '>=', dayAgo).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => []),
     db.collection('golda_memory').get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => []),
+    // Lou's meetings (kept in sync with his agency calendar "Gold A&S").
+    db.collection('meetings').get().then(rows).catch(() => []),
   ]);
   return { players, matches, deals, requirements, tasks, jobs, trainings, users,
     settings: mergeSettings({ ...(settingsSnap.exists ? settingsSnap.data() : {}), matchDays: [0] }),
-    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper, whatsapp, recent, memories };
+    sent: sentSnap.exists ? (sentSnap.data() || {}) : {}, audit, ifaSync, scraper, whatsapp, recent, memories,
+    meetings };
 }
 
 function todaysGames({ matches, trainings, players }, today) {
@@ -77,6 +80,15 @@ function todaysGames({ matches, trainings, players }, today) {
     }
   }
   return games.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+}
+
+/** Today's meetings (Lou's agency calendar). */
+function todaysMeetings(meetings, players, today) {
+  const nameOf = (id) => { const p = players.find((x) => x.id === id); return p ? (p.fullName || p.name || '') : ''; };
+  return (meetings || []).filter((m) => m.date === today || (m.endDate && m.date < today && m.endDate >= today)).map((m) => ({
+    date: today, time: m.date === today ? (m.time || '') : '', title: `פגישה: ${m.title}`,
+    sub: [m.endTime && m.date === today ? `עד ${m.endTime}` : '', m.location, (m.linkedPlayers || []).map(nameOf).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
+  }));
 }
 
 function pruneSent(keys, today) {
@@ -115,7 +127,8 @@ async function run(job, now = new Date(), { force = false, send, write } = {}) {
     const first = (u.name || '').split(' ')[0] || u.name;
     try {
       if ((force || hour === u.briefingHour) && sent.briefings[u.email] !== today) {
-        const games = todaysGames(data, today);
+        const games = [...todaysGames(data, today), ...todaysMeetings(data.meetings, data.players, today)]
+          .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
         const fallbackText = buildBriefing({ name: first, alerts: r.alerts, games, goldaActions, now });
         const changes24h = changesFrom(data.recent || [], { since: '24h', limit: 150 }, {}, now.getTime()).changes;
         const b = await (write || writeBriefing)({
@@ -168,4 +181,4 @@ exports.handler = schedule('30 * * * *', async () => {
     return { statusCode: 500, body: String(e.message || e) };
   }
 });
-exports._internal = { todaysGames, pruneSent, israelHour, run };
+exports._internal = { todaysGames, todaysMeetings, pruneSent, israelHour, run };

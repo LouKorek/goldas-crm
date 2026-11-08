@@ -603,8 +603,9 @@ export default function Pipeline({ category = null }) {
   // Sort order: Position → Name
   let data = items.filter(p => {
     if (p.deletedAt) return false;
-    // "Not relevant" candidates stay out of the way unless asked for.
-    if (!filters.showGone && p.stage === 'not_relevant' && filters.status !== 'Not Relevant') return false;
+    // A market shows all its candidates, as it always did; "Hide not
+    // relevant" is an opt-in (hiding them by default emptied whole markets).
+    if (filters.hideGone && p.stage === 'not_relevant') return false;
     if (search && !`${p.playerName} ${p.currentClub} ${p.primaryPosition} ${p.agentName}`.toLowerCase().includes(search.toLowerCase())) return false;
     if (filters.status && p.status !== filters.status) return false;
     if (filters.position && p.primaryPosition !== filters.position) return false;
@@ -679,7 +680,7 @@ export default function Pipeline({ category = null }) {
             { key:'status', label:t("Status"), values:PIPELINE_STATUS },
             { key:'position', label:t("Position"), values:POSITIONS },
           ]} />
-          <button type="button" className={`chip mt-gone${filters.showGone ? ' active' : ''}`} onClick={() => setFilters((x) => ({ ...x, showGone: !x.showGone }))}>{t('Show not relevant')}</button>
+          <button type="button" className={`chip mt-gone${filters.hideGone ? ' active' : ''}`} onClick={() => setFilters((x) => ({ ...x, hideGone: !x.hideGone }))}>{t('Hide not relevant')}</button>
         </div>
       </PageHeader>
 

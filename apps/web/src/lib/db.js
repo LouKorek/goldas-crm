@@ -31,7 +31,7 @@ const assertCanEdit = () => {
 // Soft delete: deleting a record stamps `deletedAt` and hides it; the recycle
 // bin (data/recycle.js) can restore it for 30 days. Collections not listed
 // here (system/meta data) are deleted for real.
-export const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings']);
+export const SOFT_DELETE = new Set(['players', 'clubs', 'deals', 'club_requirements', 'contacts', 'matches', 'tasks', 'trainings', 'meetings']);
 
 export const listenCollection = (path, callback, { includeDeleted = false } = {}) => {
   const q = query(collection(db, path));
@@ -213,6 +213,7 @@ export const PATHS = {
   DEALS:             'deals',
   INTERACTIONS:      'interactions',
   TRAININGS:         'trainings',
+  MEETINGS:          'meetings',     // Lou's agency calendar "Gold A&S", synced both ways
   CLUB_REQUIREMENTS: 'club_requirements',
   MATCHES:           'matches',
   CONTACTS:          'contacts',

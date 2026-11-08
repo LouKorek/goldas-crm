@@ -61,6 +61,7 @@ export default function Player360() {
   const { canEdit, email } = useRole();
   const [players, setPlayers] = useState(null);
   const [matches, setMatches] = useState([]);
+  const [meetings, setMeetings] = useState([]);
   const [deals, setDeals] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [interactions, setInteractions] = useState([]);
@@ -75,6 +76,7 @@ export default function Player360() {
     const u = [
       listenPlayers({}, setPlayers),
       listenCollection(PATHS.MATCHES, (rows) => setMatches(rows.filter((m) => (m.linkedPlayers || []).includes(id)))),
+      listenCollection(PATHS.MEETINGS, (rows) => setMeetings(rows.filter((m) => (m.linkedPlayers || []).includes(id)))),
       listenDeals({ playerId: id }, setDeals),
       listenCollection(PATHS.TASKS, (rows) => setTasks(rows.filter((x) => x.owner === email && (x.linkedPlayers || []).includes(id)))),
       listenInteractions({ playerId: id }, setInteractions),
@@ -84,6 +86,7 @@ export default function Player360() {
 
   const p = useMemo(() => (players || []).find((x) => x.id === id), [players, id]);
   const today = new Date().toISOString().slice(0, 10);
+  const nextMeetings = meetings.filter((m) => (m.endDate || m.date) >= today).sort((a, b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`)).slice(0, 5);
   const upcoming = matches.filter((m) => m.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
   const recent = matches.filter((m) => m.date < today).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
   const timeline = [...interactions].sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -210,6 +213,16 @@ export default function Player360() {
             </>
           )}
         </Card>
+
+        {nextMeetings.length > 0 && (
+          <Card title={t('Meetings')} action={<Link to="/calendar" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>
+            {nextMeetings.map((m) => (
+              <div key={m.id} style={{ fontSize: 13, padding: '5px 0', borderBottom: '1px solid var(--rule)', overflowWrap: 'anywhere' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--gold)', marginInlineEnd: 8 }}>{fmtDate(m.date)}{m.time ? ` ${m.time}` : ''}</span>{m.title}{m.location ? <span style={{ color: 'var(--text-3)' }}> · {m.location}</span> : null}
+              </div>
+            ))}
+          </Card>
+        )}
 
         <Card title={t('Open deals')}>
           {deals.filter((d) => !d.closedAt).length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>—</p> : deals.filter((d) => !d.closedAt).map((d) => (

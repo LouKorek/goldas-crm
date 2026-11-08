@@ -5,7 +5,7 @@ import { playerName } from '@goldas/domain';
 
 export const RECYCLE_LABELS = {
   players: 'שחקן', clubs: 'מועדון', deals: 'עסקה', club_requirements: 'דרישה',
-  contacts: 'איש קשר', matches: 'משחק', tasks: 'משימה', trainings: 'אימון',
+  contacts: 'איש קשר', matches: 'משחק', tasks: 'משימה', trainings: 'אימון', meetings: 'פגישה',
 };
 
 export const recycleTitle = (path, r) => {
@@ -17,6 +17,7 @@ export const recycleTitle = (path, r) => {
     case 'contacts': return `${r.contactName || ''} (${r.clubName || ''})`;
     case 'matches': return `${r.homeTeam || ''} – ${r.awayTeam || ''} ${r.date || ''}`;
     case 'tasks': return r.title || r.text || '';
+    case 'meetings': return `${r.title || ''} ${r.date || ''}`;
     default: return r.name || r.title || r.id;
   }
 };

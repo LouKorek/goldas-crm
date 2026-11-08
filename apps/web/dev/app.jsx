@@ -2,6 +2,7 @@
 // fixture data (dev/fixtures.js via dev/mock-db.js). vite.harness.config.js.
 import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
+import CalendarSync from 'components/admin/CalendarSync';
 import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import '../src/index.css';
 import '../src/theme.css';
@@ -15,6 +16,7 @@ const Requirements = lazy(() => import('pages/Requirements'));
 const Deals = lazy(() => import('pages/Deals'));
 const Players = lazy(() => import('pages/Players'));
 const Contacts = lazy(() => import('pages/Contacts'));
+const Calendar = lazy(() => import('pages/Calendar'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
 setSessionAccess(role);
@@ -31,6 +33,8 @@ const App = () => (
           <Route path="market/deals" element={<Deals />} />
           <Route path="contacts" element={<Contacts />} />
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
+          <Route path="calendar" element={<Calendar />} />
+          <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="*" element={<div>other</div>} />
         </Route>
       </Routes>
