@@ -775,14 +775,16 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   }
   const userText = (text || '').trim() || (media ? '(sent a file without text)' : '');
   const fileNote = media ? `\n[Attached file: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 1024)} KB) — available to attach_file in this message]` : '';
-  const current = { role: 'user', content: userText + fileNote };
+  // The words of this turn, kept apart: the file itself is shown to the model below but never goes into the stored history.
+  const currentText = userText + fileNote;
+  const current = { role: 'user', content: currentText };
   // A PDF or photo sent with the message is also shown to Claude directly.
   const seen = media ? fileBlocks(`data:${media.mimeType};base64,${media.buffer.toString('base64')}`, `The file sent with this message (${media.filename}):`) : null;
   if (messages.length && messages[messages.length - 1].role === 'user') messages[messages.length - 1].content += `\n${current.content}`;
   else messages.push(current);
   if (seen) {
     const last = messages[messages.length - 1];
-    last.content = [{ type: 'text', text: last.content }, ...seen];
+    messages[messages.length - 1] = { ...last, content: [{ type: 'text', text: last.content }, ...seen] };
   }
 
   let reply = '';
@@ -827,7 +829,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     messages.push({ role: 'user', content: results });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
-  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: current.content, usage, files: tools.state.outFiles };
+  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles };
 }
 
 module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, cleanContractTerms, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
