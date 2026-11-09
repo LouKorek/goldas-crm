@@ -506,6 +506,23 @@ function calendarClient(svc) {
   return { call, email: svc.client_email };
 }
 
+/**
+ * PATCH merges start/end field by field, so turning an all-day event into a
+ * timed one (Lou's "שעה לאישור" placeholder once the kick-off is known), or
+ * back, must clear the other form explicitly; otherwise Google answers
+ * "Start and end times must either both be date or both be dateTime" and
+ * the server's copy stays beside Lou's event.
+ */
+function patchBody(body) {
+  const fix = (t) => {
+    if (!t || typeof t !== 'object') return t;
+    if (t.dateTime) return { ...t, date: null };
+    if (t.date) return { ...t, dateTime: null };
+    return t;
+  };
+  return { ...body, start: fix(body.start), end: fix(body.end) };
+}
+
 function api(client, calendarId) {
   const cal = `/calendars/${encodeURIComponent(calendarId)}`;
   return {
@@ -544,10 +561,10 @@ function api(client, calendarId) {
         return await client.call('POST', `${cal}/events`, { data: { id, ...body } });
       } catch (e) {
         if (e.status !== 409) throw e;
-        return client.call('PATCH', `${cal}/events/${id}`, { data: { ...body, status: 'confirmed' } });
+        return client.call('PATCH', `${cal}/events/${id}`, { data: patchBody({ ...body, status: 'confirmed' }) });
       }
     },
-    patch: (id, body) => client.call('PATCH', `${cal}/events/${id}`, { data: body }),
+    patch: (id, body) => client.call('PATCH', `${cal}/events/${id}`, { data: patchBody(body) }),
     async remove(id) {
       try { await client.call('DELETE', `${cal}/events/${id}`); } catch (e) { if (e.status !== 404 && e.status !== 410) throw e; }
     },
@@ -591,6 +608,6 @@ const windowRange = (now = new Date()) => {
 module.exports = {
   DEFAULT_CALENDAR_ID, FOOTER, TBC, TZ,
   eventIdFor, keyFor, plusMinutes, plainText, notesFromDescription, eventLocal, parseSummary,
-  findPlayers, soundsLike, desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile,
+  findPlayers, soundsLike, desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile, patchBody,
   calendarClient, api, accessProblem, enableCalendarApi, windowRange, millis,
 };

@@ -225,3 +225,26 @@ test("a second record with a similar name does not stop Lou's placeholder from t
   const acts = G.plan({ items: [item], events: [ours, lou], links, players: twins });
   assert.equal(acts[0].type, 'adopt'); assert.equal(acts[0].event.id, 'lou-ph'); assert.equal(acts[0].replaces.id, ours.id);
 });
+
+test("patching an all-day placeholder into a timed game clears the all-day form (and back)", () => {
+  const calls = [];
+  const cal = G.api({ call: async (method, path, opts) => { calls.push({ method, path, data: opts && opts.data }); return { id: 'x' }; } }, 'cal1');
+  const timed = G.desiredEvent(enItems([{ id: 'm1', date: '2026-11-10', time: '18:30', homeTeam: 'א', awayTeam: 'ב', linkedPlayers: ['e1'], updatedAt: '2026-11-01T00:00:00Z' }])[0]);
+  return cal.patch('lou-ph', timed).then(() => {
+    const { data } = calls[0];
+    assert.equal(data.start.date, null); assert.equal(data.end.date, null);
+    assert.equal(data.start.dateTime, '2026-11-10T18:30:00');
+    // The hash the links keep is unaffected: desiredEvent itself is unchanged.
+    assert.equal('date' in timed.start, false);
+    const allDay = G.desiredEvent(enItems([{ id: 'm2', date: '2026-11-12', time: '', homeTeam: 'א', awayTeam: 'ב', linkedPlayers: ['e1'], updatedAt: '2026-11-01T00:00:00Z' }])[0]);
+    return cal.patch('lou-2', allDay);
+  }).then(() => {
+    const { data } = calls[1];
+    assert.equal(data.start.dateTime, null); assert.equal(data.start.date, '2026-11-12');
+    assert.equal(data.end.dateTime, null);
+    return cal.upsert('new1', timed);
+  }).then(() => {
+    // A plain insert sends the body as drawn, with no null fields.
+    assert.equal(calls[2].method, 'POST'); assert.equal('date' in calls[2].data.start, false);
+  });
+});
