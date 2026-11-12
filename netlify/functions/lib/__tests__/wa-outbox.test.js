@@ -57,11 +57,13 @@ function fakeApi() {
 }
 const quiet = { log: () => {} };
 
-test('the window is open for 23 hours after the last inbound message, unknown before the first one', () => {
+test('the window is open for (nearly) the full 24 hours after the last inbound message, unknown before the first one', () => {
   const now = Date.now();
   assert.equal(outbox.windowState({}, now), 'unknown');
   assert.equal(outbox.windowState({ lastInbound: now - 2 * H }, now), 'open');
-  assert.equal(outbox.windowState({ lastInbound: now - 23.5 * H }, now), 'closed');
+  assert.equal(outbox.windowState({ lastInbound: now - 23.5 * H }, now), 'open', 'yesterday 08:00 still covers today 07:30');
+  assert.equal(outbox.windowState({ lastInbound: now - 23.95 * H }, now), 'closed');
+  assert.equal(outbox.windowState({ lastInbound: now - 30 * H }, now), 'closed');
 });
 
 test('inside the window the text is sent and recorded under its message id', async () => {
@@ -177,7 +179,7 @@ test('a quick-reply tap arrives with its payload', () => {
   assert.equal(m.payload, 'שלחי את העדכון');
 });
 
-test('both templates are created where missing and re-checked while pending', async () => {
+test('every template is created where missing and re-checked while pending', async () => {
   const seen = [];
   const fetchImpl = async (url, opts = {}) => {
     seen.push(`${opts.method || 'GET'} ${url.replace(/^https:\/\/graph\.facebook\.com\/v[\d.]+\//, '')}`);
@@ -195,11 +197,11 @@ test('both templates are created where missing and re-checked while pending', as
     assert.equal(acc['222'].status, 'PENDING'); assert.equal(acc['222'].created, true);
     assert.equal(acc['1394027662708325'].status, 'error');
   }
-  assert.equal(seen.filter((s) => s.startsWith('POST 222/message_templates')).length, 2);
+  assert.equal(seen.filter((s) => s.startsWith('POST 222/message_templates')).length, TEMPLATES.length);
   assert.equal(db.data.app_meta.whatsapp.template.name, UPDATE.name);
   assert.equal(db.data.app_meta.whatsapp.templates[DIGEST.name].language, 'he');
   assert.equal(needsRecheck(db.data.app_meta.whatsapp, 10), false, 'both approved somewhere: no recheck');
-  const pending = { templates: { golda_digest: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 0 }, golda_update: { accounts: { 1: { status: 'APPROVED' } }, checkedAt: 0 } } };
+  const pending = { templates: { golda_brief: { accounts: { 1: { status: 'APPROVED' } }, checkedAt: 0 }, golda_digest: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 0 }, golda_update: { accounts: { 1: { status: 'APPROVED' } }, checkedAt: 0 } } };
   assert.equal(needsRecheck(pending, 2 * H), true);
   assert.equal(needsRecheck({ templates: { ...pending.templates, golda_digest: { accounts: { 1: { status: 'PENDING' } }, checkedAt: 2 * H - 1000 } } }, 2 * H), false);
   assert.equal(needsRecheck({}), true);
@@ -230,4 +232,58 @@ test('the first digest Meta accepts marks it approved, so the status no longer d
   const acc = db.data.app_meta.whatsapp.templates.golda_digest.accounts;
   assert.equal(acc['sent:p1'].status, 'APPROVED');
   assert.equal(outbox.templateFor(db.data.app_meta.whatsapp).optimistic, undefined, 'next time it is picked as approved');
+});
+
+const MORNING = '*בוקר טוב, Lou* ☀️ 12/11\n\n*הכי חשוב היום:*\n• 4 בירורי סוכן פתוחים: 3 באיחור של 24 ימים\n• 2 שחקנים שלנו משחקים היום\n\n*היום:*\n• אימון · 14:00 Naveh Salant\n• אימון · 15:30 Assaf Ackerman\n\n*לטיפול:*\n• Naveh Salant: יום הולדת 17 בעוד 7 ימים';
+
+test('a briefing goes out as the brief: its title and three lines, each its own parameter, without markdown', async () => {
+  const b = outbox.briefOf(MORNING);
+  assert.deepEqual(b, { title: 'בוקר טוב, Lou ☀️ 12/11', lines: ['4 בירורי סוכן פתוחים: 3 באיחור של 24 ימים', '2 שחקנים שלנו משחקים היום', 'אימון · 14:00 Naveh Salant'] });
+  assert.equal(outbox.briefOf('*לו, שים לב* ⚠️\n• נועם: החוזה מסתיים בעוד 5 ימים'), null, 'too short for the brief');
+  assert.ok(outbox.briefOf(`כותרת\n• ${'מילה '.repeat(60)}\n• ב\n• ג`).lines[0].endsWith('…'));
+  const now = Date.now();
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_brief', 'golda_digest', 'golda_update') } });
+  const api = fakeApi();
+  const a = await outbox.deliver(db, { to: '972500000001', body: MORNING, kind: 'briefing' }, { now, api, ...quiet });
+  const u = await outbox.deliver(db, { to: '972500000001', body: '*לו, שים לב* ⚠️\n• נועם: החוזה מסתיים בעוד 5 ימים', kind: 'urgent' }, { now: now + 60000, api, ...quiet });
+  assert.equal(a.reengage.template, 'golda_brief');
+  assert.equal(u.reengage.template, 'golda_digest', 'a short update still goes as the digest');
+  const params = api.calls[0].components[0].parameters.map((p) => p.text);
+  assert.equal(params.length, 4);
+  assert.ok(params.every((t) => !/[*_\n]/.test(t)));
+  assert.equal(db.data.wa_outbox[a.id].teaser, 'golda_brief');
+});
+
+test('while the brief awaits review, the digest goes out instead', async () => {
+  const now = Date.now();
+  const db = fakeDb({ wa_contacts: { 972500000001: { lastInbound: now - 30 * H } }, app_meta: { whatsapp: approved('golda_digest') } });
+  const api = fakeApi();
+  api.sendTemplate = async (to, name, language, via, components = []) => {
+    api.calls.push({ name, components });
+    if (name === 'golda_brief') throw new Error('WhatsApp API 404: {"error":{"code":132001,"message":"Template name does not exist"}}');
+    return 'wamid.x';
+  };
+  const a = await outbox.deliver(db, { to: '972500000001', body: MORNING, kind: 'briefing' }, { now, api, ...quiet });
+  assert.deepEqual(api.calls.map((c) => c.name), ['golda_brief', 'golda_digest']);
+  assert.equal(a.reengage.template, 'golda_digest');
+  assert.equal(api.calls[1].components[0].parameters.length, 2);
+});
+
+test('an unrelated message does not bring back a briefing the template already showed; the button does, and a stale one expires', async () => {
+  const now = Date.now();
+  const db = fakeDb({ wa_outbox: {
+    brief: { to: '972500000001', body: 'תדריך', state: 'queued', queuedAt: now - H, teaser: 'golda_brief', teasedAt: now - H },
+    old: { to: '972500000001', body: 'תדריך של אתמול', state: 'queued', queuedAt: now - 25 * H, teaser: 'golda_digest', teasedAt: now - 25 * H },
+    unseen: { to: '972500000001', body: 'לא ראית', state: 'queued', queuedAt: now - 2 * H },
+  } });
+  const api = fakeApi();
+  const r1 = await outbox.onInbound(db, '972500000001', 'p1', { now, api, ...quiet });
+  assert.deepEqual(r1, { pending: 1, flushed: 1 });
+  assert.deepEqual(api.calls.map((c) => c.body), ['לא ראית'], 'only what the person never saw');
+  assert.equal(db.data.wa_outbox.brief.state, 'queued');
+  assert.equal(db.data.wa_outbox.old.state, 'expired');
+  const r2 = await outbox.onInbound(db, '972500000001', 'p1', { now: now + 60000, api, release: true, ...quiet });
+  assert.deepEqual(r2, { pending: 1, flushed: 1 });
+  assert.deepEqual(api.calls.map((c) => c.body), ['לא ראית', 'תדריך']);
+  assert.equal(db.data.wa_outbox.old.state, 'expired', 'yesterday\'s never comes back');
 });

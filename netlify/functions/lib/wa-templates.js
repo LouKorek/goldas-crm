@@ -1,7 +1,12 @@
 // Golda's message templates on Meta. A business may only send an approved
-// template outside WhatsApp's 24-hour window, so Golda has two of her own:
+// template outside WhatsApp's 24-hour window, so Golda has three of her own:
+//   golda_brief   the update's title and its three most important lines, each
+//                 on its own line, plus a button for the full text
+//                 (lib/wa-outbox.js briefOf). Template parameters may not hold
+//                 line breaks, so every line is its own parameter;
 //   golda_digest  carries the update itself (a title and a one-line summary)
-//                 plus a button for the full text (lib/wa-outbox.js digestOf);
+//                 plus a button for the full text (lib/wa-outbox.js digestOf),
+//                 for updates too short for the brief;
 //   golda_update  the older pointer ("there is an update, tap"), kept as the
 //                 fallback while the digest awaits review;
 // and Meta's hello_world behind both.
@@ -31,6 +36,20 @@ const DIGEST = {
     { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'שלחי את הפירוט' }] },
   ],
 };
+const BRIEF = {
+  name: 'golda_brief',
+  language: 'he',
+  category: 'UTILITY',
+  components: [
+    {
+      type: 'BODY',
+      text: 'עדכון מגולדה 📋\n{{1}}\n\n• {{2}}\n• {{3}}\n• {{4}}\n\nלפירוט המלא לחצו על הכפתור, או כתבו לי כל דבר.',
+      example: { body_text: [['בוקר טוב, לו ☀️ 12/11', '4 בירורי סוכן פתוחים, 3 מהם באיחור', '2 שחקנים שלנו משחקים היום', 'נווה סלנט: יום הולדת 17 בעוד 7 ימים']] },
+    },
+    { type: 'FOOTER', text: 'גולדה · Gold A&S' },
+    { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'שלחי את הפירוט' }] },
+  ],
+};
 const UPDATE = {
   name: 'golda_update',
   language: 'he',
@@ -41,7 +60,7 @@ const UPDATE = {
     { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'שלחי את העדכון' }] },
   ],
 };
-const TEMPLATES = [DIGEST, UPDATE];
+const TEMPLATES = [BRIEF, DIGEST, UPDATE];
 const TEMPLATE = UPDATE;   // compatibility
 
 const wabaIds = (env = process.env) => Array.from(new Set(
@@ -109,4 +128,4 @@ const needsRecheck = (meta, now = Date.now(), everyMs = 3600000) => {
   return now - checked >= everyMs;
 };
 
-module.exports = { ensureTemplate, ensureOn, needsRecheck, approvedSomewhere, wabaIds, TEMPLATES, DIGEST, UPDATE, TEMPLATE, TEST_WABA };
+module.exports = { ensureTemplate, ensureOn, needsRecheck, approvedSomewhere, wabaIds, TEMPLATES, BRIEF, DIGEST, UPDATE, TEMPLATE, TEST_WABA };
