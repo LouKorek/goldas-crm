@@ -69,17 +69,19 @@ test('finish: an expired or unknown state is refused before calling Meta', async
   assert.equal(called, false);
 });
 
-function metaFake({ registerError = null, phone = {} } = {}) {
+function metaFake({ registerError = null, phone = {}, profileError = null } = {}) {
   const seen = [];
+  const profiles = [];
   const fetchImpl = async (url, opts = {}) => {
     seen.push(`${opts.method || 'GET'} ${url.replace('https://graph.facebook.com/v21.0/', '')}`);
     if (url.includes(`${metaAuth.REAL_WABA}?fields`)) return reply({ account_review_status: 'PENDING', business_verification_status: 'pending' });
     if (url.includes(`${metaAuth.REAL_PHONE}?fields`)) return reply({ display_phone_number: '+972 55-295-9496', code_verification_status: 'VERIFIED', status: 'PENDING', platform_type: 'NOT_APPLICABLE', ...phone });
     if (url.endsWith('/register')) return registerError ? reply({ error: registerError }, 400) : reply({ success: true });
     if (url.endsWith('/subscribed_apps')) return reply({ success: true });
+    if (url.endsWith('/whatsapp_business_profile')) { profiles.push(JSON.parse(opts.body)); return profileError ? reply({ error: profileError }, 400) : reply({ success: true }); }
     return reply({}, 404);
   };
-  return { fetchImpl, seen };
+  return { fetchImpl, seen, profiles };
 }
 
 test('onboard without the key: says so, calls nothing', async () => {
@@ -170,4 +172,25 @@ test('onboard while Meta hides the number (account not verified): waits, never a
   assert.equal(r.phoneError.code, 100);
   assert.ok(seen.some((s) => s.startsWith('POST') && s.endsWith('/register')), 'still tries to register');
   assert.equal(db._data.app_meta.whatsapp, undefined);
+});
+
+test('onboard fills the business profile on her number: once, again only when the text changes or Meta refused', async () => {
+  metaAuth._resetCacheForTests();
+  const db = fakeDb({ app_secrets: { meta: { token: require('../seal.js').seal('TOKEN') } } });
+  const deps = { log: () => {} };
+  const a = metaFake({ registerError: { code: 100, message: 'WhatsApp Business account not verified' }, profileError: { code: 100, message: 'not yet' } });
+  let r = await onboard.run(db, { ...deps, fetchImpl: a.fetchImpl, now: 1 });
+  assert.equal(r.profile[metaAuth.REAL_PHONE].ok, false, 'refused: kept for the next pass');
+  const b = metaFake({ registerError: { code: 100, message: 'WhatsApp Business account not verified' } });
+  r = await onboard.run(db, { ...deps, fetchImpl: b.fetchImpl, now: 2 });
+  assert.equal(r.profile[metaAuth.REAL_PHONE].ok, true);
+  const sent = b.profiles[0];
+  assert.equal(sent.vertical, 'PROF_SERVICES');
+  assert.deepEqual(sent.websites, ['https://gold-as.com']);
+  assert.ok(sent.description.includes('Gold A&S'));
+  assert.equal(sent.address, undefined, 'no street address');
+  assert.equal(sent.email, undefined, 'no email');
+  const c = metaFake({ registerError: { code: 100, message: 'WhatsApp Business account not verified' } });
+  await onboard.run(db, { ...deps, fetchImpl: c.fetchImpl, now: 3 });
+  assert.equal(c.profiles.length, 0, 'already set: not sent again');
 });
