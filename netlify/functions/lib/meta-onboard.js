@@ -38,6 +38,19 @@ async function call(token, path, { method = 'GET', body, fetchImpl = fetch } = {
 }
 
 const registered = (p) => p && (p.platform_type === 'CLOUD_API' || p.status === 'CONNECTED');
+
+// The number's public WhatsApp business profile. Meta's review asked for it to
+// be complete (category, description, website). No street address or email:
+// Lou's business address and email are never stored or published from here.
+// Bump `v` when the text changes, and every number gets it again.
+const PROFILE = {
+  v: 1,
+  about: 'העוזרת של צוות Gold A&S ⚽',
+  description: 'גולדה היא העוזרת הדיגיטלית של Gold A&S, סוכנות לייצוג וניהול קריירה של שחקני כדורגל. היא עובדת עם צוות הסוכנות בלבד.',
+  vertical: 'PROF_SERVICES',
+  websites: ['https://gold-as.com'],
+};
+const hasProfile = (profiles, phoneId) => !!(profiles && profiles[phoneId]?.ok && profiles[phoneId].v === PROFILE.v);
 const { hasPhoto } = require('./golda-photo.js');
 
 /**
@@ -88,6 +101,16 @@ async function run(db, { fetchImpl = fetch, now = Date.now(), notify = null, ens
     await pubRef.set({ onboard: out }, { merge: true });
     log(`[meta-onboard] cannot read the number: ${phone.error?.code} ${phone.error?.message}`);
     return out;
+  }
+
+  // The business profile on her own number: hourly until Meta takes it
+  // (it may refuse while the account review is open; retried next pass).
+  out.profile = { ...(prev.profile || {}) };
+  if (!hasProfile(out.profile, auth.REAL_PHONE)) {
+    const { v, ...fields } = PROFILE;
+    const r = await call(token, `${auth.REAL_PHONE}/whatsapp_business_profile`, { method: 'POST', body: { messaging_product: 'whatsapp', ...fields }, fetchImpl });
+    out.profile[auth.REAL_PHONE] = r.ok ? { ok: true, at: now, v } : { ok: false, at: now, v, error: r.error };
+    log(`[meta-onboard] business profile on ${auth.REAL_PHONE}: ${r.ok ? 'set' : r.error?.message}`);
   }
 
   // 2. register
@@ -167,4 +190,4 @@ async function runWithDeps({ db = require('./firestore.js').getDb(), force = fal
   });
 }
 
-module.exports = { run, runWithDeps, shouldRun, registered, _internal: { call } };
+module.exports = { run, runWithDeps, shouldRun, registered, PROFILE, _internal: { call } };
