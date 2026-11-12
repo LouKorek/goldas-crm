@@ -67,9 +67,11 @@ exports.handler = async (event) => {
       if (e.code === 6 || /already exists/i.test(e.message)) continue;
       throw e;
     }
-    // The person wrote: the 24-hour window is open again, so what waited goes out first.
-    const released = await outbox.onInbound(db, m.from, m.phoneId).catch((e) => { console.error('[wa] release failed:', e.message); return { pending: 0, flushed: 0 }; });
-    if (m.payload === outbox.PENDING_BUTTON || (m.type === 'button' && !m.mediaId) || PENDING_WORDS.test((m.text || '').trim())) {
+    // The person wrote: the 24-hour window is open again, so what they never saw goes out first.
+    // A tap on a template's button asks for what it summed up; any other message only opens the window.
+    const asked = m.payload === outbox.PENDING_BUTTON || (m.type === 'button' && !m.mediaId) || PENDING_WORDS.test((m.text || '').trim());
+    const released = await outbox.onInbound(db, m.from, m.phoneId, { release: asked }).catch((e) => { console.error('[wa] release failed:', e.message); return { pending: 0, flushed: 0 }; });
+    if (asked) {
       // A tap on the re-engagement template's button is not a request for Golda.
       await db.collection('wa_inbox').doc(m.id).set({ state: 'done', note: `released ${released.flushed} queued`, doneAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       if (!released.pending) await wa.sendText(m.from, `${(who.name || 'לו').split(' ')[0]}, אין עדכונים שמחכים כרגע. אכתוב כשיהיה משהו חדש 🙂`, m.phoneId).catch(() => {});
