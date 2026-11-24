@@ -195,9 +195,15 @@ async function addToPlaylist(token, playlistId, videoId, { fetchImpl = fetch } =
   });
 }
 
-/** The frame YouTube picked for a processed video (the best size there is), or null. */
-async function autoCover(id, { fetchImpl = fetch } = {}) {
-  for (const url of coverUrls(id)) {
+/**
+ * The frame YouTube picked for a processed video (the best size there is), or
+ * null. A private video's frame is not at the public address: only the
+ * addresses YouTube gives the channel's owner (`video.snippet.thumbnails`)
+ * open it, so those come first.
+ */
+async function autoCover(id, { fetchImpl = fetch, video = null } = {}) {
+  const own = ['maxres', 'standard', 'high', 'medium'].map((k) => video?.snippet?.thumbnails?.[k]?.url).filter((u) => /^https:\/\/[a-z0-9-]+\.ytimg\.com\//.test(u || ''));
+  for (const url of [...new Set([...own, ...coverUrls(id)])]) {
     try {
       const res = await fetchImpl(url);
       if (!res.ok) continue;

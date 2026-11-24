@@ -481,6 +481,37 @@ test('the cover step: drawn in the style once YouTube processed the video, and h
   assert.equal((await jobs.getJob(db, job.id)).status, 'done', 'the video stays up; only the cover is missing');
 });
 
+test("a private video's cover: the frame comes from the owner's address, and without any frame the cover still goes up", async () => {
+  ytAuth._resetCacheForTests();
+  const seed = () => ({ app_meta: { youtube: { connected: true }, youtubeStyle: { style: { thumbnail: { custom: true, layout: 'panel' } } } }, app_secrets: { youtube: { clientId: CLIENT.clientId, clientSecret: CLIENT.clientSecret, refreshToken: 'r' } } });
+  const run = async ({ signed }) => {
+    const db = fakeDb(seed());
+    const job = { ...(await jobs.createDraft(db, draftArgs())), status: 'uploaded', videoId: 'PRIVATE0001' };
+    await jobs.patchJob(db, job.id, { status: 'uploaded', videoId: 'PRIVATE0001' });
+    const asked = []; const drawn = []; let set = 0;
+    const fetchImpl = async (url) => {
+      if (/oauth2/.test(url)) return res(200, { access_token: 'a', expires_in: 3600 });
+      if (/\/videos\?/.test(url)) return res(200, { items: [{ status: { uploadStatus: 'processed', privacyStatus: 'private' }, snippet: { thumbnails: signed ? { high: { url: 'https://i9.ytimg.com/vi/PRIVATE0001/hqdefault.jpg?sqp=abc&rs=def' } } : {} } }] });
+      if (/thumbnails\/set/.test(url)) { set += 1; return res(200, {}); }
+      asked.push(url);
+      if (/^https:\/\/i9\.ytimg\.com\/.*sqp=abc/.test(url)) return res(200, Buffer.alloc(5000, 9));
+      if (/^https:\/\/i\.ytimg\.com\//.test(url)) return res(404, Buffer.alloc(1100, 1));   // the grey placeholder everyone else gets
+      throw new Error(`unexpected ${url}`);
+    };
+    const render = async (a) => { drawn.push(a); return { bytes: Buffer.alloc(3000, 1), type: 'image/jpeg' }; };
+    const r = await jobs.finish(db, job, { fetchImpl, env: {}, render, waitMs: 500, pollMs: 1, frameTries: 2 });
+    return { r, asked, drawn, set };
+  };
+  const a = await run({ signed: true });
+  assert.deepEqual(a.r, { done: true, coverSet: true });
+  assert.match(a.asked[0], /^https:\/\/i9\.ytimg\.com\//, "the owner's address is tried first");
+  assert.equal(a.drawn[0].background.length, 5000);
+  const b = await run({ signed: false });
+  assert.deepEqual(b.r, { done: true, coverSet: true }, 'no frame can be read: the name and the facts go up on their own');
+  assert.equal(b.drawn[0].background, null);
+  assert.equal(b.set, 1);
+});
+
 // ── Golda's tool ────────────────────────────────────────────────────────────
 function golda({ role = 'admin', turn = 1, media = null, pub = {}, record = NOAM, kicks = [] } = {}) {
   const db = fakeDb({

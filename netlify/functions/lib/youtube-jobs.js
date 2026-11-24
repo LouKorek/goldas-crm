@@ -188,7 +188,7 @@ function reasonHe(e) {
  * After YouTube processed the video: set the cover. Returns
  * { done } or { again: true } when YouTube is still working on it.
  */
-async function finish(db, job, { wa, notify, env = process.env, fetchImpl = fetch, waitMs = 11 * 60000, pollMs = 20000, render = null }) {
+async function finish(db, job, { wa, notify, env = process.env, fetchImpl = fetch, waitMs = 11 * 60000, pollMs = 20000, frameTries = 6, render = null }) {
   if (job.status !== 'uploaded') return { done: true, skipped: `status ${job.status}` };
   const mode = job.cover?.mode || 'none';
   if (mode === 'none') { await patchJob(db, job.id, { status: 'done', coverSet: false }); return { done: true }; }
@@ -205,11 +205,17 @@ async function finish(db, job, { wa, notify, env = process.env, fetchImpl = fetc
       if (!frame) {
         // The frame YouTube picked exists only once the video is processed.
         const until = Date.now() + waitMs;
+        let unread = 0;
         for (;;) {
           const v = await yt.getVideo(token, job.videoId, { fetchImpl });
           const st = v?.status?.uploadStatus;
           if (st === 'failed' || st === 'rejected' || st === 'deleted') throw new Error(`YouTube ${st} the video`);
-          if (st === 'processed') { frame = await yt.autoCover(job.videoId, { fetchImpl }); if (frame) break; }
+          if (st === 'processed') {
+            frame = await yt.autoCover(job.videoId, { fetchImpl, video: v });
+            // Processed, and still no frame to read: the cover goes up without a photo rather than never.
+            if (!frame && ++unread >= frameTries) frame = { bytes: null };
+            if (frame) break;
+          }
           if (Date.now() + pollMs > until) return { again: true };
           await sleep(pollMs);
         }
