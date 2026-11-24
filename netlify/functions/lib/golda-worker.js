@@ -210,7 +210,8 @@ async function processMessage(messageId) {
     if (msg.mediaId) {
       try {
         const m = await wa.downloadMedia(msg.mediaId, msg.phoneId);
-        media = { ...m, filename: msg.filename || `file_${String(messageId).slice(-6)}` };
+        // mediaId + phoneId let a later step fetch the same file again (a YouTube upload runs in the background).
+        media = { ...m, filename: msg.filename || `file_${String(messageId).slice(-6)}`, mediaId: msg.mediaId, phoneId: msg.phoneId || null };
       } catch (e) { console.error('[golda] media download failed:', e.message); }
     }
     let text = msg.text;

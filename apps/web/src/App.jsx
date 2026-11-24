@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from 'lib/firebase';
@@ -29,6 +29,7 @@ const Deals = lazy(() => import('pages/Deals'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Admin = lazy(() => import('pages/Admin'));
 const DesignSystem = lazy(() => import('pages/DesignSystem'));
+const YouTubeUpload = lazy(() => import('pages/YouTubeUpload'));
 import ErrorBoundary, { install as installErrorReporting } from 'components/ErrorBoundary';
 
 installErrorReporting();
@@ -67,7 +68,18 @@ function Splash({ fading }) {
   );
 }
 
+// /yt/<token> is the one page that needs no sign-in: the link Golda sends for
+// a video too big for WhatsApp. Its token is its key, so it never meets the
+// sign-in screen or the shell.
+const UPLOAD_LINK = /^\/yt\/([a-f0-9]{48})\/?$/;
+
 export default function App() {
+  const upload = UPLOAD_LINK.exec(window.location.pathname);
+  if (upload) return <ErrorBoundary><Suspense fallback={null}><YouTubeUpload token={upload[1]} /></Suspense></ErrorBoundary>;
+  return <Crm />;
+}
+
+function Crm() {
   const [user, setUser]     = useState(undefined);
   const [access, setAccess] = useState(null);
   const [denied, setDenied] = useState(false);

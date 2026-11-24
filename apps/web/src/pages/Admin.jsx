@@ -9,6 +9,8 @@
 //   Errors   what the app itself reported from people's browsers
 //   WhatsApp the server's own Meta key (one Facebook sign-in) and Golda's
 //            move to her own number, step by step
+//   YouTube  the server's connection to the channel Golda uploads to, and
+//            the style she learned from it
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useRole } from 'lib/roleContext';
@@ -16,13 +18,14 @@ import { t, fmtDateTime, getLang } from 'lib/i18n';
 import { PageHeader, Skeleton, Empty, ChipGroup, Field, SearchInput, toast, useConfirm } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import CalendarSync from 'components/admin/CalendarSync';
+import YouTubeConnect from 'components/admin/YouTubeConnect';
 import {
   JOBS, listenJobs, runJobNow, groupRuns, fetchScraperStatus, listenTmWatchMeta, saveTmWatchBudget, listenDeploys,
   listenGoldaUsage, listenBackups, downloadBackup, listenAudit, listenClientErrors, listenMetaConnect, startMetaConnect,
 } from 'data/admin';
 
 const VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
-const TABS = [['health', 'בריאות', 'Health'], ['quotas', 'מכסות', 'Quotas'], ['backups', 'גיבויים', 'Backups'], ['audit', 'יומן פעולות', 'Audit log'], ['errors', 'שגיאות', 'Errors'], ['whatsapp', 'וואטסאפ', 'WhatsApp'], ['calendar', 'יומן Google', 'Google calendar']];
+const TABS = [['health', 'בריאות', 'Health'], ['quotas', 'מכסות', 'Quotas'], ['backups', 'גיבויים', 'Backups'], ['audit', 'יומן פעולות', 'Audit log'], ['errors', 'שגיאות', 'Errors'], ['whatsapp', 'וואטסאפ', 'WhatsApp'], ['calendar', 'יומן Google', 'Google calendar'], ['youtube', 'יוטיוב', 'YouTube']];
 const toDate = (v) => (v?.toDate ? v.toDate() : v ? new Date(v) : null);
 const ago = (d, he) => {
   if (!d) return he ? 'מעולם' : 'never';
@@ -73,6 +76,7 @@ export default function Admin() {
       {tab === 'errors' && <Errors he={he} />}
       {tab === 'whatsapp' && <WhatsApp he={he} />}
       {tab === 'calendar' && <CalendarSync he={he} />}
+      {tab === 'youtube' && <YouTubeConnect he={he} />}
     </div>
   );
 }
