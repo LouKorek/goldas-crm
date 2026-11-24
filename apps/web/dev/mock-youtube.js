@@ -13,8 +13,8 @@ const STYLE = {
   learnedAt: Date.now() - 3 * 864e5, fromVideos: 7, playerVideos: 4,
   style: {
     summaryHe: 'כותרת בתבנית "שם | עמדות | עונה". תיאור קצר בשורות עם אימוג\'י: אזרחות, תאריך לידה, עמדות, גובה ורגל. כל הסרטונים ציבוריים ונכנסים לפלייליסט Men\'s Football. הקאבר: תמונת השחקן עם השם בגדול ושורות פרטים.',
-    title: '{name} | {positions} | {season}',
-    description: '{name}\n🌍 {nationality}\n🗓️ {birthDate} ({age})\n📍 {positions}\n📏 {height}\n🦵 {footShort}',
+    title: { template: '{name} | {positions} | {season}', notes: '' },
+    description: { template: '{name}\n🌍 {nationality}\n🗓️ {birthDate} ({age})\n📍 {positions}\n📏 {height}\n🦵 {footShort}', notes: '' },
     privacy: 'public', playlists: [{ id: 'PL1', title: "Men's Football", for: 'men' }],
   },
   examples: [['Noam Barzilay | LB / CB | 2025/26', '#12573f'], ['Alon Milwidsky | GK | 2025', '#3b4a6b'], ['Asia Dercksen | CB / DM | 2025', '#6b3b4a']].map(([title, tone], i) => ({ id: `video${i}`, title, cover: cover(title.split(' | ')[0], tone) })),

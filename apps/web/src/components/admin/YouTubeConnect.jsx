@@ -129,8 +129,8 @@ export default function YouTubeConnect({ he }) {
             <>
               <div style={{ fontSize: 14, marginBottom: 12 }}>{s.summaryHe || ''}</div>
               <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
-                {row(he ? 'כותרת' : 'Title', inWords(s.title, he))}
-                {row(he ? 'תיאור' : 'Description', inWords(s.description, he))}
+                {row(he ? 'כותרת' : 'Title', inWords(s.title?.template, he))}
+                {row(he ? 'תיאור' : 'Description', inWords(s.description?.template, he))}
                 {row(he ? 'פרטיות' : 'Privacy', (PRIVACY[s.privacy] || [s.privacy, s.privacy])[he ? 0 : 1])}
                 {row(he ? 'פלייליסט' : 'Playlist', lists)}
                 {row(he ? 'נלמד מתוך' : 'Learned from', he ? `${st.playerVideos ?? st.fromVideos ?? 0} סרטוני שחקנים` : `${st.playerVideos ?? st.fromVideos ?? 0} player videos`)}
