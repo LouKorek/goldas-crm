@@ -13,6 +13,15 @@
 [functions]
   directory    = "netlify/functions"
   node_bundler = "esbuild"
+  # The cover Golda draws for a YouTube video (lib/youtube-thumb.js) uses
+  # resvg, which reads its .wasm file from its own package folder at run
+  # time, so the package travels whole instead of being bundled.
+  external_node_modules = ["@resvg/resvg-wasm"]
+
+# The fonts and the mark the cover is drawn with go along with the one
+# function that draws it (it falls back to fetching them from the site).
+[functions."youtube-upload-background"]
+  included_files = ["apps/web/public/fonts/*.ttf", "apps/web/public/brand-mark.png"]
 
 # Build files carry a content hash in their name, so the browser may keep
 # them for good; index.html and sw.js stay fresh so a deploy shows at once.

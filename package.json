@@ -20,9 +20,11 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@netlify/functions": "^2.8.0",
+    "@resvg/resvg-wasm": "2.6.2",
     "cheerio": "^1.0.0",
     "firebase-admin": "^12.7.0",
     "google-auth-library": "^9.15.1",
+    "jpeg-js": "0.4.4",
     "nodemailer": "^6.9.16"
   },
   "devDependencies": {

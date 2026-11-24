@@ -20,6 +20,7 @@ const { briefTools, BRIEF_TOOL_DEFS } = require('./golda-briefs.js');
 const { windowStatus, TRANSFER_TOOL_DEF } = require('./transfer-windows.js');
 const { recentMistakes, mistakesSection } = require('./golda-feedback.js');
 const { keepDuration } = require('./agency-calendar.js');
+const { youtubeTools, YOUTUBE_TOOL_DEFS } = require('./golda-youtube.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -259,6 +260,7 @@ How you work:
 - If an instruction is missing something required, ask for it in one short question rather than inventing it. Don't ask about optional fields.
 - Deleting needs the writer's explicit yes: call delete without confirmed first (one record, or several with items; you may arm more in the same turn), show the whole list of what will be deleted and ask once; only after they answer yes in a later message call delete once with confirmed=true, which deletes everything armed. Never ask for a separate yes per record.
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
+- A video for YouTube ("תעלי ליוטיוב", "סרטון ביצועים חדש של…", or a video sent with a player's name): find the player or prospect, then youtube_upload action=draft (it fills the title, description, privacy, playlist and cover in the style of Lou's channel; pass extra for the free part such as the opponent, and override title/description/playlist only when the writer dictated them). Show the draft in full (כותרת, תיאור, פרטיות, פלייליסט, קאבר) and say the player's current video link will be replaced. Only after the writer's yes in a later message: action=confirm. If confirm returns a page link, send it as is: big videos do not pass through WhatsApp (16 MB), so the writer opens the link on the phone and picks the file. You never upload without that yes, and never to anywhere but Lou's channel. After the upload the record's videoLink is replaced automatically and the writer gets the new and the previous link, so do not update videoLink yourself. An image sent afterwards for the cover → action=cover (add cover=style when it is a plain photo of the player, so the name and facts are drawn on it like the channel's covers; a finished designed cover goes as it is). "איך אנחנו מעלים סרטונים" / the style → youtube_style. A video sent with no player named: ask whose it is.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
@@ -358,11 +360,11 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows']);
-const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync' };
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style']);
+const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
@@ -740,7 +742,12 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
 
   const impl = { search, list, get, read_file: readFile, player_pdf: playerPdf, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
     suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
-    ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }), transfer_windows: async () => windowStatus(new Date()) };
+    ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }), transfer_windows: async () => windowStatus(new Date()),
+    ...youtubeTools({ db, admin, identity, media, session, channel, role, resolve: async (c, id) => {
+      const s = await readOk(c).doc(id).get();
+      if (!s.exists || !belongs(c, s.data())) throw new Error('not found');
+      return { id: s.id, ...s.data() };
+    } }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -782,7 +789,10 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     else if (messages.length || role === 'user') messages.push({ role, content: h.text });
   }
   const userText = (text || '').trim() || (media ? '(sent a file without text)' : '');
-  const fileNote = media ? `\n[Attached file: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 1024)} KB) — available to attach_file in this message]` : '';
+  const isVideo = media && /^video\//.test(media.mimeType || '');
+  const fileNote = !media ? '' : isVideo
+    ? `\n[Attached video: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 104857.6) / 10} MB) — you cannot watch it; youtube_upload (action=draft) in this message can send it to the YouTube channel]`
+    : `\n[Attached file: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 1024)} KB) — available to attach_file in this message]`;
   // The words of this turn, kept apart: the file itself is shown to the model below but never goes into the stored history.
   const currentText = userText + fileNote;
   const current = { role: 'user', content: currentText };

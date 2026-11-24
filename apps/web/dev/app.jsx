@@ -3,6 +3,7 @@
 import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import CalendarSync from 'components/admin/CalendarSync';
+import YouTubeConnect from 'components/admin/YouTubeConnect';
 import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import '../src/index.css';
 import '../src/theme.css';
@@ -37,6 +38,7 @@ const App = () => (
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
           <Route path="calendar" element={<Calendar />} />
           <Route path="admin/calendar" element={<CalendarSync he />} />
+          <Route path="admin/youtube" element={<YouTubeConnect he />} />
           <Route path="*" element={<div>other</div>} />
         </Route>
       </Routes>
