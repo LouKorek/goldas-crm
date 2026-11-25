@@ -1175,6 +1175,7 @@ const HE = {
   'No template in this language yet: agreements in it cannot be made until one is saved.': 'עוד אין תבנית בשפה הזו: אי אפשר ליצור בה הסכמים עד שתישמר אחת.',
   'The agreement text': 'נוסח ההסכם',
   "'# ' at the start of a line makes a heading; a blank line starts a new paragraph.": "'# ' בתחילת שורה הופך אותה לכותרת; שורה ריקה מתחילה פסקה חדשה.",
+  'While you type in Hebrew, {a} and {b} can look reversed here; the preview shows them as they really are.': 'בזמן ההקלדה בעברית, {a} ו-{b} יכולים להיראות כאן הפוכים; בתצוגה המקדימה הם מופיעים כמו שהם באמת.',
   'Default length (months)': 'משך ברירת מחדל (חודשים)',
   'Longest allowed (months)': 'המשך המרבי (חודשים)',
   '{n} at most.': '{n} לכל היותר.',

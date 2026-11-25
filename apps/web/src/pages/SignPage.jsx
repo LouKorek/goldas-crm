@@ -11,10 +11,10 @@
 // signer may download the signed PDF for a short while (the copy key is kept
 // in this tab only, so a reload still finds it); any other link that does not
 // work gets one calm sentence.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { agreementBlocks } from '@goldas/domain';
 import { loadAgreement, signAgreement, copyStatus, copyUrl } from 'data/agreements';
-import { GOLD, INK, MUTED, RULE, CARD, LOGO, usePrivatePage, Shell as PublicShell, Loading, Message, Guard, BROKEN } from 'components/public/PublicLook';
+import { GOLD, INK, MUTED, RULE, CARD, LOGO, PAPER, PAPER_INK, ERROR, ERROR_INK, usePrivatePage, Shell as PublicShell, Loading, Message, Guard, BROKEN } from 'components/public/PublicLook';
 import SignaturePad from 'components/SignaturePad';
 
 const TEXT = {
@@ -26,7 +26,7 @@ const TEXT = {
     consent: 'I have read the agreement above and I sign it of my own free will.', consentMinor: 'I have read the agreement above and I sign it of my own free will, as the parent or legal guardian of the player.',
     review: 'Review what will be sent', back: 'Back', send: 'Sign the agreement', sending: 'Signing…',
     reviewTitle: 'This is what will be sent', reviewNote: 'Together with the agreement text exactly as shown above. After signing it cannot be changed.',
-    fingerprint: 'Text fingerprint (SHA-256)', consentGiven: 'Consent', yes: 'Given',
+    fingerprint: 'Text fingerprint', consentGiven: 'Consent', yes: 'Given',
     done: 'Thank you. The agreement is signed.', doneSub: 'Gold A&S has received it. You can keep a copy of the signed agreement:',
     download: 'Download the signed copy', preparing: 'Preparing the signed copy…', notYet: 'The signed copy is not ready yet. Try again in a minute.',
     until: 'The download is available until', later: 'Gold A&S will send you a copy as well.',
@@ -37,6 +37,7 @@ const TEXT = {
       text: 'The agreement changed while the page was open. Please reload the page and read it again.',
     },
     failed: 'The signature was not sent. Please check the details and try again.',
+    nameOne: 'Please write the full name.', fix: 'Something is missing or needs fixing. It is marked above.',
   },
   he: {
     agency: 'סוכנות כדורגל', title: 'הסכם ייצוג', read: 'נא לקרוא את כל ההסכם לפני החתימה.',
@@ -46,7 +47,7 @@ const TEXT = {
     consent: 'קראתי את ההסכם שלמעלה ואני חותם עליו מרצוני.', consentMinor: 'קראתי את ההסכם שלמעלה ואני חותם עליו מרצוני, כהורה או כאפוטרופוס החוקי של השחקן.',
     review: 'לבדיקת הפרטים לפני השליחה', back: 'חזרה', send: 'חתימה על ההסכם', sending: 'חותמים…',
     reviewTitle: 'אלה הפרטים שיישלחו', reviewNote: 'יחד עם נוסח ההסכם בדיוק כפי שהוצג למעלה. אחרי החתימה אי אפשר לשנות.',
-    fingerprint: 'טביעת האצבע של הנוסח (SHA-256)', consentGiven: 'הסכמה', yes: 'ניתנה',
+    fingerprint: 'טביעת האצבע של הנוסח', consentGiven: 'הסכמה', yes: 'ניתנה',
     done: 'תודה. ההסכם נחתם.', doneSub: 'ההסכם הגיע ל-Gold A&S. אפשר לשמור עותק של ההסכם החתום:',
     download: 'הורדת העותק החתום', preparing: 'מכינים את העותק החתום…', notYet: 'העותק החתום עוד לא מוכן. נסו שוב בעוד דקה.',
     until: 'ההורדה זמינה עד', later: 'Gold A&S ישלחו לכם עותק גם בעצמם.',
@@ -57,6 +58,7 @@ const TEXT = {
       text: 'נוסח ההסכם השתנה בזמן שהעמוד היה פתוח. נא לרענן את העמוד ולקרוא שוב.',
     },
     failed: 'החתימה לא נשלחה. נא לבדוק את הפרטים ולנסות שוב.',
+    nameOne: 'נא לכתוב את השם המלא.', fix: 'יש פרטים שחסרים או שצריך לתקן. הם מסומנים למעלה.',
   },
 };
 
@@ -71,7 +73,7 @@ const CSS = `
 .sg-title { font-family: 'Bebas Neue', 'Heebo', sans-serif; font-weight: 400; font-size: clamp(34px, 9vw, 52px); line-height: 1; letter-spacing: 0.02em; margin: 0; color: ${INK}; }
 .pp[dir="rtl"] .sg-title { font-family: 'Heebo', system-ui, sans-serif; font-weight: 700; letter-spacing: 0; line-height: 1.15; font-size: clamp(30px, 8vw, 44px); }
 .sg-lead { color: ${MUTED}; margin: 8px 0 0; font-size: 14px; }
-.sg-doc { background: #fbf8f0; color: #1d1a14; border-radius: 14px; padding: 22px 18px; font-size: 15.5px; line-height: 1.75; max-height: 64vh; overflow-y: auto; border: 1px solid ${RULE}; }
+.sg-doc { background: ${PAPER}; color: ${PAPER_INK}; border-radius: 14px; padding: 22px 18px; font-size: 15.5px; line-height: 1.75; max-height: 64vh; overflow-y: auto; border: 1px solid ${RULE}; }
 .sg-doc h3 { font-size: 16.5px; margin: 18px 0 6px; line-height: 1.4; }
 .sg-doc h3:first-child { margin-top: 0; }
 .sg-doc p { margin: 0 0 12px; white-space: pre-line; overflow-wrap: anywhere; }
@@ -86,17 +88,22 @@ const CSS = `
 .pp .sg-input, .pp .sg-input:focus { background: rgba(244,240,230,0.06) !important; box-shadow: none; color: ${INK} !important; font-family: inherit; border-bottom-color: ${RULE}; border-radius: 12px; min-height: 48px; padding: 10px 14px; font-size: 16px; }
 .pp .sg-input:hover:not(:focus) { border-color: ${RULE}; }
 .pp .sg-input:focus { border-color: ${GOLD}; outline: none; }
-.pp .sg-input[aria-invalid="true"] { border-color: #e48b7a; }
-.pp select.sg-input option { background: #fbf8f0 !important; color: #1d1a14 !important; }
-.sg-pad .sigpad-canvas { background: #fbf8f0; color: #1d1a14; border: 1px solid ${RULE}; }
+.pp .sg-input[aria-invalid="true"] { border-color: ${ERROR}; }
+.sg-err { font-size: 13px; line-height: 1.45; color: ${ERROR_INK}; }
+.pp select.sg-input option { background: ${PAPER} !important; color: ${PAPER_INK} !important; }
+.sg-pad .sigpad-canvas { background: ${PAPER}; color: ${PAPER_INK}; border: 1px solid ${RULE}; }
+.sg-pad[data-invalid="true"] .sigpad-canvas { border-color: ${ERROR}; box-shadow: 0 0 0 1px ${ERROR}; }
 .sg-pad .sigpad-hint { color: ${MUTED}; }
-.sg-pad .sigpad-clear { background: transparent; color: ${GOLD}; border: 1px solid ${RULE}; border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 13.5px; cursor: pointer; min-height: 40px; }
+.sg-pad .sigpad-clear { background: transparent; color: ${GOLD}; border: 1px solid ${RULE}; border-radius: 10px; padding: 8px 14px; font: inherit; font-size: 13.5px; cursor: pointer; min-height: 48px; }
 .sg-pad .sigpad-clear:disabled { opacity: 0.4; cursor: default; }
 .sg-consent { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid ${RULE}; border-radius: 12px; cursor: pointer; font-size: 14.5px; }
-.pp .sg-consent input { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 1px 0 0; accent-color: ${GOLD}; flex: none; background: transparent !important; box-shadow: none; }
-.sg-errors { border: 1px solid #e48b7a; color: #f3c2b8; background: rgba(228,139,122,0.1); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: grid; gap: 4px; }
+.sg-consent[data-invalid="true"] { border-color: ${ERROR}; }
+.sg-consent-err { display: block; margin-top: 6px; }
+/* The CRM sets every checkbox's width to auto with !important; this one stays a full finger target. */
+.pp .sg-consent input { width: 22px !important; height: 22px; min-height: 0; padding: 0; margin: 1px 0 0; accent-color: ${GOLD}; flex: none; background: transparent !important; box-shadow: none; }
+.sg-errors { border: 1px solid ${ERROR}; color: ${ERROR_INK}; background: rgba(228,139,122,0.1); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: grid; gap: 4px; }
 .sg-review { display: grid; gap: 12px; }
-.sg-review img { width: 100%; max-width: 320px; background: #fbf8f0; border-radius: 10px; border: 1px solid ${RULE}; display: block; }
+.sg-review img { width: 100%; max-width: 320px; background: ${PAPER}; border-radius: 10px; border: 1px solid ${RULE}; display: block; }
 .sg-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; color: ${MUTED}; direction: ltr; text-align: start; }
 .sg-done { display: grid; gap: 14px; justify-items: center; text-align: center; }
 .sg-tick { width: 64px; height: 64px; border-radius: 50%; background: ${GOLD}; color: ${CARD}; display: flex; align-items: center; justify-content: center; font-size: 34px; font-weight: 700; }
@@ -156,31 +163,36 @@ function SignerFields({ role, L, value, onChange, showErrors }) {
   const set = (k) => (e) => onChange({ ...value, [k]: e.target.value });
   const bad = (k) => showErrors && ((k === 'name' && value.name.trim().length < 2) || (k === 'id' && !ID_OK(value.idNumber)) || (k === 'relation' && !value.relation));
   const id = `sg-${role}`;
+  const noSign = showErrors && !value.signature;
+  const err = (k, text) => (bad(k) ? <span className="sg-err" id={`${id}-${k}-err`}>{text}</span> : null);
   return (
     <div className="sg-who">
       <h3>{role === 'guardian' ? L.guardian : L.player}</h3>
       <div className="sg-field">
         <label htmlFor={`${id}-name`}>{L.name}</label>
-        <input id={`${id}-name`} className="sg-input" value={value.name} onChange={set('name')} autoComplete="name" aria-invalid={bad('name')} maxLength={80} />
+        <input id={`${id}-name`} className="sg-input" value={value.name} onChange={set('name')} autoComplete="name" aria-invalid={bad('name')} aria-describedby={bad('name') ? `${id}-name-err` : undefined} maxLength={80} />
+        {err('name', L.nameOne)}
       </div>
       <div className="sg-field">
         <label htmlFor={`${id}-id`}>{L.id}</label>
-        <input id={`${id}-id`} className="sg-input" value={value.idNumber} onChange={set('idNumber')} autoComplete="off" inputMode="text" dir="ltr" aria-invalid={bad('id')} aria-describedby={`${id}-idh`} maxLength={30} />
-        <small id={`${id}-idh`}>{L.idHint}</small>
+        <input id={`${id}-id`} className="sg-input" value={value.idNumber} onChange={set('idNumber')} autoComplete="off" inputMode="text" dir="ltr" aria-invalid={bad('id')} aria-describedby={bad('id') ? `${id}-id-err` : `${id}-idh`} maxLength={30} />
+        {bad('id') ? err('id', L.problems.id) : <small id={`${id}-idh`}>{L.idHint}</small>}
       </div>
       {role === 'guardian' && (
         <div className="sg-field">
           <label htmlFor={`${id}-rel`}>{L.relation}</label>
-          <select id={`${id}-rel`} className="sg-input" value={value.relation} onChange={set('relation')} aria-invalid={bad('relation')}>
+          <select id={`${id}-rel`} className="sg-input" value={value.relation} onChange={set('relation')} aria-invalid={bad('relation')} aria-describedby={bad('relation') ? `${id}-relation-err` : undefined}>
             <option value="">{L.choose}</option>
             {Object.entries(L.relations).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
+          {err('relation', L.problems.relation)}
         </div>
       )}
-      <div className="sg-field sg-pad">
+      <div className="sg-field sg-pad" data-invalid={noSign ? 'true' : undefined}>
         <span className="sg-k">{L.draw}</span>
         <SignaturePad label={`${L.draw}: ${role === 'guardian' ? L.guardian : L.player}`} clearLabel={L.clear} hint={L.drawHint}
-          onChange={(png) => onChange({ ...value, signature: png })} />
+          describedBy={noSign ? `${id}-sign-err` : undefined} onChange={(png) => onChange({ ...value, signature: png })} />
+        {noSign && <span className="sg-err" id={`${id}-sign-err`}>{L.problems.signature}</span>}
       </div>
     </div>
   );
@@ -194,6 +206,7 @@ function Page({ token }) {
   const [serverErrors, setServerErrors] = useState([]);
   const [showErrors, setShowErrors] = useState(false);
   const [sending, setSending] = useState(false);
+  const fill = useRef(null);
   const a = state.data?.agreement;
   const lang = a?.lang === 'en' ? 'en' : 'he';
   const L = TEXT[lang];
@@ -229,12 +242,23 @@ function Page({ token }) {
     if (!consent) p.push('consent');
     return p;
   };
-  // Once the signer tried to go on, the list follows what is still missing as it is fixed.
-  const errors = [...new Set([...(showErrors ? localProblems() : []), ...serverErrors])];
+  // Once the signer tried to go on, each message sits by its own field and follows what is still missing as it is fixed;
+  // the box at the end says that something is marked, and carries what only the server found.
+  const local = showErrors ? localProblems() : [];
+  const fromServer = [...new Set(serverErrors)].filter((p) => !local.includes(p));
+  const noConsent = local.includes('consent');
   const toReview = () => {
     setShowErrors(true);
     setServerErrors([]);
-    if (!localProblems().length) setStep('review');
+    if (!localProblems().length) { setStep('review'); return; }
+    // Bring the first thing to fix into view (on a phone it is often above the screen) and put the cursor in it.
+    requestAnimationFrame(() => {
+      const first = fill.current?.querySelector('[aria-invalid="true"], [data-invalid="true"]');
+      if (!first) return;
+      const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      first.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+      (first.matches('input, select') ? first : first.querySelector('input'))?.focus({ preventScroll: true });
+    });
   };
   const send = async () => {
     setSending(true);
@@ -272,19 +296,21 @@ function Page({ token }) {
         </section>
 
         {/* Kept mounted while reviewing, so going back finds the drawn signatures as they were. */}
-        <section className="pp-card" hidden={step !== 'fill'}>
+        <section className="pp-card" hidden={step !== 'fill'} ref={fill}>
             <h2 className="pp-label">{L.sign}</h2>
             {needs.map((role) => (
               <SignerFields key={role} role={role} L={L} value={signers[role]} showErrors={showErrors}
                 onChange={(v) => setSigners((s) => ({ ...s, [role]: v }))} />
             ))}
-            <label className="sg-consent">
-              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+            <label className="sg-consent" data-invalid={noConsent ? 'true' : undefined}>
+              <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} aria-invalid={noConsent} aria-describedby={noConsent ? 'sg-consent-err' : undefined} />
               <span>{minor ? L.consentMinor : L.consent}</span>
             </label>
-            {errors.length > 0 && (
+            {noConsent && <span className="sg-err sg-consent-err" id="sg-consent-err">{L.problems.consent}</span>}
+            {(local.length > 0 || fromServer.length > 0) && (
               <div className="sg-errors" role="alert" style={{ marginTop: 14 }}>
-                {errors.map((p) => <span key={p}>{L.problems[p] || L.failed}</span>)}
+                {local.length > 0 && <span>{L.fix}</span>}
+                {fromServer.map((p) => <span key={p}>{L.problems[p] || L.failed}</span>)}
               </div>
             )}
             <div className="pp-actions" style={{ marginTop: 16 }}>
@@ -305,7 +331,7 @@ function Page({ token }) {
             ))}
             <dl style={{ margin: 0 }}>
               <div className="pp-row"><dt>{L.consentGiven}</dt><dd>{L.yes}: {minor ? L.consentMinor : L.consent}</dd></div>
-              <div className="pp-row"><dt>{L.fingerprint}</dt><dd className="sg-mono">{a.textHash}</dd></div>
+              <div className="pp-row"><dt>{L.fingerprint} <bdi dir="ltr" style={{ whiteSpace: 'nowrap' }}>(SHA&#8209;256)</bdi></dt><dd className="sg-mono">{a.textHash}</dd></div>
             </dl>
             <p className="sg-lead" style={{ margin: 0 }}>{L.reviewNote}</p>
             <div className="pp-actions">

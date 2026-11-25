@@ -73,7 +73,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
       if (!isTopDialog(seq)) return;
       if (e.key === 'Escape') {
         if (viewOnly || !isDirty) { onClose(); return; }
-        if (window.confirm('Discard unsaved changes?')) onClose();
+        if (window.confirm(t('Discard unsaved changes?'))) onClose();
         return;
       }
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && onSave && !viewOnly) {
@@ -94,7 +94,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
 
   const handleClose = () => {
     if (viewOnly || !isDirty) { onClose(); return; }
-    if (window.confirm('Discard unsaved changes?')) onClose();
+    if (window.confirm(t('Discard unsaved changes?'))) onClose();
   };
 
   // Swipe-to-close (mobile sheet)

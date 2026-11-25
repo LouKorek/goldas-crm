@@ -12,6 +12,12 @@ export const GOLD = '#c9a227';
 export const INK = '#f4f0e6';
 export const MUTED = 'rgba(244,240,230,0.64)';
 export const RULE = 'rgba(201,162,39,0.24)';
+// Paper: where an agreement's text is read and a signature is drawn, dark ink on a light sheet in either theme.
+export const PAPER = '#fbf8f0';
+export const PAPER_INK = '#1d1a14';
+// What is missing or wrong in a form: the border, and the text of its message.
+export const ERROR = '#e48b7a';
+export const ERROR_INK = '#f3c2b8';
 export const LOGO = '/logo.png';
 
 const BASE_CSS = `

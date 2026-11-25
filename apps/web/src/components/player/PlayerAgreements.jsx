@@ -40,7 +40,8 @@ function CreateDialog({ player, templates, onClose, onMade }) {
   const langs = ['he', 'en'].filter((l) => templates?.[l]);
   const [lang, setLang] = useState(langs[0] || 'he');
   const tpl = templates?.[lang] || null;
-  const [start, setStart] = useState(israelDate());
+  const [today] = useState(israelDate);
+  const [start, setStart] = useState(today);
   const [months, setMonths] = useState(String(tpl?.defaultMonths || 24));
   const [end, setEnd] = useState('');
   const known = isMinorOn(player.dob, israelDate());
@@ -61,6 +62,8 @@ function CreateDialog({ player, templates, onClose, onMade }) {
     months: t('The length is a whole number of months.'), tooLong: t('An agreement may run {n} months at most.', { n: period.maxMonths }),
   }[period.error];
   const guardianMissing = minor && guardian.trim().length < 2;
+  // Closing asks first only once something was changed from how the dialog opened.
+  const isDirty = lang !== (langs[0] || 'he') || start !== today || months !== String(tpl?.defaultMonths || 24) || !!end || minorAsked || !!guardian.trim() || !playerSigns || days !== String(LINK_DAYS);
 
   if (!langs.length) {
     return (
@@ -104,7 +107,7 @@ function CreateDialog({ player, templates, onClose, onMade }) {
 
   const who = minor ? `${guardian.trim() || t('the parent or guardian')}${playerSigns ? ` + ${player.fullName || ''}` : ''}` : player.fullName || '';
   return (
-    <Modal title={t('New representation agreement')} onClose={onClose} isDirty onSave={submit}
+    <Modal title={t('New representation agreement')} onClose={onClose} isDirty={isDirty} onSave={submit}
       footer={<><button type="button" className="btn btn-ghost" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn btn-primary" onClick={submit} disabled={busy || !period.ok || guardianMissing}>{busy ? t('Making…') : t('Make the agreement')}</button></>}>
       <div style={{ display: 'grid', gap: 12 }}>
         <Field label={t('Language')}>
@@ -223,7 +226,7 @@ export default function PlayerAgreements({ player }) {
               {isAdmin && a.state === 'waiting' && a.url && <button type="button" className="btn btn-secondary btn-sm" onClick={() => copy(a)}><Icon name="copy" size={11} /> {t('Copy link')}</button>}
               {isAdmin && a.state === 'waiting' && a.url && <a className="btn btn-ghost btn-sm" href={a.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} title={t('Your own look is not counted and cannot sign.')}><Icon name="eye" size={11} /> {t('Preview page')}</a>}
               {isAdmin && ['waiting', 'expired', 'revoked', 'locked'].includes(a.state) && <button type="button" className="btn btn-ghost btn-sm" disabled={busy === a.id} onClick={() => reissue(a)}>{t('New link')}</button>}
-              {isAdmin && a.state === 'waiting' && <button type="button" className="btn btn-ghost btn-sm" disabled={busy === a.id} onClick={() => revoke(a)}><Icon name="close" size={11} /> {t('Revoke')}</button>}
+              {isAdmin && a.state === 'waiting' && <button type="button" className="btn btn-danger btn-sm" disabled={busy === a.id} onClick={() => revoke(a)}><Icon name="close" size={11} /> {t('Revoke')}</button>}
               {isAdmin && a.state === 'filing_failed' && <button type="button" className="btn btn-ghost btn-sm" disabled={busy === a.id} onClick={() => run(a.id, () => retryAgreementFiling(a.id))}>{t('Retry now')}</button>}
             </div>
           </div>

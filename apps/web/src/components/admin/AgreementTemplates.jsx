@@ -78,7 +78,7 @@ function Template({ lang, saved, players, onSaved }) {
           {saved ? t('Version {v} · saved {when}{by}', { v: saved.version, when: fmtDateTime(saved.updatedAt), by: saved.updatedByName ? ` · ${saved.updatedByName}` : '' })
             : t('No template in this language yet: agreements in it cannot be made until one is saved.')}
         </div>
-        <Field label={t('The agreement text')} hint={t("'# ' at the start of a line makes a heading; a blank line starts a new paragraph.")} error={problems.join(' · ')}>
+        <Field label={t('The agreement text')} hint={<>{t("'# ' at the start of a line makes a heading; a blank line starts a new paragraph.")}{lang === 'he' && <> {t('While you type in Hebrew, {a} and {b} can look reversed here; the preview shows them as they really are.', { a: '\u2066{{#minor}}\u2069', b: '\u2066{{/minor}}\u2069' })}</>}</>} error={problems.join(' · ')}>
           <textarea ref={area} value={form.text} onChange={(e) => setForm((f) => ({ ...f, text: e.target.value }))} dir={lang === 'he' ? 'rtl' : 'ltr'} rows={16}
             style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.6, minHeight: 280 }} aria-label={t('The agreement text')} />
         </Field>

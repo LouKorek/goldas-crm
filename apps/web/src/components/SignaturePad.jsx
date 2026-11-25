@@ -28,7 +28,7 @@ function drawStrokes(ctx, strokes, { scale, colour, width }) {
   });
 }
 
-export default function SignaturePad({ onChange, label, clearLabel, hint, height = 180, className = '', disabled = false, canvasStyle, clearClassName = '', hintStyle }) {
+export default function SignaturePad({ onChange, label, clearLabel, hint, height = 180, className = '', disabled = false, canvasStyle, clearClassName = '', hintStyle, describedBy }) {
   const canvas = useRef(null);
   const strokes = useRef([]);
   const drawing = useRef(false);
@@ -101,6 +101,7 @@ export default function SignaturePad({ onChange, label, clearLabel, hint, height
         ref={canvas}
         role="img"
         aria-label={label}
+        aria-describedby={describedBy || undefined}
         className="sigpad-canvas"
         style={{ width: '100%', height, touchAction: 'none', display: 'block', cursor: disabled ? 'not-allowed' : 'crosshair', borderRadius: 12, ...canvasStyle }}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onPointerLeave={up}
