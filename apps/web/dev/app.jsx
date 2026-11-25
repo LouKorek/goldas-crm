@@ -18,6 +18,7 @@ const Requirements = lazy(() => import('pages/Requirements'));
 const Deals = lazy(() => import('pages/Deals'));
 const Players = lazy(() => import('pages/Players'));
 const Contacts = lazy(() => import('pages/Contacts'));
+const Clubs = lazy(() => import('pages/Clubs'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Player360 = lazy(() => import('pages/Player360'));
 const Admin = lazy(() => import('pages/Admin'));
@@ -48,6 +49,8 @@ const App = () => (
           <Route path="market/deals" element={<Deals />} />
           <Route path="finance" element={<Finance />} />
           <Route path="contacts" element={<Contacts />} />
+          <Route path="clubs" element={<Clubs />} />
+          <Route path="clubs/:id" element={<Clubs />} />
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
           <Route path="calendar" element={<Calendar />} />
           <Route path="notifications" element={<Notifications />} />

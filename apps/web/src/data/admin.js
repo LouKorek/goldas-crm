@@ -32,6 +32,7 @@ export const JOBS = [
   { name: 'golda-queue', he: 'תור הודעות גולדה (ניסיונות חוזרים)', when: 'כל 10 דקות', run: null },
   { name: 'golda-meeting-brief', he: 'הכנה של גולדה לפני פגישה', when: 'כשעה לפני כל פגישה ביומן', run: null },
   { name: 'golda-player-sends', he: 'הודעות של גולדה לשחקנים', when: 'נבדק כל 10 דקות, 08:00–22:00', run: null },
+  { name: 'gmail-sync', he: 'מיילים מ-Gmail לרשומות', when: 'כל 15 דקות, כשהתיבה מחוברת', run: 'gmail-sync' },
   { name: 'migrate', he: 'מיגרציות נתונים', when: 'אחרי כל פריסה', run: null },
 ];
 

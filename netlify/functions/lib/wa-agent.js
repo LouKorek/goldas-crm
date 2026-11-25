@@ -31,6 +31,7 @@ const { monthlyReportTools, MONTHLY_REPORT_TOOL_DEF } = require('./golda-monthly
 const { financeTools, financeSection, PAYMENTS_TOOL_DEFS } = require('./golda-finance.js');
 const { agreementTools, AGREEMENT_TOOL_DEFS } = require('./golda-agreement.js');
 const { networkTools, networkSection, NETWORK_TOOL_DEFS } = require('./golda-network.js');
+const { mailTools, MAIL_TOOL_DEF } = require('./golda-mail.js');
 const { chooseEffort } = require('./golda-effort.js');
 const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
@@ -287,7 +288,8 @@ How you work:
 ${financeSection(identity.role)}
 ${outreachSection(channel)}
 ${networkSection(identity.role)}
-${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
+${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה האחרון שכתבנו עם <מועדון>" / "מה כתבו לנו מ…" / the last e-mails with a club, a contact or about a deal → mail_recent (admins and managers; read-only, from the mail the CRM keeps). Answer with the date, who wrote to whom, the subject and the snippet, newest first, and the Gmail link. You never send or answer mail.
+- "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
 - A live player page (admins only) is a different thing from the PDF and never replaces it. Make one ONLY when the writer asks in so many words for a live page or a link to the player ("דף חי", "לינק לשחקן", "לינק חי", "live page"): find the player, then live_page_create with the club when one was named (one link per club; no club → a general link), days only when a period was named (14 otherwise, 90 at most) and lang "he" only when asked for Hebrew. Give the writer the link on its own line with for whom and until when it works. Never offer a live page instead of the PDF, never make one for "דף שחקן" / "CV", and never send the link to anyone but the writer: he sends it on himself. You tell Lou the first time a link is opened (your message that opens with 👀). "מי פתח את הדף של…" / "אילו לינקים פתוחים" → live_page_list. "תבטלי את הלינק" → live_page_list to find it, then live_page_revoke (it stops at once; say so).
@@ -312,6 +314,7 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - pipeline_men / pipeline_women / pipeline_youth / pipeline_jewish (prospects, NOT linked to players): playerName*, status (${C.PIPELINE_STATUS.join('|')}), profileLink, videoLink, agentName, agentPhone, nationalities, dob, primaryPosition, secondaryPositions, height (cm, 130-225, as a string), foot, currentClub, currentClubIsYouth, natTeamStatus, natTeamCountry, transferFee, salary (digits or "Not specified"), notes, league fields, linkedClubs [{clubName, linkedAt ISO}].
 - club_requirements: clubName*, gender*, clubIsYouth, tablePosition, contactName, contactRole, contactPhone, requiredPosition (position), ageMin, ageMax, ageNotSpecified (bool), transferFee, salary, notes, league fields.
 - contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, league fields, knows [{contactId, kind knows|introduced, note, at, by}] (written only with contact_link).
+- contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, contactEmail (the person's own address; the agency's mail with it then shows on the contact), league fields.
 - tasks: title*, dueDate, priority (Low|Normal|High|Urgent), notes, linkedPlayers [player ids], done (bool).
 - tmWatch (read and update; Jewish players found on Transfermarkt): name, club, clubCountry, marketValue, status (new|seen|...), starred (bool), addedToPipeline (bool).
 - igDaily (read-only): date, followers, newFollowers. igPosts (read-only): Instagram posts and their stats.
@@ -389,7 +392,7 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS, MAIL_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list', 'outreach_prepare', 'outreach_link', 'writing_style', 'voice_reply', 'network_path', 'network_cold']);
@@ -415,7 +418,9 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // Recording on a contact that a drafted message went out is an edit of the contact.
   outreach_log: 'edit',
   // The explicit "knows" link is an edit of the contact.
-  contact_link: 'edit' };
+  contact_link: 'edit',
+  // The agency's mail: admins and managers (deal mail inside the tool: admins); never a viewer or a player.
+  mail_recent: 'edit' };
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -821,7 +826,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...agreementTools({ db, identity, role, channel, session }),
     ...outreachTools({ db, admin, identity, role, channel, session, state, can }),
     ...voiceTools({ identity, channel, turnText, state, db }),
-    ...networkTools({ db, identity, role, update }) };
+    ...networkTools({ db, identity, role, update }),
+    ...mailTools({ db, identity, role }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

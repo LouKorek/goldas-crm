@@ -30,6 +30,7 @@
 | `golda-briefing` | כל שעה ב-:30 | תדריך בוקר, התראות דחופות, התראות תפעול לאדמינים | ראה סעיף 6 |
 | `golda-queue` | כל 10 דק' | ניסיונות חוזרים להודעות שנתקעו; בדיקה אם פגישה מתקרבת (הכנה של גולדה); בדיקה אם הודעה לשחקן מחובר צריכה לצאת | ראה סעיף 6 |
 | `golda-player-sends` | נבדק כל 10 דק' (ב-`golda-queue`), רק 08:00–22:00 שעון ישראל | לשחקן מחובר לגולדה, לפי המתגים בכרטיס "גולדה לשחקן": הלוח השבועי (מוצ"ש 21:00), תזכורת לפני אימון, בהצלחה לפני משחק. נרשמת רק כשנשלחה, דולגה או נכשלה הודעה | ראה סעיף 6 |
+| `gmail-sync` | כל 15 דק' (רק כשתיבת Gmail מחוברת) | מיילים עם אנשי הקשר והמועדונים שב-CRM נצמדים לרשומות (`mail_messages`) | ראה "Gmail" בסוף המסמך |
 | `backup-weekly` | כל לילה 01:30 (רץ כשעבר שבוע) | גיבוי מלא ל-`backups/{id}/chunks`, בדיקה עצמית ועותק חיצוני | ראה סעיף 3 |
 
 "הרץ עכשיו" במסך הבריאות מריץ את אותו הקוד שהתזמון מריץ, ומסומן `trigger: manual`
@@ -408,3 +409,36 @@ See it without a backend: `cd apps/web && npx vite --config vite.harness.config.
 `/dev/app.html?path=/sign/demo` (also `demo-minor`, `demo-en`, `signed`, `gone`),
 `/dev/app.html?path=/players/p1` for the card and `/dev/app.html?path=/system/agreements`
 (`&templates=none` for no template, `&theme=dark`).
+
+## Gmail: the agency's mail on its records
+
+What: once Lou connects the mailbox (System › Email, one button and Google's consent
+screen), `gmail-sync-cron` (every 15 min) calls `gmail-sync-background`, which asks Gmail
+only for mail to or from the addresses the CRM knows (a contact's `contactEmail`, a club's
+`emailDomain`; never a free mail domain such as gmail.com) and keeps what matches in
+`mail_messages`: ids, date, names and addresses, subject, Gmail's snippet, attachment
+names, and the contact, club and deal links. No body text, no attachments. Rules and
+matching in `netlify/functions/lib/mail-store.js`. The permission is `gmail.readonly` only.
+
+Connection: the same Google OAuth client as YouTube (System › YouTube) and the same return
+address (`youtube-connect`); a state starting `gmail-` is the Gmail one. The refresh token
+is sealed in `app_secrets/gmail`; the status (address, last sync, how many linked, problem)
+is in `app_meta/gmail`. The first connection reads back 90 days; an address added later to a
+contact or a club is read back 90 days at its first run. Afterwards each run asks Gmail's
+history whether anything arrived since the last one and searches only then.
+
+The Gmail API is switched on by the server's own service account (on "connect" and when a
+run finds it off, at most once a day). If it cannot (no role for it), System › Email says
+so: enable "Gmail API" on the gold-as-crm project by hand.
+
+Disconnect (System › Email) deletes the key, every stored message and the sync state. It
+does not revoke the permission at Google, because the mailbox may be the YouTube account
+and revoking the client there would cut YouTube too; to withdraw it fully, remove the app
+in the Google account's security settings (and connect YouTube again if it was the same
+account). `mail_messages` is left out of the backups on purpose.
+
+Who sees it: admins and managers see a club's and a contact's mail; mail linked to a deal is
+admin-only (it is the negotiation, like the deal's money); viewers see none. Golda's
+`mail_recent` follows the same rule and is never available to the player role. A wrong link
+is fixed on the record (move to another deal, take off the deal, "not agency mail"); the
+fix is kept in the message's `override` and survives every sync.

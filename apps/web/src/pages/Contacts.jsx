@@ -10,8 +10,10 @@ import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
 import ContactTouches, { lastTouchLine } from 'components/ContactTouches';
 import ContactNetwork from 'components/contacts/ContactNetwork';
+import { normalizeEmail } from '@goldas/domain';
+import RecordMail from 'components/mail/RecordMail';
 
-const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
+const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '', contactEmail: '' };
 
 export default function Contacts() {
   const [items, setItems]   = useState([]);
@@ -38,14 +40,21 @@ export default function Contacts() {
 
   const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); };
   const openEdit = (c) => { setForm({ ...EMPTY, ...c }); setModal({ edit: c }); };
-  const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest }); setModal('add'); };
+  // A copy keeps the club, not the person: the e-mail address belongs to one contact.
+  const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest, contactEmail: '' }); setModal('add'); };
 
   const save = async () => {
     if (!form.clubName.trim() && !form.contactName.trim()) {
       toast.error(t("Add at least a club or a contact name."));
       return;
     }
-    const data = { ...form, league };
+    // The address links the contact's mail (lib/mail-store.js), so it is kept in one form and on one contact.
+    const emailRaw = String(form.contactEmail || '').trim();
+    const contactEmail = emailRaw ? normalizeEmail(emailRaw) : '';
+    if (emailRaw && !contactEmail) { toast.error(t('That does not look like an e-mail address.')); return; }
+    const same = contactEmail && items.find((c) => normalizeEmail(c.contactEmail) === contactEmail && c.id !== modal?.edit?.id);
+    if (same) { toast.error(t('"{name}" already has this e-mail address.', { name: same.contactName || same.clubName })); return; }
+    const data = { ...form, contactEmail, league };
     try {
       if (modal === 'add') {
         await addDoc_(PATHS.CONTACTS, data);
@@ -274,6 +283,10 @@ export default function Contacts() {
           <Field label={t("Phone")} hint={t("With country code, e.g. +972...")}>
             <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
+          <Field label={t('E-mail address')}hint={t('The CRM shows the agency\'s mail with this address on the contact and its club.')}>
+            <input type="email" value={f('contactEmail') || ''} onChange={e => s('contactEmail')(e.target.value)} placeholder="name@club.com" dir="ltr" autoComplete="off" />
+          </Field>
+          {modal.edit && <RecordMail kind="contact" id={modal.edit.id} />}
         </Modal>
       )}
 

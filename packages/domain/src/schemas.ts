@@ -80,6 +80,9 @@ export const clubSchema = z.object({
   logoUrl: optStr,
   logoFileId: optStr,
   website: optStr,
+  // The club's e-mail domain ("club.co.il"): mail from or to any address at it
+  // is the club's (lib/mail-store.js). Never a free mail domain (mail.ts).
+  emailDomain: optStr,
   notes: optStr,
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
@@ -178,6 +181,8 @@ export const contactSchema = z.object({
   contactPhone: optStr,
   touches: z.array(touchSchema).optional().default([]),
   knows: z.array(contactKnowsSchema).optional().default([]),
+  // The contact's own e-mail address: the agency's mail with it is linked to the contact.
+  contactEmail: optStr,
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
 
