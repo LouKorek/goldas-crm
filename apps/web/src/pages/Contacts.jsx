@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
@@ -8,6 +9,7 @@ import { ClubLogoOrAvatar, U19 } from './Requirements';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
 import ContactTouches, { lastTouchLine } from 'components/ContactTouches';
+import ContactNetwork from 'components/contacts/ContactNetwork';
 
 const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
 
@@ -20,6 +22,10 @@ export default function Contacts() {
   const [form, setForm]     = useState(EMPTY);
   const { confirm, dialog } = useConfirm();
   const { canEdit } = useRole();
+  // The list or the relationship map (?view=map), one destination.
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'map' ? 'map' : 'list';
+  const setView = (v) => { const p = new URLSearchParams(); if (v === 'map') p.set('view', 'map'); setParams(p, { replace: true }); };
 
   useEffect(() => listenCollection(PATHS.CONTACTS, setItems, 'clubName'), []);
 
@@ -97,7 +103,7 @@ export default function Contacts() {
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Contact")}</span></button>}
-            <ExportMenu
+            {view === 'list' && <ExportMenu
               filename="Contacts"
               title={t("Contacts")}
               subtitle={term ? `search: "${term}"` : ''}
@@ -109,24 +115,30 @@ export default function Contacts() {
                 { key: 'contactPhone',   label: '📞',   pdfLabel: 'Phone' },
               ]}
               rows={filtered}
-            />
+            />}
           </div>
         }
       >
 
       <div className="filter-bar" style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div role="group" aria-label={t('View')} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button type="button" className={`chip${view === 'list' ? ' active' : ''}`} aria-pressed={view === 'list'} onClick={() => setView('list')}>{t('List')}</button>
+          <button type="button" className={`chip${view === 'map' ? ' active' : ''}`} aria-pressed={view === 'map'} onClick={() => setView('map')}>{t('Relationship map')}</button>
+        </div>
         <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
           <SearchInput value={search} onChange={setSearch} placeholder={t("Search club, name, role...")} />
         </div>
-        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
+        {view === 'list' && <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
           <option value="">{t("Group: All")}</option>
           <option value="Youth">{t("Youth")}</option>
           <option value="Senior">{t("Senior")}</option>
-        </select>
+        </select>}
       </div>
       </PageHeader>
 
-      {filtered.length === 0 ? (
+      {view === 'map' ? (
+        <ContactNetwork contacts={items} search={search} onEdit={openEdit} params={params} setParams={setParams} />
+      ) : filtered.length === 0 ? (
         <Empty
          
           message={items.length === 0 ? 'No contacts yet — add your first one.' : 'No matching contacts.'}

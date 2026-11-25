@@ -21,7 +21,7 @@ const after = (p) => p.then((r) => { kick(); return r; });
 export const addMeeting = (data) => {
   const { email } = currentUserMeta();
   return after(addDoc_(PATHS.MEETINGS, {
-    title: '', date: '', time: '', endTime: '', endDate: '', allDay: false, location: '', notes: '', linkedPlayers: [],
+    title: '', date: '', time: '', endTime: '', endDate: '', allDay: false, location: '', notes: '', linkedPlayers: [], linkedContacts: [],
     owner: email, source: 'manual', ...data,
   }));
 };

@@ -1,3 +1,4 @@
+import { addNetworkFixtures } from './fixtures-network.js';
 const CLUBS = ['מכבי חיפה', 'הפועל באר שבע', 'בית"ר ירושלים', 'מכבי תל אביב', 'Real Betis', 'FC Porto'];
 const POS = ['GK', 'CB', 'RB', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
 const ST = ['Not Contacted', 'Waiting Response', 'Initial Talks', 'Mandate Received', 'Offered to Club', 'Negotiation'];
@@ -96,3 +97,5 @@ export const FIXTURES = {
     ...(i === 4 ? { leagueCountry: 'Spain', touches: [{ id: 't4', at: '2026-11-18T08:00:00.000Z', channel: 'whatsapp', by: 'owner@example.com', playerId: 'r2', dealId: '', note: 'Offered Gavin Karam as a central midfielder' }] } : {}),
   })),
 };
+// The relationship map's story and a realistic-size book (dev/fixtures-network.js).
+addNetworkFixtures(FIXTURES);

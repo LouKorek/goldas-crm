@@ -105,13 +105,17 @@ function TrainingModal({ initial, players, onClose, onSaved }) {
   );
 }
 
-const EMPTY_MEETING = { title: '', date: '', time: '10:00', endTime: '11:00', allDay: false, location: '', notes: '', linkedPlayers: [] };
+const EMPTY_MEETING = { title: '', date: '', time: '10:00', endTime: '11:00', allDay: false, location: '', notes: '', linkedPlayers: [], linkedContacts: [] };
 const plusHour = (time) => { const [h, m] = String(time || '').split(':').map(Number); return Number.isFinite(h) ? `${String((h + 1) % 24).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}` : ''; };
 
-function MeetingModal({ initial, players, onClose }) {
+function MeetingModal({ initial, players, contacts = [], onClose }) {
   const [form, setForm] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState('');
+  // The contacts in the room: the relationship map reads who met whom from them.
+  const [cq, setCq] = useState('');
+  const contactList = cq ? contacts.filter((c) => (c.contactName || '').toLowerCase().includes(cq.toLowerCase())).slice(0, 8) : [];
+  const contactName = (id) => (contacts.find((c) => c.id === id) || {}).contactName || id;
   const s = (k) => (v) => setForm((p) => ({ ...p, [k]: v }));
   const list = q ? players.filter((p) => !p.deletedAt && playerName(p).toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [];
   const setStart = (v) => setForm((p) => ({ ...p, time: v, endTime: !p.endTime || p.endTime <= v ? plusHour(v) : p.endTime }));
@@ -126,7 +130,7 @@ function MeetingModal({ initial, players, onClose }) {
       const data = {
         title: form.title.trim(), date: form.date, allDay, time: allDay ? '' : form.time, endTime,
         endDate: allDay ? form.date : (endTime && endTime <= form.time ? addDays(form.date, 1) : form.date),
-        location: form.location, notes: form.notes, linkedPlayers: form.linkedPlayers,
+        location: form.location, notes: form.notes, linkedPlayers: form.linkedPlayers, linkedContacts: form.linkedContacts || [],
       };
       if (initial.id) await updateMeeting(initial.id, data); else await addMeeting(data);
       toast.success(initial.id ? t('Meeting updated.') : t('Meeting added.'));
@@ -157,6 +161,13 @@ function MeetingModal({ initial, players, onClose }) {
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Type to search')} />
         {list.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>{list.map((p) => <button key={p.id} type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { if (!form.linkedPlayers.includes(p.id)) s('linkedPlayers')([...form.linkedPlayers, p.id]); setQ(''); }}>{playerName(p)}</button>)}</div>}
+      </Field>
+      <Field label={t('Contacts in the meeting')}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+          {(form.linkedContacts || []).map((id) => <span key={id} className="chip active" onClick={() => s('linkedContacts')(form.linkedContacts.filter((x) => x !== id))} style={{ cursor: 'pointer' }}>{contactName(id)} ✕</span>)}
+        </div>
+        <input value={cq} onChange={(e) => setCq(e.target.value)} placeholder={t('Type to search')} />
+        {contactList.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>{contactList.map((c) => <button key={c.id} type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { const cur = form.linkedContacts || []; if (!cur.includes(c.id)) s('linkedContacts')([...cur, c.id]); setCq(''); }}>{c.contactName}{c.clubName ? ` · ${c.clubName}` : ''}</button>)}</div>}
       </Field>
       <Field label={t('Notes')}><textarea rows={3} value={form.notes} onChange={(e) => s('notes')(e.target.value)} /></Field>
       {initial.guests?.length > 0 && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{t('Guests')}: {initial.guests.join(', ')}</div>}
@@ -213,6 +224,8 @@ export default function Calendar() {
     return () => u.forEach((f) => f());
   }, []);
   useEffect(() => listenMeetings(setMeetings), []);
+  const [contacts, setContacts] = useState([]);
+  useEffect(() => listenCollection(PATHS.CONTACTS, setContacts), []);
 
   // Admin-only: pull fixtures for every represented player (background function).
   const syncNow = async () => {
@@ -279,7 +292,7 @@ export default function Calendar() {
     setModal({ id: tr.id, title: tr.title || '', kind: tr.rule ? 'weekly' : 'once', date: tr.date || '', time: tr.time || '', byWeekday: tr.rule?.byWeekday || [], start: tr.rule?.start || '', until: tr.rule?.until || '', place: tr.place || '', linkedPlayers: tr.linkedPlayers || [], ageGroup: tr.ageGroup || '', notes: tr.notes || '' });
   };
 
-  const editMeeting = (m) => setMeetingModal({ ...EMPTY_MEETING, ...m, endTime: m.endTime || '', linkedPlayers: m.linkedPlayers || [] });
+  const editMeeting = (m) => setMeetingModal({ ...EMPTY_MEETING, ...m, endTime: m.endTime || '', linkedPlayers: m.linkedPlayers || [], linkedContacts: m.linkedContacts || [] });
   const delMeeting = async (m) => {
     const ok = await confirm(t('Delete the meeting "{title}"? It is removed from Google Calendar too.', { title: m.title }));
     if (!ok) return;
@@ -366,7 +379,7 @@ export default function Calendar() {
 
       {modal && <TrainingModal initial={modal} players={players} onClose={() => setModal(null)} />}
       {moving && <MoveModal occ={moving} onClose={() => setMoving(null)} />}
-      {meetingModal && <MeetingModal initial={meetingModal} players={players} onClose={() => setMeetingModal(null)} />}
+      {meetingModal && <MeetingModal initial={meetingModal} players={players} contacts={contacts} onClose={() => setMeetingModal(null)} />}
       {dialog}
     </div>
   );
