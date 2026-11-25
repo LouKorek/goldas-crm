@@ -196,7 +196,10 @@ async function run(job, now = new Date(), { force = false, send, write, scout } 
     .then((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.atMs || 0) - (b.atMs || 0)))
     .catch((e) => { job.note(`player notes failed: ${e.message}`); return []; });
   let notesHeard = false;
-  const ops = opsAlerts({ jobs: data.jobs, ifaSync: data.ifaSync, scraper: data.scraper, now });
+  // The backups' own state (lib/backup.js): the admins hear, in the day, when the last good one is too old.
+  const backups = quiet ? null : await db.collection('backups').orderBy('startedAt', 'desc').limit(12).get()
+    .then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))).catch(() => null);
+  const ops = opsAlerts({ jobs: data.jobs, ifaSync: data.ifaSync, scraper: data.scraper, backups, now });
   const dayMs = 86400000;
   const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
   let count = 0;

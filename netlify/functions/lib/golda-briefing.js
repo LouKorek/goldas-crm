@@ -70,14 +70,20 @@ function buildUrgent(name, alerts) {
  *   - a job whose last two runs both failed (one failure is an ordinary alert);
  *   - the ScraperAPI quota at 80% or more;
  *   - the Israeli fixtures sync silent too long (quietHours);
- *   - a team page whose only readable copy is stale.
+ *   - a team page whose only readable copy is stale;
+ *   - no good backup for more than a week.
  * Each has a key that repeats once a day at most.
  */
 const IFA_QUIET_HOURS = require('./ifa-exa.js').quietHours();
 
-function opsAlerts({ jobs = [], ifaSync = null, scraper = null, now = new Date() }) {
+function opsAlerts({ jobs = [], ifaSync = null, scraper = null, backups = null, now = new Date() }) {
   const out = [];
   const today = israelDate(now);
+  // No good, checked backup for more than a week (the schedule is weekly).
+  if (backups) {
+    const h = require('./backup.js').backupHealth(backups, now.getTime());
+    if (!h.ok) out.push({ key: `backup|${today}`, text: `• ${h.lastGoodAt ? `הגיבוי התקין האחרון של המערכת הוא מלפני ${h.ageDays} ימים` : 'אין למערכת אף גיבוי תקין'}. כדאי ללחוץ "גבה עכשיו" במסך הניהול ← גיבויים.` });
+  }
   const ms = (v) => (v && typeof v.toMillis === 'function' ? v.toMillis() : v ? Date.parse(v) || 0 : 0);
   const byName = {};
   for (const j of [...jobs].sort((a, b) => ms(b.startedAt) - ms(a.startedAt))) (byName[j.name] = byName[j.name] || []).push(j);
