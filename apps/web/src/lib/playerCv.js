@@ -239,7 +239,8 @@ export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { la
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 48;
-  const age = calcAge(player.dob);
+  // The public sheet (a club's live link) carries the age but not the date of birth.
+  const age = calcAge(player.dob) || (Number(player.age) > 0 ? Math.round(Number(player.age)) : null);
   // Mirror helpers: a left-edge x becomes a right-edge x on the Hebrew sheet,
   // and text anchored at it is right-aligned.
   const X = (x) => (rtl ? W - x : x);

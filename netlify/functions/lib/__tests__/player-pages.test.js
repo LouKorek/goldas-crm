@@ -290,8 +290,8 @@ test('links on the page are plain web addresses or nothing', () => {
 
 test("this season's totals appear when the matches carry them, and not otherwise", async () => {
   const matches = {
-    m1: { date: '2026-09-01', linkedPlayers: ['p1'], playerStats: { p1: { minutes: 90, goals: 1, assists: 0, yellow: 1, started: true, rating: 'SECRET-rating' }, p2: { goals: 5 } } },
-    m2: { date: '2026-10-01', linkedPlayers: ['p1'], playerStats: [{ playerId: 'p1', minutes: 45, goals: 2 }, { playerId: 'p2', goals: 9 }] },
+    m1: { date: '2026-09-01', linkedPlayers: ['p1'], playerStats: { p1: { minutes: 90, goals: 1, assists: 0, rating: 7, note: 'SECRET-note', watchedBy: 'SECRET-scout' }, p2: { goals: 5 } } },
+    m2: { date: '2026-10-01', linkedPlayers: ['p1'], playerStats: { p1: { minutes: 45, goals: 2 }, p2: { goals: 9 } } },
     old: { date: '2026-03-01', linkedPlayers: ['p1'], playerStats: { p1: { minutes: 90, goals: 7 } } },
     none: { date: '2026-10-08', linkedPlayers: ['p1'] },
     deleted: { date: '2026-10-09', linkedPlayers: ['p1'], deletedAt: 'x', playerStats: { p1: { goals: 4 } } },
@@ -299,14 +299,14 @@ test("this season's totals appear when the matches carry them, and not otherwise
   const db = world({ matches });
   const made = await link(db);
   const body = JSON.parse((await view(db, made.token)).body);
-  assert.deepEqual(body.stats, { season: '2026/27', totals: { minutes: 135, goals: 3, yellow: 1, starts: 1, games: 2 } });
+  assert.deepEqual(body.stats, { season: '2026/27', totals: { games: 2, minutes: 135, goals: 3 } });
   assert.ok(!JSON.stringify(body).includes('SECRET'));
   // kept on the link for six hours, so an opening does not read the matches again
   db.data.get('matches').set('m3', { date: '2026-11-01', linkedPlayers: ['p1'], playerStats: { p1: { goals: 10 } } });
   assert.equal(JSON.parse((await view(db, made.token, { now: NOW + 3600000 })).body).stats.totals.goals, 3);
   assert.equal(JSON.parse((await view(db, made.token, { now: NOW + 7 * 3600000 })).body).stats.totals.goals, 13);
   // no stats on any match: nothing is shown
-  assert.equal(pages.seasonTotals(Object.values({ a: matches.none }), 'p1', { seasonStart: '2026-07-01' }), null);
+  assert.equal(pages.seasonTotals(Object.values({ a: matches.none }), 'p1', { season: '2026/27' }), null);
   assert.equal(pages.seasonTotals([], 'p1'), null);
 });
 

@@ -23,7 +23,7 @@
 // is not named there leaves the server, whatever the player record holds.
 // Times are epoch milliseconds. This collection is touched by functions only.
 const crypto = require('crypto');
-const { israelDate, playerName, seasonStartYear, seasonLabel, natTeamStatusOf } = require('@goldas/domain');
+const { israelDate, playerName, natTeamStatusOf, playerMatchRows, summarizeStats, currentSeason } = require('@goldas/domain');
 const { seal, unseal } = require('./seal.js');
 const { siteUrl } = require('./site.js');
 
@@ -283,42 +283,20 @@ async function loadPhoto(db, p = {}) {
 }
 
 // ── This season's totals ─────────────────────────────────────────────
-// A tiny local reader. REPLACE with summarizeStats from @goldas/domain once
-// that lands (another change adds playerStats to matches and the summary to
-// the domain package); until then this reads the same data leniently and
-// shows nothing when there is none.
-const STAT_KEYS = ['games', 'starts', 'minutes', 'goals', 'assists', 'yellow', 'red', 'cleanSheets'];
-const STAT_ALIASES = { appearances: 'games', apps: 'games', played: 'games', started: 'starts', mins: 'minutes', yellowCards: 'yellow', yellows: 'yellow', redCards: 'red', reds: 'red', cleanSheet: 'cleanSheets' };
+// The same rows and sums the CRM shows (packages/domain/engines/matchStats),
+// reduced to the four numbers a club may see: games, minutes, goals, assists.
+// The rating, the note and who watched never leave the server.
 
-function statsRowOf(match, playerId) {
-  const ps = match && match.playerStats;
-  if (!ps || typeof ps !== 'object') return null;
-  if (Array.isArray(ps)) return ps.find((r) => r && String(r.playerId || r.id || '') === String(playerId)) || null;
-  return ps[playerId] && typeof ps[playerId] === 'object' ? ps[playerId] : null;
-}
-
-/** { season, totals } for the matches of the season that started on seasonStart (YYYY-MM-DD), or null. */
-function seasonTotals(matches, playerId, { seasonStart, season } = {}) {
+/** { season, totals } for the season with that label ('2026/27'), or null when there is nothing to show. */
+function seasonTotals(matches, playerId, { season } = {}) {
+  const rows = playerMatchRows(matches || [], playerId).filter((r) => !season || r.season === season);
+  if (!rows.length) return null;
+  const sum = summarizeStats(rows);
   const totals = {};
-  let rows = 0;
-  for (const m of matches || []) {
-    if (!m || m.deletedAt || (seasonStart && String(m.date || '') < seasonStart)) continue;
-    const row = statsRowOf(m, playerId);
-    if (!row) continue;
-    rows++;
-    const seen = {};
-    for (const [k, v] of Object.entries(row)) {
-      const key = STAT_ALIASES[k] || k;
-      if (!STAT_KEYS.includes(key)) continue;
-      const n = v === true ? 1 : Number(v);
-      if (Number.isFinite(n) && n > 0 && n < 100000) seen[key] = Math.round(n);
-    }
-    // A row with minutes or anything else recorded is a game played, even when "games" was not written.
-    if (!seen.games && Object.keys(seen).length) seen.games = 1;
-    for (const [k, n] of Object.entries(seen)) totals[k] = (totals[k] || 0) + n;
+  for (const [key, n] of [['games', sum.apps], ['minutes', sum.minutes], ['goals', sum.goals], ['assists', sum.assists]]) {
+    if (Number(n) > 0) totals[key] = Math.round(Number(n));
   }
-  if (!rows || !Object.keys(totals).length) return null;
-  return { season: season || '', totals };
+  return Object.keys(totals).length ? { season: season || '', totals } : null;
 }
 
 /**
@@ -328,10 +306,8 @@ function seasonTotals(matches, playerId, { seasonStart, season } = {}) {
 async function statsFor(db, link, { now = Date.now() } = {}) {
   const cached = link.statsCache;
   if (cached && now - (cached.at || 0) < STATS_TTL_MS) return cached.totals ? { season: cached.season || '', totals: cached.totals } : null;
-  const at = new Date(now);
-  const seasonStart = `${seasonStartYear(at)}-07-01`;
   const snap = await db.collection('matches').where('linkedPlayers', 'array-contains', link.playerId).get();
-  const found = seasonTotals(snap.docs.map((d) => d.data()), link.playerId, { seasonStart, season: seasonLabel(at) });
+  const found = seasonTotals(snap.docs.map((d) => ({ id: d.id, ...d.data() })), link.playerId, { season: currentSeason(new Date(now)) });
   await db.collection(COL).doc(link.id).update({ statsCache: { at: now, season: found ? found.season : '', totals: found ? found.totals : null } });
   return found;
 }
