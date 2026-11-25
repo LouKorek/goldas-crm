@@ -502,7 +502,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     const snap = await db.collection('players').doc(playerId).get();
     if (!snap.exists || snap.data().deletedAt) throw new Error('player not found');
     if (state.outFiles.length >= 3) throw new Error('at most three documents per answer');
-    const file = await require('./golda-pdf.js').playerCvPdf({ id: snap.id, ...snap.data() }, { lang });
+    const file = await require('./golda-pdf.js').playerCvPdf({ id: snap.id, ...snap.data() }, { lang, db });
     state.outFiles.push(file);
     return { made: true, filename: file.filename, sizeKB: Math.round(file.buffer.length / 1024), note: 'The PDF goes out right after your text answer; just say it is attached.' };
   }

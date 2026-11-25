@@ -5,7 +5,7 @@
 // The CV source is an ES module of the web app; the functions bundler
 // (esbuild) folds it, jsPDF and the embedded fonts into this function. Tests
 // pass their own `load` (an esbuild bundle built on the fly).
-const { playerName } = require('@goldas/domain');
+const { playerName, playerMatchRows, summarizeStats, currentSeason } = require('@goldas/domain');
 
 const APP_URL = () => (process.env.URL || 'https://goldas-crm.netlify.app').replace(/\/$/, '');
 
@@ -29,17 +29,37 @@ function defaultLoad() {
 }
 
 /**
- * The player's CV as a PDF buffer. lang 'en' (clubs abroad, the default) or 'he'.
- * Returns { buffer, filename, mimeType }.
+ * The current season's totals of a player from the matches in Firestore
+ * (matches/{id}.playerStats), for the CV's season row; null when none or on
+ * any read failure (the CV never waits on it).
  */
-async function playerCvPdf(player, { lang = 'en', load = defaultLoad, logo } = {}) {
+async function seasonOf(db, playerId, now = new Date()) {
+  if (!db || !playerId) return null;
+  try {
+    const snap = await db.collection('matches').where('linkedPlayers', 'array-contains', playerId).get();
+    const label = currentSeason(now);
+    const rows = playerMatchRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })), playerId).filter((r) => r.season === label);
+    return rows.length ? { label, ...summarizeStats(rows) } : null;
+  } catch (e) {
+    console.warn('[golda-pdf] season read failed:', e.message);
+    return null;
+  }
+}
+
+/**
+ * The player's CV as a PDF buffer. lang 'en' (clubs abroad, the default) or 'he'.
+ * With `db`, the current season's match totals are read and printed; pass
+ * `season` to give them directly. Returns { buffer, filename, mimeType }.
+ */
+async function playerCvPdf(player, { lang = 'en', load = defaultLoad, logo, db = null, season } = {}) {
   const { buildPlayerCv, fonts, jsPDF } = load();
+  const totals = season !== undefined ? season : await seasonOf(db, player.id);
   const name = playerName(player);
   const { doc } = await buildPlayerCv(jsPDF, fonts, { ...player, playerName: name }, player.category || 'men',
-    { lang: lang === 'he' ? 'he' : 'en', logo: logo === undefined ? await logoDataUrl() : logo });
+    { lang: lang === 'he' ? 'he' : 'en', logo: logo === undefined ? await logoDataUrl() : logo, season: totals });
   // The app's file name drops Hebrew; WhatsApp and the app show it, so keep it.
   const filename = `${String(name || 'player').replace(/[\\/:*?"<>|]/g, '').trim() || 'player'} - Gold A&S.pdf`;
   return { buffer: Buffer.from(doc.output('arraybuffer')), filename, mimeType: 'application/pdf' };
 }
 
-module.exports = { playerCvPdf, logoDataUrl, _reset: () => { _logo = undefined; } };
+module.exports = { playerCvPdf, logoDataUrl, seasonOf, _reset: () => { _logo = undefined; } };
