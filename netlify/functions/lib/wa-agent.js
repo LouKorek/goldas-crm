@@ -24,6 +24,7 @@ const { youtubeTools, YOUTUBE_TOOL_DEFS } = require('./golda-youtube.js');
 const { websiteTools, WEBSITE_TOOL_DEFS } = require('./golda-website.js');
 const { dailyQuestionTools, DAILY_QUESTION_TOOL_DEF } = require('./golda-daily-question.js');
 const { checklistTools, CHECKLIST_TOOL_DEF } = require('./golda-checklist.js');
+const { matchReportTools, MATCH_REPORT_TOOL_DEFS } = require('./golda-match-report.js');
 const { chooseEffort } = require('./golda-effort.js');
 
 // Since the model unification every person lives in `players` with a stage
@@ -271,6 +272,7 @@ How you work:
 - A message you started yourself is in this chat as your own turn. A website draft you prepared after a CRM change (your message that opens with "האתר לא מעודכן לפי ה-CRM" 🌐): the draft already exists, so on the writer's yes call website_publish action=publish; on a no, website_read part=draft and take those lines out with website_edit drop (discard=true when nothing else is in the draft). When that message only asked what to write on a card, take the answer and prepare the draft with website_edit as usual.
 - Your daily question (your message that opens with "שאלה יומית" ❓): the writer's next message is usually its answer, in whatever topic you are. Find that player and save the answer with update: dates as YYYY-MM-DD, foot as Right/Left/Both, contractStatus as Under Contract/Free/Loan/Trial, the position in the CRM's codes, nationalities as country names in English. Confirm in one line. "דלג" / "לא יודע" → fine, no insisting and no other question instead. "בלי שאלה יומית" / "תפסיקי לשאול כל יום" → daily_question action=off; "תחזירי את השאלה היומית" → action=on.
 - "מה חסר ל…" / "מה חסר בתיק של…" (a player's file) → find the player, then player_checklist with his playerId: the score, then what is missing, most important first, each with how to fix it, and the link to his page. "למי חסר הכי הרבה" / "איזה תיקים לא מלאים" → player_checklist with no playerId. What it lists as not known yet, say so; never guess it. A photo sent for a player goes in with attach_file field=photoFiles.
+- How a player did in a match ("אתמול X שיחק 70 דקות, גול אחד, 7", "Y לא שיחק", "ראיתי את Z, היה חלש, 5"): find the player, then match_report with his playerId and the match date (yesterday/today resolved against today's date in Israel) or the matchId; minutes 0 when he did not play; a rating only when one was said; the note in the writer's words, one short sentence. One call per player. Your morning question about yesterday's matches (your message that opens with "איך היה אתמול" ⚽) is answered this way, in one or several lines; "דלג" = record nothing. Say what you saved and his season so far in one line. "בלי שאלות על משחקים" / "תחזירי את השאלות על משחקים" → match_questions off / on.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
@@ -296,7 +298,7 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - tasks: title*, dueDate, priority (Low|Normal|High|Urgent), notes, linkedPlayers [player ids], done (bool).
 - tmWatch (read and update; Jewish players found on Transfermarkt): name, club, clubCountry, marketValue, status (new|seen|...), starred (bool), addedToPipeline (bool).
 - igDaily (read-only): date, followers, newFollowers. igPosts (read-only): Instagram posts and their stats.
-- matches: date*, time (HH:MM), homeTeam*, awayTeam*, homeTeamIsYouth, awayTeamIsYouth, stadiumName, notes, linkedPlayers* [player ids], source "manual". (Israeli league fixtures also arrive automatically every morning.)
+- matches: date*, time (HH:MM), homeTeam*, awayTeam*, homeTeamIsYouth, awayTeamIsYouth, stadiumName, notes, linkedPlayers* [player ids], source "manual", watchedBy (who from the team watches it), playerStats {playerId: {minutes, goals, assists, rating, note, watchedBy}} (written only with match_report). (Israeli league fixtures also arrive automatically every morning.)
 - trainings: title*, time (HH:MM), place, notes, linkedPlayers [player ids], ageGroup (noar|nearim_a|nearim_b|nearim_c|yeladim_a|yeladim_b|yeladim_c|trom_a|trom_b|trom_c, for youth groups), and EITHER date (one-off, YYYY-MM-DD) OR rule {freq:"weekly", byWeekday:[0=Sunday…6=Saturday], start: YYYY-MM-DD, until: YYYY-MM-DD or null}. To skip or move one session of a weekly training, update exceptions: [{date, cancelled:true}] or [{date, date2, time}] (date = the original session's date).
 - Games and trainings are kept in sync, both ways, with Lou's Google calendar "Gold A&S Player Schedule": what you create, move or cancel here appears there within a minute, and what Lou adds or moves there ("אימון — <שחקן>", "משחק — <שחקן>") arrives here within ten minutes. The time of a training is the time the player has to be there (Lou's marker); put start times and other details in notes. So you never need to tell anyone to update the calendar by hand.
 - meetings: title*, date*, time (HH:MM start; empty = all day), endTime (HH:MM; default one hour after time), endDate (only for an item longer than a day), allDay (bool), location, notes, linkedPlayers [player ids the meeting is about]. Read-only, from Google: guests, meetUrl, calendarLink. These are Lou's meetings with players, business meetings and everything of the agency that is not a game or training, kept in sync both ways with his Google calendar "Gold A&S" exactly like games and trainings with the player schedule (what Lou adds, moves or deletes there arrives here within ten minutes; what you write appears there within a minute). Games and trainings never go into meetings. You cannot invite guests: if the writer wants invitations sent, they add the guests in Google Calendar. When the writer asks what they have today or this week, include meetings next to games and trainings.
@@ -370,7 +372,7 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist']);
@@ -378,7 +380,9 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // The public website is the agency's face: an admin only, like the settings.
   website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings',
   // Her own daily question to the owner: his to switch off and on.
-  daily_question: 'manage_settings' };
+  daily_question: 'manage_settings',
+  // A player's numbers in a match are an edit of the match; the morning question is the owner's to switch.
+  match_report: 'edit', match_questions: 'manage_settings' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
@@ -605,7 +609,9 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     if (VIRTUAL[collection] && collection !== 'players' && 'status' in d && d.status !== before.status) d.stage = stageFromStatus(d.status);
     if (VIRTUAL[collection] && ('fullName' in d || 'playerName' in d)) d.name = playerName({ ...before, ...d });
     const prev = {};
-    for (const k of Object.keys(d)) prev[k] = before[k] === undefined ? null : plain(before[k]);
+    // A dotted key ("playerStats.<id>") changes one entry of a map: its before is that entry.
+    const at = (k) => k.split('.').reduce((o, part) => (o && typeof o === 'object' ? o[part] : undefined), before);
+    for (const k of Object.keys(d)) prev[k] = at(k) === undefined ? null : plain(at(k));
     await ref.update({ ...d, updatedAt: FieldValue.serverTimestamp(), lastEditedAt: FieldValue.serverTimestamp(),
       lastEditedBy: who.email, lastEditedByName: who.name, ...(collection === 'tasks' && 'done' in d ? { completedAt: d.done ? new Date().toISOString() : null } : {}) });
     await audit({ action: 'update', collection, docId: id, before: prev, after: d });
@@ -763,7 +769,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       return { id: s.id, ...s.data() };
     } }),
     ...websiteTools({ db, admin, identity, media, session, channel, role, state }),
-    ...dailyQuestionTools({ db, admin, identity, role, channel }), ...checklistTools({ db }) };
+    ...dailyQuestionTools({ db, admin, identity, role, channel }), ...checklistTools({ db }),
+    ...matchReportTools({ db, admin, identity, role, channel, update }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
