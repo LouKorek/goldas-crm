@@ -442,3 +442,16 @@ admin-only (it is the negotiation, like the deal's money); viewers see none. Gol
 `mail_recent` follows the same rule and is never available to the player role. A wrong link
 is fixed on the record (move to another deal, take off the deal, "not agency mail"); the
 fix is kept in the message's `override` and survives every sync.
+
+## System status from outside (`/.netlify/functions/system-status`)
+
+One small page that says how the system is doing, readable without signing in, so a check after a change needs nobody's computer:
+
+`https://goldas-crm.netlify.app/.netlify/functions/system-status`
+
+- `jobs`: each scheduled job's last run (ok or error, when, how long, whether one is running now, when it last failed).
+- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read.
+- `backup`: the latest backup and the latest good one (read back, copied outside the database, how many documents).
+- `notifications`: how many devices take notifications.
+
+It is open, so it holds states, times and counts only: no names, addresses, ids, file names or error texts. Every word in it comes from a fixed list in `lib/system-status.js`; anything else comes out as `unknown`, and `system-status.test.js` proves nothing private gets through. To add a fact, add it there as a number, a time, a yes/no or a word from a list, never as free text. The reason behind an `error` is in System › Health, for a signed-in admin. Netlify's edge keeps an answer for a minute.
