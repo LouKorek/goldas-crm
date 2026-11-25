@@ -281,7 +281,8 @@ function layoutGraphic({ size = 'post', texts, photo = null, measure = roughMeas
       total = heightOf(block);
       top = Math.max(highest, room - total);
     }
-    out.defs.push(`<linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.card}" stop-opacity="0"/><stop offset="0.55" stop-color="${C.card}" stop-opacity="0.35"/><stop offset="1" stop-color="${C.card}" stop-opacity="1"/></linearGradient>`);
+    // The fade is solid over its last tenth, so nothing of the photo shows as a faint line at its cut lower edge.
+    out.defs.push(`<linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.card}" stop-opacity="0"/><stop offset="0.55" stop-color="${C.card}" stop-opacity="0.35"/><stop offset="0.9" stop-color="${C.card}" stop-opacity="1"/><stop offset="1" stop-color="${C.card}" stop-opacity="1"/></linearGradient>`);
     out.defs.push(`<linearGradient id="topshade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.card}" stop-opacity="0.75"/><stop offset="1" stop-color="${C.card}" stop-opacity="0"/></linearGradient>`);
     const fadeFrom = Math.min(Math.round(photoH * 0.5), top - 260);
     out.under.push(`<rect x="0" y="${fadeFrom}" width="${W}" height="${photoH - fadeFrom + 2}" fill="url(#fade)"/>`);

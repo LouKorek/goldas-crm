@@ -24,7 +24,7 @@ require.cache[waPath] = { id: waPath, filename: waPath, loaded: true, exports: {
   sendText: async (to, text) => { sent.push(['text', text]); return ['wamid.T']; },
   sendButtons: async () => ['wamid.B'], sendList: async () => ['wamid.L'],
   sendDocument: async (to, f) => { if (f.filename === 'bad.pdf') throw new Error('refused'); sent.push(['doc', f.filename]); return ['wamid.D']; },
-  sendImage: async (to, f) => { if (f.filename === 'refused.jpg') throw new Error('image refused'); sent.push(['image', f.filename]); return ['wamid.I']; },
+  sendImage: async (to, f) => { if (f.filename === 'refused.jpg') throw new Error('image refused'); sent.push(f.caption ? ['image', f.filename, f.caption] : ['image', f.filename]); return ['wamid.I']; },
 } };
 const { deliver, storeOutFile, loadOutFile } = require('../golda-worker.js');
 
@@ -56,6 +56,7 @@ test('in the app nothing is sent; the inbox document carries the files', async (
 
 // An Instagram graphic (lib/golda-instagram.js): the picture as an image first,
 // then its caption as a message of its own (to copy), then her words, then documents.
+// The picture itself carries no caption (the fake records one if it gets one), so the caption shows once.
 const graphic = { buffer: Buffer.from('JPEG'), filename: 'Noam - signing - post.jpg', mimeType: 'image/jpeg', graphic: true, caption: 'ברכות לנועם!\n#GoldAS' };
 
 test('on WhatsApp a graphic goes as an image, then its caption, then the reply, then documents', async () => {
