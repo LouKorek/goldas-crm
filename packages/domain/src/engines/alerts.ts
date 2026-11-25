@@ -5,10 +5,12 @@
 // list grouped by type. Day counts use the Israeli calendar.
 import { daysAway, nextBirthday, toDateStr, israelDate, daysBetween } from './dates.js';
 import { playerName, DEAL_STALE_DAYS } from '../stages.js';
+import { paymentRows, describePayment, PAYMENT_DUE_SOON_DAYS, type Payment } from './finance.js';
 
 export type AlertType =
   | 'contract' | 'repr' | 'passport' | 'birthday' | 'match'
-  | 'deal_stale' | 'requirement_expired' | 'task_overdue' | 'job_failed' | 'sync_mismatch';
+  | 'deal_stale' | 'requirement_expired' | 'task_overdue' | 'job_failed' | 'sync_mismatch'
+  | 'payment_late' | 'payment_due';
 export type Severity = 'critical' | 'warning' | 'info' | 'gold';
 
 export interface AlertSettings {
@@ -44,6 +46,8 @@ export interface Alert {
   record: Record<string, unknown>;
   /** Birthday: the age reached. */
   age?: number;
+  /** payment_late / payment_due: the payment, and what is still owed on it. */
+  payment?: Payment & { outstanding: number };
 }
 
 export interface AlertsInput {
@@ -57,6 +61,12 @@ export interface AlertsInput {
   now?: Date;
   /** Hours of job history to scan for failures (default 24). */
   jobWindowHours?: number;
+  /**
+   * Include payment alerts (payment_late, payment_due). Money is for admins
+   * only, so it is off unless the caller says the reader may see it:
+   * money: can(role, 'money').
+   */
+  money?: boolean;
 }
 
 export interface AlertsResult {
@@ -232,10 +242,27 @@ export function computeAlerts(input: AlertsInput): AlertsResult {
     });
   }
 
+  // Money owed on a deal: late every day until paid; due a week before and on
+  // the day. Not Relevant deals' unpaid money is out (finance.ts).
+  if (input.money) {
+    for (const r of paymentRows(input.deals ?? [], now)) {
+      if (r.excluded || r.outstanding <= 0 || r.days > PAYMENT_DUE_SOON_DAYS) continue;
+      const late = r.days < 0;
+      alerts.push({
+        type: late ? 'payment_late' : 'payment_due', severity: late ? 'critical' : r.days === 0 ? 'warning' : 'info',
+        days: r.days, dueDate: r.payment.dueDate, overdue: late,
+        subject: { kind: 'deal', id: r.dealId, name: `${r.playerName} ↔ ${r.clubName}` },
+        record: (input.deals ?? []).find((d) => str(d.id) === r.dealId) ?? {},
+        payment: { ...r.payment, outstanding: r.outstanding },
+        proof: describePayment(r),
+      });
+    }
+  }
+
   const order: Record<Severity, number> = { critical: 0, warning: 1, gold: 2, info: 3 };
   alerts.sort((a, b) => order[a.severity] - order[b.severity] || (a.days ?? 0) - (b.days ?? 0));
 
-  const byType = Object.fromEntries((['contract', 'repr', 'passport', 'birthday', 'match', 'deal_stale', 'requirement_expired', 'task_overdue', 'job_failed', 'sync_mismatch'] as AlertType[])
+  const byType = Object.fromEntries((['contract', 'repr', 'passport', 'birthday', 'match', 'deal_stale', 'requirement_expired', 'task_overdue', 'job_failed', 'sync_mismatch', 'payment_late', 'payment_due'] as AlertType[])
     .map((k) => [k, alerts.filter((a) => a.type === k)])) as Record<AlertType, Alert[]>;
   // Matches are information, not action; the total counts what needs doing.
   const total = alerts.filter((a) => a.type !== 'match').length;

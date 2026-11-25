@@ -27,6 +27,8 @@ const { checklistTools, CHECKLIST_TOOL_DEF } = require('./golda-checklist.js');
 const { matchReportTools, MATCH_REPORT_TOOL_DEFS } = require('./golda-match-report.js');
 const { playerPageTools, PLAYER_PAGE_TOOL_DEFS } = require('./golda-player-page.js');
 const { monthlyReportTools, MONTHLY_REPORT_TOOL_DEF } = require('./golda-monthly-report.js');
+const { financeTools, financeSection, PAYMENTS_TOOL_DEFS } = require('./golda-finance.js');
+const { agreementTools, AGREEMENT_TOOL_DEFS } = require('./golda-agreement.js');
 const { chooseEffort } = require('./golda-effort.js');
 
 // Since the model unification every person lives in `players` with a stage
@@ -276,10 +278,12 @@ How you work:
 - "מה חסר ל…" / "מה חסר בתיק של…" (a player's file) → find the player, then player_checklist with his playerId: the score, then what is missing, most important first, each with how to fix it, and the link to his page. "למי חסר הכי הרבה" / "איזה תיקים לא מלאים" → player_checklist with no playerId. What it lists as not known yet, say so; never guess it. A photo sent for a player goes in with attach_file field=photoFiles.
 - How a player did in a match ("אתמול X שיחק 70 דקות, גול אחד, 7", "Y לא שיחק", "ראיתי את Z, היה חלש, 5"): find the player, then match_report with his playerId and the match date (yesterday/today resolved against today's date in Israel) or the matchId; minutes 0 when he did not play; a rating only when one was said; the note in the writer's words, one short sentence. One call per player. Your morning question about yesterday's matches (your message that opens with "איך היה אתמול" ⚽) is answered this way, in one or several lines; "דלג" = record nothing. Say what you saved and his season so far in one line. "בלי שאלות על משחקים" / "תחזירי את השאלות על משחקים" → match_questions off / on.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
+${financeSection(identity.role)}
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
 - A live player page (admins only) is a different thing from the PDF and never replaces it. Make one ONLY when the writer asks in so many words for a live page or a link to the player ("דף חי", "לינק לשחקן", "לינק חי", "live page"): find the player, then live_page_create with the club when one was named (one link per club; no club → a general link), days only when a period was named (14 otherwise, 90 at most) and lang "he" only when asked for Hebrew. Give the writer the link on its own line with for whom and until when it works. Never offer a live page instead of the PDF, never make one for "דף שחקן" / "CV", and never send the link to anyone but the writer: he sends it on himself. You tell Lou the first time a link is opened (your message that opens with 👀). "מי פתח את הדף של…" / "אילו לינקים פתוחים" → live_page_list. "תבטלי את הלינק" → live_page_list to find it, then live_page_revoke (it stops at once; say so).
+- A representation agreement signed in the system (admins only) is made from the agency's template. "הסכם ייצוג ל<שחקן>": find the player, collect the start, the end or the number of months (none named → the template's default), the language (Hebrew unless asked), and for a player under 18 the full name of the parent or guardian who signs; then agreement_create action=check and show its summary with buttons [[כפתורים: ליצור, לשנות]]. Only after the yes in a later message: action=confirm, and give the writer the signing link on its own line with for whom and until when it works; he sends it on himself, you never send it to the player or the family. No template → say so in the tool's words. You tell Lou once it is signed (your message that opens with ✍️); the signed PDF goes into the player's file and the representation dates are updated by themselves. "<שחקן> חתם?" / "מה עם ההסכם של…" → agreement_list. "תבטלי את הלינק להסכם" / "לינק חדש להסכם" → agreement_list, then agreement_link. "תבני את תבנית ההסכם מההסכם של <שחקן>" → read_file his representation agreement, then agreement_template action=propose with the same wording and placeholders, show it whole and save only after the yes in a later message. Never say an agreement is legally binding, and never repeat an ID number.
 - "חלון העברות" / "מתי נסגר החלון" / "מי מתאים לחלון" → transfer_windows (exact dates and deadline times; Israel is not in it yet, so check the web for the IFA dates and say where you found them), then connect it to players who need a club (free agents, contracts ending, loans ending) and the open requirements.
 - Golda opens follow-up tasks by herself for deals that sit too long in a stage (they say "מעקב:" and close by themselves when the deal moves). When asked what to do with a deal, mention its open follow-up.
 - "הזדמנויות" / "מה כדאי לקדם" / "את מי להציע" → opportunities: for each, the player, the club and position, the score and the main reason, and the concrete next step (open a deal, call the contact).
@@ -376,10 +380,10 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit',
   // The public website is the agency's face: an admin only, like the settings.
   website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings',
@@ -390,9 +394,13 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // A live player page puts a profile on a public address: an admin's to ask for,
   // like the website. Stopping a link is open to whoever may edit.
   live_page_create: 'manage_settings', live_page_revoke: 'edit',
+  // Representation agreements: making one, its link and the template are an admin's.
+  agreement_create: 'manage_settings', agreement_link: 'manage_settings', agreement_template: 'manage_settings',
 
   // The monthly report is written on the player; its reminder is checked for admin inside the tool.
-  monthly_report: 'edit' };
+  monthly_report: 'edit',
+  // Money is for admins only, reading included.
+  payments: 'money', payment_set: 'money' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
@@ -448,7 +456,9 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   const readOk = (c) => { if (!ALL[c]) throw new Error(`unknown collection ${c}`); return db.collection(physical(c)); };
   // The documents of a (virtual) collection: live records that belong to it.
   const docsOf = async (c) => (await readOk(c).get()).docs.filter((d) => belongs(c, d.data()));
-  const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; return o; };
+  const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; if (!can(role, 'money')) delete o.payments; return o; };
+  // Money is for admins only: a deal read by anyone else comes without its payments.
+  const noMoney = (col, d) => { if (physical(col) === 'deals' && !can(role, 'money')) delete d.payments; return d; };
   const state = { pendingDeletes: normalizePending(session), changed: false, outFiles: [] };
 
   async function search({ query, collection }) {
@@ -470,7 +480,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   }
 
   async function list({ collection, where = [], fields, sortBy, desc, limit }) {
-    let rows = (await docsOf(collection)).map((d) => ({ id: d.id, ...plain(d.data()) }));
+    let rows = (await docsOf(collection)).map((d) => noMoney(collection, { id: d.id, ...plain(d.data()) }));
     for (const w of where || []) rows = rows.filter((r) => matches(r[w.field], w.op, w.value));
     if (sortBy) {
       rows.sort((a, b) => {
@@ -551,7 +561,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   async function get({ collection, id }) {
     const s = await readOk(collection).doc(id).get();
     if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
-    const d = plain(s.data());
+    const d = noMoney(collection, plain(s.data()));
     for (const f of FILE_FIELDS) if (Array.isArray(d[f])) d[f] = d[f].map((r) => ({ name: r.name, uploadedAt: r.uploadedAt, type: r.type }));
     return { collection, id, ...d };
   }
@@ -761,7 +771,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       db.collection('jobs').orderBy('startedAt', 'desc').limit(40).get().then((s) => s.docs.map((d) => ({ id: d.id, ...d.data() }))),
       db.collection('settings').doc('notifications').get().then((s) => mergeSettings(s.exists ? s.data() : {})),
     ]);
-    const r = computeAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now: new Date() });
+    const r = computeAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now: new Date(), money: can(role, 'money') });
     return { total: r.total, alerts: r.alerts.map((a) => ({ type: a.type, severity: a.severity, who: a.subject.name, kind: a.subject.kind, id: a.subject.id, what: a.proof.he, dueDate: a.dueDate, days: a.days })) };
   }
 
@@ -785,7 +795,9 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...dailyQuestionTools({ db, admin, identity, role, channel }), ...checklistTools({ db }),
     ...matchReportTools({ db, admin, identity, role, channel, update }),
     ...playerPageTools({ db, admin, identity, role, channel }),
-    ...monthlyReportTools({ db, admin, identity, role, channel, session, state, update }) };
+    ...monthlyReportTools({ db, admin, identity, role, channel, session, state, update }),
+    ...financeTools({ db, identity, role, update }),
+    ...agreementTools({ db, identity, role, channel, session }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

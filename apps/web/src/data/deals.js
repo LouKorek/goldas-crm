@@ -1,7 +1,7 @@
 // A deal is one candidate (or player) against one club. The stage machine
 // lives in the domain package (engines/deals.ts); this file does the writes.
 import { listenCollection, addDoc_, updateDoc_, PATHS, currentUserMeta } from 'lib/db';
-import { clubKey, isDealStage, playerName, canTransition, applyTransition, categoryFromPlayer } from '@goldas/domain';
+import { clubKey, isDealStage, playerName, canTransition, applyTransition, categoryFromPlayer, cleanPayment, paymentsOf, israelDate } from '@goldas/domain';
 import { addInteraction } from './interactions';
 
 /**
@@ -83,3 +83,36 @@ export const syncDealsForPlayer = async (player, status) => {
     return advanceDeal(deal, status, 'עודכן מסטטוס המועמד', { confirmed: true });
   }));
 };
+
+// ── Payments (admin only: the screens check can(role, 'money') first) ──
+// Every write replaces the deal's payments array through the audited
+// updateDoc_, so the audit log keeps the before / after of each change.
+
+const savePayments = (deal, payments) => updateDoc_(PATHS.DEALS, deal.id, { payments });
+
+const cleanOrThrow = (raw, by) => {
+  const r = cleanPayment(raw, { by });
+  if (!r.ok) throw new Error(r.errors.join('; '));
+  return r.payment;
+};
+
+export const addPayment = (deal, raw) => {
+  const { email } = currentUserMeta();
+  const p = cleanOrThrow({ ...raw, id: '' }, email);
+  return savePayments(deal, [...paymentsOf(deal), p]);
+};
+
+export const updatePayment = (deal, id, patch) => {
+  const list = paymentsOf(deal);
+  const cur = list.find((p) => p.id === id);
+  if (!cur) throw new Error('payment not found');
+  const next = cleanOrThrow({ ...cur, ...patch, id }, cur.createdBy);
+  return savePayments(deal, list.map((p) => (p.id === id ? next : p)));
+};
+
+export const deletePayment = (deal, id) =>
+  savePayments(deal, paymentsOf(deal).filter((p) => p.id !== id));
+
+/** Mark a payment paid on `paidAt` (default today, Israel). An amount below the total makes it partial. */
+export const markPaid = (deal, id, { paidAt, amount } = {}) =>
+  updatePayment(deal, id, { paidAt: paidAt || israelDate(new Date()), paidAmount: amount ?? null });

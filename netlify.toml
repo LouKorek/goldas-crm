@@ -47,6 +47,15 @@
     Cache-Control = "no-store"
     Referrer-Policy = "no-referrer"
 
+# The signing page of a representation agreement (/sign/<token>) is the same
+# kind of private link (netlify/functions/agreement-sign.js).
+[[headers]]
+  for = "/sign/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-store"
+    Referrer-Policy = "no-referrer"
+
 [[redirects]]
   from = "/*"
   to   = "/index.html"

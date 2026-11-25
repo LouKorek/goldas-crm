@@ -14,6 +14,7 @@ export const ACTIONS = [
   'manage_users',     // Team screen: add / remove / change roles
   'manage_settings',  // app-wide settings, integrations, backups
   'view_audit',       // read the audit log
+  'money',            // see and edit money: payments on deals, the Finance screen, payment alerts
 ] as const;
 export type Action = typeof ACTIONS[number];
 

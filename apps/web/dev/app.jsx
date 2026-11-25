@@ -23,11 +23,14 @@ const Player360 = lazy(() => import('pages/Player360'));
 const Admin = lazy(() => import('pages/Admin'));
 const Matches = lazy(() => import('pages/Matches'));
 const PlayerPage = lazy(() => import('pages/PlayerPage'));
+const SignPage = lazy(() => import('pages/SignPage'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
-// ?role=viewer shows the screens as someone who may not edit.
-const role = new URLSearchParams(location.search).get('role') === 'viewer'
+const Finance = lazy(() => import('pages/Finance'));
+// ?role=viewer shows the screens as someone who may not edit; ?role=manager as an editor who is not an admin.
+const asRole = new URLSearchParams(location.search).get('role') || 'admin';
+const role = asRole === 'viewer'
   ? { email: 'viewer@example.com', name: 'צופה', role: 'viewer', canEdit: false, isAdmin: false, canDelete: false }
-  : { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
+  : { email: 'lou@example.com', name: 'לו קורק', role: asRole, canEdit: true, isAdmin: asRole === 'admin', canDelete: asRole === 'admin' };
 setSessionAccess(role);
 const App = () => (
   <RoleContext.Provider value={role}>
@@ -41,6 +44,7 @@ const App = () => (
           <Route path="market/prospects" element={<Prospects />} />
           <Route path="market/requirements" element={<Requirements />} />
           <Route path="market/deals" element={<Deals />} />
+          <Route path="finance" element={<Finance />} />
           <Route path="contacts" element={<Contacts />} />
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
           <Route path="calendar" element={<Calendar />} />
@@ -58,4 +62,7 @@ const App = () => (
 );
 // ?path=/p/<token> shows the public live player page on its own, as a club sees it (dev/mock-playerPages.js).
 const livePage = /^\/p\/([^/]*)$/.exec(new URLSearchParams(location.search).get('path') || '');
-createRoot(document.getElementById('root')).render(livePage ? <Suspense fallback={null}><PlayerPage token={livePage[1]} /></Suspense> : <App />);
+// ?path=/sign/<token> shows the signing page of an agreement the same way (dev/mock-agreements.js).
+const signPage = /^\/sign\/([^/]*)$/.exec(new URLSearchParams(location.search).get('path') || '');
+createRoot(document.getElementById('root')).render(livePage ? <Suspense fallback={null}><PlayerPage token={livePage[1]} /></Suspense>
+  : signPage ? <Suspense fallback={null}><SignPage token={signPage[1]} /></Suspense> : <App />);

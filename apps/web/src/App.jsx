@@ -26,11 +26,13 @@ import Home          from 'pages/Home';
 const Player360 = lazy(() => import('pages/Player360'));
 const Golda = lazy(() => import('pages/Golda'));
 const Deals = lazy(() => import('pages/Deals'));
+const Finance = lazy(() => import('pages/Finance'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Admin = lazy(() => import('pages/Admin'));
 const DesignSystem = lazy(() => import('pages/DesignSystem'));
 const YouTubeUpload = lazy(() => import('pages/YouTubeUpload'));
 const PlayerPage = lazy(() => import('pages/PlayerPage'));
+const SignPage = lazy(() => import('pages/SignPage'));
 import ErrorBoundary, { install as installErrorReporting } from 'components/ErrorBoundary';
 
 installErrorReporting();
@@ -78,8 +80,12 @@ const UPLOAD_LINK = /^\/yt\/([a-f0-9]{48})\/?$/;
 // that is mistyped or cut short gets its own calm "not available", never the
 // CRM's sign-in screen.
 const PLAYER_LINK = /^\/p\/([^/]*)\/?$/;
+// /sign/<token>: a representation agreement the player or his parent signs, the same way.
+const SIGN_LINK = /^\/sign\/([^/]*)\/?$/;
 
 export default function App() {
+  const sign = SIGN_LINK.exec(window.location.pathname);
+  if (sign) return <ErrorBoundary><Suspense fallback={null}><SignPage token={sign[1]} /></Suspense></ErrorBoundary>;
   const upload = UPLOAD_LINK.exec(window.location.pathname);
   if (upload) return <ErrorBoundary><Suspense fallback={null}><YouTubeUpload token={upload[1]} /></Suspense></ErrorBoundary>;
   const live = PLAYER_LINK.exec(window.location.pathname);
@@ -158,6 +164,7 @@ function Crm() {
                 <Route path="clubs"          element={<Clubs />} />
                 <Route path="clubs/:id"      element={<Clubs />} />
                 <Route path="recycle"        element={<RecycleBin />} />
+                <Route path="finance" element={access.role === 'admin' ? <Finance /> : <Navigate to="/home" replace />} />
                 <Route path="admin" element={access.role === 'admin' ? <Admin /> : <Navigate to="/home" replace />} />
                 <Route path="admin/design" element={access.role === 'admin' ? <DesignSystem /> : <Navigate to="/home" replace />} />
                 <Route path="admin/:tab" element={access.role === 'admin' ? <Admin /> : <Navigate to="/home" replace />} />

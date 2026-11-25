@@ -24,6 +24,7 @@ export const AREAS = [
       { label: t('Candidates'), path: '/market/prospects', icon: 'players' },
       { label: t('Club Requirements'), path: '/market/requirements', icon: 'clipboard' },
       { label: t('Deals'), path: '/market/deals', icon: 'doc' },
+      { label: t('Finance'), path: '/finance', icon: 'dashboard', adminOnly: true },
       // The four markets are scopes of the Candidates screen, not screens
       // of their own: one screen, with All/Men/Women/Youth/Jewish chips.
       // The computer's sub-menu leaves them to those chips; the phone's
@@ -88,7 +89,7 @@ export const DESTINATIONS = AREAS.flatMap((a) => a.items.map((i) => ({ ...i, are
 export function areaOf(pathname) {
   if (pathname.startsWith('/home') || pathname === '/dashboard') return 'home';
   if (pathname.startsWith('/scouting') || pathname.startsWith('/pipeline/jewish/tm-watch')) return 'scouting';
-  if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/market')) return 'market';
+  if (pathname.startsWith('/pipeline') || pathname.startsWith('/requirements') || pathname.startsWith('/market') || pathname.startsWith('/finance')) return 'market';
   if (pathname.startsWith('/players')) return 'players';
   if (pathname.startsWith('/matches') || pathname.startsWith('/calendar')) return 'calendar';
   if (pathname.startsWith('/clubs') || pathname.startsWith('/contacts')) return 'clubs';

@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { listenCollection, PATHS } from 'lib/db';
 import { listenPlayers, promoteToRepresented } from 'data/players';
 import { listenDeals, openDeal, advanceDeal, checkTransition, reopenDeal, withPlayerMarket } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
 import { fmtDate } from 'lib/constants';
-import { useRole } from 'lib/roleContext';
+import { useRole, useCan } from 'lib/roleContext';
 import { t, tv, fmtDateTime, relDays, getLang } from 'lib/i18n';
-import { DEAL_STAGES, DEAL_STAGE_LABELS, CLOSED_STAGES, daysInStage, isStale, funnel, playerName, clubKey } from '@goldas/domain';
+import { DEAL_STAGES, DEAL_STAGE_LABELS, CLOSED_STAGES, daysInStage, isStale, funnel, playerName, clubKey, hasLatePayment } from '@goldas/domain';
+import { DealPayments } from 'components/finance/PaymentBits';
 import { PageHeader, Modal, Empty, Skeleton, useConfirm, toast, ChipGroup, Field, SearchInput } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 
@@ -26,8 +27,9 @@ const Days = ({ deal }) => {
   return <span title={t('Days in this stage')} style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: stale ? 'var(--red)' : 'var(--text-3)', fontWeight: stale ? 700 : 400 }}>{d} {t('d')}{stale ? ' ⚠' : ''}</span>;
 };
 
-function DealCard({ deal, onOpen }) {
+function DealCard({ deal, onOpen, money }) {
   const stale = isStale(deal);
+  const late = money && hasLatePayment(deal);
   return (
     <button type="button" onClick={() => onOpen(deal)} className="card" style={{
       display: 'block', width: '100%', textAlign: 'start', padding: '9px 11px', marginBottom: 8, cursor: 'pointer',
@@ -38,6 +40,7 @@ function DealCard({ deal, onOpen }) {
         <Days deal={deal} />
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>{deal.clubName}</div>
+      {late && <span className="badge" style={{ background: 'var(--red-bg)', color: 'var(--red)', fontSize: 10, marginTop: 4 }}>{t('Late payment')}</span>}
       {deal.category && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>{tv({ men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish abroad' }[deal.category] || deal.category)}</div>}
     </button>
   );
@@ -45,6 +48,7 @@ function DealCard({ deal, onOpen }) {
 
 function DealDrawer({ deal, players, onClose }) {
   const { canEdit, email } = useRole();
+  const money = useCan('money');
   const { confirm, dialog } = useConfirm();
   const [interactions, setInteractions] = useState([]);
   const [note, setNote] = useState('');
@@ -116,6 +120,7 @@ function DealDrawer({ deal, players, onClose }) {
         </div>
       )}
       {canEdit && deal.closedAt && <button className="btn btn-secondary" style={{ marginBottom: 14 }} onClick={reopen}>{t('Reopen deal')}</button>}
+      {money && <DealPayments deal={deal} canEdit={canEdit} />}
 
       <div className="view-grid-2">
         <div>
@@ -205,6 +210,7 @@ function NewDealModal({ players, clubs, requirements, onClose }) {
 
 export default function Deals() {
   const { canEdit } = useRole();
+  const money = useCan('money');
   const [rawDeals, setDeals] = useState(null);
   const [players, setPlayers] = useState([]);
   const deals = useMemo(() => withPlayerMarket(rawDeals, players), [rawDeals, players]);
@@ -238,6 +244,11 @@ export default function Deals() {
   }), [deals, showClosed, category, search]);
   const counts = useMemo(() => funnel(visible), [visible]);
   const stale = visible.filter((d) => isStale(d)).length;
+  // Payments mostly sit on signed deals, which the board hides until "Show
+  // closed": say so when one of them has a late payment (admins only).
+  const hiddenLate = useMemo(() => (money && !showClosed
+    ? (deals || []).filter((d) => !d.deletedAt && (d.closedAt || !OPEN_STAGES.includes(d.stage)) && (!category || d.category === category) && hasLatePayment(d))
+    : []), [deals, money, showClosed, category]);
   const columns = showClosed ? DEAL_STAGES : OPEN_STAGES;
   // The phone shows one stage at a time: a strip of stage chips with counts
   // above a single column, instead of eight columns scrolling sideways.
@@ -250,6 +261,12 @@ export default function Deals() {
   }, []);
   const [stageTab, setStageTab] = useState(OPEN_STAGES[0]);
   const shown = phone ? columns.filter((s) => s === (columns.includes(stageTab) ? stageTab : columns[0])) : columns;
+  // The strip scrolls sideways: when the stage changes from somewhere else (the late-payment chip), its chip comes into view.
+  const strip = useRef(null);
+  useEffect(() => {
+    if (!phone) return;
+    strip.current?.querySelector('.chip.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [phone, stageTab, showClosed]);
 
   if (!deals) return <Skeleton rows={6} />;
   return (
@@ -262,13 +279,19 @@ export default function Deals() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
           <ChipGroup options={['all', 'men', 'women', 'youth', 'jewish']} labels={[t('All'), t('Men'), t('Women'), t('Youth'), t('Jewish abroad')]} value={category || 'all'} onChange={(v) => setCategory(v === 'all' ? '' : v)} required />
           <button type="button" className={`chip${showClosed ? ' active' : ''}`} onClick={() => setShowClosed((v) => !v)}>{t('Show closed')}</button>
+          {hiddenLate.length > 0 && (
+            <button type="button" className="chip" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+              onClick={() => { setShowClosed(true); setStageTab(hiddenLate[0].stage); }}>
+              {hiddenLate.length === 1 ? t('1 closed deal with a late payment') : t('{n} closed deals with a late payment', { n: hiddenLate.length })}
+            </button>
+          )}
         </div>
       </PageHeader>
 
       {visible.length === 0 ? <Empty message={t('No deals yet. Open one from a candidate or a club requirement.')} /> : (
         <div className="kanban" style={{ display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'minmax(220px, 1fr)', gap: 12, overflowX: 'auto', paddingBottom: 12 }}>
           {phone && (
-            <div className="stage-strip" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 4, scrollbarWidth: 'none' }}>
+            <div className="stage-strip" ref={strip} style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, marginBottom: 4, scrollbarWidth: 'none' }}>
               {columns.map((s) => (
                 <button key={s} type="button" className={`chip${shown.includes(s) ? ' active' : ''}`} onClick={() => setStageTab(s)} style={{ flex: '0 0 auto' }}>
                   {stageLabel(s)}<span className="chip-count">{counts[s] || 0}</span>
@@ -282,7 +305,7 @@ export default function Deals() {
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{stageLabel(s)}</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--gold)' }}>{counts[s] || 0}</span>
               </div>
-              {visible.filter((d) => d.stage === s).sort((a, b) => (daysInStage(b) ?? 0) - (daysInStage(a) ?? 0)).map((d) => <DealCard key={d.id} deal={d} onOpen={setOpen} />)}
+              {visible.filter((d) => d.stage === s).sort((a, b) => (daysInStage(b) ?? 0) - (daysInStage(a) ?? 0)).map((d) => <DealCard key={d.id} deal={d} onOpen={setOpen} money={money} />)}
             </div>
           ))}
         </div>

@@ -11,7 +11,7 @@
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
-const { computeAlerts, mergeSettings, israelDate, daysBetween } = require('@goldas/domain');
+const { computeAlerts, mergeSettings, israelDate, daysBetween, can, normalizeRole } = require('@goldas/domain');
 const nodemailer = require('nodemailer');
 
 // Matches are emailed one day ahead only; the screen shows the whole week.
@@ -25,6 +25,8 @@ const { dedupeKey } = require('./lib/alert-keys.js');
 
 const SECTIONS = [
   ['job_failed', 'עבודות לילה שנכשלו', 'Failed night jobs', '⚠️'],
+  ['payment_late', 'תשלומים באיחור', 'Late payments', '💶'],
+  ['payment_due', 'תשלומים שצפויים השבוע', 'Payments due this week', '💶'],
   ['sync_mismatch', 'הסנכרון מצא קבוצה מפוקפקת', 'Sync found a doubtful squad', '🔍'],
   ['deal_stale', 'עסקאות שמחכות יותר מדי', 'Deals waiting too long', '⏳'],
   ['contract', 'סיום חוזה', 'Contract Expiry', '📋'],
@@ -61,12 +63,28 @@ async function fetchSettings(db) {
 }
 
 // An empty list is a deliberate "nobody wants these" and is honoured.
+// [{ email, role }]: the role decides whether money is in the email.
 async function fetchRecipients(db) {
+  const owner = [{ email: OWNER_EMAIL, role: 'admin' }];
   try {
     const snap = await db.collection('app_users').get();
-    if (snap.empty) return [OWNER_EMAIL];
-    return snap.docs.map((d) => d.data()).filter((u) => u.active !== false && u.emailAlerts !== false && u.email).map((u) => u.email);
-  } catch (e) { console.error('fetchRecipients error, falling back to owner:', e); return [OWNER_EMAIL]; }
+    if (snap.empty) return owner;
+    return snap.docs.map((d) => d.data()).filter((u) => u.active !== false && u.emailAlerts !== false && u.email)
+      .map((u) => ({ email: u.email, role: String(u.email).toLowerCase() === OWNER_EMAIL ? 'admin' : normalizeRole(u.role) }));
+  } catch (e) { console.error('fetchRecipients error, falling back to owner:', e); return owner; }
+}
+
+const MONEY_TYPES = new Set(['payment_late', 'payment_due']);
+/**
+ * Money is for admins only: those who may see it get every alert, the others
+ * the same email without the payment alerts. [{ to: [emails], alerts }], one
+ * email per group that has something to say.
+ */
+function splitByRole(alerts, recipients) {
+  const money = recipients.filter((r) => can(r.role, 'money')).map((r) => r.email);
+  const others = recipients.filter((r) => !can(r.role, 'money')).map((r) => r.email);
+  const plain = alerts.filter((a) => !MONEY_TYPES.has(a.type));
+  return [{ to: money, alerts }, { to: others, alerts: plain }].filter((g) => g.to.length && g.alerts.length);
 }
 
 // Dedupe state: { key: 'YYYY-MM-DD' } (the day it was sent). Older entries
@@ -103,7 +121,8 @@ async function sendDigest(job) {
   ]);
   const now = new Date();
   const today = israelDate(now);
-  const r = computeAlerts({ players, matches, deals, requirements, tasks: tasks.filter((x) => (x.owner || OWNER_EMAIL) === OWNER_EMAIL), jobs, settings, now });
+  // money: true here; splitByRole keeps the payment alerts to the admins' copy.
+  const r = computeAlerts({ players, matches, deals, requirements, tasks: tasks.filter((x) => (x.owner || OWNER_EMAIL) === OWNER_EMAIL), jobs, settings, now, money: true });
   const fresh = [];
   const newKeys = [];
   for (const a of r.alerts) {
@@ -116,12 +135,14 @@ async function sendDigest(job) {
   if (!recipients.length) return { statusCode: 200, body: 'no recipients' };
 
   const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: OWNER_EMAIL, pass: process.env.GMAIL_APP_PASSWORD } });
-  await transporter.sendMail({
-    from: `"Gold A&S" <${OWNER_EMAIL}>`,
-    to: recipients.join(','),
-    subject: `Gold A&S · ${fresh.length === 1 ? 'התראה חדשה' : `${fresh.length} התראות חדשות`}`,
-    html: buildEmailHtml(fresh, fresh.length),
-  });
+  for (const g of splitByRole(fresh, recipients)) {
+    await transporter.sendMail({
+      from: `"Gold A&S" <${OWNER_EMAIL}>`,
+      to: g.to.join(','),
+      subject: `Gold A&S · ${g.alerts.length === 1 ? 'התראה חדשה' : `${g.alerts.length} התראות חדשות`}`,
+      html: buildEmailHtml(g.alerts, g.alerts.length),
+    });
+  }
   const newSent = { ...sent };
   newKeys.forEach((k) => { newSent[k] = today; });
   await saveSent(db, newSent, today);
@@ -133,4 +154,4 @@ exports.handler = schedule('30 5 * * *', async () => {
   try { return await runJob('send-alerts', async (job) => { const r = await sendDigest(job); job.note(r.body); return r; }); }
   catch (e) { console.error('sendDigest failed:', e); return { statusCode: 500, body: String(e) }; }
 });
-exports._internal = { dedupeKey, buildEmailHtml, pruneSent, sendDigest };
+exports._internal = { dedupeKey, buildEmailHtml, pruneSent, sendDigest, splitByRole, fetchRecipients };

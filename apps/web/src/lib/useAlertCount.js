@@ -9,7 +9,8 @@ import { listenPlayers } from '../data/players';
 import { DEFAULT_SETTINGS, loadSettings, unifiedAlerts } from './alerts';
 
 const SOURCES = ['players', 'matches', 'deals', 'requirements', 'tasks', 'jobs'];
-const state = { players: [], matches: [], deals: [], requirements: [], tasks: [], jobs: [], settings: DEFAULT_SETTINGS };
+// money: payment alerts are in the set only for a reader who may see money (admins).
+const state = { players: [], matches: [], deals: [], requirements: [], tasks: [], jobs: [], settings: DEFAULT_SETTINGS, money: false };
 const seen = new Set();
 const subscribers = new Set();
 let unsub = null;
@@ -53,8 +54,11 @@ export function setAlertSettings(s) {
 }
 
 /** { result: { alerts, byType, total }, loaded, settings } shared by the whole app. */
-export function useAlerts(userEmail) {
+export function useAlerts(userEmail, { money = false } = {}) {
   const [snap, setSnap] = useState(snapshot);
+  useEffect(() => {
+    if (state.money !== money) { state.money = money; recompute(); }
+  }, [money]);
   useEffect(() => {
     if (!userEmail) return undefined;
     subscribers.add(setSnap);
@@ -68,6 +72,6 @@ export function useAlerts(userEmail) {
   return snap;
 }
 
-export function useAlertCount(userEmail) {
-  return useAlerts(userEmail).result.total;
+export function useAlertCount(userEmail, opts) {
+  return useAlerts(userEmail, opts).result.total;
 }

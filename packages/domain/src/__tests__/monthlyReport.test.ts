@@ -1,9 +1,10 @@
 /* eslint-disable ts-patterns/no-magic-numbers -- test fixtures are literal match data */
 import { describe, it, expect } from 'vitest';
 import {
-  isMonthKey, monthOf, addMonths, lastFullMonth, reportMonths, monthName, monthlyReportFacts, cleanReportText, reportOf,
+  isMonthKey, monthOf, lastFullMonth, reportMonths, monthName, monthlyReportFacts, cleanReportText, reportOf,
   REPORT_DID_MAX_LINES, REPORT_DID_LINE_MAX, REPORT_NEXT_MAX,
 } from '../engines/monthlyReport';
+import { addMonths } from '../engines/dates';
 import { playerSchema } from '../schemas';
 import * as domain from '../index';
 

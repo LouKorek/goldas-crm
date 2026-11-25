@@ -3,7 +3,7 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import Icon from 'components/ui/Icons';
 import { signOut } from 'firebase/auth';
 import { auth } from 'lib/firebase';
-import { useRole, roleLabel } from 'lib/roleContext';
+import { useRole, useCan, roleLabel } from 'lib/roleContext';
 import GlobalSearch from 'components/ui/GlobalSearch';
 import MoreScreen from 'components/layout/MoreScreen';
 import { AREAS, BOTTOM, DESTINATIONS, areaOf, visibleItems } from 'lib/nav';
@@ -27,7 +27,8 @@ export default function Layout({ user }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const { name, role, isAdmin, email } = useRole();
-  const alertCount = useAlertCount(email || user?.email);
+  const money = useCan('money');
+  const alertCount = useAlertCount(email || user?.email, { money });
   const info = { name: name || user?.email || '', role: roleLabel(role) };
   const area = areaOf(location.pathname);
   const lang = getLang();
