@@ -215,10 +215,10 @@ function GraphicCaption({ caption }) {
     try { await navigator.clipboard.writeText(caption); toast.success(t('Caption copied.')); } catch { toast.error(t('Could not copy the caption.')); }
   };
   return (
-    <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+    <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 'var(--radius-md)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>{t('Caption for Instagram')}</span>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={copy}><Icon name="clipboard" size={12} /><span className="btn-text">{t('Copy')}</span></button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={copy}><Icon name="copy" size={12} /><span className="btn-text">{t('Copy')}</span></button>
       </div>
       {/* Each line takes its own direction, as Instagram shows it (a Hebrew line, then "#GoldAS …" or "@handle" left to right). */}
       <div style={{ fontSize: 13, overflowWrap: 'anywhere', color: 'var(--text-1)' }}>

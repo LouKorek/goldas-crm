@@ -130,7 +130,7 @@ export function sendStream(uploadUrl, total, stream, onProgress = () => {}) {
   const reader = stream.getReader();
   let held = new Uint8Array(0), start = 0, ended = false;
   const piece = async (from) => {
-    if (from < start) throw new Error('ההעלאה נקטעה ואי אפשר להמשיך אותה מהמקום הזה. בחר שוב את הסרטון.');
+    if (from < start) throw new Error('The upload was cut off and cannot go on from this point. Pick the video again.');   // the page translates it
     const want = Math.min(CHUNK, total - from);
     const parts = [held.subarray(Math.min(from - start, held.length))];
     let have = parts[0].length, skip = Math.max(0, from - start - held.length);
@@ -146,7 +146,7 @@ export function sendStream(uploadUrl, total, stream, onProgress = () => {}) {
     parts.reduce((at, part) => { all.set(part, at); return at + part.length; }, 0);
     held = all; start = from;
     // The stream ended before the size it promised: the last piece never goes, so YouTube holds no whole video.
-    if (have < want) throw new Error('החיתוך לא יצא תקין, ולכן שום דבר לא הועלה. בחר שוב את הסרטון.');
+    if (have < want) throw new Error('The cut did not come out right, so nothing was uploaded. Pick the video again.');
     return all.subarray(0, want);
   };
   return sendPieces(uploadUrl, total, { piece, floor: () => start }, onProgress)

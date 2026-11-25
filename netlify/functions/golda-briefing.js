@@ -38,7 +38,7 @@ const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS, can } = require('@goldas/domain');
 const { buildBriefing, urgentAlerts, phoneOnlyAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
-const { pushKey, SUBS: PUSH_DEVICES } = require('./lib/push.js');
+const { pushKey } = require('./lib/push.js');
 const { writeBriefing } = require('./lib/golda-briefing-ai.js');
 const { opportunitiesOf } = require('./lib/golda-briefs.js');
 const { writeRecap, buildRecap } = require('./lib/golda-briefing-ai.js');
@@ -227,10 +227,6 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   const dayMs = 86400000;
   const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
   let count = 0;
-  // Who already hears the urgent ones on a phone (lib/push.js). Everyone else hears them from Golda, in the day.
-  const withPhone = quiet ? null : await db.collection(PUSH_DEVICES).get()
-    .then((s) => new Set(s.docs.map((d) => String((d.data() || {}).email || '').toLowerCase())))
-    .catch((e) => { job.note(`phones unreadable: ${e.message}`); return null; });
 
   for (const u of recipients) {
     const mine = u.role === 'admin' ? data.tasks : data.tasks.filter((x) => (x.owner || OWNER_EMAIL) === u.email);
@@ -257,7 +253,8 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
       }
       // A late payment is told once here, as on the phone, not every day (pushKey); every other key is the email's.
       const urgentKey = (a) => `${u.email}|${pushKey(a, data.settings, today)}`;
-      const onPhone = withPhone && !withPhone.has(u.email) ? phoneOnlyAlerts(r.alerts, u.email, OWNER_EMAIL) : [];
+      // Both ways run together (Lou, 2026-11-25): Golda says them in the day whether or not a phone is registered.
+      const onPhone = quiet ? [] : phoneOnlyAlerts(r.alerts, u.email, OWNER_EMAIL);
       const urgent = [...urgentAlerts(r.alerts), ...onPhone].filter((a) => !sent.alerts[urgentKey(a)]);
       if (urgent.length && sent.briefings[u.email] === today) {   // after the briefing, never before it on the same morning
         await say(u, buildUrgent(first, urgent), 'urgent');

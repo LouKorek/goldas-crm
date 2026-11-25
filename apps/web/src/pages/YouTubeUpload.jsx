@@ -72,7 +72,8 @@ export default function YouTubeUpload({ token }) {
   const start = async (f) => {
     if (!f) return;
     if (f.type && !/^video\//.test(f.type)) { setError(he ? 'זה לא קובץ וידאו. בחר סרטון.' : 'That is not a video file. Pick a video.'); return; }
-    setError(''); setFile(f); setSent(0); setTotal(0);
+    // The phase first, so the pick button goes at once; a second try starts its bar from nothing.
+    setError(''); setFile(f); setSent(0); setTotal(0); setClip({ n: 0, of: 0 }); setPhase(moments ? 'reading' : 'sending');
     let lock = null;
     try { lock = await navigator.wakeLock?.request('screen'); } catch { /* the screen may sleep; the upload goes on while the page is open */ }
     try {
@@ -83,7 +84,7 @@ export default function YouTubeUpload({ token }) {
       setPhase('done');
     } catch (e) {
       // A file that cannot be cut says why in a sentence of its own (CutError: the English text is the key).
-      setError(e.name === 'CutError' ? t(e.message, e.vars || undefined) : e.message || (he ? 'ההעלאה נכשלה.' : 'The upload failed.'));
+      setError(e.name === 'CutError' ? t(e.message, e.vars || undefined) : (e.message && t(e.message)) || (he ? 'ההעלאה נכשלה.' : 'The upload failed.'));
       if (e.status === 404) setGone(true);
       setPhase('idle');
     } finally { try { await lock?.release(); } catch { /* already released */ } }

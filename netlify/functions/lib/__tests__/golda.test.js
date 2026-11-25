@@ -89,7 +89,7 @@ test('urgent alerts: a contract within a week and a failed job, not a 30-day war
   assert.deepEqual(u.map((a) => `${a.type}:${a.subject.id}`).sort(), ['contract:a', 'job_failed:j']);
 });
 
-test('without a phone registered, Golda carries what the phone would have shown', () => {
+test('Golda carries what the phone shows, to the task\'s owner only', () => {
   const now = new Date('2026-10-12T09:00:00Z');
   const r = computeAlerts({
     players: [{ id: 'a', fullName: 'A', contractEnd: '2026-10-15', contractStatus: 'Under Contract' }],

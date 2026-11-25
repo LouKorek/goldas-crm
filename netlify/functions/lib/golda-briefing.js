@@ -65,9 +65,9 @@ function urgentAlerts(alerts) {
 
 /**
  * What a phone notification carries and urgentAlerts does not (lib/push.js:
- * a deal stuck far too long, a task past its day, a payment past its day),
- * for a person who has no phone registered for notifications: Golda tells
- * them here instead, so nobody has to install anything to hear of them.
+ * a deal stuck far too long, a task past its day, a payment past its day).
+ * Golda tells them here too, with or without a phone registered, so nobody
+ * has to install anything to hear of them and both ways run together.
  * A task goes to its owner only, as on the phone.
  */
 const PHONE_ONLY = new Set(['deal_stale', 'task_overdue', 'payment_late']);

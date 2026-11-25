@@ -1427,6 +1427,7 @@ const HE = {
   'This video has no point to cut at. Pick the original recording.': 'בסרטון הזה אין נקודה שאפשר לחתוך בה. בחר את הצילום המקורי.',
   'This video can only be cut {seconds} seconds before moment {n}, which is too early. Export it again as MP4 and pick that file.': 'את הסרטון הזה אפשר לחתוך רק {seconds} שניות לפני רגע {n}, וזה מוקדם מדי. ייצא אותו מחדש כ-MP4 ובחר את הקובץ החדש.',
   'The cut did not come out right, so nothing was uploaded. Pick the video again.': 'החיתוך לא יצא תקין, ולכן שום דבר לא הועלה. בחר שוב את הסרטון.',
+  'The upload was cut off and cannot go on from this point. Pick the video again.': 'ההעלאה נקטעה ואי אפשר להמשיך אותה מהמקום הזה. בחר שוב את הסרטון.',
 };
 
 export default HE;
