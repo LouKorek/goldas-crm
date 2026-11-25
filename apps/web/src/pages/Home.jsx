@@ -11,6 +11,7 @@ import { t, fmtDateTime, getLang } from 'lib/i18n';
 import { playerName, israelDate, addDays, AGE_GROUPS } from '@goldas/domain';
 import { PageHeader, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import InstallHint from 'components/push/InstallHint';
 const Snapshot = React.lazy(() => import('./Snapshot'));
 
 // Home has two tabs. "Today" is the opening screen: what needs action,
@@ -36,6 +37,7 @@ export default function Home() {
     <div>
       <PageHeader brand title={`${greeting()}, ${name?.split(' ')[0] || ''}`} subtitle={fmtDateTime(new Date()).slice(0, 8)}
         tabs={[{ label: t('Today'), path: '/home/today', on: tab === 'today' }, { label: t('Snapshot'), path: '/home/snapshot', on: tab === 'snapshot' }]} />
+      <InstallHint />
       {tab === 'snapshot' ? <React.Suspense fallback={<Skeleton rows={6} />}><Snapshot /></React.Suspense> : <Today />}
     </div>
   );

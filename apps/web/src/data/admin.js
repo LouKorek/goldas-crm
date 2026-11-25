@@ -22,7 +22,7 @@ export const JOBS = [
   { name: 'sync-matches', he: 'סנכרון משחקים', when: 'יומי 03:10 UTC', run: 'sync-matches' },
   { name: 'ifa-server-sync', he: 'משחקי ההתאחדות (ישראל)', when: 'יומי 03:00 UTC', run: 'ifa-server-sync' },
   { name: 'nightly-engines', he: 'מנועי הלילה (התראות, ציונים)', when: 'יומי 03:00 UTC', run: 'nightly-engines' },
-  { name: 'send-alerts', he: 'תקציר התראות באימייל', when: 'יומי 05:30 UTC', run: 'send-alerts' },
+  { name: 'send-alerts', he: 'תקציר התראות באימייל והתראות לטלפון', when: 'יומי 06:00 UTC', run: 'send-alerts' },
   { name: 'golda-briefing', he: 'תדריך גולדה והתראות', when: 'כל שעה ב-:30', run: 'golda-briefing' },
   { name: 'tm-watch', he: 'מעקב Transfermarkt', when: 'יומי 04:30 UTC', run: 'tm-watch' },
   { name: 'ig-watch', he: 'אינסטגרם הסוכנות', when: 'יומי 03:50 UTC', run: 'ig-watch' },

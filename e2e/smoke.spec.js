@@ -31,6 +31,9 @@ test('PWA manifest and service worker are served, cache name is versioned', asyn
   const match = /const CACHE_NAME = 'goldas-crm-([^']+)'/.exec(src);
   expect(match, 'CACHE_NAME present').toBeTruthy();
   expect(match[1], 'placeholder replaced by the build').not.toBe('__BUILD_ID__');
+  // The same worker shows the phone notifications and opens their page on a tap.
+  expect(src).toContain("addEventListener('push'");
+  expect(src).toContain("addEventListener('notificationclick'");
 });
 
 test('unknown routes fall back to the app shell (SPA redirect)', async ({ page }) => {

@@ -21,4 +21,19 @@ function dedupeKey(a, settings, today) {
   return `${a.type}|${a.subject.id}|${a.dueDate || ''}`;
 }
 
-module.exports = { dedupeKey };
+const { can } = require('@goldas/domain');
+const MONEY_TYPES = new Set(['payment_late', 'payment_due']);
+/**
+ * Money is for admins only: those who may see it get every alert, the others
+ * the same list without the payment alerts. recipients: [{ email, role }] ->
+ * [{ to: [emails], alerts }], one group per kind of reader that has something.
+ * The daily email and the phone notifications (lib/push.js) both split here.
+ */
+function splitByRole(alerts, recipients) {
+  const money = recipients.filter((r) => can(r.role, 'money')).map((r) => r.email);
+  const others = recipients.filter((r) => !can(r.role, 'money')).map((r) => r.email);
+  const plain = alerts.filter((a) => !MONEY_TYPES.has(a.type));
+  return [{ to: money, alerts }, { to: others, alerts: plain }].filter((g) => g.to.length && g.alerts.length);
+}
+
+module.exports = { dedupeKey, splitByRole, MONEY_TYPES };

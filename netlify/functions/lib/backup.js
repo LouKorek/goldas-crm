@@ -32,7 +32,7 @@ const STALE_DAYS = 8;
 const RECORD_COLLECTIONS = ['players', 'clubs', 'contacts', 'deals', 'club_requirements', 'tasks', 'matches', 'trainings', 'meetings', 'interactions'];
 // The system's own state (keys, connections, logs). A full restore puts back
 // only what is missing there, so a week-old connection never replaces a live one.
-const SYSTEM_COLLECTIONS = new Set(['app_meta', 'app_secrets', 'audit', 'wa_sessions', 'wa_outbox', 'wa_contacts', 'meta_oauth_states', 'client_errors']);
+const SYSTEM_COLLECTIONS = new Set(['app_meta', 'app_secrets', 'push_subscriptions', 'audit', 'wa_sessions', 'wa_outbox', 'wa_contacts', 'meta_oauth_states', 'client_errors']);
 const OFFSITE_STORE = 'crm-backups';
 const GOOD = new Set(['ok', 'partial', 'done']);
 

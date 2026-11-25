@@ -268,3 +268,20 @@ export function computeAlerts(input: AlertsInput): AlertsResult {
   const total = alerts.filter((a) => a.type !== 'match').length;
   return { alerts, byType, total };
 }
+
+/**
+ * The page an alert is about, as an app path: the player, the deal on the
+ * Deals board, the requirement, the task list, the calendar. The app's alert
+ * rows and the phone notifications (netlify/functions/lib/push.js) both open it.
+ */
+export function alertPath(a: Pick<Alert, 'subject'>): string {
+  const id = encodeURIComponent(a.subject.id);
+  switch (a.subject.kind) {
+    case 'player': return `/players/${id}`;
+    case 'deal': return `/market/deals?deal=${id}`;
+    case 'requirement': return `/market/requirements?req=${id}`;
+    case 'task': return '/tasks';
+    case 'match': return '/calendar';
+    default: return '/home/today';
+  }
+}

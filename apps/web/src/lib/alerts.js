@@ -8,7 +8,7 @@ import { db } from './firebase';
 import { canEditNow } from './db';
 import {
   computeAlerts as engineAlerts, mergeSettings, DEFAULT_ALERT_SETTINGS,
-  daysAway as engineDaysAway, nextBirthday, toDateStr,
+  daysAway as engineDaysAway, nextBirthday, toDateStr, alertPath,
 } from '@goldas/domain';
 
 export const DEFAULT_SETTINGS = {
@@ -88,17 +88,8 @@ export async function loadSettings() {
  */
 export const unifiedAlerts = (input) => engineAlerts(input);
 
-/** Where an alert leads when tapped. */
-export function alertLink(a) {
-  switch (a.subject.kind) {
-    case 'player': return `/players/${a.subject.id}`;
-    case 'deal': return `/market/deals?deal=${a.subject.id}`;
-    case 'requirement': return `/market/requirements?req=${a.subject.id}`;
-    case 'task': return '/tasks';
-    case 'match': return '/calendar';
-    default: return '/home/today';
-  }
-}
+/** Where an alert leads when tapped (the same page a phone notification opens). */
+export const alertLink = (a) => alertPath(a);
 
 // Legacy shape — { contract, repr, passport, birthday, matches, total } with
 // { id, player, days, overdue, date, urgency } items — for the Dashboard.
