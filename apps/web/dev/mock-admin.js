@@ -13,6 +13,7 @@ const RUNS = [
   run('golda-briefing', 0.5), run('meta-onboard', 0.3), run('golda-queue', 0.1), run('golda-briefing', 1.5),
   run('sync-matches', 9), run('ifa-server-sync', 9.2), run('nightly-engines', 9.2), run('send-alerts', 6.5),
   run('tm-watch', 7.5, 'error', { error: 'ScraperAPI 429' }), run('ig-watch', 8.2), run('migrate', 30, 'ok', { trigger: 'deploy' }),
+  run('golda-radar', 2.3, 'ok', { durationMs: 148000, notes: ['radar: 8 club(s) read, 5 search(es), 4 finding(s): 2 saved, 1 without a source, 1 already known, 0 not ours, 0 old'], summary: { clubs: 8, searches: 5, found: 4, saved: 2, unsourced: 1, duplicate: 1, unrelated: 0, stale: 0, written: 2, pruned: 0 } }),
 ];
 const STATUS = {
   'backup-weekly': { last: { status: 'ok', startedAt: new Date(now - 3 * D), durationMs: 94000, trigger: 'schedule' } },

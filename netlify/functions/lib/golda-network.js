@@ -11,9 +11,18 @@
 //    link, kept on the contact's record (contacts/{id}.knows). The write goes
 //    through wa-agent's own `update`, so it is audited and undo_last reverses it.
 //
+// 4. coldNudge: relationship memory. Once a day at most, from the hourly owner
+//    chain, Golda tells the owner about one contact tied to an open deal or an
+//    open requirement he has not spoken with for 60 days, and offers to draft a
+//    message (draft only; he sends it himself). Her own threshold: the map's
+//    COLD_AFTER_DAYS stays as the app uses it.
+//
 // Reading follows the Contacts page: every role reads; writing needs edit.
 // Deals are named by their player, club and stage, never by an amount.
-const { can, buildNetwork, wayToClub, coldContacts, networkClubs, cleanKnows, clubKey, warmthOf, israelDate, NET_LINK_LABELS, COLD_AFTER_DAYS } = require('@goldas/domain');
+const { can, buildNetwork, wayToClub, coldContacts, networkClubs, cleanKnows, clubKey, warmthOf, israelDate, daysBetween, isClosedStage, NET_LINK_LABELS, COLD_AFTER_DAYS, DEAL_STAGE_LABELS } = require('@goldas/domain');
+const { awaitsAnswer } = require('./golda-effort.js');
+const taps = require('./golda-taps.js');
+const { nudge, chatOf } = require('./golda-nudge.js');
 
 const APP = 'https://goldas-crm.netlify.app';
 const MAX_ROWS = 40;
@@ -22,6 +31,15 @@ const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[֑
 const has = (hay, q) => { const words = norm(q).split(' ').filter(Boolean); const h = norm(hay); return words.length > 0 && words.every((w) => h.includes(w)); };
 const mapLink = (q) => `${APP}/contacts?view=map&${q}`;
 const heDate = (d) => (d ? d.split('-').reverse().join('.') : '');
+
+// Relationship memory (coldNudge, below).
+const GOLDA_COLD_DAYS = 60;        // Golda's own "a long time"; the map keeps the domain's COLD_AFTER_DAYS
+const COLD_AGAIN_DAYS = 30;        // the same contact at most once in this many days
+const COLD_META = ['app_meta', 'goldaColdContacts'];
+const COLD_BUTTONS = ['לנסח הודעה', 'לא עכשיו'];
+const COLD_WAIT_FOR_ANSWER_MS = 2 * 3600000;
+const COLD_QUIET = (hour) => hour < 8 || hour >= 22;
+const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
 
 const NETWORK_TOOL_DEFS = [
   {
@@ -69,7 +87,7 @@ const NETWORK_TOOL_DEFS = [
 ];
 
 /** The rules for the prompt, in one block. */
-const networkSection = (role) => `- The relationship map (Contacts → map): "מה הדרך הכי קצרה ל<מועדון>" / "דרך מי מגיעים ל…" → network_path: say who to call first and the chain, each link with its date ("דיברתם לפני 10 ימים", "אין תיעוד"), and the link to the map. "עם מי לא דיברתי הרבה זמן" → network_cold: the oldest first with the last date and channel; the ones with no record are a separate short line, not "cold". Offer to log the call after it happens.${can(role, 'edit') ? '\n- "X מכיר את Y" / "X הכיר לנו את Y" → contact_link action=add (introduced when X introduced the agency to Y). Confirm in one line; undo_last reverses it. Never link people by a similar name: if a name is not in the contacts, ask or offer to add the contact first.' : ''}`;
+const networkSection = (role) => `- The relationship map (Contacts → map): "מה הדרך הכי קצרה ל<מועדון>" / "דרך מי מגיעים ל…" → network_path: say who to call first and the chain, each link with its date ("דיברתם לפני 10 ימים", "אין תיעוד"), and the link to the map. "עם מי לא דיברתי הרבה זמן" → network_cold: the oldest first with the last date and channel; the ones with no record are a separate short line, not "cold". Offer to log the call after it happens.${can(role, 'edit') ? '\n- "X מכיר את Y" / "X הכיר לנו את Y" → contact_link action=add (introduced when X introduced the agency to Y). Confirm in one line; undo_last reverses it. Never link people by a similar name: if a name is not in the contacts, ask or offer to add the contact first.' : ''}${can(role, 'manage_settings') ? `\n- Your own nudge that opens with "לא דיברתם מזמן" 📇 (a contact tied to an open deal or an open requirement, silent for ${GOLDA_COLD_DAYS} days): "לנסח הודעה" → the contact it names: find him in contacts, then the draft-only outreach flow (outreach_prepare, the draft, outreach_link); the player is the one of the deal it names, when it names one. You never send it yourself. "לא עכשיו" → fine, one line.` : ''}`;
 
 const rows = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
@@ -191,4 +209,115 @@ function networkTools({ db, identity = {}, role, update }) {
   };
 }
 
-module.exports = { networkTools, networkSection, NETWORK_TOOL_DEFS };
+// ── Relationship memory: "you have not spoken with X for 60 days" ─────────────
+
+const CHANNEL_HE = { call: 'שיחה', whatsapp: 'וואטסאפ', meeting: 'פגישה', email: 'מייל', requirement: 'דרישה שהעביר', deal: 'פעילות בעסקה' };
+const ROLE_HE = { 'Sporting Director': 'מנהל מקצועי', 'Head Coach': 'מאמן ראשי', CEO: 'מנכ"ל', President: 'נשיא', Scout: 'סקאוט', Agent: 'סוכן', 'Technical Director': 'מנהל טכני' };
+// Only what the engine reads of a deal; its money never leaves Firestore here.
+const leanDeal = ({ id, playerId, playerName, clubId, clubName, stage, requirementId, enteredStageAt, closedAt, history, createdAt, deletedAt }) =>
+  ({ id, playerId, playerName, clubId, clubName, stage, requirementId, enteredStageAt, closedAt, history: (history || []).map((h) => ({ at: h && h.at })), createdAt, deletedAt });
+
+/**
+ * coldCandidates({ contacts, clubs, deals, requirements, meetings, players }, now, days)
+ * The contacts worth a nudge: last spoken to more than `days` ago (the same
+ * engine as the map, with Golda's own number of days) AND tied to something
+ * open: a deal or a requirement that is theirs, or one at their club.
+ * Contacts with no date at all are left out: "60 days" cannot be said of them.
+ * Best first: their own deal, their own requirement, a deal at their club, a
+ * requirement at their club; then the longest silence. Pure.
+ */
+function coldCandidates({ contacts = [], clubs = [], deals = [], requirements = [], meetings = [], players = [] } = {}, now = new Date(), days = GOLDA_COLD_DAYS) {
+  const lean = deals.map(leanDeal);
+  const net = buildNetwork({ contacts, clubs, deals: lean, requirements, meetings, players, now });
+  const openDeals = lean.filter((d) => !d.deletedAt && !d.closedAt && !isClosedStage(d.stage));
+  const openReqs = requirements.filter((r) => !r.deletedAt && (r.status || 'open') === 'open' && !(r.validUntil && r.validUntil < net.today));
+  // The club node of a requirement, found the way the engine finds it.
+  const byKey = new Map();
+  for (const c of clubs.filter((x) => !x.deletedAt)) for (const k of [String(c.key || ''), clubKey(c.name), ...(Array.isArray(c.aliases) ? c.aliases : []).map(clubKey)]) if (k && !byKey.has(k)) byKey.set(k, `k:${c.id}`);
+  const clubNodeOf = (r) => (r.clubId && net.nodes.has(`k:${r.clubId}`) ? `k:${r.clubId}` : byKey.get(clubKey(r.clubName)) || (clubKey(r.clubName) ? `k:~${clubKey(r.clubName)}` : ''));
+  const dealText = (d) => `עסקה פתוחה: ${[d.playerName, d.clubName].filter(Boolean).join(' ↔ ')} (${DEAL_STAGE_LABELS[d.stage] || d.stage})`;
+  const reqText = (r) => `דרישה פתוחה של ${r.clubName}${r.requiredPosition ? `: ${r.requiredPosition}` : ''}`;
+
+  const out = [];
+  for (const row of coldContacts(net, days).cold) {
+    const n = row.node;
+    const refs = new Set((net.adj.get(n.id) || []).flatMap((l) => l.refs));
+    const ownDeal = openDeals.find((d) => refs.has(`deal:${d.id}`));
+    const ownReq = openReqs.find((r) => refs.has(`req:${r.id}`));
+    const clubDeal = n.club ? openDeals.find((d) => (net.nodes.get(`d:${d.id}`) || {}).club === n.club) : null;
+    const clubReq = n.club ? openReqs.find((r) => clubNodeOf(r) === n.club) : null;
+    const tie = ownDeal ? { rank: 4, text: dealText(ownDeal) } : ownReq ? { rank: 3, text: reqText(ownReq) }
+      : clubDeal ? { rank: 2, text: dealText(clubDeal) } : clubReq ? { rank: 1, text: reqText(clubReq) } : null;
+    if (!tie) continue;
+    out.push({ contactId: n.ref, name: n.name, role: n.role || '', club: n.club && net.nodes.get(n.club) ? net.nodes.get(n.club).name : '',
+      days: row.days, lastDate: row.last.date, channel: row.last.channel, tieRank: tie.rank, tie: tie.text });
+  }
+  return out.sort((a, b) => b.tieRank - a.tieRank || b.days - a.days || a.name.localeCompare(b.name));
+}
+
+/** The nudge: who, how long, the last date, what is open with them, and the offer to draft. */
+function buildColdNudge(first, c) {
+  const who = [ROLE_HE[c.role] || '', c.club].filter(Boolean).join(', ');
+  return {
+    text: [
+      '*לא דיברתם מזמן* 📇',
+      `${first}, עם *${c.name}*${who ? ` (${who})` : ''} לא דיברתם כבר ${c.days} ימים. הפעם האחרונה: ${heDate(c.lastDate)}, ${CHANNEL_HE[c.channel] || 'קשר'}.`,
+      `${c.tie}.`,
+      'לנסח הודעה? אתה שולח אותה בעצמך.',
+    ].join('\n'),
+    buttons: [...COLD_BUTTONS],
+  };
+}
+
+/**
+ * coldNudge(db, owner, data, now, { hour, send, job, days }) → { sent: 1, contactId } | { skipped: why }
+ * Called from the hourly owner chain. At most one nudge a day, the same
+ * contact at most once in COLD_AGAIN_DAYS, never in the quiet hours and never
+ * on top of a question of hers he has not answered. State in
+ * app_meta/goldaColdContacts = { lastSentOn, nudged: { [contactId]: 'YYYY-MM-DD' } }.
+ * `data` is what the hourly run already loaded (deals, requirements, meetings,
+ * players); contacts and clubs are read here when it has none.
+ */
+async function coldNudge(db, owner, data = {}, now = new Date(), { hour, send = null, job = { note: () => {} }, days = GOLDA_COLD_DAYS } = {}) {
+  if (COLD_QUIET(Number.isFinite(hour) ? hour : israelHour(now))) return { skipped: 'quiet hours' };
+  const ref = db.collection(COLD_META[0]).doc(COLD_META[1]);
+  const snap = await ref.get();
+  const state = snap.exists ? (snap.data() || {}) : {};
+  const today = israelDate(now);
+  if (state.lastSentOn === today) return { skipped: 'one a day' };
+  const read = (c) => db.collection(c).get().then(rows);
+  const [contacts, clubs] = await Promise.all([data.contacts || read('contacts'), data.clubs || read('clubs')]);
+  const nudged = Object.fromEntries(Object.entries(state.nudged || {}).filter(([, on]) => daysBetween(String(on), today) < COLD_AGAIN_DAYS));
+  const pick = coldCandidates({ ...data, contacts, clubs }, now, days).find((c) => !nudged[c.contactId]);
+  if (!pick) return { skipped: 'nobody to mention' };
+
+  const { threadRef } = await chatOf(db, owner);
+  const thread = await threadRef.get();
+  const history = thread.exists && Array.isArray(thread.data().history) ? thread.data().history : [];
+  const last = history[history.length - 1];
+  if (last && now.getTime() - (Number(last.at) || 0) < COLD_WAIT_FOR_ANSWER_MS && awaitsAnswer(history)) return { skipped: 'waiting for an answer' };
+
+  const first = String(owner.name || '').trim().split(/\s+/)[0] || 'לו';
+  const msg = buildColdNudge(first, pick);
+  // The count of days is of today: a nudge still waiting for WhatsApp's window a day later is dropped.
+  const expiresAt = now.getTime() + 24 * 3600000;
+  await nudge(db, owner, { body: msg.text, buttons: msg.buttons, kind: 'cold', remember: true, expiresAt, ref: { type: 'cold', id: pick.contactId } }, { now: now.getTime(), send, job });
+  // The whole document is written (no merge), so contacts dropped above are really gone.
+  await ref.set({ lastSentOn: today, nudged: { ...nudged, [pick.contactId]: today }, updatedAt: now.getTime() });
+  job.note('cold-contact nudge → the owner');
+  return { sent: 1, contactId: pick.contactId };
+}
+
+/**
+ * A tap on the nudge. "לא עכשיו" is answered here with one line and no model
+ * call (the contact is not mentioned again for COLD_AGAIN_DAYS either way).
+ * "לנסח הודעה" goes to the conversation, which drafts through the outreach flow.
+ */
+async function onColdTap({ button }) {
+  if (button !== 1) return { handled: false };
+  return { handled: true, reply: 'בסדר, לא אזכיר את זה שוב בחודש הקרוב.' };
+}
+const registerTaps = () => taps.onTap('cold', onColdTap);
+registerTaps();
+
+module.exports = { networkTools, networkSection, NETWORK_TOOL_DEFS, coldNudge, coldCandidates, buildColdNudge, onColdTap, registerTaps, GOLDA_COLD_DAYS, COLD_AGAIN_DAYS, COLD_BUTTONS };
