@@ -5,3 +5,4 @@ export * from './deals.js';
 export * from './recurrence.js';
 export * from './analytics.js';
 export * from './completeness.js';
+export * from './matchStats.js';
