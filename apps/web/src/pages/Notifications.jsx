@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fmtDate } from 'lib/constants';
-import { persistSettings, alertLink } from 'lib/alerts';
+import { persistSettings, alertLink, DEFAULT_SETTINGS } from 'lib/alerts';
 import { useAlerts, setAlertSettings } from 'lib/useAlertCount';
 import { PageHeader, Modal, toast, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { useRole, useCan } from 'lib/roleContext';
 import { t, getLang, relDays } from 'lib/i18n';
+import PushSettings from 'components/push/PushSettings';
 
 // Every alert in one list, from the same engine Home and the daily email use
 // (packages/domain/src/engines/alerts.ts): contracts, representation,
 // passports, birthdays, deals waiting too long, expired requirements,
 // overdue tasks, failed night jobs, and the matches of the coming week.
+// At the top, the phone notifications of this user (components/push).
 const ALL_OPTIONS = [0, 3, 7, 14, 30, 60, 90, 180];
 
 const TYPE = {
@@ -103,6 +105,7 @@ export default function Notifications() {
         subtitle={loaded ? t('{n} active alerts', { n: r.total }) : t('Loading…')}
         action={canEdit ? <button className="btn btn-ghost" onClick={() => setShowSettings(true)}><Icon name="bell" size={12} /><span className="btn-text">{t('Alert Settings')}</span></button> : null}
       />
+      <PushSettings />
       {!loaded && r.alerts.length === 0 ? (
         <Skeleton rows={5} />
       ) : r.alerts.length === 0 ? (

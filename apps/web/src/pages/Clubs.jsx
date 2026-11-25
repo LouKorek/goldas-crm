@@ -4,7 +4,8 @@ import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS }
 import { listenClubs, saveClubLogo } from 'data/clubs';
 import { listenPlayers } from 'data/players';
 import { listenDeals, withPlayerMarket } from 'data/deals';
-import { clubKey, playerName, DEAL_STAGE_LABELS, isYouthName } from '@goldas/domain';
+import { clubKey, playerName, DEAL_STAGE_LABELS, isYouthName, clubDomainProblem, normalizeMailDomain } from '@goldas/domain';
+import RecordMail from 'components/mail/RecordMail';
 import { PageHeader, Empty, Spinner, SearchInput, Modal, Field, RowActions, useConfirm, toast } from 'components/ui/UI';
 import { ClubLogoOrAvatar } from 'pages/Requirements';
 import Icon from 'components/ui/Icons';
@@ -12,7 +13,7 @@ import { useRole } from 'lib/roleContext';
 import { fmtDate, calcAge } from 'lib/constants';
 import { t } from 'lib/i18n';
 
-const EMPTY = { name: '', country: 'Israel', leagueTier: '', website: '', notes: '', logoUrl: '' };
+const EMPTY = { name: '', country: 'Israel', leagueTier: '', website: '', emailDomain: '', notes: '', logoUrl: '' };
 
 // Everything in the CRM that mentions a club, grouped by the club's key.
 function useClubWorld() {
@@ -82,9 +83,17 @@ export default function Clubs() {
     const key = clubKey(name);
     const dup = clubs.find((c) => c.key === key && c.id !== modal?.edit?.id);
     if (dup) { toast.error(`"${dup.name}" is already this club.`); return; }
+    // The e-mail domain links the club's mail (lib/mail-store.js): never a free mail service, never two clubs.
+    const domainRaw = String(form.emailDomain || '').trim();
+    const problem = domainRaw ? clubDomainProblem(domainRaw) : null;
+    if (problem === 'free') { toast.error(t('That is a free mail service (like gmail.com), shared by everyone. Leave the domain empty and save the contacts\' own addresses instead.')); return; }
+    if (problem) { toast.error(t('That does not look like an e-mail domain. Write it like maccabi-haifa.co.il.')); return; }
+    const emailDomain = domainRaw ? normalizeMailDomain(domainRaw) : '';
+    const sameDomain = emailDomain && clubs.find((c) => c.emailDomain === emailDomain && c.id !== modal?.edit?.id);
+    if (sameDomain) { toast.error(t('"{name}" already has this e-mail domain.', { name: sameDomain.name })); return; }
     setSaving(true);
     try {
-      const data = { name, key, country: form.country, leagueTier: form.leagueTier, website: form.website, notes: form.notes, logoUrl: form.logoUrl };
+      const data = { name, key, country: form.country, leagueTier: form.leagueTier, website: form.website, emailDomain, notes: form.notes, logoUrl: form.logoUrl };
       if (modal === 'add') { await addDoc_(PATHS.CLUBS, { ...data, aliases: [] }); toast.success(`"${name}" added.`); }
       else { await updateDoc_(PATHS.CLUBS, modal.edit.id, data); toast.success(t("Club updated.")); }
       setModal(null);
@@ -161,6 +170,9 @@ function ClubModal({ modal, setModal, form, setForm, save, saving }) {
       <Field label={t("Country")}><input value={form.country} onChange={s('country')} /></Field>
       <Field label={t("League tier")}><input value={form.leagueTier} onChange={s('leagueTier')} placeholder={t("Tier 1")} /></Field>
       <Field label={t("Website")}><input value={form.website} onChange={s('website')} placeholder="https://" /></Field>
+      <Field label={t('E-mail domain')} hint={t('Mail from and to addresses at this domain shows on the club. Not a free service like gmail.com.')}>
+        <input value={form.emailDomain || ''} onChange={s('emailDomain')} placeholder="maccabi-haifa.co.il" dir="ltr" autoComplete="off" />
+      </Field>
       <Field label={t("Logo URL")} hint={t("Found automatically when empty.")}><input value={form.logoUrl} onChange={s('logoUrl')} placeholder="https://..." /></Field>
       <Field label={t("Notes")}><textarea value={form.notes} onChange={s('notes')} rows={3} /></Field>
     </Modal>
@@ -193,6 +205,7 @@ function ClubDetail({ club, world, canEdit, onEdit, modal, setModal, form, setFo
           {canEdit && <button className="btn btn-primary" onClick={onEdit} style={{ height: 36 }}><Icon name="edit" size={12} /><span className="btn-text">{t("Edit")}</span></button>}
         </div>} />
       {(club.aliases || []).length > 0 && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: -6 }}>{t("Also written as:")} {club.aliases.join(' · ')}</div>}
+      {club.emailDomain && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>{t('E-mail domain')}: <span dir="ltr">{club.emailDomain}</span></div>}
       {club.notes && <div className="card" style={{ padding: 12, marginTop: 12, fontSize: 13, whiteSpace: 'pre-wrap' }}>{club.notes}</div>}
 
       <Section title={t("Represented players")} count={w.players.length}>
@@ -213,6 +226,7 @@ function ClubDetail({ club, world, canEdit, onEdit, modal, setModal, form, setFo
       <Section title={t("Upcoming matches")} count={upcoming.length}>
         {upcoming.map((m) => <Row key={m.id} to="/matches" main={`${m.homeTeam} – ${m.awayTeam}`} sub={`${fmtDate(m.date)} ${m.time || ''}`} />)}
       </Section>
+      <div style={{ marginTop: 14 }}><RecordMail kind="club" id={club.id} deals={openDeals} /></div>
       {modal && <ClubModal modal={modal} setModal={setModal} form={form} setForm={setForm} save={save} saving={saving} />}
       {dialog}
     </div>

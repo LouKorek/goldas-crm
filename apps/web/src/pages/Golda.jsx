@@ -258,6 +258,10 @@ function Rich({ text }) {
     if (/^\*[^*\n]+\*$/.test(p)) return <strong key={i}>{p.slice(1, -1)}</strong>;
     if (/^_[^_\n]+_$/.test(p)) return <em key={i}>{p.slice(1, -1)}</em>;
     if (/^https?:\/\//.test(p)) {
+      // A draft Golda prepared (lib/golda-outreach.js): opens the writer's own WhatsApp with the text ready.
+      if (/^https:\/\/wa\.me\//.test(p)) {
+        return <a key={i} href={p} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ display: 'inline-flex', margin: '4px 0', height: 32, whiteSpace: 'nowrap' }}>{t('Open in WhatsApp')}</a>;
+      }
       const m = /^https?:\/\/goldas-crm\.netlify\.app(\/[^\s)]*)/.exec(p);
       const label = p.replace(/^https?:\/\//, '').slice(0, 48);
       return m ? <Link key={i} to={m[1]} style={{ color: 'var(--gold)' }}>{label}</Link> : <a key={i} href={p} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)' }}>{label}</a>;

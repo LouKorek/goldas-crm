@@ -7,7 +7,7 @@
 // call that a success, so when Lou was quiet for a day she went silent too.
 //
 // This module makes every proactive message accountable:
-//   deliver(db, {to, body, via, kind, buttons})
+//   deliver(db, {to, body, via, kind, buttons, carryOnly, expiresAt})
 //     buttons (optional, up to three reply buttons under the text) travel with
 //     the message wherever it goes: sent with it now, or kept on the queued
 //     row and sent with it when the window opens. A template carries none.
@@ -20,6 +20,10 @@
 //     full text; before they are approved, the pointer template
 //     golda_update or Meta's hello_world (at most one of those per
 //     RE_ENGAGE_GAP_MS per person, since they carry nothing).
+//     carryOnly: only a template that carries the text (brief / digest) may
+//     go; a player is never sent a content-free template.
+//     expiresAt (ms): a queued text not released by then is dropped (a
+//     reminder must not arrive after its training).
 //   onStatuses(db, statuses)   webhook: 'delivered' / 'read' / 'failed' on the
 //     outbox row; a 131047 failure turns the row into 'queued' and re-engages.
 //   onInbound(db, phone, via, {release})  webhook: the person wrote, so the
@@ -160,9 +164,10 @@ async function readContact(db, phone) {
  * approved, the message carries the update itself and goes out every time;
  * a content-free template (pointer / hello_world) is rate-limited instead.
  */
-async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, log = console.log, body = '' } = {}) {
+async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, log = console.log, body = '', carryOnly = false } = {}) {
   const meta = (await db.collection('app_meta').doc('whatsapp').get()).data() || {};
   let tpl = templateFor(meta, body);
+  if (carryOnly && !(tpl.digest && body)) return { skipped: 'no template carries the text' };
   // A content-free template is rate-limited; the digest carries the update, so it always goes.
   const recently = now - ms(contact.lastReengageAt) < RE_ENGAGE_GAP_MS;
   if (!(tpl.digest && body) && recently) return { skipped: 'recently' };
@@ -179,6 +184,10 @@ async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, l
         // Not on this number's account, or not approved yet: the next one down.
         const tried = tpl;
         tpl = nextTemplate(tpl, meta, body);
+        if (carryOnly && !(tpl.digest && body)) {
+          log(`[wa-outbox] ${tried.name} not usable yet (${errorCode(e.message)}); no other template carries the text`);
+          return { skipped: 'no template carries the text', tried: tried.name };
+        }
         if (!(tpl.digest && body) && recently) {
           log(`[wa-outbox] ${tried.name} not usable yet (${errorCode(e.message)}); a content-free template already went out recently`);
           return { skipped: 'recently', tried: tried.name };
@@ -204,12 +213,12 @@ const sendOut = (api, phone, body, buttons, via) => (buttons && buttons.length &
 const cleanButtons = (buttons) => (Array.isArray(buttons) ? buttons.map((b) => String(b || '').trim()).filter(Boolean).slice(0, 3) : []);
 
 /** Send a proactive text, or hold it until the person writes. */
-async function deliver(db, { to, body, via = null, kind = 'text', buttons = [] }, { now = Date.now(), api = wa, log = console.log } = {}) {
+async function deliver(db, { to, body, via = null, kind = 'text', buttons = [], carryOnly = false, expiresAt = null }, { now = Date.now(), api = wa, log = console.log } = {}) {
   const phone = digits(to);
   const contact = await readContact(db, phone);
   const state = windowState(contact, now);
   const taps = cleanButtons(buttons);
-  const extra = taps.length ? { buttons: taps } : {};
+  const extra = { ...(taps.length ? { buttons: taps } : {}), ...(Number(expiresAt) > 0 ? { expiresAt: Number(expiresAt) } : {}), ...(carryOnly ? { carryOnly: true } : {}) };
   if (state !== 'closed') {
     const ids = await sendOut(api, phone, body, taps, via);
     for (const id of ids.filter(Boolean)) {
@@ -219,7 +228,7 @@ async function deliver(db, { to, body, via = null, kind = 'text', buttons = [] }
   }
   const ref = db.collection('wa_outbox').doc();
   await ref.set({ to: phone, via, body, kind, ...extra, state: 'queued', queuedAt: now, reason: 'window closed' });
-  const re = await reengage(db, phone, via, contact, { now, api, log, body });
+  const re = await reengage(db, phone, via, contact, { now, api, log, body, carryOnly });
   if (re.carried) await ref.set({ teaser: re.template, teasedAt: now }, { merge: true });
   return { state: 'queued', id: ref.id, reengage: re };
 }
@@ -242,7 +251,7 @@ async function onStatuses(db, statuses, { now = Date.now(), api = wa, log = cons
       const contact = (await cref.get()).data() || {};
       await cref.set({ lastFailure: { at: now, code: err.code || 0, message: (err.message || err.title || '').slice(0, 200) } }, { merge: true });
       if (closed) {
-        const re = await reengage(db, row.to, row.via || s.phoneId, contact, { now, api, log, body: row.body });
+        const re = await reengage(db, row.to, row.via || s.phoneId, contact, { now, api, log, body: row.body, carryOnly: !!row.carryOnly });
         if (re.carried) await ref.set({ teaser: re.template, teasedAt: now }, { merge: true });
       }
       continue;
@@ -267,6 +276,10 @@ async function onInbound(db, phone, via, { now = Date.now(), api = wa, log = con
   const all = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => ms(a.queuedAt) - ms(b.queuedAt));
   const rows = [];
   for (const r of all) {
+    if (Number(r.expiresAt) > 0 && now > Number(r.expiresAt)) {
+      await db.collection('wa_outbox').doc(r.id).set({ state: 'expired', expiredAt: now }, { merge: true });
+      continue;
+    }
     if (!r.teaser) { rows.push(r); continue; }
     if (now - ms(r.teasedAt || r.queuedAt) > TEASER_TTL_MS) {
       await db.collection('wa_outbox').doc(r.id).set({ state: 'expired', expiredAt: now }, { merge: true });

@@ -15,10 +15,16 @@
 //                                      sends the browser to /admin/youtube?yt=ok|error
 //   GET  ?status=1 (admin, or the      → the public status (no secrets)
 //        x-sync-secret header)
+//
+// The Google client has one return address registered for the site, this
+// one, so the Gmail connection (lib/gmail-auth.js) comes back here too: its
+// state starts "gmail-", and such a return is finished by the Gmail code and
+// sends the browser to /admin/mail?gm=ok|error instead.
 const { withAuth, json, internalHeaders } = require('./lib/auth.js');
 const { getDb } = require('./lib/firestore.js');
 const ytAuth = require('./lib/youtube-auth.js');
 const { originOf } = require('./lib/site.js');
+const gmailAuth = require('./lib/gmail-auth.js');
 
 // Everything stays on the address the request came to: the site, or a preview of it.
 const back = (event, result, msg) => ({
@@ -54,10 +60,40 @@ const post = withAuth({ action: 'manage_settings' }, async (event, ctx) => {
   } catch (e) { return json(/not set up/.test(e.message) ? 503 : 400, { error: e.message }); }
 });
 
+// ── the Gmail return ────────────────────────────────────────────────────────
+const backToMail = (event, result, msg) => ({
+  statusCode: 302,
+  headers: { Location: `${originOf(event)}/admin/mail?gm=${result}${msg ? `&reason=${encodeURIComponent(String(msg).slice(0, 160))}` : ''}`, 'Cache-Control': 'no-store' },
+  body: '',
+});
+
+async function gmailReturn(event, q) {
+  const db = getDb();
+  if (q.error) {
+    await gmailAuth.takeState(db, q.state).catch(() => null);
+    return backToMail(event, 'error', q.error === 'access_denied' ? 'the permission was not given' : q.error);
+  }
+  try {
+    await gmailAuth.finish(db, { code: q.code, state: q.state }, { enable: () => gmailAuth.enableGmailApi(gmailAuth.serviceAccount()) });
+    console.log('[youtube-connect] the Gmail mailbox is connected');
+    try {
+      await fetch(`${originOf(event)}/.netlify/functions/gmail-sync-background`, {
+        method: 'POST', headers: { 'content-type': 'application/json', ...(await internalHeaders('gmail-first-sync')) }, body: JSON.stringify({ reason: 'connected' }),
+      });
+    } catch (e) { console.warn('[youtube-connect] could not start the first mail sync:', e.message); }
+    return backToMail(event, 'ok');
+  } catch (e) {
+    console.error('[youtube-connect] Gmail sign-in failed:', e.message);
+    await gmailAuth.savePublic(db, { lastError: { at: Date.now(), message: String(e.message).slice(0, 240) } }).catch(() => {});
+    return backToMail(event, 'error', e.message);
+  }
+}
+
 exports.handler = async (event, context) => {
   const q = event.queryStringParameters || {};
   if (event.httpMethod === 'POST') return post(event, context);
   if (q.status) return status(event, context);
+  if (gmailAuth.isGmailState(q.state)) return gmailReturn(event, q);
   if (q.error) return back(event, 'error', q.error === 'access_denied' ? 'the permission was not given' : q.error);
   if (q.code || q.state) {
     try {

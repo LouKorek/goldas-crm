@@ -20,6 +20,7 @@ import { PageHeader, Skeleton, Empty, ChipGroup, Field, SearchInput, Modal, toas
 import Icon from 'components/ui/Icons';
 import CalendarSync from 'components/admin/CalendarSync';
 import YouTubeConnect from 'components/admin/YouTubeConnect';
+import GmailConnect from 'components/admin/GmailConnect';
 import WebsiteStatus from 'components/admin/WebsiteStatus';
 import AgreementTemplates from 'components/admin/AgreementTemplates';
 import {
@@ -29,7 +30,7 @@ import {
 } from 'data/admin';
 
 const VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
-const TABS = [['health', 'בריאות', 'Health'], ['quotas', 'מכסות', 'Quotas'], ['backups', 'גיבויים', 'Backups'], ['audit', 'יומן פעולות', 'Audit log'], ['errors', 'שגיאות', 'Errors'], ['whatsapp', 'וואטסאפ', 'WhatsApp'], ['calendar', 'יומן Google', 'Google calendar'], ['youtube', 'יוטיוב', 'YouTube'], ['website', 'אתר', 'Website'], ['agreements', 'הסכמי ייצוג', 'Agreements']];
+const TABS = [['health', 'בריאות', 'Health'], ['quotas', 'מכסות', 'Quotas'], ['backups', 'גיבויים', 'Backups'], ['audit', 'יומן פעולות', 'Audit log'], ['errors', 'שגיאות', 'Errors'], ['whatsapp', 'וואטסאפ', 'WhatsApp'], ['calendar', 'יומן Google', 'Google calendar'], ['youtube', 'יוטיוב', 'YouTube'], ['mail', 'מיילים', 'Email'], ['website', 'אתר', 'Website'], ['agreements', 'הסכמי ייצוג', 'Agreements']];
 const toDate = (v) => (v?.toDate ? v.toDate() : v ? new Date(v) : null);
 const ago = (d, he) => {
   if (!d) return he ? 'מעולם' : 'never';
@@ -86,6 +87,7 @@ export default function Admin() {
       {tab === 'whatsapp' && <WhatsApp he={he} />}
       {tab === 'calendar' && <CalendarSync he={he} />}
       {tab === 'youtube' && <YouTubeConnect he={he} />}
+      {tab === 'mail' && <GmailConnect />}
       {tab === 'website' && <WebsiteStatus he={he} />}
       {tab === 'agreements' && <AgreementTemplates />}
     </div>

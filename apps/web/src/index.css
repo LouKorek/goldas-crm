@@ -1595,3 +1595,16 @@ button:focus:not(:focus-visible) { outline: none; }
   .snap-records .data-table { min-width: max-content; }
 }
 @media (pointer: coarse) { .snap-filter { min-height: 38px; } }
+
+/* Contacts → map view (components/contacts): the map and the selected node's card. */
+.net-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 6px; background: none; border: 0; border-radius: var(--radius-sm); color: var(--text-1); text-align: start; cursor: pointer; font: inherit; }
+.net-row:hover, .net-row:focus-visible { background: var(--surface-2); }
+.net-link { background: none; border: 0; padding: 0 2px; color: var(--text-1); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-decoration-color: var(--border-2); text-underline-offset: 3px; }
+.net-link:hover { color: var(--accent); }
+.net-map-row { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; scroll-margin-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 12px); }
+/* A link written as text (the last touch under a contact, "Open in Gmail"): a full tap target on a touch screen. */
+.tap-text { display: inline-flex; align-items: center; }
+@media (pointer: coarse) { .tap-text { min-height: var(--tap); } }
+@media (min-width: 1000px) {
+  .net-map-row--card { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
+}

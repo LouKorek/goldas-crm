@@ -26,9 +26,11 @@
 | `sync-matches` | 03:10 | משחקי השחקנים המיוצגים (מהשרת) | ראה סעיף 5 |
 | `ig-watch` | 03:50 | אינסטגרם הסוכנות | טוקן `IG_ACCESS_TOKEN` פג? מחדשים ב-Meta |
 | `tm-watch` | 04:30 | מועמדים מ-Transfermarkt (ScraperAPI) | ראה סעיף 4 |
-| `send-alerts` | 05:30 | תקציר יומי באימייל למי שסימן | `GMAIL_APP_PASSWORD` תקין? |
+| `send-alerts` | 06:00 | תקציר יומי באימייל למי שסימן, ואז התראות לטלפון על הדחוף (חוזה/ייצוג תוך שבוע, עסקה תקועה, משימה באיחור, תשלום באיחור למנהלים) | `GMAIL_APP_PASSWORD` תקין? בהערות הריצה: "phones: …" אומר כמה התראות יצאו ולכמה אנשים |
 | `golda-briefing` | כל שעה ב-:30 | תדריך בוקר, התראות דחופות, התראות תפעול לאדמינים | ראה סעיף 6 |
-| `golda-queue` | כל 10 דק' | ניסיונות חוזרים להודעות שנתקעו; בדיקה אם פגישה מתקרבת (הכנה של גולדה) | ראה סעיף 6 |
+| `golda-queue` | כל 10 דק' | ניסיונות חוזרים להודעות שנתקעו; בדיקה אם פגישה מתקרבת (הכנה של גולדה); בדיקה אם הודעה לשחקן מחובר צריכה לצאת | ראה סעיף 6 |
+| `golda-player-sends` | נבדק כל 10 דק' (ב-`golda-queue`), רק 08:00–22:00 שעון ישראל | לשחקן מחובר לגולדה, לפי המתגים בכרטיס "גולדה לשחקן": הלוח השבועי (מוצ"ש 21:00), תזכורת לפני אימון, בהצלחה לפני משחק. נרשמת רק כשנשלחה, דולגה או נכשלה הודעה | ראה סעיף 6 |
+| `gmail-sync` | כל 15 דק' (רק כשתיבת Gmail מחוברת) | מיילים עם אנשי הקשר והמועדונים שב-CRM נצמדים לרשומות (`mail_messages`) | ראה "Gmail" בסוף המסמך |
 | `backup-weekly` | כל לילה 01:30 (רץ כשעבר שבוע) | גיבוי מלא ל-`backups/{id}/chunks`, בדיקה עצמית ועותק חיצוני | ראה סעיף 3 |
 
 "הרץ עכשיו" במסך הבריאות מריץ את אותו הקוד שהתזמון מריץ, ומסומן `trigger: manual`
@@ -140,6 +142,20 @@
   - האתר עוקב אחרי ה-CRM (`lib/golda-site-follow.js`): בריצה השעתית, ביום
     ואחרי התדריך, שחקן מיוצג שהשתנה מול `app_meta/goldaSiteFollow.seen`
     מקבל טיוטה לאתר ושאלה "לפרסם?". שום דבר לא מתפרסם בלי "כן" בהודעה מאוחרת.
+  - **החריג היחיד: שחקן מחובר (`lib/golda-player-sends.js`).** שחקן מיוצג
+    שאדמין חיבר לגולדה (מספר + מתג בכרטיס "גולדה לשחקן") מקבל רק מה שאדמין
+    הפעיל לו, כל סוג במתג משלו (`players.goldaWeek`, `goldaTrainingReminder`,
+    `goldaMatchWish`): הלוח לשבוע במוצאי שבת 21:00 (או ראשון בבוקר עד 12:00
+    אם התפספס), תזכורת שעתיים לפני אימון, בהצלחה ארבע שעות לפני משחק (בערב
+    שלפני ב-20:00 כשזה נופל לפני 08:00). `golda-queue` בודק כל 10 דקות ומעיר את
+    `golda-briefing-background` עם `{ task: 'player-sends' }`. פעם אחת לכל אירוע
+    ולכל שבוע (`app_meta/goldaPlayerSends`); השחקן והאימון/המשחק נקראים שוב
+    רגע לפני השליחה, כך שאימון שבוטל לא מקבל תזכורת ואימון שזז מקבל תזכורת
+    "שינוי". מחוץ לחלון 24 השעות יוצאת רק תבנית שנושאת את הטקסט (brief /
+    digest), אף פעם hello_world, והטקסט המלא פג בתחילת האירוע. השחקן כותב
+    "די" / "הפסיקי" / "stop" → שלושת המתגים כבים, היא מאשרת בשורה, והאדמינים
+    מקבלים את זה בעדכונים משחקנים (`golda_player_notes`). כלי לאדמין:
+    `player_messages`.
   - שאלה יומית (`lib/golda-daily-question.js`): פעם ביום בין 13:00 ל-19:00,
     על הפער החשוב ביותר בנתוני שחקן מיוצג. מצב ב-`app_meta/goldaDailyQuestion`;
     "בלי שאלה יומית" בוואטסאפ מכבה, "תחזירי את השאלה היומית" מדליק.
@@ -198,6 +214,14 @@
 
 - נשלח מ-Gmail של הסוכנות עם `GMAIL_APP_PASSWORD`. מי מקבל: `app_users.emailAlerts`.
 - אם `send-alerts` נכשל ב-535: הסיסמה פגה (סיסמת אפליקציה חדשה ב-Google).
+
+### התראות לטלפון (Web Push)
+
+- כל משתמש מפעיל בעצמו במסך "התראות" ("התראות לטלפון" → הפעלה). באייפון רק מהאפליקציה שבמסך הבית (iOS 16.4+).
+- יוצאות מ-`send-alerts` בבוקר (06:00 UTC), אחרי האימייל: רק ההתראות הקריטיות של חוזה, הסכם ייצוג, עסקה תקועה, משימה באיחור (לבעל המשימה) ותשלום באיחור (למנהלי מערכת). כל אחת פעם אחת לאדם (`app_meta/pushSent`). לא בין 22:00 ל-08:00.
+- המכשירים ב-`push_subscriptions` (רק הפונקציות קוראות). מכשיר ששירות ההתראות אומר שאיננו (404/410) נמחק; משתמש שהושבת מאבד את מכשיריו בריצה הבאה.
+- זוג המפתחות נוצר לבד בפעם הראשונה ב-`app_secrets/push`, החלק הפרטי חתום (`lib/seal.js`). מחיקת המסמך = מפתחות חדשים, וכל המכשירים צריכים להפעיל מחדש.
+- "לא הגיע": במסך ההתראות "שליחת בדיקה". בהערות הריצה של `send-alerts` מופיע `phones: N sent to M people`.
 
 ## 8. גישה והרשאות
 
@@ -385,3 +409,36 @@ See it without a backend: `cd apps/web && npx vite --config vite.harness.config.
 `/dev/app.html?path=/sign/demo` (also `demo-minor`, `demo-en`, `signed`, `gone`),
 `/dev/app.html?path=/players/p1` for the card and `/dev/app.html?path=/system/agreements`
 (`&templates=none` for no template, `&theme=dark`).
+
+## Gmail: the agency's mail on its records
+
+What: once Lou connects the mailbox (System › Email, one button and Google's consent
+screen), `gmail-sync-cron` (every 15 min) calls `gmail-sync-background`, which asks Gmail
+only for mail to or from the addresses the CRM knows (a contact's `contactEmail`, a club's
+`emailDomain`; never a free mail domain such as gmail.com) and keeps what matches in
+`mail_messages`: ids, date, names and addresses, subject, Gmail's snippet, attachment
+names, and the contact, club and deal links. No body text, no attachments. Rules and
+matching in `netlify/functions/lib/mail-store.js`. The permission is `gmail.readonly` only.
+
+Connection: the same Google OAuth client as YouTube (System › YouTube) and the same return
+address (`youtube-connect`); a state starting `gmail-` is the Gmail one. The refresh token
+is sealed in `app_secrets/gmail`; the status (address, last sync, how many linked, problem)
+is in `app_meta/gmail`. The first connection reads back 90 days; an address added later to a
+contact or a club is read back 90 days at its first run. Afterwards each run asks Gmail's
+history whether anything arrived since the last one and searches only then.
+
+The Gmail API is switched on by the server's own service account (on "connect" and when a
+run finds it off, at most once a day). If it cannot (no role for it), System › Email says
+so: enable "Gmail API" on the gold-as-crm project by hand.
+
+Disconnect (System › Email) deletes the key, every stored message and the sync state. It
+does not revoke the permission at Google, because the mailbox may be the YouTube account
+and revoking the client there would cut YouTube too; to withdraw it fully, remove the app
+in the Google account's security settings (and connect YouTube again if it was the same
+account). `mail_messages` is left out of the backups on purpose.
+
+Who sees it: admins and managers see a club's and a contact's mail; mail linked to a deal is
+admin-only (it is the negotiation, like the deal's money); viewers see none. Golda's
+`mail_recent` follows the same rule and is never available to the player role. A wrong link
+is fixed on the record (move to another deal, take off the deal, "not agency mail"); the
+fix is kept in the message's `override` and survives every sync.

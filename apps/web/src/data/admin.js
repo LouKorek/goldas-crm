@@ -22,7 +22,7 @@ export const JOBS = [
   { name: 'sync-matches', he: 'סנכרון משחקים', when: 'יומי 03:10 UTC', run: 'sync-matches' },
   { name: 'ifa-server-sync', he: 'משחקי ההתאחדות (ישראל)', when: 'יומי 03:00 UTC', run: 'ifa-server-sync' },
   { name: 'nightly-engines', he: 'מנועי הלילה (התראות, ציונים)', when: 'יומי 03:00 UTC', run: 'nightly-engines' },
-  { name: 'send-alerts', he: 'תקציר התראות באימייל', when: 'יומי 05:30 UTC', run: 'send-alerts' },
+  { name: 'send-alerts', he: 'תקציר התראות באימייל והתראות לטלפון', when: 'יומי 06:00 UTC', run: 'send-alerts' },
   { name: 'golda-briefing', he: 'תדריך גולדה והתראות', when: 'כל שעה ב-:30', run: 'golda-briefing' },
   { name: 'tm-watch', he: 'מעקב Transfermarkt', when: 'יומי 04:30 UTC', run: 'tm-watch' },
   { name: 'ig-watch', he: 'אינסטגרם הסוכנות', when: 'יומי 03:50 UTC', run: 'ig-watch' },
@@ -31,6 +31,8 @@ export const JOBS = [
   { name: 'meta-onboard', he: 'מעבר גולדה למספר שלה (055)', when: 'כל שעה ב-:45 עד שמסתיים', run: 'meta-onboard' },
   { name: 'golda-queue', he: 'תור הודעות גולדה (ניסיונות חוזרים)', when: 'כל 10 דקות', run: null },
   { name: 'golda-meeting-brief', he: 'הכנה של גולדה לפני פגישה', when: 'כשעה לפני כל פגישה ביומן', run: null },
+  { name: 'golda-player-sends', he: 'הודעות של גולדה לשחקנים', when: 'נבדק כל 10 דקות, 08:00–22:00', run: null },
+  { name: 'gmail-sync', he: 'מיילים מ-Gmail לרשומות', when: 'כל 15 דקות, כשהתיבה מחוברת', run: 'gmail-sync' },
   { name: 'migrate', he: 'מיגרציות נתונים', when: 'אחרי כל פריסה', run: null },
 ];
 

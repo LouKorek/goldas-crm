@@ -9,6 +9,7 @@ import { useRole, useCan } from 'lib/roleContext';
 import { t, tv, fmtDateTime, relDays, getLang } from 'lib/i18n';
 import { DEAL_STAGES, DEAL_STAGE_LABELS, CLOSED_STAGES, daysInStage, isStale, funnel, playerName, clubKey, hasLatePayment } from '@goldas/domain';
 import { DealPayments } from 'components/finance/PaymentBits';
+import RecordMail from 'components/mail/RecordMail';
 import { PageHeader, Modal, Empty, Skeleton, useConfirm, toast, ChipGroup, Field, SearchInput } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 
@@ -46,7 +47,7 @@ function DealCard({ deal, onOpen, money }) {
   );
 }
 
-function DealDrawer({ deal, players, onClose }) {
+function DealDrawer({ deal, players, deals = [], onClose }) {
   const { canEdit, email } = useRole();
   const money = useCan('money');
   const { confirm, dialog } = useConfirm();
@@ -121,6 +122,8 @@ function DealDrawer({ deal, players, onClose }) {
       )}
       {canEdit && deal.closedAt && <button className="btn btn-secondary" style={{ marginBottom: 14 }} onClick={reopen}>{t('Reopen deal')}</button>}
       {money && <DealPayments deal={deal} canEdit={canEdit} />}
+      {/* Other open deals with this club or this player: where a message can be moved. */}
+      <RecordMail kind="deal" id={deal.id} deals={deals.filter((d) => d.id !== deal.id && !d.closedAt && ((deal.clubId && d.clubId === deal.clubId) || (deal.playerId && d.playerId === deal.playerId)))} />
 
       <div className="view-grid-2">
         <div>
@@ -311,7 +314,7 @@ export default function Deals() {
         </div>
       )}
 
-      {open && <DealDrawer deal={open} players={players} onClose={() => setOpen(null)} />}
+      {open && <DealDrawer deal={open} players={players} deals={deals} onClose={() => setOpen(null)} />}
       {adding && <NewDealModal players={players} clubs={clubs} requirements={requirements} onClose={() => setAdding(false)} />}
     </div>
   );

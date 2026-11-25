@@ -1,43 +1,62 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
-         PhoneActions, RowActions, ExportMenu, toast } from 'components/ui/UI';
+         PhoneActions, RowActions, ActionBtn, ExportMenu, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
+import ContactTouches, { lastTouchLine } from 'components/ContactTouches';
+import ContactNetwork from 'components/contacts/ContactNetwork';
+import { normalizeEmail } from '@goldas/domain';
+import RecordMail from 'components/mail/RecordMail';
 
-const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
+const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '', contactEmail: '' };
 
 export default function Contacts() {
   const [items, setItems]   = useState([]);
   const [search, setSearch] = useState('');
   const [youthScope, setYouthScope] = useState('');  // '' | 'Youth' | 'Senior'
   const [modal, setModal]   = useState(null);   // 'add' | { edit }
+  const [touchesOf, setTouchesOf] = useState(null);   // the id of the contact whose touches are open
+  const [touchDirty, setTouchDirty] = useState(false);  // a note typed in the touches window and not added yet
   const [form, setForm]     = useState(EMPTY);
+  const [isDirty, setIsDirty] = useState(false);
   const { confirm, dialog } = useConfirm();
   const { canEdit } = useRole();
+  // The list or the relationship map (?view=map), one destination.
+  const [params, setParams] = useSearchParams();
+  const view = params.get('view') === 'map' ? 'map' : 'list';
+  const setView = (v) => { const p = new URLSearchParams(); if (v === 'map') p.set('view', 'map'); setParams(p, { replace: true }); };
 
   useEffect(() => listenCollection(PATHS.CONTACTS, setItems, 'clubName'), []);
 
   const f = (k) => form[k];
-  const s = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
+  const s = (k) => (v) => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
 
   const league = form.leagueMode === 'manual'
     ? form.leagueManual
     : (form.leagueCountry && form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ', '')}` : '');
 
-  const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); };
-  const openEdit = (c) => { setForm({ ...EMPTY, ...c }); setModal({ edit: c }); };
-  const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest }); setModal('add'); };
+  const openAdd  = () => { setForm({ ...EMPTY }); setIsDirty(false); setModal('add'); };
+  const openEdit = (c) => { setForm({ ...EMPTY, ...c }); setIsDirty(false); setModal({ edit: c }); };
+  // A copy keeps the club, not the person: the e-mail address belongs to one contact.
+  const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest, contactEmail: '' }); setIsDirty(false); setModal('add'); };
 
   const save = async () => {
     if (!form.clubName.trim() && !form.contactName.trim()) {
       toast.error(t("Add at least a club or a contact name."));
       return;
     }
-    const data = { ...form, league };
+    // The address links the contact's mail (lib/mail-store.js), so it is kept in one form and on one contact.
+    const emailRaw = String(form.contactEmail || '').trim();
+    const contactEmail = emailRaw ? normalizeEmail(emailRaw) : '';
+    if (emailRaw && !contactEmail) { toast.error(t('That does not look like an e-mail address.')); return; }
+    const same = contactEmail && items.find((c) => normalizeEmail(c.contactEmail) === contactEmail && c.id !== modal?.edit?.id);
+    if (same) { toast.error(t('"{name}" already has this e-mail address.', { name: same.contactName || same.clubName })); return; }
+    const data = { ...form, contactEmail, league };
     try {
       if (modal === 'add') {
         await addDoc_(PATHS.CONTACTS, data);
@@ -63,6 +82,22 @@ export default function Contacts() {
     }
   };
 
+  // The touches window follows the live record, so a touch added there shows at once.
+  const touchContact = touchesOf ? items.find((c) => c.id === touchesOf) : null;
+  // The last touch under the contact, opening the whole list (read-only for a viewer).
+  const TouchChip = ({ c }) => {
+    const line = lastTouchLine(c);
+    if (!line) return null;
+    return (
+      <button type="button" className="tap-text" onClick={() => setTouchesOf(c.id)} title={t('Touches')}
+        style={{ background: 'none', border: 0, padding: 0, marginTop: 3, fontSize: 11, color: 'var(--text-2)',
+          cursor: 'pointer', textDecoration: 'underline dotted', textUnderlineOffset: 3, textAlign: 'start' }}>
+        {`${t('Last touch')}: ${line}`}
+      </button>
+    );
+  };
+  const touchAction = (c) => <ActionBtn icon="clock" tone="blue" title={t('Touches')} onClick={() => setTouchesOf(c.id)} />;
+
   const term = search.trim().toLowerCase();
   const filtered = items.filter(c => {
     if (term && !`${c.clubName || ''} ${c.contactName || ''} ${c.contactRole || ''}`.toLowerCase().includes(term)) return false;
@@ -79,7 +114,7 @@ export default function Contacts() {
         action={
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
             {canEdit && <button className="btn btn-primary" onClick={openAdd} style={{height:36}}><Icon name="plus" size={12} /><span className="btn-text">{t("Add Contact")}</span></button>}
-            <ExportMenu
+            {view === 'list' && <ExportMenu
               filename="Contacts"
               title={t("Contacts")}
               subtitle={term ? `search: "${term}"` : ''}
@@ -91,27 +126,32 @@ export default function Contacts() {
                 { key: 'contactPhone',   label: '📞',   pdfLabel: 'Phone' },
               ]}
               rows={filtered}
-            />
+            />}
           </div>
         }
       >
 
       <div className="filter-bar" style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div role="group" aria-label={t('View')} style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <button type="button" className={`chip${view === 'list' ? ' active' : ''}`} aria-pressed={view === 'list'} onClick={() => setView('list')}>{t('List')}</button>
+          <button type="button" className={`chip${view === 'map' ? ' active' : ''}`} aria-pressed={view === 'map'} onClick={() => setView('map')}>{t('Relationship map')}</button>
+        </div>
         <div style={{ flex: '1 1 240px', maxWidth: 360 }}>
           <SearchInput value={search} onChange={setSearch} placeholder={t("Search club, name, role...")} />
         </div>
-        <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
+        {view === 'list' && <select value={youthScope} onChange={e => setYouthScope(e.target.value)} style={{ width: 'auto', minWidth: 170, height: 38, padding: '0 10px', flexShrink: 0 }}>
           <option value="">{t("Group: All")}</option>
           <option value="Youth">{t("Youth")}</option>
           <option value="Senior">{t("Senior")}</option>
-        </select>
+        </select>}
       </div>
       </PageHeader>
 
-      {filtered.length === 0 ? (
+      {view === 'map' ? (
+        <ContactNetwork contacts={items} search={search} onEdit={openEdit} params={params} setParams={setParams} />
+      ) : filtered.length === 0 ? (
         <Empty
-         
-          message={items.length === 0 ? 'No contacts yet — add your first one.' : 'No matching contacts.'}
+          message={items.length === 0 ? t('No contacts yet. Add the first one.') : t('No matching contacts.')}
           action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>{t("+ Add Contact")}</button> : null}
         />
       ) : (
@@ -128,7 +168,7 @@ export default function Contacts() {
                   </div>
                   {c.league && <div className="m-sub">{c.league}</div>}
                 </div>
-                {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
+                {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)}>{touchAction(c)}</RowActions>}
               </div>
               {(c.contactName || c.contactRole || c.contactPhone) && (
                 <div className="m-meta" style={{ marginTop: 8 }}>
@@ -138,6 +178,7 @@ export default function Contacts() {
                   {c.contactPhone && <PhoneActions phone={c.contactPhone} />}
                 </div>
               )}
+              <TouchChip c={c} />
             </div>
           ))}
         </div>
@@ -156,7 +197,7 @@ export default function Contacts() {
                 {filtered.map(c => (
                   <tr key={c.id}>
                     <td style={{ paddingInlineEnd: 20 }}>
-                      {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
+                      {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)}>{touchAction(c)}</RowActions>}
                     </td>
                     <td style={{ textAlign: 'start', paddingInlineStart: 24 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
@@ -175,8 +216,9 @@ export default function Contacts() {
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>{c.contactName || '—'}</div>
                           {c.contactRole && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{c.contactRole}</div>}
+                          <TouchChip c={c} />
                         </div>
-                      ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                      ) : <><span style={{ color: 'var(--text-3)' }}>—</span><div><TouchChip c={c} /></div></>}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {c.contactPhone ? (
@@ -197,8 +239,8 @@ export default function Contacts() {
 
       {modal && (
         <Modal
-          title={modal === 'add' ? 'Add Contact' : `Edit: ${form.contactName || form.clubName || 'Contact'}`}
-          onClose={() => setModal(null)}
+          title={modal === 'add' ? t('Add Contact') : `${t('Edit')}: ${modal?.edit?.contactName || modal?.edit?.clubName || t('Contact')}`}
+          onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save}>{t("Save")}</button>
@@ -242,6 +284,16 @@ export default function Contacts() {
           <Field label={t("Phone")} hint={t("With country code, e.g. +972...")}>
             <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
+          <Field label={t('E-mail address')} hint={t('The CRM shows the agency\'s mail with this address on the contact and its club.')}>
+            <input type="email" value={f('contactEmail') || ''} onChange={e => s('contactEmail')(e.target.value)} placeholder="name@club.com" dir="ltr" autoComplete="off" />
+          </Field>
+          {modal.edit && <RecordMail kind="contact" id={modal.edit.id} />}
+        </Modal>
+      )}
+
+      {touchContact && (
+        <Modal title={`${t('Touches')}: ${touchContact.contactName || touchContact.clubName || ''}`} onClose={() => { setTouchesOf(null); setTouchDirty(false); }} viewOnly={!canEdit} isDirty={touchDirty}>
+          <ContactTouches contact={touchContact} canEdit={canEdit} onDirty={setTouchDirty} />
         </Modal>
       )}
 

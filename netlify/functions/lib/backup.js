@@ -24,7 +24,9 @@ const RECYCLE_COLLECTIONS = ['players', 'clubs', 'deals', 'club_requirements', '
 // A Firestore document holds 1 MiB at most, counted in UTF-8 bytes (Hebrew is
 // two bytes a letter), so the text is cut by bytes, not by characters.
 const CHUNK_BYTES = 900_000;
-const SKIP = new Set(['backups', 'internal_nonces', 'jobs', 'wa_inbox']);
+// The mail kept from Gmail (lib/mail-store.js) is left out on purpose: a
+// disconnect deletes it, and a backup must not keep a copy of it for weeks.
+const SKIP = new Set(['backups', 'internal_nonces', 'jobs', 'wa_inbox', 'mail_messages', 'mail_state', 'gmail_oauth_states']);
 const MAX_TOTAL_CHARS = 150_000_000; // ~150 MB of JSON; beyond that the backup is marked partial
 // With no good backup for this long, the admins are told (the schedule is weekly).
 const STALE_DAYS = 8;
@@ -32,7 +34,7 @@ const STALE_DAYS = 8;
 const RECORD_COLLECTIONS = ['players', 'clubs', 'contacts', 'deals', 'club_requirements', 'tasks', 'matches', 'trainings', 'meetings', 'interactions'];
 // The system's own state (keys, connections, logs). A full restore puts back
 // only what is missing there, so a week-old connection never replaces a live one.
-const SYSTEM_COLLECTIONS = new Set(['app_meta', 'app_secrets', 'audit', 'wa_sessions', 'wa_outbox', 'wa_contacts', 'meta_oauth_states', 'client_errors']);
+const SYSTEM_COLLECTIONS = new Set(['app_meta', 'app_secrets', 'push_subscriptions', 'audit', 'wa_sessions', 'wa_outbox', 'wa_contacts', 'meta_oauth_states', 'client_errors']);
 const OFFSITE_STORE = 'crm-backups';
 const GOOD = new Set(['ok', 'partial', 'done']);
 

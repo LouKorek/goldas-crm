@@ -18,6 +18,7 @@ const Requirements = lazy(() => import('pages/Requirements'));
 const Deals = lazy(() => import('pages/Deals'));
 const Players = lazy(() => import('pages/Players'));
 const Contacts = lazy(() => import('pages/Contacts'));
+const Clubs = lazy(() => import('pages/Clubs'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Player360 = lazy(() => import('pages/Player360'));
 const Admin = lazy(() => import('pages/Admin'));
@@ -26,6 +27,8 @@ const PlayerPage = lazy(() => import('pages/PlayerPage'));
 const SignPage = lazy(() => import('pages/SignPage'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 const Finance = lazy(() => import('pages/Finance'));
+const Notifications = lazy(() => import('pages/Notifications'));
+const Home = lazy(() => import('pages/Home'));
 // ?role=viewer shows the screens as someone who may not edit; ?role=manager as an editor who is not an admin.
 const asRole = new URLSearchParams(location.search).get('role') || 'admin';
 const role = asRole === 'viewer'
@@ -46,8 +49,12 @@ const App = () => (
           <Route path="market/deals" element={<Deals />} />
           <Route path="finance" element={<Finance />} />
           <Route path="contacts" element={<Contacts />} />
+          <Route path="clubs" element={<Clubs />} />
+          <Route path="clubs/:id" element={<Clubs />} />
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
           <Route path="calendar" element={<Calendar />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="home/:tab" element={<Home />} />
           <Route path="matches" element={<Matches />} />
           <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="admin/youtube" element={<YouTubeConnect he />} />

@@ -192,18 +192,62 @@ async function sendList(to, body, button, rows, via) {
  * A file Golda made (a PDF), sent as a WhatsApp document: uploaded to Meta
  * first, then sent by its media id. Returns [message id].
  */
-async function sendDocument(to, { buffer, filename, mimeType = 'application/pdf', caption = '' }, via) {
-  const from = via || await defaultPhoneId();
+async function uploadMedia(from, buffer, mimeType, filename) {
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
   form.append('type', mimeType);
   form.append('file', new Blob([buffer], { type: mimeType }), filename);
   const up = await fetch(`${GRAPH}/${from}/media`, { method: 'POST', headers: { Authorization: `Bearer ${await tokenFor(from)}` }, body: form });
   if (!up.ok) throw new Error(`WhatsApp media upload ${up.status}: ${(await up.text()).slice(0, 300)}`);
-  const { id } = await up.json();
+  return (await up.json()).id;
+}
+
+async function sendDocument(to, { buffer, filename, mimeType = 'application/pdf', caption = '' }, via) {
+  const from = via || await defaultPhoneId();
+  const id = await uploadMedia(from, buffer, mimeType, filename);
   const res = await graph(`${from}/messages`, {
     method: 'POST',
     body: JSON.stringify({ messaging_product: 'whatsapp', to: digits(to), type: 'document', document: { id, filename, ...(caption ? { caption: clip(caption, 1024) } : {}) } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  return [json.messages?.[0]?.id || null];
+}
+
+/**
+ * A voice note Golda spoke (OGG/Opus from lib/golda-tts.js): uploaded, then
+ * sent as audio. `voice: true` asks WhatsApp to show it as a voice note; an
+ * API that refuses the flag gets the same audio without it. Returns [message id].
+ */
+async function sendVoice(to, { buffer, mimeType = 'audio/ogg' }, via) {
+  const from = via || await defaultPhoneId();
+  const id = await uploadMedia(from, buffer, mimeType, 'golda.ogg');
+  const send = (audio) => graph(`${from}/messages`, { method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', to: digits(to), type: 'audio', audio }) });
+  let res;
+  try { res = await send({ id, voice: true }); } catch (e) {
+    if (!/WhatsApp API 400/.test(e.message)) throw e;
+    res = await send({ id });
+  }
+  const json = await res.json().catch(() => ({}));
+  return [json.messages?.[0]?.id || null];
+}
+
+/**
+ * A link as a real button (WhatsApp's "call to action URL" message): the body
+ * text, and one button with up to 20 characters that opens the URL. Only inside
+ * the 24-hour window, like every interactive message. Returns [message id].
+ */
+async function sendCtaUrl(to, { body, label, url, footer = '' }, via) {
+  const from = via || await defaultPhoneId();
+  const res = await graph(`${from}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({
+      messaging_product: 'whatsapp', to: digits(to), type: 'interactive',
+      interactive: {
+        type: 'cta_url', body: { text: clip(body, INTERACTIVE_BODY_MAX) || '…' },
+        ...(footer ? { footer: { text: clip(footer, 60) } } : {}),
+        action: { name: 'cta_url', parameters: { display_text: clip(label, BUTTON_TITLE_MAX), url } },
+      },
+    }),
   });
   const json = await res.json().catch(() => ({}));
   return [json.messages?.[0]?.id || null];
@@ -267,4 +311,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, sendVoice, sendCtaUrl, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };

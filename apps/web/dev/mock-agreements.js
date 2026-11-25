@@ -8,7 +8,9 @@
 //   signed       just after signing: the confirmation and the signed copy
 //   gone         a link that no longer works
 //
-// The card:  /dev/app.html?path=/players/p1   (one signed and one waiting agreement)
+// The card:  /dev/app.html?path=/players/p1   (one signed and one waiting agreement; an adult)
+//            /dev/app.html?path=/players/m1   (a minor: the new-agreement dialog asks for the parent; the player signs too)
+//            add &templates=none for the dialog with no template yet
 // The tab:   /dev/app.html?path=/system/agreements           (both templates)
 //            /dev/app.html?path=/system/agreements&templates=none   (none yet)
 //
@@ -100,7 +102,7 @@ const brief = (t) => (t ? { version: t.version, defaultMonths: t.defaultMonths, 
 export const listAgreements = async (playerId) => { await wait(150); return { agreements: LIST[playerId] || [], canCreate: true, templates: { he: brief(TEMPLATES.he), en: brief(TEMPLATES.en) } }; };
 export const createAgreement = async (input) => {
   await wait(500);
-  if (!TEMPLATES[input.lang]) throw new Error('There is no representation agreement template yet. Make one in System › Agreements.');
+  if (!TEMPLATES[input.lang]) throw Object.assign(new Error('There is no Hebrew representation agreement template yet.'), { code: 'no_template' });
   return { agreement: agreement(`n${Date.now()}`, { start: input.start, linkExpiresAt: iso(now + (input.days || 14) * D), createdAt: iso(now), opens: 0 }), summary: {}, days: input.days || 14 };
 };
 export const revokeAgreementLink = async (id) => { await wait(200); return { agreement: { id, state: 'revoked', url: null } }; };

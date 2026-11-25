@@ -1,4 +1,7 @@
+import { addNetworkFixtures } from './fixtures-network.js';
+import { clubKey } from '@goldas/domain';
 const CLUBS = ['מכבי חיפה', 'הפועל באר שבע', 'בית"ר ירושלים', 'מכבי תל אביב', 'Real Betis', 'FC Porto'];
+const CLUB_KEYS = CLUBS.map(clubKey);
 const POS = ['GK', 'CB', 'RB', 'LB', 'DM', 'CM', 'AM', 'RW', 'LW', 'ST'];
 const ST = ['Not Contacted', 'Waiting Response', 'Initial Talks', 'Mandate Received', 'Offered to Club', 'Negotiation'];
 const CATS = ['men', 'women', 'youth', 'jewish'];
@@ -26,7 +29,9 @@ const players = [
       { ...base, id: 'r3', fullName: 'Yair Shemesh', videoLink: '', contractEnd: '', siteCard: undefined },
     ];
   })(),
-  ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567' } : {}) })),
+  ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567', goldaWeek: true, goldaMatchWish: true } : {}), ...(i === 3 ? { goldaAccess: true, goldaPhone: '0527654321', goldaWeek: false, goldaTrainingReminder: false, goldaMatchWish: false, goldaSendsStoppedAt: '2026-11-22T18:40:00.000Z' } : {}) })),
+  // A represented minor, for the agreement dialog (the parent and the player both sign): /players/m1.
+  { id: 'm1', stage: 'represented', category: 'youth', fullName: 'יואב כהן', gender: 'Men', primaryPosition: 'CM', currentClub: CLUBS[0], currentClubIsYouth: true, contractStatus: 'Under Contract', dob: '2011-06-01' },
 ];
 // The monthly report: p1 has a draft for the last full month (the month the dialog opens on).
 const LAST_MONTH = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString().slice(0, 7); })();
@@ -86,5 +91,20 @@ export const FIXTURES = {
     { id: 'x20', date: day(-1), time: '20:00', homeTeam: CLUBS[0], awayTeam: CLUBS[1], source: 'ifa', linkedPlayers: ['p1', 'p3'], watchedBy: 'Lou' },
     { id: 'x21', date: day(4), time: '18:00', homeTeam: CLUBS[2], awayTeam: CLUBS[0], source: 'ifa', linkedPlayers: ['p1'] },
   ],
-  contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567' })),
+  // k0 and k4 have e-mail addresses, so the harness shows their mail (dev/mock-mail.js).
+  contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567',
+    contactEmail: i === 0 ? 'sd@maccabi-haifa.co.il' : i === 4 ? 'scouting@realbetis.es' : '',
+    // Touches (Golda's outreach drafts that went out, and calls and meetings added by hand): k0 has three, k4 one, the rest none.
+    ...(i === 0 ? { touches: [
+      { id: 't1', at: '2026-10-02T09:30:00.000Z', channel: 'call', by: 'owner@example.com', playerId: '', dealId: '', note: 'Introduction call about the summer window' },
+      { id: 't2', at: '2026-11-24T16:05:00.000Z', channel: 'whatsapp', by: 'owner@example.com', playerId: 'p1', dealId: '', note: 'הצעת שחקן מיוצג 1 לעמדת הבלם' },
+      { id: 't3', at: '2026-11-10T11:00:00.000Z', channel: 'meeting', by: 'owner@example.com', playerId: 'r2', dealId: '', note: 'פגישה במגרש האימונים, ראה את גאבין' },
+    ] } : {}),
+    ...(i === 4 ? { leagueCountry: 'Spain', touches: [{ id: 't4', at: '2026-11-18T08:00:00.000Z', channel: 'whatsapp', by: 'owner@example.com', playerId: 'r2', dealId: '', note: 'Offered Gavin Karam as a central midfielder' }] } : {}),
+  })),
+  // Club documents (the club page): the first two with an e-mail domain.
+  clubs: CLUBS.map((name, i) => ({ id: `club${i}`, name, key: CLUB_KEYS[i], aliases: [], country: i < 4 ? 'Israel' : '', leagueTier: '', website: '', notes: '', logoUrl: '',
+    emailDomain: ['maccabi-haifa.co.il', 'hbs.co.il', '', '', 'realbetisbalompie.es', ''][i] })),
 };
+// The relationship map's story and a realistic-size book (dev/fixtures-network.js).
+addNetworkFixtures(FIXTURES);

@@ -89,9 +89,72 @@ test('a template is checked, versioned, and the earlier version stays', async ()
   assert.ok(db.read('agreement_templates/he/versions', '1').text === TEMPLATE_HE);
 });
 
-test('without a template, making an agreement is refused with a sentence that says how to make one', async () => {
+test('without a template: the app gets a plain sentence, Golda the path to prepare it, and no one a sentence to type', async () => {
   const db = seed();
-  await assert.rejects(ag.createAgreement(db, { playerId: 'p1', lang: 'he', start: '2026-12-01', by, now: NOW }), (e) => e.code === 'no_template' && /System › Agreements/.test(e.message));
+  await assert.rejects(ag.createAgreement(db, { playerId: 'p1', lang: 'he', start: '2026-12-01', by, now: NOW }),
+    (e) => e.code === 'no_template' && /Golda prepares it from the agency's existing agreements/.test(e.message) && /System › Agreements/.test(e.message) && !/[֐-׿"]/.test(e.message));
+  const golda = agreementTools({ db, identity: OWNER, role: 'admin', session: { turn: 1 }, now: () => NOW });
+  const r = await golda.agreement_create({ action: 'check', playerId: 'p1', start: '2026-12-01', lang: 'en' });
+  assert.equal(r.refused, true); assert.equal(r.noTemplate, true); assert.equal(r.lang, 'en');
+  assert.match(r.reason, /no English representation agreement template/);
+  assert.match(r.reason, /Do not send the writer to a screen and do not ask him to type anything/);
+  assert.match(r.reason, /agreement_template action=examples/);
+  assert.match(r.reason, /send the agreement file \(a PDF, a photo or a document\) here in the chat/);
+  assert.match(r.reason, /agreement_create action=check again/);
+  assert.ok(!/[֐-׿]/.test(r.reason), 'no Hebrew sentence for the writer to copy');
+  const shown = await golda.agreement_template({ action: 'show', lang: 'he' });
+  assert.equal(shown.exists, false); assert.match(shown.note, /agreement_template action=examples/);
+  for (const l of ['he', 'en']) assert.ok(ag.NO_TEMPLATE[l].app && ag.NO_TEMPLATE[l].golda);
+});
+
+test("Golda finds the agency's own agreements to build the template from: admins only, newest first, no content", async () => {
+  const db = seed({ players: {
+    p1: { ...ADULT, reprFiles: [{ fileId: 'old', name: 'Noam old.pdf', type: 'application/pdf', uploadedAt: '2023-01-10T09:00:00Z' }, { fileId: 'new', name: 'Noam 2025.pdf', type: 'application/pdf', uploadedAt: '2025-02-01T09:00:00Z' }] },
+    p2: { ...MINOR, reprFiles: [{ url: 'data:image/jpeg;base64,SECRETBYTES', name: 'Yoav scan.jpg', type: 'image/jpeg', uploadedAt: '2024-09-01T09:00:00Z' }] },
+    p3: { ...NODOB, reprFiles: [{ fileId: 'agr_x', name: 'made here.pdf', agreementId: 'x', uploadedAt: '2026-11-01T09:00:00Z' }] },
+    p4: { fullName: 'Prospect', stage: 'tracking', reprFiles: [{ fileId: 'z', name: 'prospect.pdf', uploadedAt: '2026-10-01T09:00:00Z' }] },
+    gone: { fullName: 'Gone', deletedAt: '2026-01-01', reprFiles: [{ fileId: 'g', name: 'gone.pdf' }] },
+  } });
+  const owner = agreementTools({ db, identity: OWNER, role: 'admin', session: { turn: 1 }, now: () => NOW });
+  const manager = agreementTools({ db, identity: MANAGER, role: 'manager', session: { turn: 1 }, now: () => NOW });
+  await assert.rejects(manager.agreement_template({ action: 'examples', lang: 'he' }), /only an admin/);
+  const r = await owner.agreement_template({ action: 'examples', lang: 'he' });
+  assert.equal(r.count, 2, 'represented players only, never a file this system made, never the recycle bin');
+  assert.deepEqual(r.examples.map((e) => [e.playerId, e.player, e.file, e.date, e.minor]), [
+    ['p1', 'Noam Levi', 'Noam 2025.pdf', '2025-02-01', false],
+    ['p2', 'Yoav Cohen', 'Yoav scan.jpg', '2024-09-01', true],
+  ]);
+  assert.equal(r.examples[0].otherFiles, 1);
+  assert.equal(r.examples[1].minorWhenUploaded, true);
+  assert.match(r.instruction, /read_file/);
+  assert.ok(!/SECRET|fileId|base64|"new"|"old"/.test(JSON.stringify(r)), 'no file content, no stored ids, nothing private');
+  const none = await agreementTools({ db: seed(), identity: OWNER, role: 'admin', session: { turn: 1 }, now: () => NOW }).agreement_template({ action: 'examples', lang: 'he' });
+  assert.equal(none.count, 1, 'the seed adult has one uploaded agreement');
+  const empty = await agreementTools({ db: fakeDb({ players: { p2: MINOR } }), identity: OWNER, role: 'admin', session: { turn: 1 }, now: () => NOW }).agreement_template({ action: 'examples', lang: 'he' });
+  assert.equal(empty.count, 0); assert.match(empty.instruction, /send the agreement file/);
+});
+
+test("read_file reads a Word .docx agreement as text (the agency's agreements are often Word files)", () => {
+  const { fileBlocks } = require('../wa-agent.js')._internal;
+  // A minimal .docx: a zip holding word/document.xml, deflated.
+  const xml = Buffer.from('<?xml version="1.0"?><w:document><w:body><w:p><w:r><w:t>הסכם ייצוג</w:t></w:r></w:p><w:p><w:r><w:t>בין Gold A&amp;S</w:t><w:tab/><w:t>לבין השחקן</w:t></w:r></w:p></w:body></w:document>');
+  const body = zlib.deflateRawSync(xml);
+  const name = Buffer.from('word/document.xml');
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(8, 8); local.writeUInt32LE(body.length, 18); local.writeUInt32LE(xml.length, 22); local.writeUInt16LE(name.length, 26);
+  const central = Buffer.alloc(46); central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(8, 10); central.writeUInt32LE(body.length, 20); central.writeUInt32LE(xml.length, 24); central.writeUInt16LE(name.length, 28); central.writeUInt32LE(0, 42);
+  const cdAt = 30 + name.length + body.length;
+  const end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(1, 8); end.writeUInt16LE(1, 10); end.writeUInt32LE(46 + name.length, 12); end.writeUInt32LE(cdAt, 16);
+  const docx = Buffer.concat([local, name, body, central, name, end]).toString('base64');
+  const blocks = fileBlocks(`data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${docx}`, 'Document:');
+  assert.equal(blocks.length, 1); assert.equal(blocks[0].type, 'text');
+  assert.equal(blocks[0].text, 'Document:\nהסכם ייצוג\nבין Gold A&S\tלבין השחקן');
+  // stored without a type: the name tells
+  assert.equal(fileBlocks(`data:application/octet-stream;base64,${docx}`, 'Document:', 'agreement.docx')[0].text, blocks[0].text);
+  // a PDF and a photo still reach the model as a document and an image, never as text
+  assert.equal(fileBlocks('data:application/pdf;base64,JVBERi0=', 'x')[1].type, 'document');
+  assert.equal(fileBlocks('data:image/jpeg;base64,/9j/', 'x')[1].type, 'image');
+  assert.equal(fileBlocks('data:application/msword;base64,AAAA', 'x'), null, 'an old .doc cannot be read');
+  assert.equal(fileBlocks('data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,AAAA', 'x'), null, 'a broken .docx is not read');
 });
 
 test('making an adult agreement: the period, the frozen text and its hash, a working link', async () => {
@@ -120,6 +183,15 @@ test('the period: capped by the template, the end after the start, the link at m
   assert.equal(db.read('agreements', r.id).end, '2027-05-31');
 });
 
+test('a template with text only for adults refuses a minor, and never makes an empty agreement', async () => {
+  const db = seed();
+  await ag.saveTemplate(db, { lang: 'en', text: '{{#adult}}# Contract\n\n{{player_name}} signs alone.{{/adult}}', by: OWNER, now: NOW - DAY });
+  await assert.rejects(ag.createAgreement(db, { playerId: 'p2', lang: 'en', start: '2026-12-01', guardianName: 'Rina Cohen', by, now: NOW }),
+    (e) => e.code === 'no_section' && /English template has no text for a player under 18/.test(e.message));
+  const made = await ag.createAgreement(db, { playerId: 'p1', lang: 'en', start: '2026-12-01', by, now: NOW });
+  assert.match(db.read('agreements', made.id).text, /Noam Levi signs alone/);
+});
+
 test('a minor needs the parent or guardian, and the minor section is in the text', async () => {
   const db = await withTemplates(seed());
   await assert.rejects(ag.createAgreement(db, { playerId: 'p2', start: '2026-12-01', by, now: NOW }), (e) => e.code === 'guardian');
@@ -129,6 +201,40 @@ test('a minor needs the parent or guardian, and the minor section is in the text
   assert.equal(a.minor, true); assert.equal(a.playerSigns, true);
   assert.ok(a.text.includes('Rina Cohen') && a.text.includes('קטין'));
   assert.deepEqual(ag.publicAgreement(a).needs, ['guardian', 'player']);
+});
+
+test("a minor always signs with the parent: asking for the guardian alone changes nothing, from the app or from Golda", async () => {
+  const db = await withTemplates(seed());
+  const made = await ag.createAgreement(db, { playerId: 'p2', start: '2026-12-01', guardianName: 'Rina Cohen', playerSigns: false, by, now: NOW });
+  assert.equal(db.read('agreements', made.id).playerSigns, true);
+  assert.deepEqual(ag.publicAgreement(db.read('agreements', made.id)).needs, ['guardian', 'player']);
+  const res = await signedIn._handle({ httpMethod: 'POST', body: JSON.stringify({ action: 'create', playerId: 'p2', start: '2026-12-01', guardianName: 'Rina Cohen', playerSigns: false }) }, { auth: { user: { ...OWNER, role: 'admin' } } }, { db, now: NOW });
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).agreement.playerSigns, true);
+  // Golda's tool no longer takes the choice at all.
+  const def = require('../golda-agreement.js').AGREEMENT_TOOL_DEFS.find((d) => d.name === 'agreement_create');
+  assert.equal(def.input_schema.properties.playerSigns, undefined);
+  assert.ok(!/signs too beside/.test(JSON.stringify(def)));
+  const golda = agreementTools({ db, identity: OWNER, role: 'admin', session: { turn: 1 }, now: () => NOW });
+  const checked = await golda.agreement_create({ action: 'check', playerId: 'p2', start: '2026-12-01', guardianName: 'Rina Cohen' });
+  assert.match(checked.signedBy, /^Rina Cohen \(parent or guardian\) and Yoav Cohen/);
+  // An adult: the player alone, as before.
+  const adult = await ag.createAgreement(db, { playerId: 'p1', start: '2026-12-01', by, now: NOW });
+  assert.deepEqual(ag.publicAgreement(db.read('agreements', adult.id)).needs, ['player']);
+});
+
+test('an agreement stored earlier with the guardian alone still opens, signs and shows as stored', async () => {
+  const db = await withTemplates(seed());
+  const made = await ag.createAgreement(db, { playerId: 'p2', start: '2026-12-01', guardianName: 'Rina Cohen', by, now: NOW });
+  await db.collection('agreements').doc(made.id).update({ playerSigns: false });
+  const a = { id: made.id, ...db.read('agreements', made.id) };
+  assert.deepEqual(ag.publicAgreement(a).needs, ['guardian']);
+  assert.equal(ag.viewOf(a, { now: NOW }).playerSigns, false);
+  const view = JSON.parse((await viewOf(db, made.token)).body);
+  assert.deepEqual(view.agreement.needs, ['guardian']);
+  const r = await submit(db, made.token, { consent: true, textHash: sha256(a.text), signers: [{ role: 'guardian', name: 'Rina Cohen', idNumber: SECRET_GUARDIAN_ID, relation: 'mother', signature: SIG }] });
+  assert.equal(r.statusCode, 200);
+  assert.deepEqual(db.read('agreements', made.id).signers.map((s) => s.role), ['guardian']);
 });
 
 test('every link that does not work gets the same short answer', async () => {
@@ -365,7 +471,8 @@ test('the CRM endpoint: everyone sees the states, only an admin makes one or see
   assert.ok(!after.body.includes(SECRET_ID) && !after.body.includes('base64'), 'neither the ID number nor the drawn signature');
   const noTemplate = await signedIn._handle({ headers: {}, httpMethod: 'POST', body: JSON.stringify({ action: 'create', playerId: 'p1', start: '2026-12-01', lang: 'en' }) }, { auth: { user: OWNER } }, { db: seed(), now: NOW });
   assert.equal(noTemplate.statusCode, 400);
-  assert.match(JSON.parse(noTemplate.body).message, /no representation agreement template in English/);
+  assert.equal(JSON.parse(noTemplate.body).error, 'no_template');
+  assert.match(JSON.parse(noTemplate.body).message, /no English representation agreement template yet\. Golda prepares it/);
 });
 
 test('the agency signature is drawn once and goes on the agreements its admin makes', async () => {
@@ -460,4 +567,15 @@ test('the prompt tells Golda about agreements and never to call them legally bin
   const p = systemPrompt('גולדה', { name: 'לו', role: 'admin', email: OWNER.email });
   assert.match(p, /agreement_create action=check/);
   assert.match(p, /Never say an agreement is legally binding/);
+  // No template: she prepares it herself from the agency's own agreements; the writer only approves.
+  assert.match(p, /never send the writer to a screen and never ask him to type anything/);
+  assert.match(p, /agreement_template action=examples, read one or two of them with read_file \(one of a minor and one of an adult/);
+  assert.match(p, /never a clause or a word of your own/);
+  assert.match(p, /\[\[כפתורים: לשמור, לשנות\]\]; after the yes in a later message action=save, then go on with the agreement/);
+  assert.match(p, /send the agreement file \(a PDF, a photo or a document\) here in the chat/);
+  assert.match(p, /a minor's agreement is always signed by the parent or guardian and by the player himself/);
+  assert.ok(!/"תבני את תבנית ההסכם/.test(p), 'no set sentence for anyone to type');
+  const def = require('../golda-agreement.js').AGREEMENT_TOOL_DEFS.find((d) => d.name === 'agreement_template');
+  assert.deepEqual(def.input_schema.properties.action.enum, ['show', 'examples', 'propose', 'save']);
+  assert.match(def.description, /never invent, add or reword a clause/);
 });

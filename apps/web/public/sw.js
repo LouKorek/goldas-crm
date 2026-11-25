@@ -122,3 +122,38 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(request))
   );
 });
+
+// ── Phone notifications (Web Push) ───────────────────────────────────
+// The server (netlify/functions/lib/push.js) sends { title, body, url, tag }:
+// short Hebrew, the name and what is due. Tapping opens the page of the thing
+// it is about, in the open app window when there is one.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = { body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(data.title || 'Gold A&S', {
+    body: data.body || '',
+    icon: '/logo.png',
+    dir: 'rtl',
+    lang: 'he',
+    tag: data.tag || undefined,
+    renotify: !!data.tag,
+    data: { url: data.url || '/notifications' },
+  }));
+});
+
+// Only a path of this site is opened ("/players/abc"), never another address.
+const appPath = (u) => (typeof u === 'string' && u.startsWith('/') && !u.startsWith('//') ? u : '/notifications');
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(appPath(event.notification.data && event.notification.data.url), self.location.origin).href;
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const win = wins.find((c) => new URL(c.url).origin === self.location.origin);
+    if (win) {
+      await win.focus();
+      try { await win.navigate(target); return; } catch (e) { /* not controlled by this worker yet: open a window below */ }
+    }
+    await self.clients.openWindow(target);
+  })());
+});

@@ -23,7 +23,8 @@ const TASKS = {
     }, { trigger: 'schedule' });
   },
   'nightly-engines': () => runJob('nightly-engines', require('./nightly-engines.js')._internal.nightly, { trigger: 'manual' }),
-  'send-alerts': () => runJob('send-alerts', async (job) => { const r = await require('./send-alerts.js')._internal.sendDigest(job); job.note(r.body); return r; }, { trigger: 'manual' }),
+  // The morning email and phone notifications (send-alerts.js asks at 06:00 UTC with trigger 'schedule').
+  'send-alerts': (event, body) => runJob('send-alerts', async (job) => { const r = await require('./send-alerts.js')._internal.sendDigest(job); job.note(r.body); return r; }, { trigger: body.trigger === 'schedule' ? 'schedule' : 'manual' }),
   'golda-briefing': () => runJob('golda-briefing', (job) => require('./golda-briefing.js')._internal.run(job, new Date(), { force: true }), { trigger: 'manual' }),
   // Golda's move to her own number (hourly from meta-onboard-cron, and after Lou's Facebook sign-in).
   'meta-onboard': async () => {
@@ -42,7 +43,7 @@ exports.handler = withAuth({ action: 'manage_settings', internal: true }, async 
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'bad json' }); }
   const task = TASKS[body.task];
   if (!task) return json(400, { error: `unknown task ${body.task}` });
-  try { await task(event); return json(200, { ok: true }); }
+  try { await task(event, body); return json(200, { ok: true }); }
   catch (e) { console.error(`[ops] ${body.task} failed:`, e); return json(500, { error: String(e.message || e) }); }
 });
 exports.TASKS = Object.keys(TASKS);

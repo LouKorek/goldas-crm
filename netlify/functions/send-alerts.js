@@ -4,14 +4,18 @@
 // Each alert is emailed once per threshold it crosses; the dedupe keys live
 // in app_meta/sentAlerts.
 //
+// The same morning run then sends the urgent ones to the phones that asked
+// for them (lib/push.js): each once per person, by role, never at night.
+//
 // Required Netlify environment variables:
 //   FIREBASE_SERVICE_ACCOUNT_KEY  — the Firebase service account JSON.
 //   GMAIL_APP_PASSWORD            — a Gmail App Password for the owner mailbox.
 
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
-const { runJob } = require('./lib/jobs.js');
-const { computeAlerts, mergeSettings, israelDate, daysBetween, can, normalizeRole } = require('@goldas/domain');
+const { internalHeaders } = require('./lib/auth.js');
+const { pushUrgent } = require('./lib/push.js');
+const { computeAlerts, mergeSettings, israelDate, daysBetween, normalizeRole } = require('@goldas/domain');
 const nodemailer = require('nodemailer');
 
 // Matches are emailed one day ahead only; the screen shows the whole week.
@@ -21,7 +25,7 @@ const KEEP_DAYS = 400;
 const pad = (n) => ('0' + n).slice(-2);
 const fmtDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(s || ''); };
 
-const { dedupeKey } = require('./lib/alert-keys.js');
+const { dedupeKey, splitByRole } = require('./lib/alert-keys.js');
 
 const SECTIONS = [
   ['job_failed', 'עבודות לילה שנכשלו', 'Failed night jobs', '⚠️'],
@@ -74,19 +78,6 @@ async function fetchRecipients(db) {
   } catch (e) { console.error('fetchRecipients error, falling back to owner:', e); return owner; }
 }
 
-const MONEY_TYPES = new Set(['payment_late', 'payment_due']);
-/**
- * Money is for admins only: those who may see it get every alert, the others
- * the same email without the payment alerts. [{ to: [emails], alerts }], one
- * email per group that has something to say.
- */
-function splitByRole(alerts, recipients) {
-  const money = recipients.filter((r) => can(r.role, 'money')).map((r) => r.email);
-  const others = recipients.filter((r) => !can(r.role, 'money')).map((r) => r.email);
-  const plain = alerts.filter((a) => !MONEY_TYPES.has(a.type));
-  return [{ to: money, alerts }, { to: others, alerts: plain }].filter((g) => g.to.length && g.alerts.length);
-}
-
 // Dedupe state: { key: 'YYYY-MM-DD' } (the day it was sent). Older entries
 // used the value 1; they are kept as if sent today and age out normally.
 async function loadSent(db) {
@@ -122,17 +113,32 @@ async function sendDigest(job) {
   const now = new Date();
   const today = israelDate(now);
   // money: true here; splitByRole keeps the payment alerts to the admins' copy.
-  const r = computeAlerts({ players, matches, deals, requirements, tasks: tasks.filter((x) => (x.owner || OWNER_EMAIL) === OWNER_EMAIL), jobs, settings, now, money: true });
+  // Every user's tasks: the email carries the owner's, a phone gets its own user's.
+  const r = computeAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now, money: true });
+  const ownerTask = (a) => a.type !== 'task_overdue' || String(a.record?.owner || OWNER_EMAIL).toLowerCase() === OWNER_EMAIL;
+  // One failing never holds back the other; the run is marked failed if either did.
+  let emailed, pushed, failed = false;
+  try { emailed = await emailDigest(db, r.alerts.filter(ownerTask), { settings, recipients, sent, today, job }); }
+  catch (e) { failed = true; emailed = `email failed: ${e.message}`; console.error('[send-alerts] email failed:', e.message); }
+  // Then the phones: the urgent ones only, each once per person (lib/push.js).
+  try { pushed = await pushUrgent(db, r.alerts, { settings, now, job }); }
+  catch (e) { failed = true; pushed = { error: e.message }; console.error('[send-alerts] phones failed:', e.message); }
+  if (failed) throw new Error(`${emailed}; ${pushed.error ? `phones failed: ${pushed.error}` : 'phones ok'}`);
+  const phones = pushed.quiet ? 'phones: quiet hours' : `phones: ${pushed.sent} sent to ${pushed.people} people${pushed.gone ? `, ${pushed.gone} gone devices removed` : ''}${pushed.failed ? `, ${pushed.failed} failed` : ''}`;
+  return { statusCode: 200, body: `${emailed}; ${phones}` };
+}
+
+async function emailDigest(db, alerts, { settings, recipients, sent, today, job }) {
   const fresh = [];
   const newKeys = [];
-  for (const a of r.alerts) {
+  for (const a of alerts) {
     const k = dedupeKey(a, settings, today);
     if (sent[k]) continue;
     fresh.push(a); newKeys.push(k);
   }
-  job.note(`${r.alerts.length} alerts, ${fresh.length} new`);
-  if (!fresh.length) return { statusCode: 200, body: 'no new alerts' };
-  if (!recipients.length) return { statusCode: 200, body: 'no recipients' };
+  job.note(`${alerts.length} alerts, ${fresh.length} new`);
+  if (!fresh.length) return 'no new alerts';
+  if (!recipients.length) return 'no recipients';
 
   const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: OWNER_EMAIL, pass: process.env.GMAIL_APP_PASSWORD } });
   for (const g of splitByRole(fresh, recipients)) {
@@ -146,12 +152,23 @@ async function sendDigest(job) {
   const newSent = { ...sent };
   newKeys.forEach((k) => { newSent[k] = today; });
   await saveSent(db, newSent, today);
-  return { statusCode: 200, body: `sent ${fresh.length} alerts to ${recipients.length}` };
+  return `sent ${fresh.length} alerts to ${recipients.length}`;
 }
 
-// 05:30 UTC = 07:30 (winter) / 08:30 (summer) in Israel — after the night run.
-exports.handler = schedule('30 5 * * *', async () => {
-  try { return await runJob('send-alerts', async (job) => { const r = await sendDigest(job); job.note(r.body); return r; }); }
-  catch (e) { console.error('sendDigest failed:', e); return { statusCode: 500, body: String(e) }; }
+// 06:00 UTC = 08:00 (winter) / 09:00 (summer) in Israel: after the night run,
+// and never inside the phones' quiet hours (22:00 to 08:00). The work runs in
+// ops-background (task 'send-alerts'): a scheduled function is cut after
+// seconds, and the email and the phone notifications take longer than that.
+exports.handler = schedule('0 6 * * *', async () => {
+  const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  try {
+    const res = await fetch(`${base}/.netlify/functions/ops-background`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(await internalHeaders('send-alerts')) }, body: JSON.stringify({ task: 'send-alerts', trigger: 'schedule' }),
+    });
+    return { statusCode: 200, body: `triggered: ${res.status}` };
+  } catch (e) {
+    console.error('send-alerts trigger failed:', e);
+    return { statusCode: 500, body: String(e) };
+  }
 });
-exports._internal = { dedupeKey, buildEmailHtml, pruneSent, sendDigest, splitByRole, fetchRecipients };
+exports._internal = { dedupeKey, buildEmailHtml, pruneSent, sendDigest, emailDigest, splitByRole, fetchRecipients };

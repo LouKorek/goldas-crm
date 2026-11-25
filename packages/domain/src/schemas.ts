@@ -6,9 +6,12 @@ import { STAGES, CATEGORIES, DEAL_STAGES } from './stages.js';
 import { POSITIONS, FOOT_OPTIONS, CONTRACT_STATUS, CONTACT_ROLES } from './constants.js';
 import { AGE_GROUPS } from './ageGroups.js';
 import { CURRENCIES, PAYER_KINDS } from './engines/finance.js';
+import { KNOWS_KINDS } from './engines/network.js';
 
 const str = z.string().trim();
 const optStr = str.optional().default('');
+// A calendar day or empty: matches "2026-11-25" and "", rejects "25/11/2026".
+// https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24&testString=2026-11-25%0A25%2F11%2F2026
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal('')).optional().default('');
 
 export const fileRefSchema = z.object({
@@ -77,6 +80,9 @@ export const clubSchema = z.object({
   logoUrl: optStr,
   logoFileId: optStr,
   website: optStr,
+  // The club's e-mail domain ("club.co.il"): mail from or to any address at it
+  // is the club's (lib/mail-store.js). Never a free mail domain (mail.ts).
+  emailDomain: optStr,
   notes: optStr,
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
@@ -95,8 +101,12 @@ export const paymentSchema = z.object({
   label: optStr,
   amount: z.number().positive(),
   currency: z.enum(CURRENCIES),
+  // A calendar day: matches "2026-11-25", rejects "25/11/2026".
+  // https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24&testString=2026-11-25%0A25%2F11%2F2026
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   payer: z.object({ kind: z.enum(PAYER_KINDS), name: optStr }),
+  // A calendar day: matches "2026-11-25", rejects "2026-11-25T10:00".
+  // https://regex101.com/?regex=%5E%5Cd%7B4%7D-%5Cd%7B2%7D-%5Cd%7B2%7D%24&testString=2026-11-25%0A2026-11-25T10%3A00
   paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().default(null),
   paidAmount: z.number().positive().nullable().optional().default(null),
   note: optStr,
@@ -138,13 +148,59 @@ export const interactionSchema = z.object({
   at: str,
 }).passthrough();
 
+// A touch: one time the agency reached a contact (a WhatsApp message Lou sent
+// from Golda's draft, a call, a meeting). Kept on the contact as `touches`,
+// appended as they happen; the relationship map reads the same field.
+export const TOUCH_CHANNELS = ['whatsapp', 'call', 'meeting', 'email', 'other'] as const;
+export const touchSchema = z.object({
+  id: str.min(1),
+  at: str.min(1),                                   // ISO time
+  channel: z.enum(TOUCH_CHANNELS),
+  by: optStr,                                       // the team member's email
+  playerId: optStr,
+  dealId: optStr,
+  note: optStr,                                     // one line: what it was about
+}).passthrough();
+export type Touch = z.infer<typeof touchSchema>;
+// An explicit link from one contact to another (engines/network.ts): "knows"
+// (they know each other) or "introduced" (this contact introduced the agency
+// to the other one). Kept on one of the two contacts; the map reads it both ways.
+export const contactKnowsSchema = z.object({
+  contactId: str.min(1),
+  kind: z.enum(KNOWS_KINDS).optional().default('knows'),
+  note: optStr,
+  at: optStr,
+  by: optStr,
+}).passthrough();
+export type ContactKnows = z.infer<typeof contactKnowsSchema>;
+
 export const contactSchema = z.object({
   clubName: optStr, clubId: optStr, clubIsYouth: z.boolean().optional().default(false),
   contactName: str.min(1),
   contactRole: z.enum(CONTACT_ROLES).or(z.literal('')).optional().default(''),
   contactPhone: optStr,
+  touches: z.array(touchSchema).optional().default([]),
+  knows: z.array(contactKnowsSchema).optional().default([]),
+  // The contact's own e-mail address: the agency's mail with it is linked to the contact.
+  contactEmail: optStr,
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
+
+const touchTime = (t: { at?: unknown } | null | undefined): number =>
+  (t && typeof t.at === 'string' ? Date.parse(t.at) : NaN);
+
+/** A contact's touches, newest first; entries without a readable time are left out. */
+export function touchesOf(contact: { touches?: unknown } | null | undefined): Touch[] {
+  const list = contact && Array.isArray(contact.touches) ? contact.touches : [];
+  return (list as Touch[])
+    .filter((t) => t && typeof t === 'object' && Number.isFinite(touchTime(t)))
+    .sort((a, b) => touchTime(b) - touchTime(a));
+}
+
+/** The most recent touch of a contact, or null when there is none. */
+export function lastTouch(contact: { touches?: unknown } | null | undefined): Touch | null {
+  return touchesOf(contact)[0] || null;
+}
 
 export const auditSchema = z.object({
   action: z.enum(['create', 'update', 'delete', 'restore', 'purge', 'migrate']),

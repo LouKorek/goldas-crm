@@ -608,6 +608,6 @@ const windowRange = (now = new Date()) => {
 module.exports = {
   DEFAULT_CALENDAR_ID, FOOTER, TBC, TZ,
   eventIdFor, keyFor, plusMinutes, plainText, notesFromDescription, eventLocal, parseSummary,
-  findPlayers, soundsLike, desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile, patchBody,
+  findPlayers, soundsLike, normName, wordVariants, nearWord, desiredEvent, bodyHash, crmItems, pullPatch, deletionPatch, importRecord, plan, reconcile, patchBody,
   calendarClient, api, accessProblem, enableCalendarApi, windowRange, millis,
 };
