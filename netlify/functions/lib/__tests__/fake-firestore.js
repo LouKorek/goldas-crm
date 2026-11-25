@@ -30,7 +30,11 @@ function fakeDb(seed = {}) {
   /** One document as plain data (undefined when it is not there). */
   const read = (path, id) => { const v = col(path).get(id); return v === undefined ? undefined : structuredClone(v); };
   const all = (path) => [...col(path)].map(([id, v]) => ({ id, ...structuredClone(v) }));
-  return { data, collection, read, all };
+  // A transaction over the same documents: reads and writes go straight through (one test, one thread).
+  const runTransaction = async (fn) => fn({
+    get: (ref) => ref.get(), set: (ref, v, o) => { ref.set(v, o); }, update: (ref, v) => { ref.update(v); }, delete: (ref) => { ref.delete(); },
+  });
+  return { data, collection, read, all, runTransaction };
 }
 
 /** Replaces lib/firestore.js for modules that load it: no Firebase in a test. */

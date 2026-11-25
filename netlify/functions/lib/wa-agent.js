@@ -25,6 +25,7 @@ const { websiteTools, WEBSITE_TOOL_DEFS } = require('./golda-website.js');
 const { dailyQuestionTools, DAILY_QUESTION_TOOL_DEF } = require('./golda-daily-question.js');
 const { checklistTools, CHECKLIST_TOOL_DEF } = require('./golda-checklist.js');
 const { matchReportTools, MATCH_REPORT_TOOL_DEFS } = require('./golda-match-report.js');
+const { playerPageTools, PLAYER_PAGE_TOOL_DEFS } = require('./golda-player-page.js');
 const { chooseEffort } = require('./golda-effort.js');
 
 // Since the model unification every person lives in `players` with a stage
@@ -276,6 +277,7 @@ How you work:
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
+- A live player page (admins only) is a different thing from the PDF and never replaces it. Make one ONLY when the writer asks in so many words for a live page or a link to the player ("דף חי", "לינק לשחקן", "לינק חי", "live page"): find the player, then live_page_create with the club when one was named (one link per club; no club → a general link), days only when a period was named (14 otherwise, 90 at most) and lang "he" only when asked for Hebrew. Give the writer the link on its own line with for whom and until when it works. Never offer a live page instead of the PDF, never make one for "דף שחקן" / "CV", and never send the link to anyone but the writer: he sends it on himself. You tell Lou the first time a link is opened (your message that opens with 👀). "מי פתח את הדף של…" / "אילו לינקים פתוחים" → live_page_list. "תבטלי את הלינק" → live_page_list to find it, then live_page_revoke (it stops at once; say so).
 - "חלון העברות" / "מתי נסגר החלון" / "מי מתאים לחלון" → transfer_windows (exact dates and deadline times; Israel is not in it yet, so check the web for the IFA dates and say where you found them), then connect it to players who need a club (free agents, contracts ending, loans ending) and the open requirements.
 - Golda opens follow-up tasks by herself for deals that sit too long in a stage (they say "מעקב:" and close by themselves when the deal moves). When asked what to do with a deal, mention its open follow-up.
 - "הזדמנויות" / "מה כדאי לקדם" / "את מי להציע" → opportunities: for each, the player, the club and position, the score and the main reason, and the concrete next step (open a deal, call the contact).
@@ -372,17 +374,20 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit',
   // The public website is the agency's face: an admin only, like the settings.
   website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings',
   // Her own daily question to the owner: his to switch off and on.
   daily_question: 'manage_settings',
   // A player's numbers in a match are an edit of the match; the morning question is the owner's to switch.
-  match_report: 'edit', match_questions: 'manage_settings' };
+  match_report: 'edit', match_questions: 'manage_settings',
+  // A live player page puts a profile on a public address: an admin's to ask for,
+  // like the website. Stopping a link is open to whoever may edit.
+  live_page_create: 'manage_settings', live_page_revoke: 'edit' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
@@ -770,7 +775,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     } }),
     ...websiteTools({ db, admin, identity, media, session, channel, role, state }),
     ...dailyQuestionTools({ db, admin, identity, role, channel }), ...checklistTools({ db }),
-    ...matchReportTools({ db, admin, identity, role, channel, update }) };
+    ...matchReportTools({ db, admin, identity, role, channel, update }),
+    ...playerPageTools({ db, admin, identity, role, channel }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

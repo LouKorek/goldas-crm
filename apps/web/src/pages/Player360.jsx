@@ -14,6 +14,7 @@ import Icon from 'components/ui/Icons';
 import DocViewer from 'components/DocViewer';
 import PlayerChecklist from 'components/player/PlayerChecklist';
 import PlayerSeason from 'components/player/PlayerSeason';
+import PlayerLinks from 'components/player/PlayerLinks';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -289,6 +290,8 @@ export default function Player360() {
             );
           }))}
         </Card>
+
+        <PlayerLinks playerId={p.id} />
 
         <Card title={t('Matches')} action={<Link to="/matches" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>
           {upcoming.length + recent.length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No matches scheduled.')}</p> : (

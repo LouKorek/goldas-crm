@@ -134,7 +134,8 @@ export async function reportClientError(error, { screen, source = 'window' } = {
     await addDoc(collection(db, 'client_errors'), {
       message: String(error?.message || error || '').slice(0, 500),
       stack: String(error?.stack || '').slice(0, 3000),
-      screen: screen || window.location.pathname,
+      // The two pages whose address is itself a key (/p/<token>, /yt/<token>) are recorded without it.
+      screen: screen || window.location.pathname.replace(/^\/(p|yt)\/.*/, '/$1/…'),
       source,
       version: typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev', // eslint-disable-line no-undef
       userAgent: navigator.userAgent.slice(0, 300),

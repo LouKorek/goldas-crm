@@ -294,3 +294,52 @@ CRM -> calendar only; `calendarId` points it at another calendar. Run it now wit
 
 Safety: a pass stops without touching anything when the CRM returns no games or trainings
 while the calendar has synced events, or when more than 40 events would be removed.
+
+## Live player pages (`/p/<token>`)
+
+What: a private page of one player for one club, made only when an admin asks Golda for it
+("דף חי", "לינק לשחקן", "live page"). The PDF sheet stays the answer to "דף שחקן" / "CV".
+Golda gives the link to the person who asked and to nobody else; he sends it himself.
+A link works 14 days unless he names a period, 90 at most.
+
+What a link exposes (the allow-list is `publicPlayer` in `netlify/functions/lib/player-pages.js`,
+nothing else leaves the server): name, age and year of birth, positions, foot, height,
+nationalities, current club and league, national team status, the video link, the public
+profile link, the first profile photo, this season's totals, and a CV built from those same
+fields. Never: notes, contract, salary, documents, phone numbers, agent details, deals,
+interactions, tasks. Adding a field to the page means adding it to `publicPlayer` and to the
+key list in the test "a player record full of private fields" in
+`netlify/functions/lib/__tests__/player-pages.test.js`.
+
+Revoke a link (it stops at once, and cannot be brought back; make a new one instead):
+- in the CRM: the player's page, card "Live links" ("לינקים חיים"), button "Revoke" ("חסימה"), editors only;
+- by Golda: "בטלי את הלינק של <player> ל-<club>";
+- by hand: in the collection `player_pages`, set `revokedAt` on the link's document to any
+  number (the time in milliseconds). Deleting the document works too.
+Deleting the player also closes his links: the page answers "not available".
+
+Where things are stored: collection `player_pages`, one document per link, read and written
+only by functions (`player-page`, `player-links`, Golda). The document id is the SHA-256 of
+the token; the token itself is kept sealed (`tokenSealed`, `lib/seal.js`), so a database
+export or a backup holds no working link. Openings: `opens` (total), `firstOpenAt`,
+`lastOpenAt`, and `openLog`, the last 100 as `{ at, device }` where device is `phone` or
+`desktop`. No IP address and no browser string is kept. An opening is counted when the
+page's script asks for the data, so a link preview (WhatsApp) is not one; a reload within a
+minute is not counted again; the CV download and the photo are not openings. A look from a
+browser that is signed in to the CRM is not counted either (the page says so in a banner).
+
+First-opening notice: the first counted opening sets `noticeState: "pending"` and calls
+`player-page-notify-background`, which sends the owner one WhatsApp line. `golda-queue-cron`
+picks up any link left `pending`. It is sent at most once per link: `sent`, `failed` and
+`skipped` (no owner number) are final, and a link left at `sending` means a run died in the
+middle; nothing retries it, on purpose. To send it again by hand set `noticeState` back to
+`pending`.
+
+A club says the link does not work: every bad case (unknown, expired, revoked, deleted
+player) gives the same sentence on purpose. Look the link up on the player's card to see
+which it was.
+
+See it without a backend: `cd apps/web && npx vite --config vite.harness.config.js`, then
+`/dev/app.html?path=/p/demo` (also `demo-he`, `demo-bare`, `demo-vimeo`, `demo-preview`,
+`gone`, `broken`) and `/dev/app.html?path=/players/p1` for the card (`&role=viewer`,
+`&theme=dark`).

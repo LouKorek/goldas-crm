@@ -40,6 +40,7 @@ self.addEventListener('activate', (event) => {
 
 // Fetch strategy:
 //   • Firebase / Google / Firestore                     → bypass SW
+//   • the site's own functions (/.netlify/…)            → bypass SW
 //   • HTML navigation                                   → network-first
 //   • /assets/* hashed assets and /fonts/*              → cache-first
 //   • anything else                                     → network-first,
@@ -66,6 +67,11 @@ self.addEventListener('fetch', (event) => {
   ) {
     return;
   }
+
+  // The site's own functions are live answers (and some are private: a player's
+  // live page, a signed-in user's data). They are never kept in the cache, and
+  // a file a function hands over as a download is never taken for the app shell.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/.netlify/')) return;
 
   // HTML navigation — always try network so a deploy is immediately
   // visible. If the user is offline, fall back to the cached shell.

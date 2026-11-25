@@ -50,7 +50,7 @@ test('WhatsApp recipients are active users with a number who chose the channel',
 
 test('a viewer gets read tools only; a manager edits; only roles with run_sync get the sync', () => {
   const names = (role) => toolsFor(role).map((t) => t.name);
-  assert.deepEqual(names('viewer').sort(), ['alerts_today', 'changes', 'check_schedule', 'club_brief', 'forget', 'get', 'list', 'opportunities', 'overview', 'player_brief', 'player_checklist', 'player_pdf', 'read_file', 'remember', 'search', 'suggest_matches', 'transfer_windows', 'youtube_style']);
+  assert.deepEqual(names('viewer').sort(), ['alerts_today', 'changes', 'check_schedule', 'club_brief', 'forget', 'get', 'list', 'live_page_list', 'opportunities', 'overview', 'player_brief', 'player_checklist', 'player_pdf', 'read_file', 'remember', 'search', 'suggest_matches', 'transfer_windows', 'youtube_style']);
   assert.ok(!names('viewer').includes('youtube_upload'), 'a viewer reads the style but never uploads');
   assert.ok(names('manager').includes('update') && names('manager').includes('delete') && names('manager').includes('sync_fixtures'));
   assert.equal(names('admin').length, TOOLS.length);

@@ -993,6 +993,33 @@ const HE = {
   'Match by match': 'משחק אחר משחק',
   'Minutes, goals and assists per match': 'דקות, שערים ובישולים בכל משחק',
   'No match data yet. Enter minutes, goals and a rating on the Matches page, or tell Golda after the game.': 'אין עדיין נתוני משחקים. אפשר להזין דקות, שערים וציון בעמוד המשחקים, או לספר לגולדה אחרי המשחק.',
+
+  // Live player pages: the "Live links" card on a player's page (components/player/PlayerLinks.jsx).
+  'Live links': 'לינקים חיים',
+  'General link': 'לינק כללי',
+  'Link active': 'פעיל',
+  'Link expired': 'פג תוקף',
+  'Link revoked': 'חסום',
+  'made on': 'נוצר',
+  'works until': 'בתוקף עד',
+  'expired on': 'פג',
+  'revoked on': 'נחסם',
+  'Opened once': 'נפתח פעם אחת',
+  'Opened {n} times': 'נפתח {n} פעמים',
+  'Not opened yet': 'עדיין לא נפתח',
+  'last opening': 'פתיחה אחרונה',
+  'from a phone': 'מטלפון',
+  'from a computer': 'ממחשב',
+  'Copy link': 'העתקה',
+  'Preview page': 'תצוגה',
+  'Your own look is not counted as an opening.': 'הצפייה שלך לא נספרת כפתיחה.',
+  // "חסימה" and not "ביטול": the dialog's own "Cancel" button already reads "ביטול".
+  'Revoke link': 'חסימת הלינק',
+  'Revoke': 'חסימה',
+  'Revoke the link for {name}? It stops working at once and cannot be brought back.': 'לחסום את הלינק של {name}? הוא מפסיק לעבוד מיד ואי אפשר להחזיר אותו.',
+  'Link copied.': 'הלינק הועתק.',
+  'Could not copy the link.': 'לא הצלחנו להעתיק את הלינק.',
+  'The link was revoked.': 'הלינק נחסם.',
 };
 
 export default HE;
