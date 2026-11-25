@@ -6,6 +6,7 @@
 // returns, and that function returns only what a club may see.
 import React, { useEffect, useState } from 'react';
 import { loadPlayerPage, loadPlayerPhoto, playerCvUrl } from 'data/playerPages';
+import HE from '../i18n/he.js';
 
 // The agency's public colours. This page is the one place they are written
 // out: it must look like gold-as.com in either CRM theme.
@@ -19,7 +20,7 @@ const LOGO = '/logo.png';
 
 const TEXT = {
   en: {
-    agency: 'Football Agency', age: 'Age', born: 'Born', height: 'Height', foot: 'Foot', position: 'Position',
+    agency: 'Football Agency', age: 'Age', born: 'Born', height: 'Height', metres: 'metres', foot: 'Foot', position: 'Position',
     profile: 'Profile', nationality: 'Nationality', club: 'Current club', freeAgent: 'Free agent', natTeam: 'National team',
     otherPos: 'Other positions', video: 'Highlights', watch: 'Watch the video', play: 'Play the video', openYouTube: 'Open on YouTube',
     season: 'Season', cv: 'Download CV', tm: 'Transfermarkt profile', link: 'Player profile', contact: 'Contact',
@@ -28,7 +29,7 @@ const TEXT = {
     stats: { games: 'Games', starts: 'Starts', minutes: 'Minutes', goals: 'Goals', assists: 'Assists', cleanSheets: 'Clean sheets', yellow: 'Yellow cards', red: 'Red cards' },
   },
   he: {
-    agency: 'סוכנות כדורגל', age: 'גיל', born: 'שנת לידה', height: 'גובה', foot: 'רגל', position: 'עמדה',
+    agency: 'סוכנות כדורגל', age: 'גיל', born: 'שנת לידה', height: 'גובה', metres: 'מטר', foot: 'רגל', position: 'עמדה',
     profile: 'פרופיל', nationality: 'אזרחות', club: 'מועדון נוכחי', freeAgent: 'שחקן חופשי', natTeam: 'נבחרת',
     otherPos: 'עמדות נוספות', video: 'קטעים נבחרים', watch: 'צפייה בסרטון', play: 'הפעלת הסרטון', openYouTube: 'פתיחה ביוטיוב',
     season: 'עונת', cv: 'הורדת קורות חיים', tm: 'פרופיל טרנספרמרקט', link: 'פרופיל השחקן', contact: 'יצירת קשר',
@@ -114,7 +115,14 @@ const CSS = `
 
 const hasHebrew = (s) => /[֐-׿]/.test(String(s || ''));
 const initials = (name) => { const w = String(name || '').split(/\s+/).filter(Boolean); return (w.length > 1 ? [w[0], w[w.length - 1]] : w).map((x) => Array.from(x)[0]).join('').toUpperCase(); };
-const metres = (cm) => `${(cm / 100).toFixed(2)} m`;
+const metres = (cm) => (cm / 100).toFixed(2);
+// The CRM keeps countries in English; a Hebrew page says them in Hebrew, from
+// the CRM's own dictionary. A league is "<country> <tier>" unless typed by hand.
+const place = (s, lang) => (lang === 'he' && s ? (HE[s] || s) : s);
+const leagueName = (s, lang) => {
+  const m = /^(.+?) (\d+)$/.exec(s || '');
+  return m ? `${place(m[1], lang)} ${m[2]}` : place(s, lang);
+};
 
 /** Head tags a private page needs, taken back when the page is left. */
 function usePrivatePage(title) {
@@ -223,17 +231,17 @@ function Page({ token }) {
   const contact = data.contact || {};
   const nt = p.nationalTeam;
   const natTeam = nt ? (lang === 'he'
-    ? [nt.country, nt.youth ? L.youth : '', nt.former ? L.former : ''].filter(Boolean).join(' · ')
+    ? [place(nt.country, lang), nt.youth ? L.youth : '', nt.former ? L.former : ''].filter(Boolean).join(' · ')
     : `${nt.former ? `${L.former} ` : ''}${nt.country}${nt.youth ? ` ${L.youth}` : ''}`) : '';
-  const nations = p.nationalities || [];
+  const nations = (p.nationalities || []).map((n) => place(n, lang));
   const figures = [
     p.age ? [L.age, String(p.age), p.birthYear ? `${L.born} ${p.birthYear}` : ''] : null,
-    p.heightCm ? [L.height, metres(p.heightCm), ''] : null,
+    p.heightCm ? [L.height, metres(p.heightCm), L.metres] : null,
     p.foot ? [L.foot, L.foot_[p.foot] || p.foot, ''] : null,
     p.position ? [L.position, p.position, ''] : null,
   ].filter(Boolean);
   const rows = [
-    [L.club, p.club ? `${p.club}${p.league ? ` (${p.league})` : ''}` : (p.freeAgent ? L.freeAgent : '')],
+    [L.club, p.club ? `${p.club}${p.league ? ` (${leagueName(p.league, lang)})` : ''}` : (p.freeAgent ? L.freeAgent : '')],
     [L.natTeam, natTeam],
     [L.otherPos, (p.otherPositions || []).join(' / ')],
   ].filter(([, v]) => v);

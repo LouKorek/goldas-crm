@@ -990,7 +990,6 @@ const HE = {
   'G': 'ש',
   'A': 'ב',
   'Min.': "דק'",
-  'Avg. rating': 'ציון ממוצע',
   'Match by match': 'משחק אחר משחק',
   'Minutes, goals and assists per match': 'דקות, שערים ובישולים בכל משחק',
   'No match data yet. Enter minutes, goals and a rating on the Matches page, or tell Golda after the game.': 'אין עדיין נתוני משחקים. אפשר להזין דקות, שערים וציון בעמוד המשחקים, או לספר לגולדה אחרי המשחק.',
@@ -1021,6 +1020,8 @@ const HE = {
   'Link copied.': 'הלינק הועתק.',
   'Could not copy the link.': 'לא הצלחנו להעתיק את הלינק.',
   'The link was revoked.': 'הלינק נחסם.',
+  'No link is active now.': 'אין כרגע לינק פעיל.',
+  'Earlier links': 'לינקים קודמים',
 
   // Monthly report
   'Monthly report': 'דוח חודשי',

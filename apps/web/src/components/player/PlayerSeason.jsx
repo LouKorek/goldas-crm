@@ -91,12 +91,12 @@ export default function PlayerSeason({ playerId, matches }) {
         <p style={{ color: 'var(--text-3)', fontSize: 12.5, margin: 0 }}>{t('No match data yet. Enter minutes, goals and a rating on the Matches page, or tell Golda after the game.')}</p>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(52px, 1fr))', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(56px, 1fr))', gap: 8, marginBottom: 12 }}>
             <StatTile compact label={t('Matches')} value={sum.apps} />
             <StatTile compact label={t('Minutes')} value={sum.minutes} />
             <StatTile compact label={t('Goals')} value={sum.goals} />
             <StatTile compact label={t('Assists')} value={sum.assists} />
-            <StatTile compact label={t('Avg. rating')} value={sum.avgRating ?? '—'} />
+            <StatTile compact label={t('Rating')} value={sum.avgRating ?? '—'} />
           </div>
           <SeasonChart rows={inSeason} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 11, color: 'var(--text-2)', marginTop: 6 }}>

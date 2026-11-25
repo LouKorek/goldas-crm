@@ -25,7 +25,7 @@ export function PlayerCard({ title, action, note, children, style }) {
 export function StatTile({ label, value, sub, tone = 'var(--gold)', toned = false, compact = false }) {
   return (
     <div style={{ border: '1px solid var(--border)', borderTop: `2px solid ${tone}`, padding: compact ? '8px 10px' : '10px 12px', background: 'var(--card)', minWidth: 0 }}>
-      <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={typeof label === 'string' ? label : undefined}>{label}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>{label}</div>
       <div style={{ fontFamily: 'var(--font-mono)', fontSize: compact ? 18 : 22, color: toned ? tone : 'var(--text-1)', lineHeight: 1.1, marginTop: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{sub}</div>}
     </div>

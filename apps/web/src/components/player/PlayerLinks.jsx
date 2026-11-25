@@ -54,9 +54,7 @@ export default function PlayerLinks({ playerId }) {
     setBusy('');
   };
 
-  return (
-    <PlayerCard title={t('Live links')}>
-      {links.map((l) => {
+  const row = (l) => {
         const [label, bg, fg] = STATE[l.state] || STATE.expired;
         const when = l.state === 'revoked' ? `${t('revoked on')} ${fmtDate(day(l.revokedAt))}`
           : l.state === 'expired' ? `${t('expired on')} ${fmtDate(day(l.expiresAt))}`
@@ -81,12 +79,26 @@ export default function PlayerLinks({ playerId }) {
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {l.url && <button type="button" className="btn btn-secondary btn-sm" onClick={() => copy(l)}><Icon name="copy" size={11} /> {t('Copy link')}</button>}
                 {l.url && <a className="btn btn-ghost btn-sm" href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }} title={t('Your own look is not counted as an opening.')}><Icon name="eye" size={11} /> {t('Preview page')}</a>}
-                <button type="button" className="btn btn-ghost btn-sm" disabled={busy === l.id} onClick={() => revoke(l)}><Icon name="close" size={11} /> {t('Revoke')}</button>
+                <button type="button" className="btn btn-danger btn-sm" disabled={busy === l.id} onClick={() => revoke(l)}><Icon name="close" size={11} /> {t('Revoke')}</button>
               </div>
             )}
           </div>
         );
-      })}
+      };
+
+  // The links that work now; the ones that ended are kept, folded away.
+  const active = links.filter((l) => l.state === 'active');
+  const past = links.filter((l) => l.state !== 'active');
+
+  return (
+    <PlayerCard title={t('Live links')}>
+      {active.length ? active.map(row) : <p style={{ color: 'var(--text-3)', fontSize: 12.5, margin: 0 }}>{t('No link is active now.')}</p>}
+      {past.length > 0 && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ fontSize: 11, color: 'var(--text-3)', cursor: 'pointer' }}>{t('Earlier links')} · {past.length}</summary>
+          {past.map(row)}
+        </details>
+      )}
       {dialog}
     </PlayerCard>
   );
