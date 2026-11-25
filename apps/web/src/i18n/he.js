@@ -1216,6 +1216,19 @@ const HE = {
   'Touch added.': 'הפנייה נוספה.',
   'a player': 'שחקן',
   'No touches yet. When Golda drafts a message and you confirm it went out, it is recorded here.': 'אין עדיין פניות. כשגולדה מנסחת הודעה ומאשרים לה שהיא נשלחה, היא נרשמת כאן.',
+
+  // Golda writes first to a connected player (the "גולדה לשחקן" card)
+  'What Golda sends him on her own': 'מה גולדה שולחת לו מעצמה',
+  'Fixed texts with his own schedule only, between 08:00 and 22:00. He can stop them by writing "די" to her; you will hear about it.': 'טקסטים קבועים עם הלוח שלו בלבד, בין 08:00 ל־22:00. הוא יכול להפסיק אותם כשהוא כותב לה "די", ואתה תשמע על זה.',
+  'His week': 'הלוח השבועי שלו',
+  'Games and trainings for the coming week, on Saturday at 21:00': 'משחקים ואימונים לשבוע הקרוב, במוצאי שבת ב־21:00',
+  'Reminder before a training': 'תזכורת לפני אימון',
+  'Two hours before he has to be there; for a training before 10:00, the evening before': 'שעתיים לפני שהוא צריך להיות שם; לאימון לפני 10:00, בערב שלפני',
+  'Good luck before a match': 'בהצלחה לפני משחק',
+  'Four hours before kickoff; for a game before 12:00, the evening before': 'ארבע שעות לפני שריקת הפתיחה; למשחק לפני 12:00, בערב שלפני',
+  'Golda will send it': 'גולדה תשלח את זה',
+  'Golda will stop sending it': 'גולדה תפסיק לשלוח את זה',
+  'He asked Golda to stop on {d}': 'הוא ביקש מגולדה להפסיק ב־{d}',
 };
 
 export default HE;

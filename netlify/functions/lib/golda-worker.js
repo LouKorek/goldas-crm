@@ -18,6 +18,7 @@ const wa = require('./wa-api.js');
 const { runAgent, MAIN_TOPIC, MODEL, _internal: { norm } } = require('./wa-agent.js');
 const { resolveSender, userForApp, sessionKey } = require('./golda-identity.js');
 const playerGolda = require('./golda-player.js');
+const playerSends = require('./golda-player-sends.js');
 const speech = require('./golda-speech.js');
 const { VOICE_UNAVAILABLE } = require('./golda-voice.js');
 
@@ -262,7 +263,12 @@ async function processMessage(messageId) {
     const cmd = isPlayer ? null : topicCommand(text);
     let direct = null;   // a reply that needs no model call
     let list = null;
-    if (isPlayer && usage.count > playerGolda.DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות להיום. נמשיך מחר 🙂`;
+    // A player who writes "די" / "stop" turns off what Golda sends him on her own (before the model, over the daily limit too).
+    const stopped = isPlayer && playerSends.isStopCommand(text)
+      ? await playerSends.stopForPlayer(db, admin, identity).catch((e) => { console.error('[golda] stopping player messages failed:', e.message); return null; })
+      : null;
+    if (stopped?.wasOn) direct = playerSends.stopConfirmation(identity);
+    else if (isPlayer && usage.count > playerGolda.DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות להיום. נמשיך מחר 🙂`;
     else if (usage.count > DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות היומית (${DAILY_LIMIT}). נמשיך מחר, או שלו יכול להגדיל אותה.`;
     else if (voiceFailed) direct = `${first}, ${speech.excuse(voiceFailed)}. אפשר לכתוב לי את זה במילים?`;
     else if (!isPlayer && isMenuCommand(text)) {

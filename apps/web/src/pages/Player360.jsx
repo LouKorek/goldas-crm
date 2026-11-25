@@ -46,6 +46,52 @@ function AgeGroupFact({ p }) {
 
 // What the contract itself says, as Golda read it (contractTerms on the player).
 const money = (n, cur) => (typeof n === 'number' ? `${n.toLocaleString('en-US')}${cur ? ` ${cur}` : ''}` : '');
+// What Golda sends on her own to a connected player, each switched separately
+// (netlify/functions/lib/golda-player-sends.js has the timings and the texts).
+const GOLDA_SENDS = [
+  { field: 'goldaWeek', label: 'His week', hint: 'Games and trainings for the coming week, on Saturday at 21:00' },
+  { field: 'goldaTrainingReminder', label: 'Reminder before a training', hint: 'Two hours before he has to be there; for a training before 10:00, the evening before' },
+  { field: 'goldaMatchWish', label: 'Good luck before a match', hint: 'Four hours before kickoff; for a game before 12:00, the evening before' },
+];
+
+function GoldaSends({ p }) {
+  const [busy, setBusy] = useState('');
+  const toggle = async (field) => {
+    const next = p[field] !== true;
+    setBusy(field);
+    try {
+      await updateDoc_(PATHS.PLAYERS, p.id, { [field]: next });
+      toast.success(next ? t('Golda will send it') : t('Golda will stop sending it'));
+    } catch (e) { toast.error(e.message || t('Save failed.')); }
+    setBusy('');
+  };
+  const allOff = GOLDA_SENDS.every((x) => p[x.field] !== true);
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-1)', marginBottom: 2 }}>{t('What Golda sends him on her own')}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5, marginBottom: 6 }}>
+        {t('Fixed texts with his own schedule only, between 08:00 and 22:00. He can stop them by writing "די" to her; you will hear about it.')}
+      </div>
+      {GOLDA_SENDS.map((x) => {
+        const on = p[x.field] === true;
+        return (
+          <button key={x.field} type="button" role="switch" aria-checked={on} disabled={!!busy} onClick={() => toggle(x.field)}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 0', background: 'none', border: 'none', borderTop: '1px solid var(--border)', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit', textAlign: 'start', color: 'var(--text-1)' }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 500 }}>{t(x.label)}</span>
+              <span style={{ display: 'block', fontSize: 11.5, color: 'var(--text-3)', marginTop: 1 }}>{t(x.hint)}</span>
+            </span>
+            <span className={`tog-sw${on ? ' on' : ''}`} aria-hidden="true" />
+          </button>
+        );
+      })}
+      {allOff && p.goldaSendsStoppedAt && (
+        <div style={{ fontSize: 11.5, color: 'var(--amber)', marginTop: 6 }}>{t('He asked Golda to stop on {d}', { d: fmtDateTime(p.goldaSendsStoppedAt) })}</div>
+      )}
+    </div>
+  );
+}
+
 /** Admin only: let this player ask Golda about himself on WhatsApp (read-only, his own data). */
 function GoldaAccess({ p, he }) {
   const [phone, setPhone] = useState(p.goldaPhone || '');
@@ -66,8 +112,8 @@ function GoldaAccess({ p, he }) {
   return (
     <Card title={he ? 'גולדה לשחקן' : 'Golda for the player'}>
       <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 10 }}>
-        {he ? 'השחקן יוכל לשאול את גולדה בוואטסאפ על המשחקים, האימונים, תאריכי החוזה והמסמכים שלו, ולבקש את דף השחקן שלו. היא רק עונה, אף פעם לא כותבת אליו ראשונה, ולא רואה עסקאות, שחקנים אחרים או הערות פנימיות. מה שהוא מדווח מגיע אליך.'
-          : "The player can ask Golda on WhatsApp about his games, trainings, contract and document dates, and get his own player sheet. She only answers, never writes first, and never shows deals, other players or internal notes. What he reports comes to you."}
+        {he ? 'השחקן יוכל לשאול את גולדה בוואטסאפ על המשחקים, האימונים, תאריכי החוזה והמסמכים שלו, ולבקש את דף השחקן שלו. היא כותבת אליו ראשונה רק מה שהפעלת כאן למטה, ולא מראה לו עסקאות, שחקנים אחרים או הערות פנימיות. מה שהוא מדווח מגיע אליך.'
+          : "The player can ask Golda on WhatsApp about his games, trainings, contract and document dates, and get his own player sheet. She writes to him first only what you switch on below, and never shows him deals, other players or internal notes. What he reports comes to you."}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} inputMode="tel" dir="ltr" placeholder="05x-xxxxxxx"
@@ -84,6 +130,7 @@ function GoldaAccess({ p, he }) {
       <div style={{ fontSize: 11, marginTop: 8, color: on ? 'var(--green-ok)' : 'var(--text-3)' }}>
         {on ? (he ? '● פעיל: השחקן יכול לכתוב לגולדה' : '● On: the player can write to Golda') : (he ? 'כבוי' : 'Off')}
       </div>
+      {on && p.goldaPhone && <GoldaSends p={p} />}
     </Card>
   );
 }

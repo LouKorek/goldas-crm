@@ -8,6 +8,10 @@
 // an hour away, it wakes golda-briefing-background to send Lou its brief
 // (lib/golda-meeting-brief.js). The check itself is two small reads.
 //
+// It also wakes the messages Golda sends to connected players (their week, a
+// reminder before a training, good luck before a match; lib/golda-player-sends.js):
+// nothing is read at night, and one small query when no player is switched on.
+//
 // And it is the safety net for live player pages: a first opening that could
 // not wake its own notice (player-page.js) is picked up here, so Lou hears
 // about it within ten minutes at the latest. One small query.
@@ -20,6 +24,7 @@ const { getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
 const { pickRetries } = require('./lib/golda-worker.js');
 const { dueNow } = require('./lib/golda-meeting-brief.js');
+const playerSends = require('./lib/golda-player-sends.js');
 
 /** Wakes the briefing worker when a meeting is coming up; never fails the queue check. */
 async function kickMeetingBriefs(db, base) {
@@ -32,6 +37,21 @@ async function kickMeetingBriefs(db, base) {
     return due.length;
   } catch (e) {
     console.error('[golda-queue] meeting brief check failed:', e.message);
+    return 0;
+  }
+}
+
+/** Wakes the briefing worker when a message to a connected player is due; never fails the queue check. */
+async function kickPlayerSends(db, base) {
+  try {
+    const due = await playerSends.dueNow(db, new Date());
+    if (!due.length) return 0;
+    await fetch(`${base}/.netlify/functions/golda-briefing-background`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(await internalHeaders('golda-player-sends')) }, body: JSON.stringify({ task: 'player-sends' }),
+    });
+    return due.length;
+  } catch (e) {
+    console.error('[golda-queue] player messages check failed:', e.message);
     return 0;
   }
 }
@@ -71,6 +91,7 @@ exports.handler = schedule('*/10 * * * *', async () => {
   const briefs = await kickMeetingBriefs(db, base);
   const pageNotices = await kickPageNotices(db, base);
   const agreementWork = await kickAgreements(db, base);
+  const toPlayers = await kickPlayerSends(db, base);
   const since = Date.now() - 2 * 86400000;
   const snap = await db.collection('wa_inbox').where('timestamp', '>', Math.floor(since / 1000)).get();
   const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -84,5 +105,5 @@ exports.handler = schedule('*/10 * * * *', async () => {
       if (res.ok || res.status === 202) kicked++;
     } catch (e) { console.error('[golda-queue] kick failed:', m.id, e.message); }
   }
-  return { statusCode: 200, body: `${rows.length} recent, ${retry.length} to retry, ${kicked} kicked, ${briefs} meeting brief(s) due, ${pageNotices} live page notice(s) waiting, agreements ${agreementWork ? 'kicked' : 'idle'}` };
+  return { statusCode: 200, body: `${rows.length} recent, ${retry.length} to retry, ${kicked} kicked, ${briefs} meeting brief(s) due, ${pageNotices} live page notice(s) waiting, agreements ${agreementWork ? 'kicked' : 'idle'}, ${toPlayers} player message(s) due` };
 });

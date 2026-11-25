@@ -5,6 +5,9 @@
 // website draft waiting for a yes) goes to the agency's owner only, never to
 // the team and never to anyone outside the agency, and always through
 // lib/wa-outbox.js so WhatsApp's 24-hour window and the templates are respected.
+// The one exception: a represented player an admin connected to Golda may get
+// his week, a reminder before a training and good luck before a match, each
+// only when an admin switched it on (lib/golda-player-sends.js, also through here).
 //
 // A question she asks on her own also has to be in the chat's history: the
 // owner answers with one word ("ימין", "כן, לפרסם"), and without the
@@ -48,15 +51,18 @@ async function noteInChat(db, identity, { text, buttons = [], kind = 'nudge', no
 }
 
 /**
- * nudge(db, u, { body, buttons, kind, remember }, { now, send, job })
- * Sends one own-initiative message to the owner and, when it asks something
+ * nudge(db, u, { body, buttons, kind, remember, carryOnly, expiresAt }, { now, send, job })
+ * Sends one own-initiative message to the owner (or a connected player) and,
+ * when it asks something or should be in front of her when he answers
  * (remember: true), keeps it in the chat's history.
+ *   carryOnly  outside the window, only a template that carries the text itself
+ *   expiresAt  ms: a text still waiting for the window after this is dropped
  *   send  the hourly run's sender (tests inject it): (u, body, kind, buttons) → { state }
  */
-async function nudge(db, u, { body, buttons = [], kind = 'nudge', remember = false }, { now = Date.now(), send = null, job = null } = {}) {
+async function nudge(db, u, { body, buttons = [], kind = 'nudge', remember = false, carryOnly = false, expiresAt = null }, { now = Date.now(), send = null, job = null } = {}) {
   const r = send
     ? await send(u, body, kind, buttons)
-    : await outbox.deliver(db, { to: u.phone, body, kind, buttons }, { now });
+    : await outbox.deliver(db, { to: u.phone, body, kind, buttons, carryOnly, expiresAt }, { now });
   if (r && r.state === 'queued' && job) job.note(`${kind} → ${u.email}: window closed, queued`);
   if (remember) await noteInChat(db, u, { text: body, buttons, kind, now }).catch((e) => { if (job) job.note(`${kind}: chat note failed: ${e.message}`); });
   return r;

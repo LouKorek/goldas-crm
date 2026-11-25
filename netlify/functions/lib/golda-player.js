@@ -3,7 +3,9 @@
 // WhatsApp. Read-only and his own data only: his profile, his games and
 // trainings, his contract and document dates, his own CV. Never other
 // players, deals, negotiations, the contract's money terms or the agency's
-// notes. She only answers; she never writes to a player first. Anything he
+// notes. She answers, and writes to him first only with what an admin switched
+// on for him, each separately (lib/golda-player-sends.js: his week, a reminder
+// before a training, good luck before a match; "די" stops them). Anything he
 // reports (an injury, an offer, a change) goes to the agency as a note that
 // the hourly briefing pass delivers to the admins.
 const { playerName, expandTrainings, AGE_GROUPS, israelDate } = require('@goldas/domain');
@@ -54,7 +56,8 @@ async function loadPlayerView(db, playerId, now = new Date()) {
     db.collection('trainings').where('linkedPlayers', 'array-contains', playerId).get().then(rows).catch(() => []),
   ]);
   const today = israelDate(now);
-  return { player: p, profile: profileOf(p), schedule: scheduleOf({ matches, trainings }, playerId, today), today };
+  const sends = { week: p.goldaWeek === true, trainingReminder: p.goldaTrainingReminder === true, matchWish: p.goldaMatchWish === true };
+  return { player: p, profile: profileOf(p), schedule: scheduleOf({ matches, trainings }, playerId, today), today, sends };
 }
 
 const TOOLS = [
@@ -71,10 +74,11 @@ function systemPrompt(view, first) {
     'You cannot change anything. When he reports something (injury, a new club or coach, a schedule change, an offer or a call from a club or another agent, a document), thank him, call tell_agent with a clear summary, and tell him you passed it to the agency.',
     'Never talk about other players, the agency\'s other clients, deals, negotiations, offers the agency is working on, money terms of his contract, or the agency\'s internal notes; say that is for his agent (Lou) to discuss with him. Never give legal, medical or financial advice; pass it on with tell_agent.',
     'When he asks for his CV or profile sheet, call my_cv; it is sent right after your answer, so keep the text to one line.',
+    'You write to him first only with what his agency switched on for him (messagesFromGolda in the facts): his games and trainings for the week (Saturday evening), a reminder two hours before a training, good luck before a match. Those messages are in the conversation above. You cannot switch them on or off yourself: when he wants them stopped, tell him to write just "די" (that stops all of them at once); when he wants more of them, that is for his agent.',
     'When something is not in the facts, say you do not have it and offer to pass the question on.',
     'WhatsApp formatting: short lines, *bold* only for a heading, no tables.',
     '',
-    `Facts:\n${JSON.stringify({ profile: view.profile, schedule: view.schedule })}`,
+    `Facts:\n${JSON.stringify({ profile: view.profile, schedule: view.schedule, messagesFromGolda: view.sends || {} })}`,
   ].join('\n');
 }
 
