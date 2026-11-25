@@ -40,6 +40,7 @@ const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
 const { instagramTools, INSTAGRAM_TOOL_DEF } = require('./golda-instagram.js');
 const { radarTools, radarSection, RADAR_TOOL_DEFS } = require('./golda-radar.js');   // loading it also registers the radar card's taps (lib/golda-taps.js)
+const { researchTools, RESEARCH_TOOL_DEFS, researchSection } = require('./golda-research.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -332,6 +333,7 @@ How you work:
 - An Instagram graphic ("תכיני גרפיקה לחתימה של X ב…", "גרפיקה ליום ההולדת של Y", "story לשער של Z מול…"): find the player, then instagram_graphic with kind signing, goal or birthday (custom with a headline for anything else: a first call-up, player of the month); size story only when a story was asked for, lang en only when English was. Pass only facts the writer said or the CRM has (club, opponent, score, minute, competition), never a number you were not told; when the tool says something is missing, ask the writer that one short question. The picture and its caption go to the writer right after your answer, so your text is one line on what it shows, then [[כפתורים: גם סטורי | לשנות טקסט]] (גם פוסט after a story). "גם סטורי" / "גם פוסט" → the same call in the other size; "לשנות טקסט" → ask what to change, then call again with headline, name or caption. You never post it and never send it to anyone but the writer; he uploads it himself. Your offer that opens with "גרפיקה לאינסטגרם" 🎨: the writer's yes ("כן, להכין") means make that graphic now: the player is the one in its link, a birthday → kind birthday, a goal → kind goal against the other team of the match it names (the tool fills the goals from the match data); post size, Hebrew. "לא הפעם" → fine, one line, nothing else.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
 ${financeSection(identity.role)}
+${researchSection()}
 ${outreachSection(channel)}
 ${networkSection(identity.role)}
 ${radarSection(identity.role)}
@@ -473,6 +475,10 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
 // Golda 3.0, the market radar: the team reads what it found; what is relevant is the owner's to teach it.
 TOOLS.push(...RADAR_TOOL_DEFS);
 Object.assign(TOOL_ACTION, { radar_list: 'edit', radar_get: 'edit', radar_mark: 'manage_settings' });
+// The research dossier (lib/golda-research.js): admins and managers ask for one and read its state.
+// What money it may show is decided there, by the asker's own permission.
+TOOLS.push(...RESEARCH_TOOL_DEFS);
+Object.assign(TOOL_ACTION, { research_start: 'edit', research_status: 'edit' });
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -882,6 +888,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...mailTools({ db, identity, role }),
     ...instagramTools({ db, identity, role, media, state }) };
   Object.assign(impl, radarTools({ db, identity, role }));   // Golda 3.0: the market radar
+  Object.assign(impl, researchTools({ db, identity, role, channel, state }));
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

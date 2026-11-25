@@ -3,10 +3,11 @@
 // the rest run through ops-background. Answers at once; the run shows up in
 // `jobs` within seconds, which the screen listens to.
 //
-//   POST { job: 'sync-matches' | 'ifa-server-sync' | 'tm-watch' | 'ig-watch' | 'backup' | 'nightly-engines' | 'send-alerts' | 'golda-briefing' | 'gmail-sync' }
+//   POST { job: 'sync-matches' | 'ifa-server-sync' | 'tm-watch' | 'ig-watch' | 'backup' | 'nightly-engines' | 'send-alerts' | 'golda-briefing' | 'gmail-sync' | 'golda-radar' | 'golda-research' }
 const { withAuth, json, internalHeaders } = require('./lib/auth.js');
 
-const WORKERS = { 'sync-matches': 'sync-matches-background', 'ifa-server-sync': 'ifa-server-sync-background', 'tm-watch': 'tm-watch-background', 'ig-watch': 'ig-watch-background', 'gmail-sync': 'gmail-sync-background' };
+const WORKERS = { 'sync-matches': 'sync-matches-background', 'ifa-server-sync': 'ifa-server-sync-background', 'tm-watch': 'tm-watch-background', 'ig-watch': 'ig-watch-background', 'gmail-sync': 'gmail-sync-background',
+  'golda-research': 'golda-research-background' };
 WORKERS['golda-radar'] = 'golda-radar-background';   // Golda 3.0: the market radar's scan
 const OPS = new Set(['backup', 'nightly-engines', 'send-alerts', 'golda-briefing', 'meta-onboard']);
 
