@@ -7,7 +7,7 @@ process.env.OWNER_EMAIL = 'lou.korek@gmail.com';
 
 const { matchSender, sessionKey, whatsappRecipients } = require('../golda-identity.js');
 const { toolsFor, TOOLS, _internal: { armDeletes, armedFor, normalizePending } } = require('../wa-agent.js');
-const { buildBriefing, urgentAlerts } = require('../golda-briefing.js');
+const { buildBriefing, urgentAlerts, phoneOnlyAlerts, buildUrgent } = require('../golda-briefing.js');
 const { pickRetries, topicCommand, nextUsage } = require('../golda-worker.js');
 const { computeAlerts, mergeSettings } = require('@goldas/domain');
 const { memoryStore } = require('../migrations/store.js');
@@ -87,6 +87,34 @@ test('urgent alerts: a contract within a week and a failed job, not a 30-day war
   });
   const u = urgentAlerts(r.alerts);
   assert.deepEqual(u.map((a) => `${a.type}:${a.subject.id}`).sort(), ['contract:a', 'job_failed:j']);
+});
+
+test('Golda carries what the phone shows, to the task\'s owner only', () => {
+  const now = new Date('2026-10-12T09:00:00Z');
+  const r = computeAlerts({
+    players: [{ id: 'a', fullName: 'A', contractEnd: '2026-10-15', contractStatus: 'Under Contract' }],
+    tasks: [
+      { id: 't1', title: 'mine, late', dueDate: '2026-10-10', owner: 'me@example.com' },
+      { id: 't2', title: 'someone else, late', dueDate: '2026-10-10', owner: 'other@example.com' },
+      { id: 't3', title: 'mine, today', dueDate: '2026-10-12', owner: 'me@example.com' },
+    ],
+    settings: mergeSettings({}), now,
+  });
+  const mine = phoneOnlyAlerts(r.alerts, 'Me@Example.com', 'owner@example.com');
+  assert.deepEqual(mine.map((a) => `${a.type}:${a.subject.id}`), ['task_overdue:t1']);   // the late one, its owner's only; never what urgentAlerts already tells
+  assert.equal(phoneOnlyAlerts(r.alerts, 'nobody@example.com', 'owner@example.com').length, 0);
+  // A task with no owner is the agency owner's.
+  const loose = computeAlerts({ tasks: [{ id: 't4', title: 'x', dueDate: '2026-10-01' }], settings: mergeSettings({}), now });
+  assert.equal(phoneOnlyAlerts(loose.alerts, 'owner@example.com', 'owner@example.com').length, 1);
+  assert.equal(phoneOnlyAlerts(loose.alerts, 'me@example.com', 'owner@example.com').length, 0);
+});
+
+test('a long urgent message is cut to a few lines and says how many more', () => {
+  const alerts = Array.from({ length: 11 }, (_, i) => ({ type: 'task_overdue', subject: { name: `T${i}` }, proof: { he: 'באיחור' }, dueDate: '2026-10-10' }));
+  const text = buildUrgent('לו', alerts);
+  assert.equal(text.split('\n').filter((l) => l.startsWith('• ')).length, 8);
+  assert.match(text, /…ועוד 3/);
+  assert.match(text, /11 דברים/);
 });
 
 test('the queue retries what fell through and leaves the rest alone', () => {

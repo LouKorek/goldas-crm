@@ -124,6 +124,20 @@ async function deliver(msg, reply, { buttons = [], list = null, files = [], link
   if (msg.channel === 'app') return [];                    // the app reads the reply (and its files) from the inbox document
   let ids = [];
   let text = reply;
+  // An Instagram graphic (lib/golda-instagram.js) comes first, as an image,
+  // then its caption as a message of its own so it can be copied; her words
+  // and their buttons ("also a story?") come after. Never fails the reply.
+  const graphics = files.filter((f) => f && f.graphic);
+  const docs = files.filter((f) => !(f && f.graphic));
+  for (const g of graphics) {
+    // The caption is not put under the picture as well: it would be there twice.
+    const bare = { buffer: g.buffer, filename: g.filename, mimeType: g.mimeType };
+    try { ids.push(...await wa.sendImage(msg.from, bare, msg.phoneId)); } catch (e) {
+      console.error('[golda] image delivery failed, sending it as a file:', g.filename, e.message);
+      try { ids.push(...await wa.sendDocument(msg.from, bare, msg.phoneId)); } catch (e2) { console.error('[golda] graphic delivery failed:', g.filename, e2.message); continue; }
+    }
+    if (g.caption) { try { ids.push(...await wa.sendText(msg.from, g.caption, msg.phoneId)); } catch (e) { console.error('[golda] caption delivery failed:', e.message); } }
+  }
   // A voice answer goes first; it never fails the reply.
   if (voice && voice.buffer) {
     try { ids.push(...await wa.sendVoice(msg.from, voice, msg.phoneId)); } catch (e) {
@@ -143,7 +157,7 @@ async function deliver(msg, reply, { buttons = [], list = null, files = [], link
   else ids.push(...await wa.sendText(msg.from, text, msg.phoneId));
   // Documents go right after the text. The text is what counts: a document
   // WhatsApp refuses is logged, and the text is not sent a second time for it.
-  for (const f of files) {
+  for (const f of docs) {
     try { ids = [...(ids || []), ...(await wa.sendDocument(msg.from, f, msg.phoneId))]; }
     catch (e) { console.error('[golda] document delivery failed:', f.filename, e.message); }
   }
@@ -163,7 +177,8 @@ async function storeOutFile(db, file, who) {
   const uploadedAt = new Date().toISOString();
   await db.collection('files').doc(fileId).set({ name: file.filename, originalName: file.filename, type: file.mimeType, size: file.buffer.length,
     parts: parts.length, uploadedAt, uploadedBy: who.email || 'golda', madeBy: 'golda' });
-  return { fileId, name: file.filename, type: file.mimeType, size: file.buffer.length, uploadedAt };
+  return { fileId, name: file.filename, type: file.mimeType, size: file.buffer.length, uploadedAt,
+    ...(file.graphic ? { graphic: true, caption: String(file.caption || '') } : {}) };
 }
 
 /** A stored document back as { buffer, filename, mimeType }, for a reply sent later. */
@@ -174,7 +189,8 @@ async function loadOutFile(db, ref) {
   const chunks = await Promise.all(Array.from({ length: n }, (_, i) => db.collection('files').doc(ref.fileId).collection('chunks').doc(String(i)).get()));
   if (chunks.some((c) => !c.exists)) return null;
   const dataUrl = chunks.map((c) => c.data().data).join('');
-  return { buffer: Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'), filename: ref.name, mimeType: ref.type || 'application/pdf' };
+  return { buffer: Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64'), filename: ref.name, mimeType: ref.type || 'application/pdf',
+    ...(ref.graphic ? { graphic: true, caption: ref.caption || '' } : {}) };
 }
 
 /** A voice note in, its words out; the service state is kept for the Golda screen. */

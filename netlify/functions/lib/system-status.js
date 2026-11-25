@@ -41,6 +41,8 @@ function mailOf(m) {
     connected: !!m.connected, state: word(m.state, MAIL_STATES), api: word(m.api && m.api.state, API_STATES),
     contactAddresses: count(m.book && m.book.emails), clubDomains: count(m.book && m.book.domains),
     messagesKept: count(m.linkedCount), waiting: count(m.backlog), lastReadAt: when(m.lastSyncAt), lastFailedAt: when(m.lastError && m.lastError.at),
+    // The address search (lib/mail-addresses.js): two numbers, never the values themselves.
+    addressesFilled: count(m.found && m.found.filled), suggestionsOpen: count(m.found && m.found.open),
   };
 }
 

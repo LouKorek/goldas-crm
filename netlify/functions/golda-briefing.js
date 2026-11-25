@@ -4,7 +4,10 @@
 //      today's games and trainings, what needs action, what Golda did;
 //   2. urgent alerts the moment they appear (a contract ending within a week,
 //      a night job that failed), each sent once per threshold
-//      (lib/alert-keys.js, state in app_meta/goldaSent);
+//      (lib/alert-keys.js, state in app_meta/goldaSent); and, for a person
+//      with no phone registered for notifications, what the phone would have
+//      shown (lib/push.js: a deal stuck far too long, his own overdue task, a
+//      late payment), in the day only, so nothing depends on an install;
 //   3. for admins, operations alerts (lib/golda-briefing.js opsAlerts): a job
 //      that failed twice in a row, a quota past 80%, the IFA browser sync
 //      silent for 36 hours. Once a day each.
@@ -15,6 +18,9 @@
 //      yesterday's matches of represented players that have no numbers yet
 //      (lib/golda-match-report.js), and on the 1st of the month a reminder that
 //      last month's player reports can be prepared (lib/golda-monthly-report.js).
+//      In an hour when none of those went out, she offers an Instagram graphic
+//      for a represented player's birthday or yesterday's goal
+//      (lib/golda-instagram.js; the picture only after his yes).
 //      Never two in the same hour; on a day she asks about matches the monthly
 //      reminder waits for the next day, and on a day she asks about matches or
 //      reminds about the reports the daily question waits for the next day.
@@ -31,8 +37,8 @@
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS, can } = require('@goldas/domain');
-const { dedupeKey } = require('./lib/alert-keys.js');
-const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
+const { buildBriefing, urgentAlerts, phoneOnlyAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
+const { pushKey } = require('./lib/push.js');
 const { writeBriefing } = require('./lib/golda-briefing-ai.js');
 const { opportunitiesOf } = require('./lib/golda-briefs.js');
 const { writeRecap, buildRecap } = require('./lib/golda-briefing-ai.js');
@@ -52,6 +58,7 @@ const { followSite, checkSiteCards } = require('./lib/golda-site-follow.js');
 const { askDaily } = require('./lib/golda-daily-question.js');
 const { askMatches, askedMatchesOn } = require('./lib/golda-match-report.js');
 const { askMonthlyReports, remindedOn } = require('./lib/golda-monthly-report.js');
+const { offerGraphics } = require('./lib/golda-instagram.js');
 
 const KEEP_DAYS = 400;
 const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
@@ -244,10 +251,14 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
         sent.briefings[u.email] = today; count++;
         job.note(`briefing → ${u.email}`);
       }
-      const urgent = urgentAlerts(r.alerts).filter((a) => !sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`]);
+      // A late payment is told once here, as on the phone, not every day (pushKey); every other key is the email's.
+      const urgentKey = (a) => `${u.email}|${pushKey(a, data.settings, today)}`;
+      // Both ways run together (Lou, 2026-11-25): Golda says them in the day whether or not a phone is registered.
+      const onPhone = quiet ? [] : phoneOnlyAlerts(r.alerts, u.email, OWNER_EMAIL);
+      const urgent = [...urgentAlerts(r.alerts), ...onPhone].filter((a) => !sent.alerts[urgentKey(a)]);
       if (urgent.length && sent.briefings[u.email] === today) {   // after the briefing, never before it on the same morning
         await say(u, buildUrgent(first, urgent), 'urgent');
-        urgent.forEach((a) => { sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`] = today; });
+        urgent.forEach((a) => { sent.alerts[urgentKey(a)] = today; });
         count++;
         job.note(`${urgent.length} urgent → ${u.email}`);
       }
@@ -301,7 +312,9 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
     const reports = site.sent || matchDay ? {} : await askMonthlyReports(db, owner, { players: data.players }, now, { hour, send, job }).catch((e) => { job.note(`monthly reports reminder failed: ${e.message}`); return {}; });
     const reportDay = !!reports.sent || await remindedOn(db, today).catch(() => false);
     const asked = site.sent || matchDay || reportDay ? {} : await askDaily(db, owner, data.players, now, { hour, send, job }).catch((e) => { job.note(`daily question failed: ${e.message}`); return {}; });
-    count += (site.sent || 0) + (games.sent || 0) + (reports.sent || 0) + (asked.sent || 0);
+    // An Instagram graphic for a birthday or yesterday's goal: only in an hour when nothing else of hers went out.
+    const offer = site.sent || games.sent || reports.sent || asked.sent ? {} : await offerGraphics(db, owner, { players: data.players, matches: data.matches }, now, { hour, send, job }).catch((e) => { job.note(`graphic offer failed: ${e.message}`); return {}; });
+    count += (site.sent || 0) + (games.sent || 0) + (reports.sent || 0) + (asked.sent || 0) + (offer.sent || 0);
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning

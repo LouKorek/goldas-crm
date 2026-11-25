@@ -15,10 +15,19 @@
 //   POST { action: 'start' }                        → { url }: the Google consent screen (admin)
 //   POST { action: 'sync' }                         sync now (admin)
 //   POST { action: 'disconnect' }                   forget the key and delete every stored message (admin)
+//
+// The addresses the server found by itself (lib/mail-addresses.js), admin only.
+// Names and addresses leave the server here and nowhere else:
+//   GET  ?addresses=1                               → { filled, suggestions, search }
+//   POST { action: 'address_accept', id }           approve one suggestion       → { accepted, filled, open }
+//   POST { action: 'address_accept_all' }           approve all that stand alone → { accepted, skipped, filled, open }
+//   POST { action: 'address_dismiss', id }          never offer it again         → { dismissed, filled, open }
+//   POST { action: 'address_undo', id }             take back an automatic value → { removed, cleared, filled, open }
 const { withAuth, json, internalHeaders } = require('./lib/auth.js');
 const { getDb } = require('./lib/firestore.js');
 const { can } = require('@goldas/domain');
 const store = require('./lib/mail-store.js');
+const addresses = require('./lib/mail-addresses.js');
 const gmailAuth = require('./lib/gmail-auth.js');
 const { originOf } = require('./lib/site.js');
 
@@ -31,8 +40,15 @@ async function kickSync(event, reason) {
   if (!res.ok && res.status !== 202) throw new Error(`the sync did not start (${res.status})`);
 }
 
+/** After an address changed: sync now, so its mail shows (or leaves) without waiting for the next run. Best effort. */
+const syncSoon = (event, reason) => kickSync(event, reason).catch(() => {});
+
 const read = withAuth({ action: 'edit' }, async (event, ctx) => {
   const q = event.queryStringParameters || {};
+  if (q.addresses) {
+    if (!can(ctx.auth.user.role, 'manage_settings')) return json(403, { error: 'Forbidden' });
+    return json(200, await addresses.listFound(getDb()));
+  }
   const kind = q.deal ? 'deal' : q.club ? 'club' : q.contact ? 'contact' : null;
   if (!kind) return json(400, { error: 'which record?' });
   const money = can(ctx.auth.user.role, 'money');
@@ -47,7 +63,7 @@ const read = withAuth({ action: 'edit' }, async (event, ctx) => {
 const write = withAuth({ action: 'edit' }, async (event, ctx) => {
   let body = {};
   try { body = JSON.parse(event.body || '{}'); } catch { return json(400, { error: 'bad json' }); }
-  const { role, email } = ctx.auth.user;
+  const { role, email, name } = ctx.auth.user;
   const db = getDb();
   const need = (action) => { if (!can(role, action)) { const e = new Error('Forbidden'); e.status = 403; throw e; } };
   try {
@@ -89,7 +105,31 @@ const write = withAuth({ action: 'edit' }, async (event, ctx) => {
       }
       case 'disconnect': {
         need('manage_settings');
-        return json(200, await store.disconnect(db, { by: email }));
+        const out = await store.disconnect(db, { by: email });
+        await addresses.forgetUndecided(db);
+        return json(200, out);
+      }
+      case 'address_accept': {
+        need('manage_settings');
+        const out = await addresses.accept(db, body.id, { by: { email, name } });
+        await syncSoon(event, `admin:${email}`);
+        return json(200, out);
+      }
+      case 'address_accept_all': {
+        need('manage_settings');
+        const out = await addresses.acceptAll(db, { by: { email, name } });
+        if (out.accepted) await syncSoon(event, `admin:${email}`);
+        return json(200, out);
+      }
+      case 'address_dismiss': {
+        need('manage_settings');
+        return json(200, await addresses.dismiss(db, body.id, { by: { email, name } }));
+      }
+      case 'address_undo': {
+        need('manage_settings');
+        const out = await addresses.undo(db, body.id, { by: { email, name } });
+        if (out.cleared) await syncSoon(event, `admin:${email}`);
+        return json(200, out);
       }
       default:
         return json(400, { error: 'unknown action' });

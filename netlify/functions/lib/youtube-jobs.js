@@ -15,7 +15,14 @@
 // log, the video is filed in the channel's playlist for that kind of player
 // (when Lou gave the permission for playlists), and the writer gets the new
 // link and the old one on WhatsApp.
+//
+// Highlights (job.highlights = { moments: [{ start, end }], total }): the
+// writer asked for chosen moments of a match, with their times in the video
+// file. Such a job always goes through the page: the phone cuts the moments
+// out of the full match and sends only them to YouTube. The moments are read
+// from the job (never from the link) and are checked again every time.
 const crypto = require('crypto');
+const { checkHighlightMoments, formatMoment, formatClock } = require('@goldas/domain');
 const yt = require('./youtube.js');
 const ytAuth = require('./youtube-auth.js');
 const ytStyle = require('./youtube-style.js');
@@ -46,7 +53,7 @@ async function jobByToken(db, token, now = Date.now()) {
 const patchJob = (db, id, data) => db.collection(JOBS).doc(String(id)).set({ ...data, updatedAt: Date.now() }, { merge: true });
 
 /** A draft: what would be uploaded, for the writer to approve. */
-async function createDraft(db, { record, target, meta, values, source, cover, playlist = null, by }, { now = Date.now() } = {}) {
+async function createDraft(db, { record, target, meta, values, source, cover, playlist = null, highlights = null, by }, { now = Date.now() } = {}) {
   // One open draft per writer: a new one replaces the previous.
   const prev = await db.collection(JOBS).where('by.email', '==', by.email || '').get();
   for (const d of prev.docs) if (d.data().status === 'draft') await d.ref.set({ status: 'cancelled', updatedAt: now, note: 'replaced by a newer draft' }, { merge: true });
@@ -56,10 +63,24 @@ async function createDraft(db, { record, target, meta, values, source, cover, pl
     target,                                   // { collection (as Golda names it), physical, id, name }
     oldLink: record.videoLink || '',
     meta, values, source, cover, playlist, by,
+    ...(highlights ? { highlights: { moments: highlights.moments, total: highlights.total } } : {}),
   };
   await ref.set(job);
   return { id: ref.id, ...job };
 }
+
+/**
+ * The moments of a highlights job, checked again as they are stored:
+ * null for an ordinary upload, { ok: false } when what is stored cannot be
+ * used (then nothing may be uploaded for this job).
+ */
+function highlightsOf(job) {
+  if (!job || !job.highlights) return null;
+  const r = checkHighlightMoments(job.highlights.moments);
+  return r.ok ? { ok: true, moments: r.moments, total: r.total } : { ok: false, problem: r.problem };
+}
+/** The moments as a writer reads them: ["12:30–12:50", …], and their total as "1:08". */
+const highlightsText = (h) => ({ moments: h.moments.map(formatMoment), total: formatClock(h.total), count: h.moments.length });
 
 /** The newest open job of this writer (to confirm or cancel without an id). */
 async function latestOpen(db, email, statuses = ['draft']) {
@@ -72,19 +93,23 @@ async function latestOpen(db, email, statuses = ['draft']) {
 /** Confirmed: either the server uploads (it has the video), or the writer gets the page. */
 async function confirm(db, job, { now = Date.now(), env = process.env } = {}) {
   if (job.status !== 'draft') throw new Error(`this upload is already ${job.status}`);
-  const server = job.source?.kind === 'whatsapp' || job.source?.kind === 'url';
+  // Highlights are cut on the phone, so they never go through the server.
+  const server = !job.highlights && (job.source?.kind === 'whatsapp' || job.source?.kind === 'url');
   const status = server ? 'uploading' : 'awaiting_file';
   await patchJob(db, job.id, { status, confirmedAt: now });
   return { ...job, status, confirmedAt: now, mode: server ? 'server' : 'page', page: server ? null : pageUrl(job, env) };
 }
 
 /** The page asks for an upload session: the phone sends the bytes to YouTube itself. */
-async function openPageSession(db, job, { size, mimeType }, { env = process.env, fetchImpl = fetch, origin = null } = {}) {
+async function openPageSession(db, job, { size, mimeType, cut = null }, { env = process.env, fetchImpl = fetch, origin = null } = {}) {
   if (job.status !== 'awaiting_file') throw new Error(job.status === 'uploaded' || job.status === 'done' ? 'this video was already uploaded' : 'this upload link is not active');
+  const highlights = highlightsOf(job);
+  // A highlights job takes only what the page cut: never the whole match file.
+  if (highlights && (!highlights.ok || !cut)) throw new Error('this link uploads highlights only');
   const token = await ytAuth.accessToken(db, { env, fetchImpl });
   if (!token) throw new Error('YouTube is not connected');
   const uploadUrl = await yt.startUpload(token, job.meta, { size, mimeType: mimeType || 'video/*', origin: origin || siteUrl(env), fetchImpl });
-  await patchJob(db, job.id, { pageSessionAt: Date.now(), fileSize: Number(size) || 0, fileType: mimeType || '' });
+  await patchJob(db, job.id, { pageSessionAt: Date.now(), fileSize: Number(size) || 0, fileType: mimeType || '', ...(highlights ? { cut } : {}) });
   return uploadUrl;
 }
 
@@ -122,7 +147,10 @@ async function fileInPlaylist(db, job, videoId, { token, fetchImpl = fetch }) {
 }
 
 function uploadedText(job, link, swap, list = null) {
-  const lines = [`✅ הסרטון של ${job.target.name} עלה ליוטיוב:`, link];
+  const highlights = highlightsOf(job);
+  const lines = [highlights?.ok
+    ? `✅ הרגעים הנבחרים של ${job.target.name} עלו ליוטיוב (${highlights.moments.length === 1 ? 'רגע אחד' : `${highlights.moments.length} רגעים`}):`
+    : `✅ הסרטון של ${job.target.name} עלה ליוטיוב:`, link];
   if (list?.added) lines.push(`נמצא בפלייליסט "${list.title}".`);
   else if (list?.title) lines.push(`לפלייליסט "${list.title}" לא הוספתי אותו${list.reason === 'no permission' ? ' (אין לי הרשאה לפלייליסטים)' : ''}; אפשר להוסיף ביוטיוב.`);
   if (swap.swapped) {
@@ -181,6 +209,7 @@ function reasonHe(e) {
   if (/not connected|invalid_grant/i.test(m)) return 'החיבור ליוטיוב לא פעיל. צריך לחבר מחדש במסך מערכת › יוטיוב.';
   if (/web page/.test(m)) return 'הקישור פותח דף ולא את קובץ הסרטון עצמו.';
   if (/too big/.test(m)) return 'הקובץ גדול מדי להעברה דרכי. אפשר להעלות אותו בדף ההעלאה.';
+  if (/highlights only/.test(m)) return 'הקישור הזה מעלה רק את הרגעים הנבחרים. רענן את הדף ובחר שוב את סרטון המשחק.';
   return m.slice(0, 160);
 }
 
@@ -248,5 +277,6 @@ async function finish(db, job, { wa, notify, env = process.env, fetchImpl = fetc
 
 module.exports = {
   createDraft, getJob, jobByToken, latestOpen, confirm, openPageSession, afterUpload, runServerUpload, finish, swapVideoLink, patchJob, fileInPlaylist,
+  highlightsOf, highlightsText,
   pageUrl, reasonHe, uploadedText, JOBS, PAGE_TTL_MS, SERVER_MAX, FINISH_TRIES, OPEN,
 };

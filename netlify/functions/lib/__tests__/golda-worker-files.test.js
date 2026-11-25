@@ -24,6 +24,7 @@ require.cache[waPath] = { id: waPath, filename: waPath, loaded: true, exports: {
   sendText: async (to, text) => { sent.push(['text', text]); return ['wamid.T']; },
   sendButtons: async () => ['wamid.B'], sendList: async () => ['wamid.L'],
   sendDocument: async (to, f) => { if (f.filename === 'bad.pdf') throw new Error('refused'); sent.push(['doc', f.filename]); return ['wamid.D']; },
+  sendImage: async (to, f) => { if (f.filename === 'refused.jpg') throw new Error('image refused'); sent.push(f.caption ? ['image', f.filename, f.caption] : ['image', f.filename]); return ['wamid.I']; },
 } };
 const { deliver, storeOutFile, loadOutFile } = require('../golda-worker.js');
 
@@ -51,4 +52,34 @@ test('in the app nothing is sent; the inbox document carries the files', async (
   sent.length = 0;
   assert.deepEqual(await deliver({ channel: 'app' }, 'x', { files: [file] }), []);
   assert.deepEqual(sent, []);
+});
+
+// An Instagram graphic (lib/golda-instagram.js): the picture as an image first,
+// then its caption as a message of its own (to copy), then her words, then documents.
+// The picture itself carries no caption (the fake records one if it gets one), so the caption shows once.
+const graphic = { buffer: Buffer.from('JPEG'), filename: 'Noam - signing - post.jpg', mimeType: 'image/jpeg', graphic: true, caption: 'ברכות לנועם!\n#GoldAS' };
+
+test('on WhatsApp a graphic goes as an image, then its caption, then the reply, then documents', async () => {
+  sent.length = 0;
+  const ids = await deliver({ channel: 'whatsapp', from: '972500000001' }, 'הנה הגרפיקה', { files: [file, graphic] });
+  assert.deepEqual(sent, [['image', 'Noam - signing - post.jpg'], ['text', 'ברכות לנועם!\n#GoldAS'], ['text', 'הנה הגרפיקה'], ['doc', 'Assaf Cohen - Gold A&S.pdf']]);
+  assert.deepEqual(ids, ['wamid.I', 'wamid.T', 'wamid.T', 'wamid.D']);
+});
+
+test('an image WhatsApp refuses goes as a document instead', async () => {
+  sent.length = 0;
+  await deliver({ channel: 'whatsapp', from: '972500000001' }, 'x', { files: [{ ...graphic, filename: 'refused.jpg' }] });
+  assert.deepEqual(sent.map((x) => x[0]), ['doc', 'text', 'text']);
+});
+
+test('a stored graphic keeps its caption, so the app shows it and a later reply can resend it', async () => {
+  const ref = await storeOutFile(db, graphic, { email: 'lou@x.com' });
+  assert.deepEqual([ref.graphic, ref.caption, ref.type], [true, 'ברכות לנועם!\n#GoldAS', 'image/jpeg']);
+  assert.ok(!JSON.stringify(ref).includes(graphic.buffer.toString('base64')), 'the reference carries no picture');
+  const back = await loadOutFile(db, ref);
+  assert.deepEqual([back.graphic, back.caption], [true, 'ברכות לנועם!\n#GoldAS']);
+  assert.ok(back.buffer.equals(graphic.buffer));
+  // an ordinary document stays as it was
+  const doc = await storeOutFile(db, file, { email: 'lou@x.com' });
+  assert.equal(doc.graphic, undefined);
 });

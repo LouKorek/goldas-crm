@@ -28,6 +28,17 @@ export const syncGmailNow = () => post({ action: 'sync' });
 /** Forget the key and delete every stored message. */
 export const disconnectGmail = () => post({ action: 'disconnect' });
 
+// The addresses the server found by itself (lib/mail-addresses.js), admin only.
+/** { filled: [...], suggestions: [...], search: { state, readBackTo, lastRunAt, yearRead } }; each row { id, kind, name, club, value, reason, seenName, times }. */
+export const fetchFoundAddresses = () => callFunctionJson('mail', { query: { addresses: '1' } });
+export const acceptAddress = (id) => post({ action: 'address_accept', id });
+/** Approves every suggestion that stands alone: { accepted, skipped }. */
+export const acceptAllAddresses = () => post({ action: 'address_accept_all' });
+/** Not this one: never offered again for that record. */
+export const dismissAddress = (id) => post({ action: 'address_dismiss', id });
+/** Takes back a value the server saved by itself; it is never saved or offered again. */
+export const undoAddress = (id) => post({ action: 'address_undo', id });
+
 /** Opens the thread in Gmail, in the connected mailbox when the browser has several. */
 export const gmailThreadUrl = (address, threadId) =>
   `https://mail.google.com/mail/${address ? `?authuser=${encodeURIComponent(address)}` : ''}#all/${threadId}`;

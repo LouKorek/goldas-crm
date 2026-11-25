@@ -18,7 +18,8 @@ const seed = () => ({
       'Dana Levi': { last: { status: 'ok' } },                                   // not a job name: left out
     },
     gmail: { connected: true, address: 'dana@club-example.com', state: 'ok', api: { state: 'on', at: NOW, message: 'Permission denied for dana' },
-      book: { emails: 12, domains: 5 }, linkedCount: 40, backlog: 3, lastSyncAt: NOW - 60000, lastError: { at: NOW - 3600000, message: 'Permission denied for dana' } },
+      book: { emails: 12, domains: 5 }, linkedCount: 40, backlog: 3, lastSyncAt: NOW - 60000, lastError: { at: NOW - 3600000, message: 'Permission denied for dana' },
+      found: { filled: 7, open: 2, last: 'dana@club-example.com' } },
   },
   backups: {
     b1: { status: 'ok', startedAt: T('2026-11-18T01:00:00Z'), verified: true, docs: 5000, offsite: { key: 'backup-2026-11-25.jsonl', bytes: 9 }, collections: ['players'] },
@@ -34,7 +35,7 @@ test('the status says states, times and counts', async () => {
   assert.deepEqual(s.jobs['backup-weekly'], { status: 'error', at: '2026-11-24T01:10:00.000Z', seconds: 1, trigger: 'unknown', running: true, lastFailedAt: '2026-11-24T01:10:00.000Z' });
   assert.deepEqual(Object.keys(s.jobs).sort(), ['backup-weekly', 'gmail-sync']);
   assert.deepEqual(s.mail, { connected: true, state: 'ok', api: 'on', contactAddresses: 12, clubDomains: 5, messagesKept: 40, waiting: 3,
-    lastReadAt: new Date(NOW - 60000).toISOString(), lastFailedAt: new Date(NOW - 3600000).toISOString() });
+    lastReadAt: new Date(NOW - 60000).toISOString(), lastFailedAt: new Date(NOW - 3600000).toISOString(), addressesFilled: 7, suggestionsOpen: 2 });
   assert.deepEqual(s.backup.latest, { status: 'error', at: '2026-11-25T01:00:00.000Z', readBackOk: false, outsideCopy: false, documents: 10 });
   assert.deepEqual(s.backup.latestGood, { status: 'ok', at: '2026-11-18T01:00:00.000Z', readBackOk: true, outsideCopy: true, documents: 5000 });
   assert.deepEqual(s.notifications, { devices: 1 });
@@ -50,9 +51,17 @@ test('a state that is not on the list comes out as "unknown", and an empty syste
   const db = fakeDb({ app_meta: { gmail: { connected: true, state: 'Dana Levi', api: { state: 'p_secret_id' } } } });
   const s = await readStatus(db, NOW);
   assert.deepEqual([s.mail.state, s.mail.api, s.mail.contactAddresses, s.mail.lastReadAt], ['unknown', 'unknown', null, null]);
+  assert.deepEqual([s.mail.addressesFilled, s.mail.suggestionsOpen], [null, null], 'no address search yet');
   assert.deepEqual(s.jobs, {});
   assert.deepEqual(s.backup, { latest: null, latestGood: null });
   assert.deepEqual(s.notifications, { devices: 0 });
+});
+
+test('the address search shows as two numbers; anything that is not a number comes out empty', async () => {
+  const db = fakeDb({ app_meta: { gmail: { connected: true, state: 'ok', found: { filled: 'dana@club-example.com', open: 'Dana Levi' } } } });
+  const s = await readStatus(db, NOW);
+  assert.deepEqual([s.mail.addressesFilled, s.mail.suggestionsOpen], [null, null]);
+  assert.ok(!/@|Dana/.test(JSON.stringify(s)));
 });
 
 test('a real Firestore time (toMillis) reads the same', () => {

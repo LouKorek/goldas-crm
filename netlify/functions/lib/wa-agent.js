@@ -36,6 +36,7 @@ const { mailTools, MAIL_TOOL_DEF } = require('./golda-mail.js');
 const { chooseEffort } = require('./golda-effort.js');
 const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
+const { instagramTools, INSTAGRAM_TOOL_DEF } = require('./golda-instagram.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -319,11 +320,13 @@ How you work:
 - Deleting needs the writer's explicit yes: call delete without confirmed first (one record, or several with items; you may arm more in the same turn), show the whole list of what will be deleted and ask once; only after they answer yes in a later message call delete once with confirmed=true, which deletes everything armed. Never ask for a separate yes per record.
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - A video for YouTube ("תעלי ליוטיוב", "סרטון ביצועים חדש של…", or a video sent with a player's name): find the player or prospect, then youtube_upload action=draft (it fills the title, description, privacy, playlist and cover in the style of Lou's channel; pass extra for the free part such as the opponent, and override title/description/playlist only when the writer dictated them). Show the draft in full (כותרת, תיאור, פרטיות, פלייליסט, קאבר) and say the player's current video link will be replaced. Only after the writer's yes in a later message: action=confirm. If confirm returns a page link, send it as is: big videos do not pass through WhatsApp (16 MB), so the writer opens the link on the phone and picks the file. You never upload without that yes, and never to anywhere but Lou's channel. After the upload the record's videoLink is replaced automatically and the writer gets the new and the previous link, so do not update videoLink yourself. An image sent afterwards for the cover → action=cover (add cover=style when it is a plain photo of the player, so the name and facts are drawn on it like the channel's covers; a finished designed cover goes as it is). "איך אנחנו מעלים סרטונים" / the style → youtube_style. A video sent with no player named: ask whose it is.
+- Highlights of a match, ONLY on request: when the writer asks for chosen moments and writes the times ("רגעים נבחרים של נועם: 12:30-12:50, 44:10-44:40, 71:05", "highlights …", "תחתכי לי…"), call youtube_upload action=draft with the player and moments = those times exactly as written (a range, or a single time which is cut from a few seconds before it to a few seconds after). You NEVER offer highlights, never suggest cutting a video, never propose or guess times, and never add moments to a normal upload: without times written by the writer there are no highlights (the tool refuses times the writer did not write). The times are minutes:seconds from the start of the video file, not the match clock; if the writer gives match minutes ("דקה 71") or says them in a voice note, ask them to write the times as they appear in the video's time bar. Show the draft as for any upload plus the list of moments and their total length, mention that each moment may start a second or two early (the video can only be cut at certain frames) and that the moments are joined in the order they come in the video with plain cuts. After the yes in a later message, action=confirm returns the page link: the writer picks the full match video there and keeps the page open; the phone cuts the moments and uploads only the highlights, the match file is not uploaded. Everything after that is the same as any upload.
 - The agency's website gold-as.com (admins only; "תוסיפי את … לאתר", "תעדכני באתר", "תורידי מהאתר", "תשני באתר את הטקסט…"): you change it yourself with website_read, website_edit and website_publish. First website_read (players for the cards; texts or links for their ids). Then website_edit with every change of the request in one call; it builds a draft and nothing is live. A card has: the name in English, the club in English with the age group in brackets for a youth team ("Hapoel Hadera (U19)"), the position in short codes, at most two ("DM / CM"), the year of birth, the foot (Right/Left/Both) and the flags as country codes (["il"], ["il","de"]). Take what you can from the player's CRM record (translate the position and the club to that form) and ask only for what is missing. A new card needs the player's picture: the writer sends it with the request, best as a PNG with a transparent background sent as a document (a regular WhatsApp photo is a JPG and loses the transparency); pass photo:"attached" and you get the finished card photo back, and the writer gets it as a file. If the result says the picture has no transparent background, tell the writer the card will show the picture's own background and ask whether to continue or send a cut-out one. Show the draft line by line, say it is not live yet, and ask with buttons [[כפתורים: כן, לפרסם | לא]]. Only after the yes in a later message: website_publish action=publish (about a minute), then report what is live with the link https://gold-as.com. You never publish without that yes. Several changes asked together go live in one publish. "תבטלי את השינוי באתר" → website_publish action=undo (it asks once more; undo_last is only for the CRM). Lou also edits the site from his own panel; both work side by side, and you always start from the live site.
 - A message you started yourself is in this chat as your own turn. A website draft you prepared after a CRM change (your message that opens with "האתר לא מעודכן לפי ה-CRM" 🌐): the draft already exists, so on the writer's yes call website_publish action=publish; on a no, website_read part=draft and take those lines out with website_edit drop (discard=true when nothing else is in the draft). When that message only asked what to write on a card, take the answer and prepare the draft with website_edit as usual.
 - Your daily question (your message that opens with "שאלה יומית" ❓): the writer's next message is usually its answer, in whatever topic you are. Find that player and save the answer with update: dates as YYYY-MM-DD, foot as Right/Left/Both, contractStatus as Under Contract/Free/Loan/Trial, the position in the CRM's codes, nationalities as country names in English. Confirm in one line. "דלג" / "לא יודע" → fine, no insisting and no other question instead. When that daily question offered to prepare the representation agreement template (it says there is no agreement template yet): a yes ("כן, תכיני") → prepare it now on the agreements path below (examples, read_file, propose, buttons, save after a later yes), without an agreement at the end; "לא עכשיו" → fine, one line, nothing else. "בלי שאלה יומית" / "תפסיקי לשאול כל יום" → daily_question action=off; "תחזירי את השאלה היומית" → action=on.
 - "מה חסר ל…" / "מה חסר בתיק של…" (a player's file) → find the player, then player_checklist with his playerId: the score, then what is missing, most important first, each with how to fix it, and the link to his page. "למי חסר הכי הרבה" / "איזה תיקים לא מלאים" → player_checklist with no playerId. What it lists as not known yet, say so; never guess it. A photo sent for a player goes in with attach_file field=photoFiles.
 - How a player did in a match ("אתמול X שיחק 70 דקות, גול אחד, 7", "Y לא שיחק", "ראיתי את Z, היה חלש, 5"): find the player, then match_report with his playerId and the match date (yesterday/today resolved against today's date in Israel) or the matchId; minutes 0 when he did not play; a rating only when one was said; the note in the writer's words, one short sentence. One call per player. Your morning question about yesterday's matches (your message that opens with "איך היה אתמול" ⚽) is answered this way, in one or several lines; "דלג" = record nothing. Say what you saved and his season so far in one line. "בלי שאלות על משחקים" / "תחזירי את השאלות על משחקים" → match_questions off / on.
+- An Instagram graphic ("תכיני גרפיקה לחתימה של X ב…", "גרפיקה ליום ההולדת של Y", "story לשער של Z מול…"): find the player, then instagram_graphic with kind signing, goal or birthday (custom with a headline for anything else: a first call-up, player of the month); size story only when a story was asked for, lang en only when English was. Pass only facts the writer said or the CRM has (club, opponent, score, minute, competition), never a number you were not told; when the tool says something is missing, ask the writer that one short question. The picture and its caption go to the writer right after your answer, so your text is one line on what it shows, then [[כפתורים: גם סטורי | לשנות טקסט]] (גם פוסט after a story). "גם סטורי" / "גם פוסט" → the same call in the other size; "לשנות טקסט" → ask what to change, then call again with headline, name or caption. You never post it and never send it to anyone but the writer; he uploads it himself. Your offer that opens with "גרפיקה לאינסטגרם" 🎨: the writer's yes ("כן, להכין") means make that graphic now: the player is the one in its link, a birthday → kind birthday, a goal → kind goal against the other team of the match it names (the tool fills the goals from the match data); post size, Hebrew. "לא הפעם" → fine, one line, nothing else.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
 ${financeSection(identity.role)}
 ${outreachSection(channel)}
@@ -432,7 +435,7 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS, MAIL_TOOL_DEF];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS, MAIL_TOOL_DEF, INSTAGRAM_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list', 'outreach_prepare', 'outreach_link', 'writing_style', 'voice_reply', 'network_path', 'network_cold']);
@@ -460,7 +463,9 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // The explicit "knows" link is an edit of the contact.
   contact_link: 'edit',
   // The agency's mail: admins and managers (deal mail inside the tool: admins); never a viewer or a player.
-  mail_recent: 'edit' };
+  mail_recent: 'edit',
+  // An Instagram graphic of a player: whoever may edit the player.
+  instagram_graphic: 'edit' };
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -495,7 +500,7 @@ function armedFor(pending, items, turn) {
   return ready.filter((p) => items.some((it) => sameTarget(p, it)));
 }
 
-function createTools({ db, admin, identity, media, session, assistantName, channel = 'whatsapp', turnText = '' }) {
+function createTools({ db, admin, identity, media, session, assistantName, channel = 'whatsapp', turnText = '', writerTexts = [] }) {
   const FieldValue = admin.firestore.FieldValue;
   const sender = identity.name || 'לו';
   const role = identity.role || 'viewer';
@@ -851,7 +856,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   const impl = { search, list, get, read_file: readFile, player_pdf: playerPdf, rename_file: renameFile, create, update, delete: del, attach_file: attachFile, remove_file: removeFile, undo_last: undoLast,
     suggest_matches: suggestMatches, alerts_today: alertsToday, sync_fixtures: syncFixtures,
     ...insightTools({ db }), ...memoryTools({ db, identity }), ...briefTools({ db }), transfer_windows: async () => windowStatus(new Date()),
-    ...youtubeTools({ db, admin, identity, media, session, channel, role, resolve: async (c, id) => {
+    ...youtubeTools({ db, admin, identity, media, session, channel, role, writerTexts, resolve: async (c, id) => {
       const s = await readOk(c).doc(id).get();
       if (!s.exists || !belongs(c, s.data())) throw new Error('not found');
       return { id: s.id, ...s.data() };
@@ -867,7 +872,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...outreachTools({ db, admin, identity, role, channel, session, state, can }),
     ...voiceTools({ identity, channel, turnText, state, db }),
     ...networkTools({ db, identity, role, update }),
-    ...mailTools({ db, identity, role }) };
+    ...mailTools({ db, identity, role }),
+    ...instagramTools({ db, identity, role, media, state }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -895,10 +901,13 @@ function kickCalendarSync() {
 async function runAgent({ db, admin, identity, text, media, session, assistantName, client, topic = null, topics = [], channel = 'whatsapp', memories }) {
   const anthropic = client || new Anthropic();
   const sender = identity.name || 'לו';
-  // The words of this message, typed or transcribed: what voice_reply checks for a request.
-  const tools = createTools({ db, admin, identity, media, session, assistantName, channel, turnText: text || '' });
-  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, steps: 0 };
   const history = (topic ? topic.history || [] : session.history || []).slice(-HISTORY_TURNS);
+  // The words of this message, typed or transcribed: what voice_reply checks for a request.
+  // writerTexts: everything the writer wrote in this conversation, this message last: the
+  // only place the times of a highlights request may come from (golda-youtube.js).
+  const writerTexts = [...history.filter((h) => h.role !== 'assistant').map((h) => String(h.text || '')), text || ''];
+  const tools = createTools({ db, admin, identity, media, session, assistantName, channel, turnText: text || '', writerTexts });
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, steps: 0 };
   // Long-term memory is read once per message; a failed read never blocks the reply.
   const remembered = memories || await loadMemories(db, identity).catch((e) => { console.warn('[golda] memory read failed:', e.message); return []; });
   const mistakes = await recentMistakes(db).catch(() => []);
