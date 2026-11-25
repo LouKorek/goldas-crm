@@ -4,7 +4,10 @@
 //      today's games and trainings, what needs action, what Golda did;
 //   2. urgent alerts the moment they appear (a contract ending within a week,
 //      a night job that failed), each sent once per threshold
-//      (lib/alert-keys.js, state in app_meta/goldaSent);
+//      (lib/alert-keys.js, state in app_meta/goldaSent); and, for a person
+//      with no phone registered for notifications, what the phone would have
+//      shown (lib/push.js: a deal stuck far too long, his own overdue task, a
+//      late payment), in the day only, so nothing depends on an install;
 //   3. for admins, operations alerts (lib/golda-briefing.js opsAlerts): a job
 //      that failed twice in a row, a quota past 80%, the IFA browser sync
 //      silent for 36 hours. Once a day each.
@@ -34,8 +37,8 @@
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
 const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS, can } = require('@goldas/domain');
-const { dedupeKey } = require('./lib/alert-keys.js');
-const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
+const { buildBriefing, urgentAlerts, phoneOnlyAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
+const { pushKey, SUBS: PUSH_DEVICES } = require('./lib/push.js');
 const { writeBriefing } = require('./lib/golda-briefing-ai.js');
 const { opportunitiesOf } = require('./lib/golda-briefs.js');
 const { writeRecap, buildRecap } = require('./lib/golda-briefing-ai.js');
@@ -224,6 +227,10 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   const dayMs = 86400000;
   const goldaActions = data.audit.filter((a) => (a.at?.toMillis?.() || 0) > now.getTime() - dayMs).length;
   let count = 0;
+  // Who already hears the urgent ones on a phone (lib/push.js). Everyone else hears them from Golda, in the day.
+  const withPhone = quiet ? null : await db.collection(PUSH_DEVICES).get()
+    .then((s) => new Set(s.docs.map((d) => String((d.data() || {}).email || '').toLowerCase())))
+    .catch((e) => { job.note(`phones unreadable: ${e.message}`); return null; });
 
   for (const u of recipients) {
     const mine = u.role === 'admin' ? data.tasks : data.tasks.filter((x) => (x.owner || OWNER_EMAIL) === u.email);
@@ -248,10 +255,13 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
         sent.briefings[u.email] = today; count++;
         job.note(`briefing → ${u.email}`);
       }
-      const urgent = urgentAlerts(r.alerts).filter((a) => !sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`]);
+      // A late payment is told once here, as on the phone, not every day (pushKey); every other key is the email's.
+      const urgentKey = (a) => `${u.email}|${pushKey(a, data.settings, today)}`;
+      const onPhone = withPhone && !withPhone.has(u.email) ? phoneOnlyAlerts(r.alerts, u.email, OWNER_EMAIL) : [];
+      const urgent = [...urgentAlerts(r.alerts), ...onPhone].filter((a) => !sent.alerts[urgentKey(a)]);
       if (urgent.length && sent.briefings[u.email] === today) {   // after the briefing, never before it on the same morning
         await say(u, buildUrgent(first, urgent), 'urgent');
-        urgent.forEach((a) => { sent.alerts[`${u.email}|${dedupeKey(a, data.settings, today)}`] = today; });
+        urgent.forEach((a) => { sent.alerts[urgentKey(a)] = today; });
         count++;
         job.note(`${urgent.length} urgent → ${u.email}`);
       }

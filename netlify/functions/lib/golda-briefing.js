@@ -63,9 +63,27 @@ function urgentAlerts(alerts) {
     || (a.type === 'birthday' && a.age === 18 && a.days === 0));
 }
 
+/**
+ * What a phone notification carries and urgentAlerts does not (lib/push.js:
+ * a deal stuck far too long, a task past its day, a payment past its day),
+ * for a person who has no phone registered for notifications: Golda tells
+ * them here instead, so nobody has to install anything to hear of them.
+ * A task goes to its owner only, as on the phone.
+ */
+const PHONE_ONLY = new Set(['deal_stale', 'task_overdue', 'payment_late']);
+function phoneOnlyAlerts(alerts, email, ownerEmail = '') {
+  const me = String(email || '').toLowerCase();
+  return alerts.filter((a) => a.severity === 'critical' && PHONE_ONLY.has(a.type)
+    && (a.type !== 'task_overdue' || String(a.record?.owner || ownerEmail).toLowerCase() === me));
+}
+
+const URGENT_LINES = 8;
 function buildUrgent(name, alerts) {
   const head = alerts.length === 1 ? `*${name}, שימי לב* ⚠️` : `*${name}, ${alerts.length} דברים שדורשים תשומת לב* ⚠️`;
-  return [head, ...alerts.map(line), '', `פרטים: ${APP}/notifications`].join('\n').replace('שימי לב', name === 'לו' ? 'שים לב' : 'שימו לב');
+  // The first message after a quiet stretch can hold many; the screen has them all.
+  const lines = alerts.slice(0, URGENT_LINES).map(line);
+  if (alerts.length > URGENT_LINES) lines.push(`…ועוד ${alerts.length - URGENT_LINES}`);
+  return [head, ...lines, '', `פרטים: ${APP}/notifications`].join('\n').replace('שימי לב', name === 'לו' ? 'שים לב' : 'שימו לב');
 }
 
 /**
@@ -122,4 +140,4 @@ function buildOps(name, items) {
   return [`*${name}, עדכון תפעולי* 🔧`, ...items.map((i) => i.text), '', `${APP}/admin`].join('\n');
 }
 
-module.exports = { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps, fmtDate };
+module.exports = { buildBriefing, urgentAlerts, phoneOnlyAlerts, buildUrgent, opsAlerts, buildOps, fmtDate };
