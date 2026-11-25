@@ -19,6 +19,7 @@ const { runAgent, MAIN_TOPIC, MODEL, _internal: { norm } } = require('./wa-agent
 const { resolveSender, userForApp, sessionKey } = require('./golda-identity.js');
 const playerGolda = require('./golda-player.js');
 const speech = require('./golda-speech.js');
+const { VOICE_UNAVAILABLE } = require('./golda-voice.js');
 
 const ASSISTANT_NAME = process.env.WA_ASSISTANT_NAME || 'גולדה';
 const LOCK_MS = 15 * 60 * 1000;               // a background function's whole budget
@@ -104,13 +105,41 @@ async function identityFor(db, msg) {
   return resolveSender(db, msg.from);
 }
 
-/** Deliver a reply on the message's channel. Throws when WhatsApp refuses the text. */
-async function deliver(msg, reply, { buttons = [], list = null, files = [] } = {}) {
+/** One "open in WhatsApp" button (lib/golda-outreach.js); a refused button goes as the plain link. */
+async function sendLink(msg, l) {
+  try { return await wa.sendCtaUrl(msg.from, l, msg.phoneId); } catch (e) {
+    console.warn('[golda] link button refused, sending the plain link:', e.message);
+    return wa.sendText(msg.from, `${l.body}\n${l.url}`, msg.phoneId);
+  }
+}
+
+/**
+ * Deliver a reply on the message's channel. Throws when WhatsApp refuses the text.
+ * Order on WhatsApp: the voice note (when asked for), the text, the "open in
+ * WhatsApp" buttons of drafts, and the reply buttons last, under the text's
+ * last paragraph (the "did it go out?" question), then documents.
+ */
+async function deliver(msg, reply, { buttons = [], list = null, files = [], links = [], voice = null } = {}) {
   if (msg.channel === 'app') return [];                    // the app reads the reply (and its files) from the inbox document
-  let ids;
-  if (list) ids = await wa.sendList(msg.from, reply, list.button, list.rows, msg.phoneId);
-  else if (buttons.length) ids = await wa.sendButtons(msg.from, reply, buttons, msg.phoneId);
-  else ids = await wa.sendText(msg.from, reply, msg.phoneId);
+  let ids = [];
+  let text = reply;
+  // A voice answer goes first; it never fails the reply.
+  if (voice && voice.buffer) {
+    try { ids.push(...await wa.sendVoice(msg.from, voice, msg.phoneId)); } catch (e) {
+      console.error('[golda] voice note delivery failed:', e.message);
+      text = `${text}\n\n${VOICE_UNAVAILABLE}`;
+    }
+  }
+  if (list) ids.push(...await wa.sendList(msg.from, text, list.button, list.rows, msg.phoneId));
+  else if (links.length) {
+    // The question rides with the buttons below the links, so the link comes before "did it go out?".
+    const split = buttons.length ? wa.splitForButtons(text) : { head: text, tail: '' };
+    ids.push(...await wa.sendText(msg.from, split.head, msg.phoneId));
+    for (const l of links) ids.push(...(await sendLink(msg, l)));
+    if (buttons.length) ids.push(...await wa.sendButtons(msg.from, split.tail, buttons, msg.phoneId));
+  }
+  else if (buttons.length) ids.push(...await wa.sendButtons(msg.from, text, buttons, msg.phoneId));
+  else ids.push(...await wa.sendText(msg.from, text, msg.phoneId));
   // Documents go right after the text. The text is what counts: a document
   // WhatsApp refuses is logged, and the text is not sent a second time for it.
   for (const f of files) {
@@ -253,6 +282,7 @@ async function processMessage(messageId) {
     const thread = await loadThread(sessRef, session, current);
     const topic = current === MAIN_TOPIC ? null : { name: current, ...topics[current], history: thread.history };
     let pendingDeletes = Array.isArray(session.pendingDeletes) ? session.pendingDeletes : (session.pendingDelete ? [session.pendingDelete] : []), changed = false, userText = text || '', agentUsage = null, outFiles = [];
+    let pendingOutreach, links = [], voice = null;
     if (direct) reply = direct;
     else {
       // A long task gets one "still on it" line, so the writer knows it was received.
@@ -267,6 +297,9 @@ async function processMessage(messageId) {
         ({ reply, pendingDeletes, changed, userText } = out);
         agentUsage = out.usage;
         outFiles = Array.isArray(out.files) ? out.files : [];
+        pendingOutreach = out.pendingOutreach;
+        links = Array.isArray(out.links) ? out.links : [];
+        voice = out.voice || null;
       } finally { if (ack) clearTimeout(ack); }
     }
     const parsed = parseButtons(reply);
@@ -287,16 +320,18 @@ async function processMessage(messageId) {
       email: identity.email || '', name: identity.name, phone: identity.phone || '',
       usage: { ...usage, inputTokens: usage.inputTokens + (agentUsage?.inputTokens || 0), outputTokens: usage.outputTokens + (agentUsage?.outputTokens || 0) },
       history: admin.firestore.FieldValue.delete(),
+      // Drafts waiting for "did it go out?" (lib/golda-outreach.js); kept as they were when the agent did not run.
+      ...(Array.isArray(pendingOutreach) ? { pendingOutreach } : {}),
     };
     for (const k of Object.keys(topics)) delete topics[k].history;
     if (Object.keys(topics).length) patch.topics = topics;
     if (!direct) await thread.ref.set({ topic: current, history: [...thread.history, ...turn].slice(-HISTORY_KEEP), updatedAt: now }, { merge: true });
     await sessRef.set(patch, { merge: true });
 
-    const done = { reply, buttons, menu: Boolean(list), changed, topic: current, files: fileRefs, doneAt: admin.firestore.FieldValue.serverTimestamp(), durationMs: Date.now() - t0,
+    const done = { reply, buttons, menu: Boolean(list), changed, topic: current, files: fileRefs, links, voiced: Boolean(voice), doneAt: admin.firestore.FieldValue.serverTimestamp(), durationMs: Date.now() - t0,
       usage: agentUsage ? { ...agentUsage, model: MODEL } : null };
     try {
-      const ids = await deliver(msg, reply, { buttons: parsed.buttons, list, files: outFiles });
+      const ids = await deliver(msg, reply, { buttons: parsed.buttons, list, files: outFiles, links, voice });
       await inboxRef.update({ ...done, state: 'done', sentIds: (ids || []).filter(Boolean) });
     } catch (e) {
       console.error('[golda] reply delivery failed:', e.message);
@@ -319,7 +354,7 @@ async function processMessage(messageId) {
 async function resendReply(db, inboxRef, msg) {
   try {
     const files = msg.channel === 'app' ? [] : (await Promise.all((Array.isArray(msg.files) ? msg.files : []).map((r) => loadOutFile(db, r).catch(() => null)))).filter(Boolean);
-    const ids = await deliver(msg, msg.reply || '', { ...(msg.menu ? { list: { button: 'מה לעשות?', rows: MENU_ROWS } } : { buttons: Array.isArray(msg.buttons) ? msg.buttons : [] }), files });
+    const ids = await deliver(msg, msg.reply || '', { ...(msg.menu ? { list: { button: 'מה לעשות?', rows: MENU_ROWS } } : { buttons: Array.isArray(msg.buttons) ? msg.buttons : [] }), files, links: Array.isArray(msg.links) ? msg.links : [] });
     await inboxRef.update({ state: 'done', error: admin.firestore.FieldValue.delete(), resentAt: admin.firestore.FieldValue.serverTimestamp(), sentIds: (ids || []).filter(Boolean) });
     return { status: 200, body: 'resent' };
   } catch (e) {

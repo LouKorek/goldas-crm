@@ -1202,6 +1202,20 @@ const HE = {
   'Remove your saved signature? Agreements you make from now on carry your name without a drawn signature.': 'להסיר את החתימה השמורה? הסכמים שתיצור מעכשיו יישאו את השם שלך בלי חתימה מצוירת.',
   'Remove signature': 'הסרת החתימה',
   'An admin makes an agreement on the player\'s page or asks Golda ("הסכם ייצוג ל…"). The player, or for a minor the parent or guardian, signs on the phone through a private link; the signed PDF goes into the player\'s documents and the representation dates are updated.': 'מנהל מערכת יוצר הסכם בעמוד השחקן או מבקש מגולדה ("הסכם ייצוג ל…"). השחקן, או לקטין ההורה או האפוטרופוס, חותם בטלפון דרך לינק פרטי; ה-PDF החתום נשמר במסמכי השחקן ותאריכי הייצוג מתעדכנים.',
+
+  // ── Golda outreach drafts: touches on a contact, the "open in WhatsApp" link ──
+  'Open in WhatsApp': 'פתיחה בוואטסאפ',
+  'Meeting': 'פגישה',
+  'Touches': 'פניות',
+  'Last touch': 'פנייה אחרונה',
+  'Phone call': 'שיחה',
+  'Add a touch': 'הוספת פנייה',
+  'About a player (optional)': 'על שחקן (לא חובה)',
+  'What it was about, in one line': 'על מה זה היה, בשורה אחת',
+  'Write in one line what it was about.': 'כותבים בשורה אחת על מה זה היה.',
+  'Touch added.': 'הפנייה נוספה.',
+  'a player': 'שחקן',
+  'No touches yet. When Golda drafts a message and you confirm it went out, it is recorded here.': 'אין עדיין פניות. כשגולדה מנסחת הודעה ומאשרים לה שהיא נשלחה, היא נרשמת כאן.',
 };
 
 export default HE;

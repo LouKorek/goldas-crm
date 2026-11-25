@@ -5,18 +5,23 @@
 // golda_memory/{id}: text, about, shared (bool), owner (email, or the phone
 // when the sender has no email), ownerName, createdAt, updatedAt (ms).
 // Shared memories are seen by everyone who talks to Golda; personal ones only
-// by their owner.
+// by their owner. A row with `kind` (the writer's style examples and rules,
+// kind 'style') is kept here too but is not part of "What you remember".
 const MEMORY_MAX_ITEMS = 150;
 const MEMORY_MAX_CHARS = 12000;
 const TEXT_MAX = 600;
 
 const ownerKey = (identity = {}) => identity.email || identity.phone || '';
 
-/** The memories this person may see, newest first. */
+/**
+ * The memories this person may see, newest first. Entries with a kind are
+ * Golda's working notes, not memories: kind 'style' is the writer's way of
+ * writing (lib/golda-outreach.js reads it for drafts only).
+ */
 function visibleMemories(rows, identity) {
   const me = ownerKey(identity);
   return rows
-    .filter((m) => m && m.text && (m.shared || (me && m.owner === me)))
+    .filter((m) => m && m.text && !m.kind && (m.shared || (me && m.owner === me)))
     .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 }
 

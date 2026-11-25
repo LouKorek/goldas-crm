@@ -30,6 +30,8 @@ const { monthlyReportTools, MONTHLY_REPORT_TOOL_DEF } = require('./golda-monthly
 const { financeTools, financeSection, PAYMENTS_TOOL_DEFS } = require('./golda-finance.js');
 const { agreementTools, AGREEMENT_TOOL_DEFS } = require('./golda-agreement.js');
 const { chooseEffort } = require('./golda-effort.js');
+const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
+const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -279,7 +281,8 @@ How you work:
 - How a player did in a match ("אתמול X שיחק 70 דקות, גול אחד, 7", "Y לא שיחק", "ראיתי את Z, היה חלש, 5"): find the player, then match_report with his playerId and the match date (yesterday/today resolved against today's date in Israel) or the matchId; minutes 0 when he did not play; a rating only when one was said; the note in the writer's words, one short sentence. One call per player. Your morning question about yesterday's matches (your message that opens with "איך היה אתמול" ⚽) is answered this way, in one or several lines; "דלג" = record nothing. Say what you saved and his season so far in one line. "בלי שאלות על משחקים" / "תחזירי את השאלות על משחקים" → match_questions off / on.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
 ${financeSection(identity.role)}
-- "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
+${outreachSection(channel)}
+${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
 - A live player page (admins only) is a different thing from the PDF and never replaces it. Make one ONLY when the writer asks in so many words for a live page or a link to the player ("דף חי", "לינק לשחקן", "לינק חי", "live page"): find the player, then live_page_create with the club when one was named (one link per club; no club → a general link), days only when a period was named (14 otherwise, 90 at most) and lang "he" only when asked for Hebrew. Give the writer the link on its own line with for whom and until when it works. Never offer a live page instead of the PDF, never make one for "דף שחקן" / "CV", and never send the link to anyone but the writer: he sends it on himself. You tell Lou the first time a link is opened (your message that opens with 👀). "מי פתח את הדף של…" / "אילו לינקים פתוחים" → live_page_list. "תבטלי את הלינק" → live_page_list to find it, then live_page_revoke (it stops at once; say so).
@@ -296,7 +299,7 @@ ${financeSection(identity.role)}
 
 Buttons: on WhatsApp the writer can tap instead of typing. When your answer ends with a short choice (yes/no before a deletion or a batch of changes, picking between two or three options, the natural next step), end the message with one last line [[כפתורים: א | ב | ג]]: one to three labels, each at most 20 characters, in the writer's words (e.g. [[כפתורים: כן, למחוק | לא]]). The line is turned into real buttons and is never shown as text; a tap comes back to you as a message with the label's text. Use it only for real choices, at most once per message, never for open questions. "תפריט" opens a fixed menu without you.
 - Never claim you did something a tool didn't confirm. If a tool returns an error, explain it simply and say what you need.
-- You cannot change users/permissions or send messages to other people; say so if asked. The website gold-as.com: an admin can ask you to change it (see above); for anyone else, say only Lou can. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
+- You cannot change users/permissions or send messages to other people (a message to someone outside the agency is a draft the writer sends himself, see above); say so if asked. The website gold-as.com: an admin can ask you to change it (see above); for anyone else, say only Lou can. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
 CRM data (field names are exact; values in lists must match exactly; dates are YYYY-MM-DD):
 - players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), goldaAccess (bool) + goldaPhone (digits): admins only, lets this represented player ask you about himself on WhatsApp (read-only, his own data; you never write to him first), contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles, photoFiles (the player's photo) (use attach_file / remove_file, never update these directly).
@@ -380,10 +383,10 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list', 'outreach_prepare', 'outreach_link', 'writing_style', 'voice_reply']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit',
   // The public website is the agency's face: an admin only, like the settings.
   website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings',
@@ -400,8 +403,11 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // The monthly report is written on the player; its reminder is checked for admin inside the tool.
   monthly_report: 'edit',
   // Money is for admins only, reading included.
-  payments: 'money', payment_set: 'money' };
-const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
+  payments: 'money', payment_set: 'money',
+  // Recording on a contact that a drafted message went out is an edit of the contact.
+  outreach_log: 'edit' };
+// The app has no voice notes, so voice_reply is offered on WhatsApp only.
+const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
   { type: 'web_search_20260209', name: 'web_search', max_uses: 8 },
@@ -434,7 +440,7 @@ function armedFor(pending, items, turn) {
   return ready.filter((p) => items.some((it) => sameTarget(p, it)));
 }
 
-function createTools({ db, admin, identity, media, session, assistantName, channel = 'whatsapp' }) {
+function createTools({ db, admin, identity, media, session, assistantName, channel = 'whatsapp', turnText = '' }) {
   const FieldValue = admin.firestore.FieldValue;
   const sender = identity.name || 'לו';
   const role = identity.role || 'viewer';
@@ -459,7 +465,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
   const clean = (data) => { const o = { ...(data || {}) }; for (const k of PROTECTED) delete o[k]; if (!can(role, 'money')) delete o.payments; return o; };
   // Money is for admins only: a deal read by anyone else comes without its payments.
   const noMoney = (col, d) => { if (physical(col) === 'deals' && !can(role, 'money')) delete d.payments; return d; };
-  const state = { pendingDeletes: normalizePending(session), changed: false, outFiles: [] };
+  const state = { pendingDeletes: normalizePending(session), changed: false, outFiles: [], outLinks: [], outVoice: null };
 
   async function search({ query, collection }) {
     const cols = collection ? [collection] : Object.keys(ALL);
@@ -571,6 +577,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     let d = clean(data);
     for (const f of FILE_FIELDS) delete d[f];
     delete d.monthlyReports;   // written only through monthly_report
+    delete d.touches;          // written only through outreach_log (and the Contacts screen)
     guardGolda(collection, d);
     if (collection === 'tasks') d = { priority: 'Normal', done: false, owner: who.email, ...d };
     if (collection === 'meetings') d = { time: '', endTime: '', allDay: !d.time, location: '', notes: '', linkedPlayers: [], source: 'manual', owner: who.email, ...d };
@@ -600,6 +607,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     need('edit');
     // The monthly report's text and its approval are written only through monthly_report.
     if (!monthlyReport && Object.keys(data || {}).some((k) => k === 'monthlyReports' || k.startsWith('monthlyReports.'))) throw new Error('the monthly report is changed only with monthly_report');
+    if (Object.keys(data || {}).some((k) => k === 'touches' || k.startsWith('touches.'))) throw new Error('a contact\'s touches are recorded only with outreach_log, after the writer confirms');
     const ref = colOk(collection).doc(id);
     const s = await ref.get();
     if (!s.exists || !belongs(collection, s.data())) throw new Error('not found');
@@ -797,7 +805,9 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...playerPageTools({ db, admin, identity, role, channel }),
     ...monthlyReportTools({ db, admin, identity, role, channel, session, state, update }),
     ...financeTools({ db, identity, role, update }),
-    ...agreementTools({ db, identity, role, channel, session }) };
+    ...agreementTools({ db, identity, role, channel, session }),
+    ...outreachTools({ db, admin, identity, role, channel, session, state, can }),
+    ...voiceTools({ identity, channel, turnText, state, db }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -825,7 +835,8 @@ function kickCalendarSync() {
 async function runAgent({ db, admin, identity, text, media, session, assistantName, client, topic = null, topics = [], channel = 'whatsapp', memories }) {
   const anthropic = client || new Anthropic();
   const sender = identity.name || 'לו';
-  const tools = createTools({ db, admin, identity, media, session, assistantName, channel });
+  // The words of this message, typed or transcribed: what voice_reply checks for a request.
+  const tools = createTools({ db, admin, identity, media, session, assistantName, channel, turnText: text || '' });
   const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, steps: 0 };
   const history = (topic ? topic.history || [] : session.history || []).slice(-HISTORY_TURNS);
   // Long-term memory is read once per message; a failed read never blocks the reply.
@@ -873,7 +884,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
       output_config: { effort },
       cache_control: { type: 'ephemeral' },
       system,
-      tools: [...toolsFor(identity.role), ...SERVER_TOOLS],
+      tools: [...toolsFor(identity.role, channel), ...SERVER_TOOLS],
       messages,
     }).finalMessage();
     usage.steps++;
@@ -902,7 +913,8 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     messages.push({ role: 'user', content: results });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
-  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles };
+  return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles,
+    pendingOutreach: tools.state.pendingOutreach, links: tools.state.outLinks, voice: tools.state.outVoice };
 }
 
 module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, chooseEffort, systemPrompt, _internal: { withLeague, freeAgentRules, validate, cleanContractTerms, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };

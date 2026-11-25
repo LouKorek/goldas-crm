@@ -86,5 +86,13 @@ export const FIXTURES = {
     { id: 'x20', date: day(-1), time: '20:00', homeTeam: CLUBS[0], awayTeam: CLUBS[1], source: 'ifa', linkedPlayers: ['p1', 'p3'], watchedBy: 'Lou' },
     { id: 'x21', date: day(4), time: '18:00', homeTeam: CLUBS[2], awayTeam: CLUBS[0], source: 'ifa', linkedPlayers: ['p1'] },
   ],
-  contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567' })),
+  contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567',
+    // Touches (Golda's outreach drafts that went out, and calls and meetings added by hand): k0 has three, k4 one, the rest none.
+    ...(i === 0 ? { touches: [
+      { id: 't1', at: '2026-10-02T09:30:00.000Z', channel: 'call', by: 'owner@example.com', playerId: '', dealId: '', note: 'Introduction call about the summer window' },
+      { id: 't2', at: '2026-11-24T16:05:00.000Z', channel: 'whatsapp', by: 'owner@example.com', playerId: 'p1', dealId: '', note: 'הצעת שחקן מיוצג 1 לעמדת הבלם' },
+      { id: 't3', at: '2026-11-10T11:00:00.000Z', channel: 'meeting', by: 'owner@example.com', playerId: 'r2', dealId: '', note: 'פגישה במגרש האימונים, ראה את גאבין' },
+    ] } : {}),
+    ...(i === 4 ? { leagueCountry: 'Spain', touches: [{ id: 't4', at: '2026-11-18T08:00:00.000Z', channel: 'whatsapp', by: 'owner@example.com', playerId: 'r2', dealId: '', note: 'Offered Gavin Karam as a central midfielder' }] } : {}),
+  })),
 };

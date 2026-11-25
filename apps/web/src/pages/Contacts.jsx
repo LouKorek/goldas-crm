@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
 import { CONTACT_ROLES, COUNTRIES, formatPhone } from 'lib/constants';
 import { Modal, Field, ChipGroup, SearchInput, PageHeader, Empty, useConfirm,
-         PhoneActions, RowActions, ExportMenu, toast } from 'components/ui/UI';
+         PhoneActions, RowActions, ActionBtn, ExportMenu, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { ClubLogoOrAvatar, U19 } from './Requirements';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
+import ContactTouches, { lastTouchLine } from 'components/ContactTouches';
 
 const EMPTY = { clubName: '', clubIsYouth: false, leagueMode: 'select', leagueCountry: '', leagueTier: '', leagueManual: '', league: '', contactName: '', contactRole: '', contactPhone: '' };
 
@@ -15,6 +16,7 @@ export default function Contacts() {
   const [search, setSearch] = useState('');
   const [youthScope, setYouthScope] = useState('');  // '' | 'Youth' | 'Senior'
   const [modal, setModal]   = useState(null);   // 'add' | { edit }
+  const [touchesOf, setTouchesOf] = useState(null);   // the id of the contact whose touches are open
   const [form, setForm]     = useState(EMPTY);
   const { confirm, dialog } = useConfirm();
   const { canEdit } = useRole();
@@ -62,6 +64,22 @@ export default function Contacts() {
       toast.error(t("Could not delete. Please try again."));
     }
   };
+
+  // The touches window follows the live record, so a touch added there shows at once.
+  const touchContact = touchesOf ? items.find((c) => c.id === touchesOf) : null;
+  // The last touch under the contact, opening the whole list (read-only for a viewer).
+  const TouchChip = ({ c }) => {
+    const line = lastTouchLine(c);
+    if (!line) return null;
+    return (
+      <button type="button" onClick={() => setTouchesOf(c.id)} title={t('Touches')}
+        style={{ display: 'block', background: 'none', border: 0, padding: 0, marginTop: 3, fontSize: 11, color: 'var(--text-2)',
+          cursor: 'pointer', textDecoration: 'underline dotted', textUnderlineOffset: 3, textAlign: 'start' }}>
+        {`${t('Last touch')}: ${line}`}
+      </button>
+    );
+  };
+  const touchAction = (c) => <ActionBtn icon="clock" tone="blue" title={t('Touches')} onClick={() => setTouchesOf(c.id)} />;
 
   const term = search.trim().toLowerCase();
   const filtered = items.filter(c => {
@@ -128,7 +146,7 @@ export default function Contacts() {
                   </div>
                   {c.league && <div className="m-sub">{c.league}</div>}
                 </div>
-                {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
+                {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)}>{touchAction(c)}</RowActions>}
               </div>
               {(c.contactName || c.contactRole || c.contactPhone) && (
                 <div className="m-meta" style={{ marginTop: 8 }}>
@@ -138,6 +156,7 @@ export default function Contacts() {
                   {c.contactPhone && <PhoneActions phone={c.contactPhone} />}
                 </div>
               )}
+              <TouchChip c={c} />
             </div>
           ))}
         </div>
@@ -156,7 +175,7 @@ export default function Contacts() {
                 {filtered.map(c => (
                   <tr key={c.id}>
                     <td style={{ paddingInlineEnd: 20 }}>
-                      {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)} />}
+                      {canEdit && <RowActions onDelete={() => remove(c)} onEdit={() => openEdit(c)} onDuplicate={() => openDup(c)}>{touchAction(c)}</RowActions>}
                     </td>
                     <td style={{ textAlign: 'start', paddingInlineStart: 24 }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-start' }}>
@@ -175,8 +194,9 @@ export default function Contacts() {
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500 }}>{c.contactName || '—'}</div>
                           {c.contactRole && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>{c.contactRole}</div>}
+                          <TouchChip c={c} />
                         </div>
-                      ) : <span style={{ color: 'var(--text-3)' }}>—</span>}
+                      ) : <><span style={{ color: 'var(--text-3)' }}>—</span><div><TouchChip c={c} /></div></>}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {c.contactPhone ? (
@@ -242,6 +262,12 @@ export default function Contacts() {
           <Field label={t("Phone")} hint={t("With country code, e.g. +972...")}>
             <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
+        </Modal>
+      )}
+
+      {touchContact && (
+        <Modal title={`${t('Touches')}: ${touchContact.contactName || touchContact.clubName || ''}`} onClose={() => setTouchesOf(null)} viewOnly>
+          <ContactTouches contact={touchContact} canEdit={canEdit} />
         </Modal>
       )}
 
