@@ -443,6 +443,34 @@ admin-only (it is the negotiation, like the deal's money); viewers see none. Gol
 is fixed on the record (move to another deal, take off the deal, "not agency mail"); the
 fix is kept in the message's `override` and survives every sync.
 
+Finding the addresses (`netlify/functions/lib/mail-addresses.js`): mail attaches only where
+a contact has `contactEmail` or a club has `emailDomain`, so before each sync the same job
+looks for the missing ones. It reads the mail Lou SENT in the last 365 days, metadata only
+(the To/Cc/Bcc and Date headers; never a body, a subject or a snippet), and compares the
+recipients' names with the names of the contacts that have no address. The list of
+recipients is never stored; only what fits a CRM record is.
+
+- Saved by itself: a contact's address when the recipient's name is the contact's full
+  name (two words or more, any order, Hebrew or English), one contact has that name, one
+  address carries it, and the address is not the mailbox's own, another contact's, a
+  no-reply or a shared office box. A club's domain when it is the host of the club's own
+  `website` (not a social or listing site, not a free mail domain, not shared by two clubs)
+  and at least one sent mail went to it. The record gets `contactEmailSource: 'mailbox'` /
+  `emailDomainSource: 'website'`, `…FilledAt`, and a line in `audit` (via `mail-addresses`).
+- Anything less sure waits in `mail_suggestions` (`{ kind, targetId, value, reason, state }`)
+  and shows in System › Email, "Addresses found", where an admin approves or dismisses it,
+  approves all that stand alone, or removes a value the server saved. A dismissed
+  suggestion and a removed value are remembered there (`dismissed`, `removed`) and never
+  come back for that record.
+- Pace: a new pass starts at most once a day; a pass reads at most 1,200 Gmail calls per
+  run and goes on from its cursor in the next runs (every 15 min) until the year is read,
+  then later passes read only the sent mail since the last one. A new contact or club
+  without an address starts one more full-year pass. Timestamps and the cursor are in the
+  private `mail_state/sync.fill`; `app_meta/gmail.found` holds two counts only. It does
+  not run while the mailbox is not connected or the Gmail API is off, and a failure in it
+  never stops the sync. Disconnect deletes the undecided suggestions; values already on
+  records, and the dismissed/removed memory, stay.
+
 ## System status from outside (`/.netlify/functions/system-status`)
 
 One small page that says how the system is doing, readable without signing in, so a check after a change needs nobody's computer:
@@ -450,7 +478,7 @@ One small page that says how the system is doing, readable without signing in, s
 `https://goldas-crm.netlify.app/.netlify/functions/system-status`
 
 - `jobs`: each scheduled job's last run (ok or error, when, how long, whether one is running now, when it last failed).
-- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read.
+- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read, and two counts from the address search: `addressesFilled` (values the server saved by itself) and `suggestionsOpen` (waiting for a decision in System › Email).
 - `backup`: the latest backup and the latest good one (read back, copied outside the database, how many documents).
 - `notifications`: how many devices take notifications.
 
