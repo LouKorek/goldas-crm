@@ -30,6 +30,7 @@ export const JOBS = [
   { name: 'backup-restore', he: 'שחזור מגיבוי', when: 'ידני, ממסך הגיבויים', run: null },
   { name: 'meta-onboard', he: 'מעבר גולדה למספר שלה (055)', when: 'כל שעה ב-:45 עד שמסתיים', run: 'meta-onboard' },
   { name: 'golda-queue', he: 'תור הודעות גולדה (ניסיונות חוזרים)', when: 'כל 10 דקות', run: null },
+  { name: 'golda-meeting-brief', he: 'הכנה של גולדה לפני פגישה', when: 'כשעה לפני כל פגישה ביומן', run: null },
   { name: 'migrate', he: 'מיגרציות נתונים', when: 'אחרי כל פריסה', run: null },
 ];
 

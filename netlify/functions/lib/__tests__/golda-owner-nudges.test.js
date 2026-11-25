@@ -23,6 +23,7 @@ const MOVED = { ...GAVIN, currentClub: 'Maccabi Haifa' };
 function seed({ users = { lou: OWNER, dani: MANAGER }, briefed = TODAY, meta = {}, player = GAVIN } = {}) {
   return fakeDb({
     app_users: users, players: { p1: player },
+    backups: { b1: { status: 'ok', verified: true, startedAt: at('03:30').getTime() } },   // a good backup from last night: no operations alert about it
     app_meta: { whatsapp: approved, goldaSent: { briefings: { 'lou.korek@gmail.com': briefed, 'dani@x.com': briefed }, eventsAt: at('13:30').getTime() }, ...meta },
   });
 }
