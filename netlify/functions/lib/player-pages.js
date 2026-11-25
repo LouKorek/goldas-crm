@@ -22,7 +22,6 @@
 // What a link shows is built field by field in publicPlayer(): nothing that
 // is not named there leaves the server, whatever the player record holds.
 // Times are epoch milliseconds. This collection is touched by functions only.
-const crypto = require('crypto');
 const { israelDate, playerName, natTeamStatusOf, playerMatchRows, summarizeStats, currentSeason } = require('@goldas/domain');
 const { seal, unseal } = require('./seal.js');
 const { siteUrl } = require('./site.js');
@@ -37,11 +36,9 @@ const STATS_TTL_MS = 6 * 3600 * 1000;    // the season's totals are recomputed a
 const PHOTO_MAX_CHARS = 4 * 1024 * 1024; // a profile photo as a data: URL (about 3 MB of image)
 const PHOTO_MAX_PARTS = 8;
 const DAY = 86400000;
-const TOKEN_RE = /^[A-Za-z0-9_-]{32}$/;
+// The token, its hash, the device class and the time line are shared with the agreement links (lib/public-link.js).
+const { TOKEN_RE, newToken, validToken, idOf, deviceOf, whenHe } = require('./public-link.js');
 
-const newToken = () => crypto.randomBytes(24).toString('base64url');
-const validToken = (t) => typeof t === 'string' && TOKEN_RE.test(t);
-const idOf = (token) => crypto.createHash('sha256').update(String(token)).digest('hex');
 const pageUrl = (token, base = siteUrl()) => `${base}/p/${token}`;
 
 /** Text as it may be shown: one line, trimmed, capped. */
@@ -55,9 +52,6 @@ function daysFor(asked) {
 }
 
 const stateOf = (link, now = Date.now()) => (!link ? 'missing' : link.revokedAt ? 'revoked' : !(Number(link.expiresAt) > now) ? 'expired' : 'active');
-
-/** 'phone' or 'desktop', and nothing else: the user agent itself is never stored. */
-const deviceOf = (userAgent) => (/Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(String(userAgent || '')) ? 'phone' : 'desktop');
 
 // ── Links ────────────────────────────────────────────────────────────
 
@@ -313,14 +307,6 @@ async function statsFor(db, link, { now = Date.now() } = {}) {
 }
 
 // ── "A club opened the page" ─────────────────────────────────────────
-
-const two = (n) => String(n).padStart(2, '0');
-/** 25/11 14:32 in Israel time. */
-function whenHe(ms) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
-    .formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
-  return `${two(parts.day)}/${two(parts.month)} ${two(parts.hour === '24' ? '00' : parts.hour)}:${two(parts.minute)}`;
-}
 
 /** The one line the owner gets the first time a link is opened. */
 function noticeText(link) {

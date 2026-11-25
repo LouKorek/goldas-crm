@@ -24,30 +24,14 @@
 // query of the player's matches at most every six hours per link); a photo at
 // most eleven reads; the CV two reads.
 const { getDb } = require('./lib/firestore.js');
-const { header, resolveUser, internalHeaders } = require('./lib/auth.js');
+const { header, internalHeaders } = require('./lib/auth.js');
 const { originOf } = require('./lib/site.js');
 const pages = require('./lib/player-pages.js');
-
-const HEADERS = {
-  'Cache-Control': 'no-store',
-  'X-Robots-Tag': 'noindex, nofollow',
-  'Referrer-Policy': 'no-referrer',
-  'X-Content-Type-Options': 'nosniff',
-};
-const json = (statusCode, body) => ({ statusCode, headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify(body) });
-const NOT_AVAILABLE = () => json(404, { error: 'not_available' });
+// The headers, the one dead-link answer, the preview check and the PDF download are shared with /sign/ (lib/public-link.js).
+const { HEADERS, json, notAvailable: NOT_AVAILABLE, isPreview, pdfResponse } = require('./lib/public-link.js');
 
 // The agency's contact, the same line the CV closes with.
 const CONTACT = { site: 'gold-as.com', url: 'https://gold-as.com', agent: { en: 'Lou Korek', he: 'לו קורק' }, title: { en: 'FIFA Licensed Agent', he: 'סוכן מורשה FIFA' } };
-
-/** A signed-in CRM user looking at a link is a preview, never an opening. */
-async function isPreview(event) {
-  if (!header(event, 'authorization')) return false;
-  try {
-    const user = await resolveUser(event);
-    return !!(user && user.role);
-  } catch { return false; }
-}
 
 /** Wakes the function that tells the owner; never waits long and never fails the page. */
 async function kickNotice(event) {
@@ -80,12 +64,7 @@ async function handle(event, deps = {}) {
     const pub = pages.publicPlayer(player, new Date(now));
     const makePdf = deps.cvPdf || require('./lib/golda-pdf.js').playerCvPdf;
     const file = await makePdf(pages.cvPlayer(pub, { women: player.gender === 'Women' }), { lang: link.lang });
-    const ascii = (String(file.filename || '').replace(/[^\x20-\x7e]/g, '').replace(/["\\]/g, '').trim().replace(/^-\s*/, '')) || 'Gold A&S.pdf';
-    return {
-      statusCode: 200, isBase64Encoded: true, body: Buffer.from(file.buffer).toString('base64'),
-      headers: { ...HEADERS, 'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${/\.pdf$/i.test(ascii) && ascii.length > 4 ? ascii : 'player.pdf'}"; filename*=UTF-8''${encodeURIComponent(file.filename || 'player.pdf')}` },
-    };
+    return pdfResponse(file, 'player.pdf');
   }
 
   if (event.httpMethod !== 'POST') return json(405, { error: 'method_not_allowed' });

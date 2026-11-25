@@ -11,6 +11,10 @@
 // And it is the safety net for live player pages: a first opening that could
 // not wake its own notice (player-page.js) is picked up here, so Lou hears
 // about it within ten minutes at the latest. One small query.
+//
+// And for signed representation agreements: a signed PDF that could not be
+// filed at once, or an owner's notice still waiting, wakes
+// agreement-file-background (lib/agreements.js hasPending, three small queries).
 const { schedule } = require('@netlify/functions');
 const { getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
@@ -47,11 +51,26 @@ async function kickPageNotices(db, base) {
   }
 }
 
+/** Wakes the agreement worker when a signed agreement still waits to be filed or told. */
+async function kickAgreements(db, base) {
+  try {
+    if (!(await require('./lib/agreements.js').hasPending(db))) return 0;
+    await fetch(`${base}/.netlify/functions/agreement-file-background`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(await internalHeaders('agreement-filing')) }, body: '{}',
+    });
+    return 1;
+  } catch (e) {
+    console.error('[golda-queue] agreement check failed:', e.message);
+    return 0;
+  }
+}
+
 exports.handler = schedule('*/10 * * * *', async () => {
   const db = getDb();
   const base = process.env.URL || 'https://goldas-crm.netlify.app';
   const briefs = await kickMeetingBriefs(db, base);
   const pageNotices = await kickPageNotices(db, base);
+  const agreementWork = await kickAgreements(db, base);
   const since = Date.now() - 2 * 86400000;
   const snap = await db.collection('wa_inbox').where('timestamp', '>', Math.floor(since / 1000)).get();
   const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -65,5 +84,5 @@ exports.handler = schedule('*/10 * * * *', async () => {
       if (res.ok || res.status === 202) kicked++;
     } catch (e) { console.error('[golda-queue] kick failed:', m.id, e.message); }
   }
-  return { statusCode: 200, body: `${rows.length} recent, ${retry.length} to retry, ${kicked} kicked, ${briefs} meeting brief(s) due, ${pageNotices} live page notice(s) waiting` };
+  return { statusCode: 200, body: `${rows.length} recent, ${retry.length} to retry, ${kicked} kicked, ${briefs} meeting brief(s) due, ${pageNotices} live page notice(s) waiting, agreements ${agreementWork ? 'kicked' : 'idle'}` };
 });

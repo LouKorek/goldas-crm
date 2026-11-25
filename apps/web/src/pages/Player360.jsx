@@ -15,6 +15,7 @@ import DocViewer from 'components/DocViewer';
 import PlayerChecklist from 'components/player/PlayerChecklist';
 import PlayerSeason from 'components/player/PlayerSeason';
 import PlayerLinks from 'components/player/PlayerLinks';
+import PlayerAgreements from 'components/player/PlayerAgreements';
 import { PlayerCard, StatTile } from 'components/player/PlayerCard';
 import MonthlyReportDialog from 'components/player/MonthlyReportDialog';
 
@@ -283,6 +284,7 @@ export default function Player360() {
         </Card>
 
         <PlayerLinks playerId={p.id} />
+        <PlayerAgreements player={p} />
 
         <Card title={t('Matches')} action={<Link to="/matches" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>
           {upcoming.length + recent.length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No matches scheduled.')}</p> : (

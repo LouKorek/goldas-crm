@@ -33,6 +33,8 @@ const LAST_MONTH = (() => { const d = new Date(); return new Date(d.getFullYear(
 Object.assign(players.find((p) => p.id === 'p1'), { monthlyReports: { [LAST_MONTH]: {
   did: ['שיחה עם המאמן על הדקות שלו ועל ההתקדמות באימונים', 'פגישה עם ההורים לסיכום תחילת העונה', 'שלחנו קטעי וידאו מעודכנים לשני סקאוטים בחו"ל'],
   next: 'בחודש הבא נמשיך לעקוב אחרי הדקות שלו בליגה, ונקבע איתכם שיחה קצרה באמצע החודש.', status: 'draft', by: 'owner@example.com', at: '2026-11-02T09:00:00Z' } } });
+// p1's signed representation agreement (dev/mock-agreements.js "s1"), filed in his documents as the server files it.
+players.find((p) => p.id === 'p1').reprFiles = [{ fileId: 'agr_s1', name: 'הסכם ייצוג - שחקן מיוצג 1 - 2025-06-01.pdf', originalName: 'agreement.pdf', type: 'application/pdf', size: 48211, uploadedAt: '2025-06-01T10:00:00Z', expiresAt: '2026-06-30', agreementId: 's1' }];
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 // Payments on deals (Finance screen): paid, one partial, one late, one due
 // this week, two currencies, and an unpaid one on a Not Relevant deal.

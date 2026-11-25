@@ -343,3 +343,45 @@ See it without a backend: `cd apps/web && npx vite --config vite.harness.config.
 `/dev/app.html?path=/p/demo` (also `demo-he`, `demo-bare`, `demo-vimeo`, `demo-preview`,
 `gone`, `broken`) and `/dev/app.html?path=/players/p1` for the card (`&role=viewer`,
 `&theme=dark`).
+
+## Representation agreements (`/sign/<token>`)
+
+What: an admin makes a representation agreement for a player from the agency's template, in the
+CRM (player page, card "Representation agreement" / "הסכם ייצוג") or through Golda
+("הסכם ייצוג ל<שחקן>"). The signer opens a private link, reads the text, types the name and the
+ID number, draws a signature and signs. The server builds the signed PDF, files it in the
+player's representation documents, sets the representation's start and end on the player
+through an audited change that can be undone from the Golda screen, and tells the owner once.
+Nobody in the system claims the agreement is legally binding.
+
+Template: Admin → "הסכמי ייצוג" ("Agreements"). One per language (he, en). Every save is a new
+version; old versions stay under `agreement_templates/{lang}/versions/{n}`, and each agreement
+keeps its own frozen text. Without a template, creating an agreement is refused with a sentence
+that says where to make one. The agency signature (drawn once per admin, same tab) goes on the
+agreements that admin creates; without it the PDF prints the agency's name and the creator's.
+
+Links: 14 days by default, 30 at most, one use. A new link (CRM "New link" / Golda "לינק חדש
+להסכם") kills the old one at once; "Revoke" / "חסימה" kills it for good. After 10 failed
+submissions the link locks; give a new link. A dead, expired, revoked, locked or used link gets
+the same neutral sentence on purpose; look at the card to see which. After signing, the signer
+can download the signed PDF for 30 minutes from the same browser.
+
+Filing: the signing request files at once. If the PDF or the file save fails, the agreement
+stays "signed, filing failed" ("נחתם, התיוק נכשל"); the signature is never lost.
+`golda-queue-cron` (every ten minutes) kicks `agreement-file-background`, which retries filings
+left `pending` for over two minutes, `failed`, or stuck in `working` for over five, up to 12
+tries (about two hours), and sends the owner notices. If the notice went out before filing
+finished, a second notice says when the PDF is in the file. The file id is `agr_<agreement id>`,
+so a retry never makes a second copy. After 12 tries: fix the cause (see `filingError`, a code
+only) and press "Retry now" on the card (admins), which tries once more at once, whatever the count.
+
+Where things are stored (functions only, the browser never reads them): `agreements`,
+`agreement_links` (pointers by token hash), `agreement_templates`, `agreement_signatures`,
+`agreement_drafts`. The shapes are listed at the top of `netlify/functions/lib/agreements.js`.
+The ID numbers live only in `agreements/{id}.signers` and in the PDF: never in logs, audit
+lines, Golda's memory or error reports. The PDF file itself sits in `files` like any upload.
+
+See it without a backend: `cd apps/web && npx vite --config vite.harness.config.js`, then
+`/dev/app.html?path=/sign/demo` (also `demo-minor`, `demo-en`, `signed`, `gone`),
+`/dev/app.html?path=/players/p1` for the card and `/dev/app.html?path=/system/agreements`
+(`&templates=none` for no template, `&theme=dark`).
