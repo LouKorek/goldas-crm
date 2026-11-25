@@ -13,7 +13,7 @@ const { admin, getDb, isLive } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
 const { computeAlerts, topMatches, mergeSettings, stageOfPlayer } = require('@goldas/domain');
 
-const FILE_FIELDS = ['contractFiles', 'passportFiles', 'reprFiles', 'mandateFiles', 'files'];
+const FILE_FIELDS = ['contractFiles', 'passportFiles', 'reprFiles', 'photoFiles', 'mandateFiles', 'files'];
 const ORPHAN_MIN_AGE_MS = 7 * 86400000;
 const ORPHAN_BATCH = 40;
 

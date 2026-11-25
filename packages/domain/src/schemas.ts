@@ -51,6 +51,7 @@ export const playerSchema = z.object({
   contractFiles: z.array(fileRefSchema).optional().default([]),
   passportFiles: z.array(fileRefSchema).optional().default([]),
   reprFiles: z.array(fileRefSchema).optional().default([]),
+  photoFiles: z.array(fileRefSchema).optional().default([]),
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
 export type Player = z.infer<typeof playerSchema>;

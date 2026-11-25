@@ -12,7 +12,7 @@
 // On and off: he tells her ("בלי שאלה יומית" / "תחזירי את השאלה היומית") and
 // the agent calls the daily_question tool below.
 // State: app_meta/goldaDailyQuestion { enabled, lastKey, lastAskedOn, recent }.
-const { israelDate, daysBetween, playerName } = require('@goldas/domain');
+const { israelDate, daysBetween, playerName, RECORD_GAPS } = require('@goldas/domain');
 const { chatOf, nudge } = require('./golda-nudge.js');
 const { awaitsAnswer } = require('./golda-effort.js');
 
@@ -25,21 +25,12 @@ const KEEP_RECENT = 60;
 const WAIT_FOR_ANSWER_MS = 3 * 3600000;
 
 const empty = (v) => (Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim());
-const HAS_CONTRACT = ['Under Contract', 'Loan'];
 
-// What may be asked, by importance. Links, notes, the league and document
-// numbers are never asked: a question a day is for what the work depends on.
-const GAPS = [
-  { field: 'contractEnd', weight: 100, when: (p) => HAS_CONTRACT.includes(p.contractStatus) },
-  { field: 'contractStatus', weight: 95 },
-  { field: 'reprEnd', weight: 90 },
-  { field: 'passportExpiry', weight: 70 },
-  { field: 'dob', weight: 60 },
-  { field: 'primaryPosition', weight: 50 },
-  { field: 'currentClub', weight: 45, when: (p) => p.contractStatus !== 'Free' },
-  { field: 'foot', weight: 20 },
-  { field: 'nationalities', weight: 15 },
-];
+// What may be asked, by importance: the record items of the player checklist
+// (packages/domain/src/engines/completeness.ts), one definition for the app and
+// Golda. Files, links, the website card and the calendar are in that checklist
+// too but are never asked here: a question a day is for what the work depends on.
+const GAPS = RECORD_GAPS;
 
 /**
  * The gap to ask about today, or null when nothing important is missing.

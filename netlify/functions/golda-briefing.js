@@ -42,7 +42,7 @@ const { whatsappRecipients } = require('./lib/golda-identity.js');
 const outbox = require('./lib/wa-outbox.js');
 const { ensureTemplate, needsRecheck } = require('./lib/wa-templates.js');
 const { ownerOf } = require('./lib/golda-nudge.js');
-const { followSite } = require('./lib/golda-site-follow.js');
+const { followSite, checkSiteCards } = require('./lib/golda-site-follow.js');
 const { askDaily } = require('./lib/golda-daily-question.js');
 
 const KEEP_DAYS = 400;
@@ -174,6 +174,8 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   });
   const today = israelDate(now);
   const hour = israelHour(now);
+  // Once a night: which players have a card on the website, for the player checklist. Nothing is sent.
+  await checkSiteCards(db, data.players, now, { hour, today, site: siteClient, job }).catch((e) => job.note(`site cards failed: ${e.message}`));
   const recipients = whatsappRecipients(data.users);
   if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
 
