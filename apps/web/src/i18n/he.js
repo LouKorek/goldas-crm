@@ -1044,6 +1044,7 @@ const HE = {
   'Write at least one line of what we did.': 'צריך לכתוב לפחות שורה אחת על מה שעשינו.',
   'Write the next step.': 'צריך לכתוב את הצעד הבא.',
   'Discard the changes to this month?': 'לוותר על השינויים בחודש הזה?',
+  'Discard': 'לוותר',
   'PDF (Hebrew)': 'PDF בעברית',
   'PDF (English)': 'PDF באנגלית',
 };

@@ -4,21 +4,15 @@ import { monthlyReportFacts, cleanReportText, reportOf, reportMonths, lastFullMo
   REPORT_DID_MAX_LINES, REPORT_DID_LINE_MAX, REPORT_NEXT_MAX } from '@goldas/domain';
 import { PATHS, updateDoc_ } from 'lib/db';
 import { t, getLang } from 'lib/i18n';
-import { Modal, Field, toast } from 'components/ui/UI';
+import { Modal, Field, toast, useConfirm } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
+import { StatTile } from './PlayerCard';
 
 // The monthly report for a represented player and his family: the month's
 // numbers and matches exactly as the PDF prints them (no rating, no note,
 // no watcher), the two written parts, a draft saved on the player
 // (players/{id}.monthlyReports['YYYY-MM'], the same field Golda writes) and
 // the PDF in Hebrew or English from the same builder Golda uses.
-const Tile = ({ label, value }) => (
-  <div style={{ border: '1px solid var(--border)', borderTop: '2px solid var(--gold)', padding: '8px 10px', background: 'var(--card)', minWidth: 0 }}>
-    <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>{label}</div>
-    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--text-1)', lineHeight: 1.1, marginTop: 4 }}>{value}</div>
-  </div>
-);
-
 const formOf = (entry) => ({ did: (entry?.did || []).join('\n'), next: entry?.next || '' });
 const day = (d) => `${Number(d.slice(8, 10))}/${Number(d.slice(5, 7))}`;
 // "64′", "90′ · 1 Goal · 2 assists", or "did not play": as the page prints it, in words.
@@ -40,8 +34,9 @@ export default function MonthlyReportDialog({ player, matches, email, onClose })
   const text = cleanReportText(form);
   const lines = form.did.split('\n').filter((l) => l.trim()).length;
 
-  const pick = (m) => {
-    if (dirty && !window.confirm(t('Discard the changes to this month?'))) return;
+  const { confirm, dialog } = useConfirm();
+  const pick = async (m) => {
+    if (dirty && !(await confirm(t('Discard the changes to this month?'), { title: t('Monthly report'), confirmLabel: t('Discard') }))) return;
     setMonth(m);
     setForm(formOf(reportOf(player, m)));
     setDirty(false);
@@ -96,10 +91,10 @@ export default function MonthlyReportDialog({ player, matches, email, onClose })
 
       <div className="section-label">{t('The month in numbers')}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
-        <Tile label={t('Matches')} value={t_.apps} />
-        <Tile label={t('Minutes')} value={t_.minutes} />
-        <Tile label={t('Goals')} value={t_.goals} />
-        <Tile label={t('Assists')} value={t_.assists} />
+        <StatTile compact label={t('Matches')} value={t_.apps} />
+        <StatTile compact label={t('Minutes')} value={t_.minutes} />
+        <StatTile compact label={t('Goals')} value={t_.goals} />
+        <StatTile compact label={t('Assists')} value={t_.assists} />
       </div>
       {facts.season.apps + facts.season.goals + facts.season.assists > 0 && (
         <div style={{ fontSize: 12, color: 'var(--text-3)', margin: '6px 0 0' }}>
@@ -124,16 +119,17 @@ export default function MonthlyReportDialog({ player, matches, email, onClose })
       <div style={{ marginTop: 16 }}>
         <Field label={t('What we did this month')} hint={t('One line per row, up to {n} lines.', { n: REPORT_DID_MAX_LINES })}
           error={lines > REPORT_DID_MAX_LINES ? t('Only the first {n} lines go into the report.', { n: REPORT_DID_MAX_LINES }) : null}>
-          <textarea rows={5} value={form.did} onChange={set('did')} maxLength={(REPORT_DID_LINE_MAX + 1) * (REPORT_DID_MAX_LINES + 2)} />
+          <textarea dir="auto" rows={5} value={form.did} onChange={set('did')} maxLength={(REPORT_DID_LINE_MAX + 1) * (REPORT_DID_MAX_LINES + 2)} />
         </Field>
         <Field label={t('The next step')} hint={t('One or two sentences.')}>
-          <textarea rows={3} value={form.next} onChange={set('next')} maxLength={REPORT_NEXT_MAX} />
+          <textarea dir="auto" rows={3} value={form.next} onChange={set('next')} maxLength={REPORT_NEXT_MAX} />
         </Field>
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.5 }}>
           <span style={{ flex: '1 1 220px' }}>{t('Written for the player and his family: no ratings, contract terms, deals, other clubs or players.')}</span>
           <button type="button" onClick={askGolda} style={{ background: 'none', border: 'none', color: 'var(--gold)', fontSize: 11.5, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>{t('Ask Golda to write it')}</button>
         </div>
       </div>
+      {dialog}
     </Modal>
   );
 }
