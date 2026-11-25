@@ -43,12 +43,13 @@ const usePhone = () => {
 
 const dealLink = (r) => `/market/deals?deal=${encodeURIComponent(r.dealId)}`;
 const countLine = (n) => (n === 1 ? t('1 payment') : t('{n} payments', { n }));
+const received = (r) => t('{x} of {y} received', { x: formatMoney(r.paid, r.payment.currency), y: formatMoney(r.payment.amount, r.payment.currency) });
 
 function Kpi({ label, value, sub, tone }) {
   return (
     // The card stacks bottom-up (column-reverse): label, figure, then the line under it.
     <div className="kpi-card">
-      {sub && <div className="m-sub">{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{sub}</div>}
       <div className="kpi-value" style={tone ? { color: tone } : undefined}>{value}</div>
       <div className="kpi-label">{label}</div>
     </div>
@@ -75,6 +76,9 @@ export default function Finance() {
   const cur = currencies.includes(currency) ? currency : busiest;
   const tot = totals[cur];
   const others = (key) => currencies.filter((c) => c !== cur && totals[c]?.[key]).map((c) => formatMoney(totals[c][key], c)).join(' · ');
+  // The line under a figure: how many payments make it up, then the other
+  // currencies set apart, so a count is never read next to another currency's sum.
+  const under = (count, key) => [count ? countLine(count) : '', others(key) ? t('Also: {x}', { x: others(key) }) : ''].filter(Boolean).join(' · ');
 
   const counts = useMemo(() => Object.fromEntries(PAYMENT_FILTERS.map((f) => [f, filterPayments(rows, f, now).length])), [rows, now]);
   const active = filter || (counts.late ? 'late' : 'upcoming');
@@ -127,13 +131,10 @@ export default function Finance() {
     <div>
       {header}
 
-      <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 18 }}>
-        <Kpi label={t('Expected this month')} value={formatMoney(tot?.expectedThisMonth || 0, cur)}
-          sub={[tot?.dueThisMonthCount ? countLine(tot.dueThisMonthCount) : '', others('expectedThisMonth')].filter(Boolean).join(' · ')} />
-        <Kpi label={t('Late now')} value={formatMoney(tot?.lateNow || 0, cur)} tone={tot?.lateNow ? 'var(--red)' : undefined}
-          sub={[tot?.lateCount ? countLine(tot.lateCount) : '', others('lateNow')].filter(Boolean).join(' · ')} />
-        <Kpi label={t('Paid this year')} value={formatMoney(tot?.paidThisYear || 0, cur)} tone={tot?.paidThisYear ? 'var(--green-ok)' : undefined}
-          sub={others('paidThisYear')} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 18 }}>
+        <Kpi label={t('Expected this month')} value={formatMoney(tot?.expectedThisMonth || 0, cur)} sub={under(tot?.dueThisMonthCount, 'expectedThisMonth')} />
+        <Kpi label={t('Late now')} value={formatMoney(tot?.lateNow || 0, cur)} tone={tot?.lateNow ? 'var(--red)' : undefined} sub={under(tot?.lateCount, 'lateNow')} />
+        <Kpi label={t('Paid this year')} value={formatMoney(tot?.paidThisYear || 0, cur)} tone={tot?.paidThisYear ? 'var(--green-ok)' : undefined} sub={under(0, 'paidThisYear')} />
       </div>
 
       <div className="card card-body" style={{ padding: 14, marginBottom: 18 }}>
@@ -163,6 +164,8 @@ export default function Finance() {
               </div>
               <div className="m-meta" style={{ marginTop: 6 }}>
                 <span>{t('Due')} {fmtDate(r.payment.dueDate)}</span>
+                {r.payment.paidAt && <span>{t('Paid on')} {fmtDate(r.payment.paidAt)}</span>}
+                {r.partial && <span>{received(r)}</span>}
                 {(r.payment.label || r.payment.payer.name) && <span className="m-sub">{[r.payment.label, r.payment.payer.name].filter(Boolean).join(' · ')}</span>}
                 <PayStatus row={r} />
               </div>
@@ -190,7 +193,7 @@ export default function Finance() {
                     <td>{r.payment.label || '—'}{r.payment.payer.name && <span style={{ color: 'var(--text-3)' }}> · {r.payment.payer.name}</span>}</td>
                     <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                       {rowMoney(r)}
-                      {r.partial && <div className="m-sub">{t('{x} of {y} received', { x: formatMoney(r.paid, r.payment.currency), y: formatMoney(r.payment.amount, r.payment.currency) })}</div>}
+                      {r.partial && <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-3)', whiteSpace: 'normal' }}>{received(r)}</div>}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>{r.payment.paidAt ? fmtDate(r.payment.paidAt) : '—'}</td>
                     <td><PayStatus row={r} /></td>

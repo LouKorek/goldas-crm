@@ -244,6 +244,11 @@ export default function Deals() {
   }), [deals, showClosed, category, search]);
   const counts = useMemo(() => funnel(visible), [visible]);
   const stale = visible.filter((d) => isStale(d)).length;
+  // Payments mostly sit on signed deals, which the board hides until "Show
+  // closed": say so when one of them has a late payment (admins only).
+  const hiddenLate = useMemo(() => (money && !showClosed
+    ? (deals || []).filter((d) => !d.deletedAt && (d.closedAt || !OPEN_STAGES.includes(d.stage)) && (!category || d.category === category) && hasLatePayment(d))
+    : []), [deals, money, showClosed, category]);
   const columns = showClosed ? DEAL_STAGES : OPEN_STAGES;
   // The phone shows one stage at a time: a strip of stage chips with counts
   // above a single column, instead of eight columns scrolling sideways.
@@ -268,6 +273,12 @@ export default function Deals() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
           <ChipGroup options={['all', 'men', 'women', 'youth', 'jewish']} labels={[t('All'), t('Men'), t('Women'), t('Youth'), t('Jewish abroad')]} value={category || 'all'} onChange={(v) => setCategory(v === 'all' ? '' : v)} required />
           <button type="button" className={`chip${showClosed ? ' active' : ''}`} onClick={() => setShowClosed((v) => !v)}>{t('Show closed')}</button>
+          {hiddenLate.length > 0 && (
+            <button type="button" className="chip" style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
+              onClick={() => { setShowClosed(true); setStageTab(hiddenLate[0].stage); }}>
+              {hiddenLate.length === 1 ? t('1 closed deal with a late payment') : t('{n} closed deals with a late payment', { n: hiddenLate.length })}
+            </button>
+          )}
         </div>
       </PageHeader>
 

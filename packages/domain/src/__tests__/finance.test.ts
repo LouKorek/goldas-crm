@@ -187,6 +187,9 @@ describe('rows, cash flow and totals', () => {
     const partial = rows.find((r) => r.payment.id === 'a3')!;
     expect(partial.days).toBe(IN_6);
     expect(describePayment(partial).he).toBe('€600 (יתרה) ממכבי חיפה (עמלה) צפוי בעוד 6 ימים');
+    // A name in another script is not glued to the Hebrew prefix.
+    const porto = { ...late, payment: { ...late.payment, payer: { ...late.payment.payer, name: 'FC Porto' } } };
+    expect(describePayment(porto).he).toBe('€3,000 מ-FC Porto (עמלה) באיחור של 5 ימים');
   });
 });
 

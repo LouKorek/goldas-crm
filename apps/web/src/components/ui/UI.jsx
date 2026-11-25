@@ -52,15 +52,25 @@ export function ToastProvider() {
   );
 }
 
+// Open dialogs by the order they opened. Only the newest one answers the
+// keyboard, so Esc in a dialog opened from another dialog closes just that
+// one, and Ctrl+Enter saves just that one.
+let dialogSeq = 0;
+const openDialogs = new Set();
+const isTopDialog = (seq) => seq === Math.max(...openDialogs);
+
 // ── Modal — swipe-to-close on mobile, Esc/Ctrl+Enter on desktop ──
 export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirty = false, onSave }) {
   const boxRef = useRef(null);
+  const [seq] = useState(() => ++dialogSeq);
+  useEffect(() => { openDialogs.add(seq); return () => { openDialogs.delete(seq); }; }, [seq]);
   const [drag, setDrag] = useState(0);
   const touchStart = useRef({ y: 0, time: 0, dragging: false });
 
   // Keyboard handlers
   useEffect(() => {
     const h = (e) => {
+      if (!isTopDialog(seq)) return;
       if (e.key === 'Escape') {
         if (viewOnly || !isDirty) { onClose(); return; }
         if (window.confirm('Discard unsaved changes?')) onClose();
@@ -73,7 +83,7 @@ export function Modal({ title, onClose, children, footer, wide, viewOnly, isDirt
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose, viewOnly, isDirty, onSave]);
+  }, [onClose, viewOnly, isDirty, onSave, seq]);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -169,12 +179,16 @@ export function useConfirm() {
   const handleCancel  = useCallback(() => { if (state) { state.resolve(false); setState(null); } }, [state]);
   useEffect(() => {
     if (!state) return;
+    // The question sits above whatever dialog asked it.
+    const seq = ++dialogSeq;
+    openDialogs.add(seq);
     const h = (e) => {
+      if (!isTopDialog(seq)) return;
       if (e.key === 'Escape') handleCancel();
       if (e.key === 'Enter')  handleConfirm();
     };
     document.addEventListener('keydown', h);
-    return () => document.removeEventListener('keydown', h);
+    return () => { openDialogs.delete(seq); document.removeEventListener('keydown', h); };
   }, [state, handleCancel, handleConfirm]);
   const dialog = state ? createPortal(
     <div className="modal-overlay" style={{ zIndex: 300 }}>

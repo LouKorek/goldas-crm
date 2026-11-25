@@ -3,7 +3,7 @@ import { CURRENCIES, PAYER_KINDS, formatMoney, paidSoFar, paymentRows, israelDat
 import { addPayment, updatePayment, deletePayment, markPaid } from 'data/deals';
 import { fmtDate } from 'lib/constants';
 import { t } from 'lib/i18n';
-import { Modal, Field, ChipGroup, DateInput, useConfirm, toast } from 'components/ui/UI';
+import { Modal, Field, ChipGroup, DateInput, RowActions, useConfirm, toast } from 'components/ui/UI';
 
 // Payments on a deal (admin only: callers check can(role, 'money') first).
 // The engine is packages/domain/src/engines/finance.ts; the writes are in
@@ -123,9 +123,11 @@ export function MarkPaidModal({ deal, row, onClose }) {
   const [mode, setMode] = useState('full');
   const [now, setNow] = useState('');
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
   const part = Number(String(now).replace(/[,\s]/g, ''));
   const partOk = mode === 'full' || (part > 0);
   const save = async () => {
+    setTried(true);
     if (!paidAt || !partOk) return;
     setBusy(true);
     try {
@@ -139,14 +141,14 @@ export function MarkPaidModal({ deal, row, onClose }) {
   return (
     <Modal title={t('Mark paid')} onClose={onClose} onSave={save} footer={<>
       <button className="btn btn-ghost" onClick={onClose}>{t('Cancel')}</button>
-      <button className="btn btn-primary" onClick={save} disabled={busy || !paidAt || !partOk}>{busy ? t('Saving…') : t('Save')}</button>
+      <button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? t('Saving…') : t('Save')}</button>
     </>}>
       <p style={{ fontSize: 13.5, marginBottom: 14 }}>
         <strong>{formatMoney(p.amount, p.currency)}</strong>{p.label ? ` · ${p.label}` : ''}{p.payer.name ? ` · ${p.payer.name}` : ''}
         {already > 0 && <span style={{ color: 'var(--text-3)' }}> · {t('{x} received so far', { x: formatMoney(already, p.currency) })}</span>}
       </p>
-      <Field label={t('Paid on')} required><DateInput value={paidAt} onChange={setPaidAt} /></Field>
-      <Field label={t('How much came in')}>
+      <Field label={t('Paid on')} required error={tried && !paidAt ? t('Pick the date it was paid.') : ''}><DateInput value={paidAt} onChange={setPaidAt} /></Field>
+      <Field label={t('How much came in')} error={tried && !partOk ? t('Enter an amount above 0.') : ''}>
         <ChipGroup options={['full', 'part']} labels={[already > 0 ? t('The rest ({x})', { x: formatMoney(row.outstanding, p.currency) }) : t('The full amount'), t('Part of it')]} value={mode} onChange={setMode} required />
         {mode === 'part' && <input style={{ marginTop: 8 }} inputMode="decimal" value={now} onChange={(e) => setNow(e.target.value)} placeholder={t('Amount received now')} autoFocus />}
       </Field>
@@ -188,10 +190,9 @@ export function DealPayments({ deal, canEdit }) {
           </span>
           <PayStatus row={r} />
           {canEdit && (
-            <span style={{ display: 'flex', gap: 4 }}>
-              {r.outstanding > 0 && <button className="btn btn-primary btn-sm" onClick={() => setPaying(r)}>{t('Mark paid')}</button>}
-              <button className="btn btn-ghost btn-sm" onClick={() => setEditing(r.payment)}>{t('Edit')}</button>
-              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => remove(r)}>{t('Delete')}</button>
+            <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {r.outstanding > 0 && <button className="btn btn-secondary btn-sm" onClick={() => setPaying(r)}>{t('Mark paid')}</button>}
+              <RowActions onEdit={() => setEditing(r.payment)} onDelete={() => remove(r)} />
             </span>
           )}
         </div>

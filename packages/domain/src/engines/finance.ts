@@ -337,6 +337,8 @@ export function filterPayments(rows: PaymentRow[], filter: PaymentFilter, now: D
 }
 
 const daysHe = (n: number): string => (n === 1 ? 'יום אחד' : `${n} ימים`);
+/** "ממכבי חיפה", but "מ-FC Porto": the prefix is not glued to a name in another script. */
+const fromHe = (name: string): string => (/^[\u0590-\u05FF]/.test(name) ? `מ${name}` : `מ-${name}`);
 const daysEn = (n: number): string => `${n} day${n === 1 ? '' : 's'}`;
 
 /** One line about a payment, Hebrew and English: "€5,000 ממכבי חיפה באיחור של 3 ימים". */
@@ -345,7 +347,7 @@ export function describePayment(r: Pick<PaymentRow, 'payment' | 'status' | 'days
   const money = formatMoney(r.status === 'paid' ? p.amount : r.outstanding, p.currency);
   const what = p.label ? ` (${p.label})` : '';
   const head = {
-    he: `${money}${r.partial ? ' (יתרה)' : ''}${p.payer.name ? ` מ${p.payer.name}` : ''}${what}`,
+    he: `${money}${r.partial ? ' (יתרה)' : ''}${p.payer.name ? ` ${fromHe(p.payer.name)}` : ''}${what}`,
     en: `${money}${r.partial ? ' (balance)' : ''}${p.payer.name ? ` from ${p.payer.name}` : ''}${what}`,
   };
   const d = r.days;
