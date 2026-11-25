@@ -1403,6 +1403,29 @@ const HE = {
   'Copy': 'העתק',
   'Caption copied.': 'הכיתוב הועתק.',
   'Could not copy the caption.': 'לא הצלחתי להעתיק את הכיתוב.',
+
+  // Highlights on the upload page (/yt/<token>): the moments, the cutting, and why a file cannot be cut
+  'Upload highlights to YouTube': 'העלאת רגעים נבחרים ליוטיוב',
+  'The highlights are up': 'הרגעים הנבחרים עלו',
+  'Moments': 'רגעים',
+  'The moments that will be cut, as times in the video': 'הרגעים שייחתכו, לפי הזמן בסרטון',
+  'Length': 'אורך',
+  'about {length}': 'בערך {length}',
+  'Pick the match video': 'בחר את סרטון המשחק',
+  'Pick the full match video. This phone cuts the moments out of it and uploads only them; the match itself is not uploaded. Each moment may start a second or two early. Keep this page open until it ends.': 'בחר את סרטון המשחק המלא. הטלפון חותך ממנו את הרגעים ומעלה רק אותם; המשחק עצמו לא עולה לשום מקום. כל רגע עשוי להתחיל שנייה או שתיים מוקדם יותר. השאר את העמוד פתוח עד שזה מסתיים.',
+  'Cutting progress': 'התקדמות החיתוך',
+  'Reading the video…': 'קורא את הסרטון…',
+  'Cutting the moments': 'חותך את הרגעים',
+  'Uploading the highlights': 'מעלה את הרגעים',
+  'Keep this page open. The cutting happens on this phone, and nothing is uploaded yet.': 'השאר את העמוד פתוח. החיתוך נעשה כאן בטלפון, ועדיין שום דבר לא עולה.',
+  'This file is not a kind of video that can be cut here. Pick the original MP4 or MOV recording.': 'אי אפשר לחתוך כאן קובץ מהסוג הזה. בחר את הצילום המקורי, בפורמט MP4 או MOV.',
+  'There is no video in this file. Pick the match recording.': 'אין וידאו בקובץ הזה. בחר את צילום המשחק.',
+  'The video in this file is in a format ({codec}) that cannot be cut without converting it. Pick an MP4 or MOV recording.': 'הווידאו בקובץ הזה בפורמט ({codec}) שאי אפשר לחתוך בלי להמיר אותו. בחר צילום בפורמט MP4 או MOV.',
+  'The sound in this file is in a format ({codec}) that cannot be copied as it is. Export the video as MP4 and pick that file.': 'הקול בקובץ הזה בפורמט ({codec}) שאי אפשר להעתיק כמו שהוא. ייצא את הסרטון כ-MP4 ובחר את הקובץ החדש.',
+  'Moment {n} starts at {at}, but this video is only {length} long. Check that this is the right file.': 'רגע {n} מתחיל ב-{at}, אבל הסרטון הזה באורך {length} בלבד. בדוק שזה הקובץ הנכון.',
+  'This video has no point to cut at. Pick the original recording.': 'בסרטון הזה אין נקודה שאפשר לחתוך בה. בחר את הצילום המקורי.',
+  'This video can only be cut {seconds} seconds before moment {n}, which is too early. Export it again as MP4 and pick that file.': 'את הסרטון הזה אפשר לחתוך רק {seconds} שניות לפני רגע {n}, וזה מוקדם מדי. ייצא אותו מחדש כ-MP4 ובחר את הקובץ החדש.',
+  'The cut did not come out right, so nothing was uploaded. Pick the video again.': 'החיתוך לא יצא תקין, ולכן שום דבר לא הועלה. בחר שוב את הסרטון.',
 };
 
 export default HE;

@@ -25,6 +25,7 @@ const Admin = lazy(() => import('pages/Admin'));
 const Matches = lazy(() => import('pages/Matches'));
 const PlayerPage = lazy(() => import('pages/PlayerPage'));
 const SignPage = lazy(() => import('pages/SignPage'));
+const YouTubeUpload = lazy(() => import('pages/YouTubeUpload'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 const Finance = lazy(() => import('pages/Finance'));
 const Notifications = lazy(() => import('pages/Notifications'));
@@ -73,5 +74,8 @@ const App = () => (
 const livePage = /^\/p\/([^/]*)$/.exec(new URLSearchParams(location.search).get('path') || '');
 // ?path=/sign/<token> shows the signing page of an agreement the same way (dev/mock-agreements.js).
 const signPage = /^\/sign\/([^/]*)$/.exec(new URLSearchParams(location.search).get('path') || '');
+// ?path=/yt/<token> shows the phone upload page on its own; ?yt=highlights a highlights job (dev/mock-youtube.js).
+const uploadPage = /^\/yt\/([^/]*)$/.exec(new URLSearchParams(location.search).get('path') || '');
 createRoot(document.getElementById('root')).render(livePage ? <Suspense fallback={null}><PlayerPage token={livePage[1]} /></Suspense>
-  : signPage ? <Suspense fallback={null}><SignPage token={signPage[1]} /></Suspense> : <App />);
+  : signPage ? <Suspense fallback={null}><SignPage token={signPage[1]} /></Suspense>
+  : uploadPage ? <Suspense fallback={null}><YouTubeUpload token={uploadPage[1]} /></Suspense> : <App />);

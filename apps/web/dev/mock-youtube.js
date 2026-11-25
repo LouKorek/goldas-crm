@@ -25,8 +25,46 @@ export const startYouTubeConnect = async () => ({ url: location.href });
 export const saveYouTubeClient = async () => ({ clientReady: true });
 export const relearnYouTubeStyle = async () => ({ started: true });
 export const setManagersMayUpload = async () => ({});
-// The upload page is not part of the harness; these keep the dependency scan whole.
-export const uploadInfo = async () => ({ status: 'awaiting_file', player: 'Noam Barzilay', title: 'Noam Barzilay | LB / CB | 2026/27', privacy: 'public' });
+// The upload page: ?path=/yt/<anything> shows it on its own (dev/app.jsx).
+//   ?yt=plain (default)   an ordinary upload of one video
+//   ?yt=highlights        a highlights job with three moments; ?yt=highlights30 with thirty
+//   ?yt=done              already uploaded          ?yt=gone   a link that is no longer good
+//   ?hold=reading|cutting|sending   stops at that step, so it can be looked at
+//   ?cut=real             cuts the picked file for real (lib/highlights-cut.js) instead of acting it;
+//                         ?cut=fail shows a file that cannot be cut
+// Nothing is sent anywhere: the upload itself is acted out.
+const q = new URLSearchParams(location.search);
+const yt = q.get('yt') || 'plain';
+export const hold = q.get('hold') || '';
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+export const forever = () => new Promise(() => {});
+const THREE = [{ start: 750, end: 770 }, { start: 2650, end: 2680 }, { start: 4259, end: 4277 }];
+const THIRTY = Array.from({ length: 30 }, (_, i) => ({ start: 120 + i * 175, end: 120 + i * 175 + 20 + (i % 3) * 5 }));
+const moments = yt === 'highlights30' ? THIRTY : THREE;
+export const uploadInfo = async () => {
+  await wait(150);
+  if (yt === 'gone') throw Object.assign(new Error('הקישור הזה כבר לא בתוקף. בקש מגולדה קישור חדש.'), { status: 404 });
+  return {
+    status: yt === 'done' ? 'done' : 'awaiting_file', player: 'Noam Barzilay', title: 'Noam Barzilay | LB / CB | 2026/27', privacy: 'public',
+    link: yt === 'done' ? 'https://youtu.be/video0' : null,
+    ...(yt.startsWith('highlights') ? { highlights: { moments, total: moments.reduce((n, m) => n + m.end - m.start, 0) } } : {}),
+  };
+};
 export const openUploadSession = async () => '';
 export const uploadFinished = async () => ({ link: 'https://youtu.be/video0' });
-export const sendFile = async () => ({ id: 'video0' });
+async function act(total, onProgress) {
+  const steps = 40;
+  for (let i = 1; i <= steps; i++) {
+    await wait(120);
+    onProgress(Math.round((total * i) / steps), total);
+    if (hold === 'sending' && i === 14) await forever();
+  }
+  return { id: 'video0' };
+}
+export const sendFile = (url, file, onProgress = () => {}) => act(file.size, onProgress);
+export const sendStream = async (url, total, stream, onProgress = () => {}) => {
+  // Read what the cut gives (a real cut is made in full), then act the upload.
+  const reader = stream.getReader();
+  for (;;) { const r = await reader.read(); if (r.done) break; }
+  return act(total, onProgress);
+};
