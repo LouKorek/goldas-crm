@@ -21,6 +21,7 @@ const { windowStatus, TRANSFER_TOOL_DEF } = require('./transfer-windows.js');
 const { recentMistakes, mistakesSection } = require('./golda-feedback.js');
 const { keepDuration } = require('./agency-calendar.js');
 const { youtubeTools, YOUTUBE_TOOL_DEFS } = require('./golda-youtube.js');
+const { websiteTools, WEBSITE_TOOL_DEFS } = require('./golda-website.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -261,6 +262,7 @@ How you work:
 - Deleting needs the writer's explicit yes: call delete without confirmed first (one record, or several with items; you may arm more in the same turn), show the whole list of what will be deleted and ask once; only after they answer yes in a later message call delete once with confirmed=true, which deletes everything armed. Never ask for a separate yes per record.
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - A video for YouTube ("תעלי ליוטיוב", "סרטון ביצועים חדש של…", or a video sent with a player's name): find the player or prospect, then youtube_upload action=draft (it fills the title, description, privacy, playlist and cover in the style of Lou's channel; pass extra for the free part such as the opponent, and override title/description/playlist only when the writer dictated them). Show the draft in full (כותרת, תיאור, פרטיות, פלייליסט, קאבר) and say the player's current video link will be replaced. Only after the writer's yes in a later message: action=confirm. If confirm returns a page link, send it as is: big videos do not pass through WhatsApp (16 MB), so the writer opens the link on the phone and picks the file. You never upload without that yes, and never to anywhere but Lou's channel. After the upload the record's videoLink is replaced automatically and the writer gets the new and the previous link, so do not update videoLink yourself. An image sent afterwards for the cover → action=cover (add cover=style when it is a plain photo of the player, so the name and facts are drawn on it like the channel's covers; a finished designed cover goes as it is). "איך אנחנו מעלים סרטונים" / the style → youtube_style. A video sent with no player named: ask whose it is.
+- The agency's website gold-as.com (admins only; "תוסיפי את … לאתר", "תעדכני באתר", "תורידי מהאתר", "תשני באתר את הטקסט…"): you change it yourself with website_read, website_edit and website_publish. First website_read (players for the cards; texts or links for their ids). Then website_edit with every change of the request in one call; it builds a draft and nothing is live. A card has: the name in English, the club in English with the age group in brackets for a youth team ("Hapoel Hadera (U19)"), the position in short codes, at most two ("DM / CM"), the year of birth, the foot (Right/Left/Both) and the flags as country codes (["il"], ["il","de"]). Take what you can from the player's CRM record (translate the position and the club to that form) and ask only for what is missing. A new card needs the player's picture: the writer sends it with the request, best as a PNG with a transparent background sent as a document (a regular WhatsApp photo is a JPG and loses the transparency); pass photo:"attached" and you get the finished card photo back, and the writer gets it as a file. If the result says the picture has no transparent background, tell the writer the card will show the picture's own background and ask whether to continue or send a cut-out one. Show the draft line by line, say it is not live yet, and ask with buttons [[כפתורים: כן, לפרסם | לא]]. Only after the yes in a later message: website_publish action=publish (about a minute), then report what is live with the link https://gold-as.com. You never publish without that yes. Several changes asked together go live in one publish. "תבטלי את השינוי באתר" → website_publish action=undo (it asks once more; undo_last is only for the CRM). Lou also edits the site from his own panel; both work side by side, and you always start from the live site.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
@@ -276,7 +278,7 @@ How you work:
 
 Buttons: on WhatsApp the writer can tap instead of typing. When your answer ends with a short choice (yes/no before a deletion or a batch of changes, picking between two or three options, the natural next step), end the message with one last line [[כפתורים: א | ב | ג]]: one to three labels, each at most 20 characters, in the writer's words (e.g. [[כפתורים: כן, למחוק | לא]]). The line is turned into real buttons and is never shown as text; a tap comes back to you as a message with the label's text. Use it only for real choices, at most once per message, never for open questions. "תפריט" opens a fixed menu without you.
 - Never claim you did something a tool didn't confirm. If a tool returns an error, explain it simply and say what you need.
-- You cannot change users/permissions, send messages to other people, or change the website itself; say so if asked. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
+- You cannot change users/permissions or send messages to other people; say so if asked. The website gold-as.com: an admin can ask you to change it (see above); for anyone else, say only Lou can. igDaily and igPosts (Instagram stats) are read-only. Users can set their own morning briefing (hour, WhatsApp/email) on the Golda screen in the app, under "הגדרות".
 
 CRM data (field names are exact; values in lists must match exactly; dates are YYYY-MM-DD):
 - players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), goldaAccess (bool) + goldaPhone (digits): admins only, lets this represented player ask you about himself on WhatsApp (read-only, his own data; you never write to him first), contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles (use attach_file / remove_file, never update these directly).
@@ -360,11 +362,13 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style']);
-const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit' };
+const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit',
+  // The public website is the agency's face: an admin only, like the settings.
+  website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
@@ -747,7 +751,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       const s = await readOk(c).doc(id).get();
       if (!s.exists || !belongs(c, s.data())) throw new Error('not found');
       return { id: s.id, ...s.data() };
-    } }) };
+    } }),
+    ...websiteTools({ db, admin, identity, media, session, channel, role, state }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -792,7 +797,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   const isVideo = media && /^video\//.test(media.mimeType || '');
   const fileNote = !media ? '' : isVideo
     ? `\n[Attached video: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 104857.6) / 10} MB) — you cannot watch it; youtube_upload (action=draft) in this message can send it to the YouTube channel]`
-    : `\n[Attached file: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 1024)} KB) — available to attach_file in this message]`;
+    : `\n[Attached file: ${media.filename} (${media.mimeType}, ${Math.round(media.buffer.length / 1024)} KB) — available to attach_file in this message${identity.role === 'admin' && /^image\/(jpeg|png|webp)$/.test(media.mimeType || '') ? '; website_edit (photo: "attached") in this message can make it a player\'s card photo on the website' : ''}]`;
   // The words of this turn, kept apart: the file itself is shown to the model below but never goes into the stored history.
   const currentText = userText + fileNote;
   const current = { role: 'user', content: currentText };
