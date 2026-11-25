@@ -21,7 +21,7 @@ const BACKUPS = [
   backup('a41d77f2', 10, { verified: true, offsiteError: 'store unavailable' }),
   backup('9e02bb13', 11, { status: 'running', chunks: 0, docs: 0, chars: 0, collections: [] }),
   backup('5fd0a3c8', 17, { status: 'error', error: 'check failed: 4810 of 4812 lines', verified: false }),
-  backup('2c9e4410', 24, { status: 'done', partial: true }),
+  backup('2c9e4410', 24, { status: 'done', partial: true, reason: 'before-restore' }),
 ];
 const FOUND = [
   { path: 'players/p1', collection: 'players', id: 'p1', name: 'נועם ברזילי' },

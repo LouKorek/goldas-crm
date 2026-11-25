@@ -101,7 +101,7 @@ function Health({ he }) {
   const by = useMemo(() => groupRuns(runs || []), [runs]);
   // The last run of a job: from the recent list, or, once hourly jobs have
   // pushed it out of that list, from the job's own last-run record.
-  const lastOf = (name) => (by[name] || [])[0] || status[name]?.last || (status[name]?.runningSince ? { status: 'running', startedAt: status[name].runningSince } : null);
+  const lastOf = (name) => { const s = status[name] || {}; return (by[name] || [])[0] || (s.runningSince ? { status: 'running', startedAt: s.runningSince } : s.last) || null; };
   const names = useMemo(() => {
     const known = JOBS.map((j) => j.name);
     const extra = Object.keys(by).filter((n) => !known.includes(n) && n !== 'golda');
@@ -120,7 +120,7 @@ function Health({ he }) {
       <Card style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ width: 10, height: 10, background: failing.length ? 'var(--red)' : 'var(--green-ok)', flexShrink: 0 }} />
         <div style={{ fontWeight: 700 }}>{failing.length ? (he ? `${failing.length} עבודות נכשלו בריצה האחרונה` : `${failing.length} jobs failed on their last run`) : (he ? 'כל העבודות הצליחו בריצה האחרונה' : 'Every job succeeded on its last run')}</div>
-        <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{he ? 'גרסה' : 'Version'} <Mono>{VERSION}</Mono> · {he ? `${runs.length} הריצות האחרונות` : `the last ${runs.length} runs`}</div>
+        <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{he ? 'גרסה' : 'Version'} <bdi><Mono>{VERSION}</Mono></bdi> · {he ? `${runs.length} הריצות האחרונות` : `the last ${runs.length} runs`}</div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="table-wrap">
@@ -243,15 +243,18 @@ function RestoreDialog({ backup, he, onClose, confirm }) {
   const [q, setQ] = useState('');
   const [found, setFound] = useState(null);
   const [legacy, setLegacy] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState('');
   const when = fmtDateTime(toDate(backup.startedAt));
   useEffect(() => {
     const words = q.trim();
-    if (words.length < 2) { setFound(null); return undefined; }
+    if (words.length < 2) { setFound(null); setSearching(false); return undefined; }
     let live = true;
+    setSearching(true);
     const timer = setTimeout(async () => {
       try { const r = await findInBackup(backup.id, words); if (live) { setFound(r.records || []); setLegacy(!!r.legacy); } }
-      catch (e) { if (live) { setFound([]); toast.error(e.message); } }
+      catch (e) { if (live) { setFound(null); toast.error(e.message); } }
+      if (live) setSearching(false);
     }, 300);
     return () => { live = false; clearTimeout(timer); };
   }, [q, backup.id]);
@@ -277,7 +280,8 @@ function RestoreDialog({ backup, he, onClose, confirm }) {
           <div style={{ width: 'fit-content', maxWidth: '100%' }}><SearchInput value={q} onChange={setQ} placeholder={he ? 'חיפוש לפי שם' : 'Search by name'} /></div>
         </Field>
         {legacy && <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{he ? 'זה גיבוי ישן וגדול, ואי אפשר לחפש בו רשומה אחת. אפשר לשחזר ממנו את הכל, או לבחור גיבוי חדש יותר.' : 'This is an older, large backup that cannot be searched for one record. Restore everything from it, or pick a newer backup.'}</div>}
-        {found && !legacy && (found.length ? (
+        {searching && !legacy && <Skeleton rows={2} height={36} />}
+        {!searching && found && !legacy && (found.length ? (
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>{found.map((r, i) => (
             <div key={r.path} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderTop: i ? '1px solid var(--rule)' : 'none' }}>
               <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere' }}>{r.name || <Mono style={{ color: 'var(--text-3)' }}>{r.id.slice(0, 8)}</Mono>}</div>
@@ -353,13 +357,15 @@ function Backups({ he }) {
                     {b.verified === true && <span style={{ color: 'var(--green-ok)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'נבדק' : 'checked'}</span>}
                     {b.offsite && <span style={{ color: 'var(--text-3)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'עותק חיצוני' : 'outside copy'}</span>}
                     {b.verified === true && !b.offsite && b.offsiteError && <span style={{ color: 'var(--amber)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'בלי עותק חיצוני' : 'no outside copy'}</span>}
+                    {b.reason === 'before-restore' && <span style={{ color: 'var(--text-3)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'לפני שחזור' : 'before a restore'}</span>}
+                    {b.reason === 'before-migration' && <span style={{ color: 'var(--text-3)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'לפני מיגרציה' : 'before a migration'}</span>}
                   </td>
                   <td><Mono>{(b.docs || 0).toLocaleString()}</Mono></td>
                   <td><Mono>{b.chars ? `${(b.chars / 1048576).toFixed(1)} MB` : ''}</Mono></td>
                   <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{(b.collections || []).length}</td>
-                  <td style={{ textAlign: 'end', whiteSpace: 'nowrap' }}>{b.chunks > 0 && isGood(b) && (
+                  <td style={{ textAlign: 'end', whiteSpace: 'nowrap' }}>{b.chunks > 0 && (
                     <span style={{ display: 'inline-flex', gap: 6 }}>
-                      <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => setRestoring(b)} style={{ height: 30 }}>{he ? 'שחזר' : 'Restore'}</button>
+                      {isGood(b) && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => setRestoring(b)} style={{ height: 30 }}>{he ? 'שחזר' : 'Restore'}</button>}
                       <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => download(b)} style={{ height: 30 }}>{busy === b.id ? '…' : (he ? 'הורד' : 'Download')}</button>
                     </span>
                   )}</td>
