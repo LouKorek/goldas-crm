@@ -22,6 +22,7 @@ const { recentMistakes, mistakesSection } = require('./golda-feedback.js');
 const { keepDuration } = require('./agency-calendar.js');
 const { youtubeTools, YOUTUBE_TOOL_DEFS } = require('./golda-youtube.js');
 const { websiteTools, WEBSITE_TOOL_DEFS } = require('./golda-website.js');
+const { chooseEffort } = require('./golda-effort.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -40,7 +41,9 @@ const FILE_MAX = 15 * 1024 * 1024;
 const MAX_STEPS = 60;
 const MAX_TOKENS = 64000;
 // Golda's depth of thought. Opus 5.5 always thinks; effort sets how hard.
-// xhigh suits multi-step agent work (cross-checking, planning, verifying).
+// xhigh suits multi-step agent work (cross-checking, planning, verifying) and
+// is the level for everything except a plain lookup or small talk, which
+// lib/golda-effort.js recognises from the message itself and runs lighter.
 const EFFORT = 'xhigh';
 const HISTORY_TURNS = 60;   // history entries replayed (user + assistant lines)
 const READ_MAX = 20 * 1024 * 1024;   // largest stored file Golda will read (bytes)
@@ -810,6 +813,11 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
     messages[messages.length - 1] = { ...last, content: [{ type: 'text', text: last.content }, ...seen] };
   }
 
+  // One level for the whole message, so every step of the loop shares a cache.
+  const { effort, reason: effortReason } = chooseEffort({ text, media, session, history, topic });
+  usage.effort = effort;
+  usage.effortReason = effortReason;
+
   let reply = '';
   for (let step = 0; step < MAX_STEPS; step++) {
     // Streamed, so a long report or a deep analysis never hits an HTTP timeout.
@@ -820,7 +828,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
       max_tokens: MAX_TOKENS,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: EFFORT },
+      output_config: { effort },
       cache_control: { type: 'ephemeral' },
       system,
       tools: [...toolsFor(identity.role), ...SERVER_TOOLS],
@@ -855,4 +863,4 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles };
 }
 
-module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, systemPrompt, _internal: { withLeague, freeAgentRules, validate, cleanContractTerms, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
+module.exports = { runAgent, createTools, TOOLS, toolsFor, COLLECTIONS, MAIN_TOPIC, MODEL, EFFORT, chooseEffort, systemPrompt, _internal: { withLeague, freeAgentRules, validate, cleanContractTerms, norm, matches, fileBlocks, armDeletes, armedFor, normalizePending } };
