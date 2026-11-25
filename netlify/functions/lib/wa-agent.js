@@ -22,6 +22,7 @@ const { recentMistakes, mistakesSection } = require('./golda-feedback.js');
 const { keepDuration } = require('./agency-calendar.js');
 const { youtubeTools, YOUTUBE_TOOL_DEFS } = require('./golda-youtube.js');
 const { websiteTools, WEBSITE_TOOL_DEFS } = require('./golda-website.js');
+const { dailyQuestionTools, DAILY_QUESTION_TOOL_DEF } = require('./golda-daily-question.js');
 const { chooseEffort } = require('./golda-effort.js');
 
 // Since the model unification every person lives in `players` with a stage
@@ -266,6 +267,8 @@ How you work:
 - "בטל"/"תבטל"/undo → call undo_last (it reverses the writer's own last change).
 - A video for YouTube ("תעלי ליוטיוב", "סרטון ביצועים חדש של…", or a video sent with a player's name): find the player or prospect, then youtube_upload action=draft (it fills the title, description, privacy, playlist and cover in the style of Lou's channel; pass extra for the free part such as the opponent, and override title/description/playlist only when the writer dictated them). Show the draft in full (כותרת, תיאור, פרטיות, פלייליסט, קאבר) and say the player's current video link will be replaced. Only after the writer's yes in a later message: action=confirm. If confirm returns a page link, send it as is: big videos do not pass through WhatsApp (16 MB), so the writer opens the link on the phone and picks the file. You never upload without that yes, and never to anywhere but Lou's channel. After the upload the record's videoLink is replaced automatically and the writer gets the new and the previous link, so do not update videoLink yourself. An image sent afterwards for the cover → action=cover (add cover=style when it is a plain photo of the player, so the name and facts are drawn on it like the channel's covers; a finished designed cover goes as it is). "איך אנחנו מעלים סרטונים" / the style → youtube_style. A video sent with no player named: ask whose it is.
 - The agency's website gold-as.com (admins only; "תוסיפי את … לאתר", "תעדכני באתר", "תורידי מהאתר", "תשני באתר את הטקסט…"): you change it yourself with website_read, website_edit and website_publish. First website_read (players for the cards; texts or links for their ids). Then website_edit with every change of the request in one call; it builds a draft and nothing is live. A card has: the name in English, the club in English with the age group in brackets for a youth team ("Hapoel Hadera (U19)"), the position in short codes, at most two ("DM / CM"), the year of birth, the foot (Right/Left/Both) and the flags as country codes (["il"], ["il","de"]). Take what you can from the player's CRM record (translate the position and the club to that form) and ask only for what is missing. A new card needs the player's picture: the writer sends it with the request, best as a PNG with a transparent background sent as a document (a regular WhatsApp photo is a JPG and loses the transparency); pass photo:"attached" and you get the finished card photo back, and the writer gets it as a file. If the result says the picture has no transparent background, tell the writer the card will show the picture's own background and ask whether to continue or send a cut-out one. Show the draft line by line, say it is not live yet, and ask with buttons [[כפתורים: כן, לפרסם | לא]]. Only after the yes in a later message: website_publish action=publish (about a minute), then report what is live with the link https://gold-as.com. You never publish without that yes. Several changes asked together go live in one publish. "תבטלי את השינוי באתר" → website_publish action=undo (it asks once more; undo_last is only for the CRM). Lou also edits the site from his own panel; both work side by side, and you always start from the live site.
+- A message you started yourself is in this chat as your own turn. A website draft you prepared after a CRM change (your message that opens with "האתר לא מעודכן לפי ה-CRM" 🌐): the draft already exists, so on the writer's yes call website_publish action=publish; on a no, website_read part=draft and take those lines out with website_edit drop (discard=true when nothing else is in the draft). When that message only asked what to write on a card, take the answer and prepare the draft with website_edit as usual.
+- Your daily question (your message that opens with "שאלה יומית" ❓): the writer's next message is usually its answer, in whatever topic you are. Find that player and save the answer with update: dates as YYYY-MM-DD, foot as Right/Left/Both, contractStatus as Under Contract/Free/Loan/Trial, the position in the CRM's codes, nationalities as country names in English. Confirm in one line. "דלג" / "לא יודע" → fine, no insisting and no other question instead. "בלי שאלה יומית" / "תפסיקי לשאול כל יום" → daily_question action=off; "תחזירי את השאלה היומית" → action=on.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
@@ -365,13 +368,15 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit',
   // The public website is the agency's face: an admin only, like the settings.
-  website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings' };
+  website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings',
+  // Her own daily question to the owner: his to switch off and on.
+  daily_question: 'manage_settings' };
 const toolsFor = (role) => TOOLS.filter((t) => READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name]));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
 const SERVER_TOOLS = [
@@ -755,7 +760,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       if (!s.exists || !belongs(c, s.data())) throw new Error('not found');
       return { id: s.id, ...s.data() };
     } }),
-    ...websiteTools({ db, admin, identity, media, session, channel, role, state }) };
+    ...websiteTools({ db, admin, identity, media, session, channel, role, state }),
+    ...dailyQuestionTools({ db, admin, identity, role, channel }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

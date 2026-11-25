@@ -73,6 +73,7 @@ function seed(extra = {}) {
     settings: {},
     app_meta: {
       whatsapp: approved,
+      goldaDailyQuestion: { enabled: false },   // her daily question has its own tests (golda-owner-nudges.test.js)
       goldaSent: { briefings: { 'lou.korek@gmail.com': '2026-11-12', 'dani@x.com': '2026-11-12' }, eventsAt: new Date('2026-11-12T15:30:00Z').getTime() },
     },
     ...extra,

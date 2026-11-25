@@ -8,7 +8,11 @@
 //   3. for admins, operations alerts (lib/golda-briefing.js opsAlerts): a job
 //      that failed twice in a row, a quota past 80%, the IFA browser sync
 //      silent for 36 hours. Once a day each.
-// All of it comes from the alerts engine the app uses; nothing is computed here.
+//   4. for the owner only, in the day and after his briefing: the website
+//      following the CRM (lib/golda-site-follow.js: a draft and "לפרסם?") and
+//      one question a day about a gap in a player's record
+//      (lib/golda-daily-question.js). Never both in the same hour.
+// The first three come from the alerts engine the app uses; nothing is computed here.
 // The morning briefing's text is written by the model from those facts plus
 // the last day's audit and the person's memories (lib/golda-briefing-ai.js);
 // it falls back to the template briefing if the model is unavailable.
@@ -37,6 +41,9 @@ const { scraperAccount } = require('./lib/scraper-account.js');
 const { whatsappRecipients } = require('./lib/golda-identity.js');
 const outbox = require('./lib/wa-outbox.js');
 const { ensureTemplate, needsRecheck } = require('./lib/wa-templates.js');
+const { ownerOf } = require('./lib/golda-nudge.js');
+const { followSite } = require('./lib/golda-site-follow.js');
+const { askDaily } = require('./lib/golda-daily-question.js');
 
 const KEEP_DAYS = 400;
 const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
@@ -152,7 +159,7 @@ function pruneSent(keys, today) {
   return out;
 }
 
-async function run(job, now = new Date(), { force = false, send, write, scout } = {}) {
+async function run(job, now = new Date(), { force = false, send, write, scout, site: siteClient } = {}) {
   const db = getDb();
   const data = await loadAll(db);
   if (needsRecheck(data.whatsapp, now.getTime())) {
@@ -270,6 +277,13 @@ async function run(job, now = new Date(), { force = false, send, write, scout } 
       job.note(`${u.email}: ${e.message}`);
       console.error('[golda-briefing] send failed:', u.email, e.message);
     }
+  }
+  // What Golda starts on her own with the owner. A failure here never costs the hour's other messages.
+  const owner = ownerOf(recipients);
+  if (owner && !quiet && sent.briefings[owner.email] === today) {
+    const site = await followSite(db, owner, data.players, now, { admin, send, job, site: siteClient }).catch((e) => { job.note(`site follow failed: ${e.message}`); return {}; });
+    const asked = site.sent ? {} : await askDaily(db, owner, data.players, now, { hour, send, job }).catch((e) => { job.note(`daily question failed: ${e.message}`); return {}; });
+    count += (site.sent || 0) + (asked.sent || 0);
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning
