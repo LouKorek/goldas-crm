@@ -188,3 +188,41 @@ test('the agent knows the question and its switch; the answer is thought about a
   assert.equal(chooseEffort({ text: 'ימין', history }).effort, TOP);
   assert.equal(chooseEffort({ text: '30/6/2027', history: [{ role: 'assistant', text: questionFor('לו', { field: 'contractEnd', player: { ...FULL, id: 'p1' } }).text }] }).effort, TOP);
 });
+
+// ── the agreement template, offered once before the gaps ────────────────────
+const { templateQuestion, TEMPLATE_KEY, TEMPLATE_COOLDOWN_DAYS } = require('../golda-daily-question.js');
+const WITH_AGREEMENT = [...PLAYERS, { ...FULL, id: 'c', fullName: 'Carmel', stage: 'represented', reprFiles: [{ fileId: 'f1', name: 'הסכם ייצוג כרמל.pdf', type: 'application/pdf', uploadedAt: '2025-08-01T10:00:00Z' }] }];
+
+test("no Hebrew agreement template and the files hold the agency's agreements: offered once, before any gap, with two buttons", async () => {
+  const db = fakeDb();
+  const { out, send } = recorder();
+  assert.deepEqual(await ask(db, send, { players: WITH_AGREEMENT }), { sent: 1, key: TEMPLATE_KEY });
+  assert.deepEqual(out[0].buttons, ['כן, תכיני', 'לא עכשיו']);
+  assert.match(out[0].body, /^\*שאלה יומית, לו\* ❓\nעוד אין לנו תבנית להסכם ייצוג/);
+  assert.ok(out[0].body.split('\n').length <= 5, 'short');
+  for (const b of out[0].buttons) assert.ok(b.length <= 20);
+  // "not now" (or no answer): the next days go back to the gaps, and the offer stays quiet for its cooldown
+  const day = (n) => new Date(NOW.getTime() + n * 24 * 3600000);
+  assert.equal((await ask(db, send, { players: WITH_AGREEMENT, now: day(1) })).key, 'a|contractEnd');
+  assert.notEqual((await ask(db, send, { players: WITH_AGREEMENT, now: day(TEMPLATE_COOLDOWN_DAYS - 1) })).key, TEMPLATE_KEY);
+  assert.equal((await ask(db, send, { players: WITH_AGREEMENT, now: day(TEMPLATE_COOLDOWN_DAYS + 1) })).key, TEMPLATE_KEY, 'after the cooldown it may come once more');
+});
+
+test("the template offer is not made when a Hebrew template exists, or when no player has one of the agency's agreement files", async () => {
+  const { send } = recorder();
+  const withTemplate = fakeDb({ agreement_templates: { he: { lang: 'he', text: '# הסכם\n\n{{player_name}}', version: 1 } } });
+  assert.equal((await ask(withTemplate, send, { players: WITH_AGREEMENT })).key, 'a|contractEnd');
+  // a PDF this system made and filed is not one of the agency's own agreements
+  const ours = [...PLAYERS, { ...FULL, id: 'c', fullName: 'Carmel', reprFiles: [{ fileId: 'agr_1', name: 'signed.pdf', agreementId: '1', uploadedAt: '2026-01-01' }] }];
+  assert.equal((await ask(fakeDb(), send, { players: ours })).key, 'a|contractEnd');
+  // off is off, for this question too
+  const off = fakeDb({ app_meta: { goldaDailyQuestion: { enabled: false } } });
+  assert.deepEqual(await ask(off, send, { players: WITH_AGREEMENT }), { skipped: 'off' });
+  // the very first question says how to stop the daily question
+  assert.match(templateQuestion('לו', { firstEver: true }).text, /בלי שאלה יומית/);
+});
+
+test('the prompt tells Golda what a yes to the template offer means', () => {
+  const p = systemPrompt('גולדה', { name: 'לו', role: 'admin', email: OWNER.email });
+  assert.match(p, /offered to prepare the representation agreement template[^\n]*"כן, תכיני"[^\n]*without an agreement at the end[^\n]*"לא עכשיו"/);
+});

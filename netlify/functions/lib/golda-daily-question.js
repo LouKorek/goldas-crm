@@ -11,10 +11,16 @@
 // so it is audited and can be undone like any change made through Golda.
 // On and off: he tells her ("בלי שאלה יומית" / "תחזירי את השאלה היומית") and
 // the agent calls the daily_question tool below.
+// Before any gap, once: when there is no Hebrew representation agreement
+// template yet and the players' files already hold the agency's own signed
+// agreements, she offers to prepare the template from them (yes / not now).
+// A yes is his next message, and the agent takes the template path
+// (lib/golda-agreement.js); "not now" keeps it quiet for TEMPLATE_COOLDOWN_DAYS.
 // State: app_meta/goldaDailyQuestion { enabled, lastKey, lastAskedOn, recent }.
 const { israelDate, daysBetween, playerName, RECORD_GAPS } = require('@goldas/domain');
 const { chatOf, nudge } = require('./golda-nudge.js');
 const { awaitsAnswer } = require('./golda-effort.js');
+const { getTemplate, agreementExamples } = require('./agreements.js');
 
 const APP = 'https://goldas-crm.netlify.app';
 const META = ['app_meta', 'goldaDailyQuestion'];
@@ -23,6 +29,8 @@ const TO_HOUR = 19;
 const COOLDOWN_DAYS = 14;        // a question that got no answer comes back after this long
 const KEEP_RECENT = 60;
 const WAIT_FOR_ANSWER_MS = 3 * 3600000;
+const TEMPLATE_KEY = 'agreementTemplate|he';
+const TEMPLATE_COOLDOWN_DAYS = 30;  // "not now" (or no answer): not offered again for a month
 
 const empty = (v) => (Array.isArray(v) ? v.length === 0 : !String(v ?? '').trim());
 
@@ -77,6 +85,26 @@ function questionFor(first, gap, { firstEver = false } = {}) {
   return { text: lines.join('\n'), buttons: q.buttons || [] };
 }
 
+/**
+ * Whether to offer the agreement template today: no Hebrew template yet, at
+ * least one represented player has the agency's own agreement in his file,
+ * and it was not offered within TEMPLATE_COOLDOWN_DAYS.
+ */
+async function templateDue(db, players, state = {}, today = israelDate(new Date())) {
+  const last = (state.recent || []).find((r) => r && r.key === TEMPLATE_KEY);
+  if (last && daysBetween(last.on, today) < TEMPLATE_COOLDOWN_DAYS) return false;
+  if (!agreementExamples(players, { today, limit: 1 }).length) return false;
+  return !(await getTemplate(db, 'he'));
+}
+
+/** The offer, in Golda's voice, with its two buttons. */
+function templateQuestion(first, { firstEver = false } = {}) {
+  const lines = [`*שאלה יומית, ${first}* ❓`, 'עוד אין לנו תבנית להסכם ייצוג, אז אי אפשר לשלוח הסכם לחתימה בטלפון.',
+    'להכין אותה מההסכמים החתומים שכבר יש בתיקים של השחקנים? אראה לך אותה לפני שאשמור.'];
+  if (firstEver) lines.push('', 'ואם השאלה היומית מיותרת, מספיק לכתוב לי "בלי שאלה יומית".');
+  return { text: lines.join('\n'), buttons: ['כן, תכיני', 'לא עכשיו'] };
+}
+
 async function readState(db) {
   const snap = await db.collection(META[0]).doc(META[1]).get();
   return snap.exists ? (snap.data() || {}) : {};
@@ -101,16 +129,18 @@ async function askDaily(db, owner, players, now = new Date(), { hour, send = nul
   const last = history[history.length - 1];
   if (last && now.getTime() - (Number(last.at) || 0) < WAIT_FOR_ANSWER_MS && awaitsAnswer(history)) return { skipped: 'waiting for an answer' };
 
-  const gap = pickDataGap(players, state, today);
-  if (!gap) return { skipped: 'nothing important is missing' };
   const first = (owner.name || '').split(' ')[0] || 'לו';
-  const q = questionFor(first, gap, { firstEver: !state.lastKey });
+  const offer = await templateDue(db, players, state, today);
+  const gap = offer ? null : pickDataGap(players, state, today);
+  if (!offer && !gap) return { skipped: 'nothing important is missing' };
+  const key = offer ? TEMPLATE_KEY : gap.key;
+  const q = offer ? templateQuestion(first, { firstEver: !state.lastKey }) : questionFor(first, gap, { firstEver: !state.lastKey });
   await nudge(db, owner, { body: q.text, buttons: q.buttons, kind: 'question', remember: true }, { now: now.getTime(), send, job });
-  const recent = [...(state.recent || []).filter((r) => r && r.key !== gap.key), { key: gap.key, on: today }].slice(-KEEP_RECENT);
+  const recent = [...(state.recent || []).filter((r) => r && r.key !== key), { key, on: today }].slice(-KEEP_RECENT);
   // merge: "enabled" belongs to the daily_question tool and is never written from here
-  await db.collection(META[0]).doc(META[1]).set({ lastKey: gap.key, lastAskedOn: today, recent, updatedAt: now.getTime() }, { merge: true });
-  job.note(`daily question → ${owner.email}: ${gap.field}`);
-  return { sent: 1, key: gap.key };
+  await db.collection(META[0]).doc(META[1]).set({ lastKey: key, lastAskedOn: today, recent, updatedAt: now.getTime() }, { merge: true });
+  job.note(`daily question → ${owner.email}: ${offer ? 'agreement template' : gap.field}`);
+  return { sent: 1, key };
 }
 
 // ── the agent's tool: on, off, status ────────────────────────────────────────
@@ -143,4 +173,4 @@ function dailyQuestionTools({ db, admin, identity = {}, role, channel = 'whatsap
   };
 }
 
-module.exports = { GAPS, pickDataGap, questionFor, askDaily, dailyQuestionTools, DAILY_QUESTION_TOOL_DEF, FROM_HOUR, TO_HOUR, COOLDOWN_DAYS };
+module.exports = { GAPS, pickDataGap, questionFor, templateDue, templateQuestion, askDaily, dailyQuestionTools, DAILY_QUESTION_TOOL_DEF, FROM_HOUR, TO_HOUR, COOLDOWN_DAYS, TEMPLATE_KEY, TEMPLATE_COOLDOWN_DAYS };

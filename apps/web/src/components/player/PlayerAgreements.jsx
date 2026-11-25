@@ -34,6 +34,8 @@ const STATE = {
 const day = (iso) => (iso ? iso.slice(0, 10) : '');
 const LINK_DAYS = 14;
 const MAX_LINK_DAYS = 30;
+// What a person reads when a language has no template yet (lib/agreements.js NO_TEMPLATE app).
+const NO_TEMPLATE = 'There is no agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.';
 
 /** Making an agreement: language, period, who signs, how long the link works. */
 function CreateDialog({ player, templates, onClose, onMade }) {
@@ -48,7 +50,6 @@ function CreateDialog({ player, templates, onClose, onMade }) {
   const [minorAsked, setMinorAsked] = useState(false);
   const minor = known === null ? minorAsked : known;
   const [guardian, setGuardian] = useState('');
-  const [playerSigns, setPlayerSigns] = useState(true);
   const [days, setDays] = useState(String(LINK_DAYS));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -63,13 +64,13 @@ function CreateDialog({ player, templates, onClose, onMade }) {
   }[period.error];
   const guardianMissing = minor && guardian.trim().length < 2;
   // Closing asks first only once something was changed from how the dialog opened.
-  const isDirty = lang !== (langs[0] || 'he') || start !== today || months !== String(tpl?.defaultMonths || 24) || !!end || minorAsked || !!guardian.trim() || !playerSigns || days !== String(LINK_DAYS);
+  const isDirty = lang !== (langs[0] || 'he') || start !== today || months !== String(tpl?.defaultMonths || 24) || !!end || minorAsked || !!guardian.trim() || days !== String(LINK_DAYS);
 
   if (!langs.length) {
     return (
       <Modal title={t('New representation agreement')} onClose={onClose} viewOnly>
         <p style={{ fontSize: 13.5, lineHeight: 1.6, color: 'var(--text-2)', margin: 0 }}>
-          {t('There is no agreement template yet. An admin makes one in System › Agreements (the agency\'s own text with placeholders), or asks Golda to build it from an existing agreement.')}
+          {t(NO_TEMPLATE)}
         </p>
       </Modal>
     );
@@ -82,12 +83,12 @@ function CreateDialog({ player, templates, onClose, onMade }) {
     try {
       const r = await createAgreement({
         playerId: player.id, lang, start, ...(end ? { end } : { months: Number(months) }),
-        ...(minor ? { guardianName: guardian.trim(), playerSigns } : {}), ...(known === null ? { minor } : {}),
+        ...(minor ? { guardianName: guardian.trim() } : {}), ...(known === null ? { minor } : {}),
         days: Number(days) || LINK_DAYS,
       });
       setMade(r.agreement);
       onMade(r.agreement);
-    } catch (e) { setError(e.message || t('Save failed.')); }
+    } catch (e) { setError(e.code === 'no_template' ? t(NO_TEMPLATE) : e.message || t('Save failed.')); }
     setBusy(false);
   };
 
@@ -105,7 +106,7 @@ function CreateDialog({ player, templates, onClose, onMade }) {
     );
   }
 
-  const who = minor ? `${guardian.trim() || t('the parent or guardian')}${playerSigns ? ` + ${player.fullName || ''}` : ''}` : player.fullName || '';
+  const who = minor ? `${guardian.trim() || t('the parent or guardian')} + ${player.fullName || ''}` : player.fullName || '';
   return (
     <Modal title={t('New representation agreement')} onClose={onClose} isDirty={isDirty} onSave={submit}
       footer={<><button type="button" className="btn btn-ghost" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn btn-primary" onClick={submit} disabled={busy || !period.ok || guardianMissing}>{busy ? t('Making…') : t('Make the agreement')}</button></>}>
@@ -129,15 +130,9 @@ function CreateDialog({ player, templates, onClose, onMade }) {
           </label>
         )}
         {minor && (
-          <>
-            <Field label={t('Parent or guardian who signs (full name)')} required error={guardianMissing && guardian ? t('Write the full name.') : ''}>
-              <input value={guardian} onChange={(e) => setGuardian(e.target.value)} maxLength={80} />
-            </Field>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
-              <input type="checkbox" checked={playerSigns} onChange={(e) => setPlayerSigns(e.target.checked)} />
-              {t('The player signs too, on the same page')}
-            </label>
-          </>
+          <Field label={t('Parent or guardian who signs (full name)')} required hint={t('The player signs too, on the same page.')} error={guardianMissing && guardian ? t('Write the full name.') : ''}>
+            <input value={guardian} onChange={(e) => setGuardian(e.target.value)} maxLength={80} />
+          </Field>
         )}
         <Field label={t('The link works for (days)')} hint={t('{d} days unless you choose otherwise, {max} at most.', { d: LINK_DAYS, max: MAX_LINK_DAYS })}>
           <input type="number" min="1" max={MAX_LINK_DAYS} value={days} onChange={(e) => setDays(e.target.value)} />

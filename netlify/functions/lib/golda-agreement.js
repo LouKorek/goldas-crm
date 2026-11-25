@@ -6,8 +6,10 @@
 //                       message, makes it and returns the signing link
 //   agreement_list      a player's agreements and where each one stands
 //   agreement_link      stop an unsigned agreement's link, or issue a new one
-//   agreement_template  show a language's template, propose a new text, and
-//                       save it only after the writer's yes in a later message
+//   agreement_template  show a language's template, list the agency's own
+//                       signed agreements to build one from, propose a new
+//                       text, and save it only after the writer's yes in a
+//                       later message
 //
 // Making, linking and templates are an admin's (TOOL_ACTION in lib/wa-agent.js,
 // and checked here again); the list is open to whoever may read the player,
@@ -15,11 +17,11 @@
 // writer alone: Golda never sends it to the player or the family herself.
 // Neither an ID number nor a signature ever reaches the model: the views this
 // file returns are lib/agreements.js viewOf(), which has neither.
-const { dayText, checkTemplate, AGREEMENT_PLACEHOLDERS } = require('@goldas/domain');
+const { dayText, israelDate, checkTemplate, AGREEMENT_PLACEHOLDERS } = require('@goldas/domain');
 const agreements = require('./agreements.js');
 
 const AGREEMENT_TOOL_DEFS = [
-  { name: 'agreement_create', description: "Make a representation agreement for one player from the agency's template and get its private signing link (the player, or for a minor the parent or guardian, signs on the phone). Two steps: action=check with everything collected (start; end OR months, leave both out for the template's default length; lang he (default) or en; for a player under 18 the guardianName of the parent or guardian who signs) returns the summary to show the writer; action=confirm, ONLY after the writer's yes in a LATER message, makes it. days: how long the link works (14 when the writer named none, 30 at most). Admin only.",
+  { name: 'agreement_create', description: "Make a representation agreement for one player from the agency's template and get its private signing link (an adult signs alone on the phone; for a player under 18 the parent or guardian and the player both sign, on the same page). Two steps: action=check with everything collected (start; end OR months, leave both out for the template's default length; lang he (default) or en; for a player under 18 the guardianName of the parent or guardian who signs) returns the summary to show the writer; action=confirm, ONLY after the writer's yes in a LATER message, makes it. days: how long the link works (14 when the writer named none, 30 at most). When the language has no template yet, the result says how to prepare it from the agency's existing agreements. Admin only.",
     input_schema: { type: 'object', properties: {
       action: { type: 'string', enum: ['check', 'confirm'] },
       playerId: { type: 'string', description: 'The id of the player in players, from search or list (check only)' },
@@ -29,7 +31,6 @@ const AGREEMENT_TOOL_DEFS = [
       lang: { type: 'string', enum: ['he', 'en'], description: "The agreement's language: he (default) or en" },
       guardianName: { type: 'string', description: 'For a player under 18: the full name of the parent or guardian who signs' },
       minor: { type: 'boolean', description: 'Only when the CRM has no date of birth: whether the player is under 18' },
-      playerSigns: { type: 'boolean', description: 'For a minor: whether the player signs too beside the guardian (default true)' },
       days: { type: 'integer', description: 'How many days the signing link works: 1 to 30. Leave out when none was named (14)' },
     }, required: ['action'], additionalProperties: false } },
   { name: 'agreement_list', description: "A player's representation agreements made in the system and where each stands: waiting for the signature (until when the link works, how often it was opened), expired, revoked, locked (too many failed tries), signed (when, from a phone or a computer, by whom) and whether the signed PDF is in his file. Use for \"מה עם ההסכם של…\", \"<שחקן> חתם?\".",
@@ -39,9 +40,9 @@ const AGREEMENT_TOOL_DEFS = [
       action: { type: 'string', enum: ['revoke', 'reissue'] }, agreementId: { type: 'string' },
       days: { type: 'integer', description: 'reissue: 1 to 30 days; leave out for 14' },
     }, required: ['action', 'agreementId'], additionalProperties: false } },
-  { name: 'agreement_template', description: `The agency's representation agreement template, one per language. action=show returns the current text, its version and settings, and the placeholder list. action=propose keeps a new text as a proposal (nothing changes yet): build it from the agency's own agreement when asked (read the player's representation agreement with read_file, keep the wording, and put placeholders where the names, dates and numbers of that one player were: ${AGREEMENT_PLACEHOLDERS.map((p) => `{{${p.key}}}`).join(' ')}; {{#minor}}…{{/minor}} holds text only for a player under 18, {{#adult}}…{{/adult}} only for an adult; '# ' starts a heading, a blank line a new paragraph). Never leave a real person's name, ID number, address or phone in a template. Show the writer the whole proposal and ask. action=save, ONLY after the writer's yes in a LATER message, saves it as the new version (earlier versions stay, signed agreements keep their own text). Admin only.`,
+  { name: 'agreement_template', description: `The agency's representation agreement template, one per language. action=show returns the current text, its version and settings, and the placeholder list. action=examples lists the agency's own signed agreements already in the players' files (reprFiles): the player, whether he is under 18 today and when the file was uploaded, the file's name and date, newest first; read one with read_file (field reprFiles, name as listed). action=propose keeps a new text as a proposal (nothing changes yet). Build it only from the agency's own agreement: read one or two examples (one of a minor and one of an adult when both exist) or the file the writer sent, copy the agency's wording as it is (never invent, add or reword a clause), and put placeholders where that one player's names, dates and numbers were: ${AGREEMENT_PLACEHOLDERS.map((p) => `{{${p.key}}}`).join(' ')}; {{#minor}}…{{/minor}} around text only for a player under 18 (the parent's part), {{#adult}}…{{/adult}} around text only for an adult; '# ' starts a heading, a blank line a new paragraph. Never leave a real person's name, ID number, address or phone in a template. Show the writer the whole proposal and ask. action=save, ONLY after the writer's yes in a LATER message, saves it as the new version (earlier versions stay, signed agreements keep their own text). Admin only.`,
     input_schema: { type: 'object', properties: {
-      action: { type: 'string', enum: ['show', 'propose', 'save'] },
+      action: { type: 'string', enum: ['show', 'examples', 'propose', 'save'] },
       lang: { type: 'string', enum: ['he', 'en'] },
       text: { type: 'string', description: 'propose: the whole template text' },
       defaultMonths: { type: 'integer', description: 'propose: the default length in months (24 when left out)' },
@@ -67,7 +68,8 @@ function agreementTools({ db, identity = {}, role, channel = 'whatsapp', session
     if (!me) throw new Error('the writer is not known');
   };
   const draftRef = () => db.collection(agreements.DRAFTS).doc(me);
-  const answer = (e) => {
+  const answer = (e, lang) => {
+    if (e instanceof agreements.AgreementError && e.code === 'no_template') return { refused: true, noTemplate: true, lang: lang === 'en' ? 'en' : 'he', reason: agreements.NO_TEMPLATE[lang === 'en' ? 'en' : 'he'].golda };
     if (e instanceof agreements.AgreementError) return { refused: true, reason: e.message };
     throw e;
   };
@@ -82,18 +84,18 @@ function agreementTools({ db, identity = {}, role, channel = 'whatsapp', session
   });
 
   return {
-    agreement_create: async ({ action, playerId, start, end, months, lang, guardianName, minor, playerSigns, days } = {}) => {
+    agreement_create: async ({ action, playerId, start, end, months, lang, guardianName, minor, days } = {}) => {
       adminOnly('make a representation agreement');
       if (action === 'check') {
-        const input = { playerId, start, end, months, lang, guardianName, minor, playerSigns, days };
+        const input = { playerId, start, end, months, lang, guardianName, minor, days };
         let p;
-        try { p = await agreements.prepareAgreement(db, { ...input, now: now() }); } catch (e) { return answer(e); }
+        try { p = await agreements.prepareAgreement(db, { ...input, now: now() }); } catch (e) { return answer(e, lang); }
         const summary = agreements.summaryOf(p);
         const span = agreements.linkDays(days);
         await draftRef().set({ input: JSON.parse(JSON.stringify(input)), summary, turn, at: now() });
         return {
           ready: true, summary, linkDays: span.days, ...(span.clamped ? { note: `A signing link works ${agreements.MAX_LINK_DAYS} days at most; say so.` } : {}),
-          signedBy: p.minor ? `${p.guardianName} (parent or guardian)${p.playerSigns ? ` and ${summary.player}` : ''}` : summary.player,
+          signedBy: p.minor ? `${p.guardianName} (parent or guardian) and ${summary.player}, on the same page` : summary.player,
           instruction: 'Show the writer this summary in short lines (player, period with dates, language, who signs, how long the link works) and ask with buttons [[כפתורים: ליצור, לשנות]]. Nothing is made yet. Only after the yes in a LATER message call agreement_create action=confirm.',
         };
       }
@@ -103,7 +105,7 @@ function agreementTools({ db, identity = {}, role, channel = 'whatsapp', session
       if (!d || !d.input) return { refused: true, reason: 'there is nothing waiting to be made: run action=check first' };
       if (!(turn > Number(d.turn))) throw new Error('the writer has not answered the summary yet: show it, ask, and confirm only after the yes in a later message');
       let made;
-      try { made = await agreements.createAgreement(db, { ...d.input, by: { email: me, name: sender, channel }, now: now() }); } catch (e) { return answer(e); }
+      try { made = await agreements.createAgreement(db, { ...d.input, by: { email: me, name: sender, channel }, now: now() }); } catch (e) { return answer(e, d.input.lang); }
       await draftRef().delete();
       await db.collection('audit').add({
         action: 'create', collection: agreements.COL, docId: made.id, name: made.summary.player,
@@ -147,7 +149,15 @@ function agreementTools({ db, identity = {}, role, channel = 'whatsapp', session
       if (action === 'show') {
         const t = await agreements.templateView(db, l);
         return t ? { exists: true, lang: l, version: t.version, defaultMonths: t.defaultMonths, maxMonths: t.maxMonths, agencyName: t.agencyName, text: t.text, placeholders: AGREEMENT_PLACEHOLDERS.map((p) => p.key) }
-          : { exists: false, lang: l, note: agreements.NO_TEMPLATE[l], placeholders: AGREEMENT_PLACEHOLDERS.map((p) => p.key) };
+          : { exists: false, lang: l, note: agreements.NO_TEMPLATE[l].golda, placeholders: AGREEMENT_PLACEHOLDERS.map((p) => p.key) };
+      }
+      if (action === 'examples') {
+        const players = (await db.collection('players').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+        const list = agreements.agreementExamples(players, { today: israelDate(new Date(now())) });
+        return { count: list.length, examples: list,
+          instruction: list.length
+            ? 'Read one or two of these with read_file (playerId, field reprFiles, name = file): one of a minor (minorWhenUploaded true, or the parent signs in it) and one of an adult when both exist. Then propose the template from that wording. A file that cannot be read (e.g. an old Word .doc): try another one.'
+            : 'There is no signed agreement in the players\' files yet: ask the writer to send the agreement file (a PDF, a photo or a document) here in the chat, and build the template from it.' };
       }
       if (action === 'propose') {
         const body = String(text || '').replace(/\r\n?/g, '\n').trim();
@@ -157,7 +167,7 @@ function agreementTools({ db, identity = {}, role, channel = 'whatsapp', session
         const settings = agreements.periodSettings({ defaultMonths, maxMonths });
         await ref.set({ draft: { text: body, ...settings, agencyName: String(agencyName || '').slice(0, 60), by: me, turn, at: now() } }, { merge: true });
         return { proposed: true, lang: l, ...settings, placeholdersUsed: check.used,
-          instruction: 'Show the writer the whole text as it will be saved, say nothing is saved yet, and ask with buttons [[כפתורים: לשמור, לשנות]]. Only after the yes in a LATER message call action=save.' };
+          instruction: 'Show the writer the whole text as it will be saved, say where the wording comes from (which agency agreement it was copied from, with placeholders in place of that player\'s details), that nothing is saved yet, and (when an agreement was asked for) that you go on with it after saving. Ask with buttons [[כפתורים: לשמור, לשנות]]. Only after the yes in a LATER message call action=save.' };
       }
       if (action === 'save') {
         const snap = await ref.get();
@@ -167,10 +177,10 @@ function agreementTools({ db, identity = {}, role, channel = 'whatsapp', session
         if (!(turn > Number(d.turn))) throw new Error('the writer has not answered the proposal yet: show it, ask, and save only after the yes in a later message');
         try {
           const r = await agreements.saveTemplate(db, { lang: l, text: d.text, defaultMonths: d.defaultMonths, maxMonths: d.maxMonths, agencyName: d.agencyName, by: { email: me, name: sender }, now: now() });
-          return { saved: true, lang: l, version: r.version, note: 'Saved as the new version; earlier versions are kept and agreements already made keep their own text.' };
+          return { saved: true, lang: l, version: r.version, note: 'Saved as the new version; earlier versions are kept and agreements already made keep their own text. If an agreement was asked for before the template was made, go on with it now: agreement_create action=check.' };
         } catch (e) { return answer(e); }
       }
-      throw new Error('action is show, propose or save');
+      throw new Error('action is show, examples, propose or save');
     },
   };
 }

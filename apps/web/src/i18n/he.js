@@ -1139,7 +1139,6 @@ const HE = {
   'A new link was made. Copy it and send it on.': 'נוצר לינק חדש. אפשר להעתיק ולשלוח הלאה.',
   'Stop the signing link? It stops working at once; you can issue a new one later.': 'לעצור את לינק החתימה? הוא מפסיק לעבוד מיד, ואפשר להוציא לינק חדש אחר כך.',
   'Issue a new signing link? The current link stops working at once.': 'להוציא לינק חתימה חדש? הלינק הנוכחי מפסיק לעבוד מיד.',
-  'There is no agreement template yet. An admin makes one in System › Agreements (the agency\'s own text with placeholders), or asks Golda to build it from an existing agreement.': 'עוד אין תבנית הסכם. מנהל מערכת יוצר אותה במערכת › הסכמי ייצוג (הנוסח של הסוכנות עם שדות למילוי), או מבקש מגולדה לבנות אותה מהסכם קיים.',
   'Agreement made': 'ההסכם נוצר',
   'Send this link to {who}. It works until {date}, once.': 'שלחו את הלינק הזה ל{who}. הוא עובד עד {date}, פעם אחת.',
   'You will get a message from Golda as soon as it is signed. The signed PDF goes into the documents by itself.': 'גולדה תשלח הודעה ברגע שייחתם. ה-PDF החתום נשמר במסמכים לבד.',
@@ -1154,7 +1153,6 @@ const HE = {
   'The player is under 18 (his date of birth is not in the CRM)': 'השחקן מתחת לגיל 18 (תאריך הלידה שלו לא ב-CRM)',
   'Parent or guardian who signs (full name)': 'ההורה או האפוטרופוס שחותם (שם מלא)',
   'Write the full name.': 'צריך לכתוב שם מלא.',
-  'The player signs too, on the same page': 'גם השחקן חותם, באותו עמוד',
   'The link works for (days)': 'הלינק עובד (ימים)',
   '{d} days unless you choose otherwise, {max} at most.': '{d} ימים אם לא בוחרים אחרת, {max} לכל היותר.',
   'From {a} to {b} ({n} months)': 'מ-{a} עד {b} ({n} חודשים)',
@@ -1172,7 +1170,6 @@ const HE = {
   'The Hebrew template': 'התבנית בעברית',
   'The English template': 'התבנית באנגלית',
   'Version {v} · saved {when}{by}': 'גרסה {v} · נשמרה {when}{by}',
-  'No template in this language yet: agreements in it cannot be made until one is saved.': 'עוד אין תבנית בשפה הזו: אי אפשר ליצור בה הסכמים עד שתישמר אחת.',
   'The agreement text': 'נוסח ההסכם',
   "'# ' at the start of a line makes a heading; a blank line starts a new paragraph.": "'# ' בתחילת שורה הופך אותה לכותרת; שורה ריקה מתחילה פסקה חדשה.",
   'While you type in Hebrew, {a} and {b} can look reversed here; the preview shows them as they really are.': 'בזמן ההקלדה בעברית, {a} ו-{b} יכולים להיראות כאן הפוכים; בתצוגה המקדימה הם מופיעים כמו שהם באמת.',
@@ -1201,7 +1198,6 @@ const HE = {
   'Your signature was saved.': 'החתימה נשמרה.',
   'Remove your saved signature? Agreements you make from now on carry your name without a drawn signature.': 'להסיר את החתימה השמורה? הסכמים שתיצור מעכשיו יישאו את השם שלך בלי חתימה מצוירת.',
   'Remove signature': 'הסרת החתימה',
-  'An admin makes an agreement on the player\'s page or asks Golda ("הסכם ייצוג ל…"). The player, or for a minor the parent or guardian, signs on the phone through a private link; the signed PDF goes into the player\'s documents and the representation dates are updated.': 'מנהל מערכת יוצר הסכם בעמוד השחקן או מבקש מגולדה ("הסכם ייצוג ל…"). השחקן, או לקטין ההורה או האפוטרופוס, חותם בטלפון דרך לינק פרטי; ה-PDF החתום נשמר במסמכי השחקן ותאריכי הייצוג מתעדכנים.',
 
   // ── Golda outreach drafts: touches on a contact, the "open in WhatsApp" link ──
   'Open in WhatsApp': 'פתיחה בוואטסאפ',
@@ -1395,6 +1391,11 @@ const HE = {
   'No matching contacts.': 'אין אנשי קשר מתאימים.',
   'How we reached them': 'איך פנינו',
   'No player': 'בלי שחקן',
+  // Representation agreements: a minor always signs with the parent; no template yet → Golda prepares it.
+  'The player signs too, on the same page.': 'גם השחקן חותם, באותו עמוד.',
+  'An admin makes an agreement on the player\'s page or asks Golda ("הסכם ייצוג ל…"). The player signs on the phone through a private link (a minor together with the parent or guardian, on the same page); the signed PDF goes into the player\'s documents and the representation dates are updated.': 'מנהל מערכת יוצר הסכם בעמוד השחקן או מבקש מגולדה ("הסכם ייצוג ל…"). השחקן חותם בטלפון דרך לינק פרטי (קטין יחד עם ההורה או האפוטרופוס, באותו עמוד); ה-PDF החתום נשמר במסמכי השחקן ותאריכי הייצוג מתעדכנים.',
+  'There is no agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.': 'עוד אין תבנית הסכם. גולדה מכינה אותה מההסכמים הקיימים של הסוכנות כשמבקשים ממנה הסכם, או שאפשר לכתוב אותה במערכת › הסכמי ייצוג.',
+  'There is no template in this language yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written here.': 'עוד אין תבנית בשפה הזו. גולדה מכינה אותה מההסכמים הקיימים של הסוכנות כשמבקשים ממנה הסכם, או שאפשר לכתוב אותה כאן.',
 };
 
 export default HE;

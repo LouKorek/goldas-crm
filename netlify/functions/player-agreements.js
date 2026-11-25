@@ -4,7 +4,7 @@
 //
 //   GET  ?playerId=<id>     → { agreements, canCreate, templates: { he, en } }     anyone signed in
 //   GET  ?templates=1       → { he, en, signature: { has, name, savedAt } }       admins
-//   POST { action: 'create', playerId, lang, start, end?, months?, guardianName?, minor?, playerSigns?, days? }  admins
+//   POST { action: 'create', playerId, lang, start, end?, months?, guardianName?, minor?, days? }  admins (a minor's: the guardian and the player both sign)
 //   POST { action: 'revoke' | 'reissue' | 'retry', id, days? }                      admins
 //   POST { action: 'template_save', lang, text, defaultMonths, maxMonths, agencyName }   admins
 //   POST { action: 'signature_save', png } | { action: 'signature_clear' }        admins (their own signature)
@@ -65,7 +65,7 @@ async function handle(event, ctx, deps = {}) {
       case 'create': {
         const r = await agreements.createAgreement(db, {
           playerId: body.playerId, lang: body.lang, start: body.start, end: body.end, months: body.months,
-          guardianName: body.guardianName, minor: body.minor, playerSigns: body.playerSigns, days: body.days,
+          guardianName: body.guardianName, minor: body.minor, days: body.days,
           by: { email: user.email, name: user.name, channel: 'web' }, now, base,
         });
         await audit(db, user, { docId: r.id, name: r.summary.player, summary: `Representation agreement made: ${r.summary.player} · ${r.summary.start} → ${r.summary.end}`, fields: ['created'] });

@@ -76,7 +76,7 @@ function Template({ lang, saved, players, onSaved }) {
         <Title>{lang === 'he' ? t('The Hebrew template') : t('The English template')}</Title>
         <div style={{ fontSize: 12.5, color: 'var(--text-3)', marginBottom: 10 }}>
           {saved ? t('Version {v} · saved {when}{by}', { v: saved.version, when: fmtDateTime(saved.updatedAt), by: saved.updatedByName ? ` · ${saved.updatedByName}` : '' })
-            : t('No template in this language yet: agreements in it cannot be made until one is saved.')}
+            : t('There is no template in this language yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written here.')}
         </div>
         <Field label={t('The agreement text')} hint={<>{t("'# ' at the start of a line makes a heading; a blank line starts a new paragraph.")}{lang === 'he' && <> {t('While you type in Hebrew, {a} and {b} can look reversed here; the preview shows them as they really are.', { a: '\u2066{{#minor}}\u2069', b: '\u2066{{/minor}}\u2069' })}</>}</>} error={problems.join(' · ')}>
           <textarea ref={area} value={form.text} onChange={(e) => setForm((f) => ({ ...f, text: e.target.value }))} dir={lang === 'he' ? 'rtl' : 'ltr'} rows={16}
@@ -198,7 +198,7 @@ export default function AgreementTemplates() {
       <Card>
         <Title>{t('Representation agreements')}</Title>
         <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
-          {t('An admin makes an agreement on the player\'s page or asks Golda ("הסכם ייצוג ל…"). The player, or for a minor the parent or guardian, signs on the phone through a private link; the signed PDF goes into the player\'s documents and the representation dates are updated.')}
+          {t('An admin makes an agreement on the player\'s page or asks Golda ("הסכם ייצוג ל…"). The player signs on the phone through a private link (a minor together with the parent or guardian, on the same page); the signed PDF goes into the player\'s documents and the representation dates are updated.')}
         </div>
         <div className="chip-group" role="tablist" style={{ display: 'flex', marginTop: 12 }}>
           {['he', 'en'].map((l) => (

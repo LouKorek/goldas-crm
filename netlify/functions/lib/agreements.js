@@ -2,14 +2,16 @@
 //
 // An admin makes an agreement for a player from the agency's own template
 // (one per language, versioned), in the CRM or through Golda. The player, or
-// for a minor his parent or guardian (and the player too when it was made
-// that way), opens a private link on the phone (/sign/<token>,
+// for a minor his parent or guardian together with him, opens a private link on the phone (/sign/<token>,
 // apps/web/src/pages/SignPage.jsx), reads the text, types the name and the
 // ID number, draws the signature with a finger and signs. The server then
 // builds the signed PDF, files it in the player's representation documents
 // exactly as an uploaded one is filed, sets the representation's start and
 // end on the player through an audited, undoable change (so the existing
 // "representation ends" alert takes it from there) and tells the owner.
+// A minor's agreement is signed by the parent or guardian and by the player,
+// both on the same page; an adult signs alone. Agreements stored earlier with
+// playerSigns: false (the guardian alone) still open, sign and print as stored.
 //
 // Collections (functions only; the browser never reads them):
 //
@@ -227,23 +229,62 @@ const PERIOD_MESSAGES = {
   tooLong: (max) => `a representation agreement may run ${max} months at most`,
 };
 
+// A language with no template yet. app: the sentence a person reads in the
+// CRM. golda: what Golda's tool result tells her to do instead (never a screen
+// to go to, never a set sentence for the writer to type).
+const goldaNoTemplate = (name) => `There is no ${name} representation agreement template yet. Do not send the writer to a screen and do not ask him to type anything. `
+  + 'Say in one short line that there is no template yet and that you are preparing it now from the agency\'s existing agreements. '
+  + 'Then call agreement_template action=examples, read one or two of the files it lists with read_file (field reprFiles, the file name as listed; one of a minor and one of an adult when both exist) '
+  + 'and call agreement_template action=propose with the agency\'s own wording. When examples lists nothing, or none of the files can be read, ask the writer to send the agreement file (a PDF, a photo or a document) here in the chat and build it from that. '
+  + 'Once the template is saved after his yes, go on with the agreement that was asked for: agreement_create action=check again.';
 const NO_TEMPLATE = {
-  he: 'There is no representation agreement template in Hebrew yet. Make one in System › Agreements (admins), or ask Golda: "תבני את תבנית ההסכם מההסכם של <שחקן>".',
-  en: 'There is no representation agreement template in English yet. Make one in System › Agreements (admins), or ask Golda: "build the English agreement template from <player>\'s agreement".',
+  he: {
+    app: 'There is no Hebrew representation agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.',
+    golda: goldaNoTemplate('Hebrew'),
+  },
+  en: {
+    app: 'There is no English representation agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.',
+    golda: goldaNoTemplate('English'),
+  },
 };
+
+/**
+ * The agency's own representation agreements already on the players (the
+ * paper ones uploaded to reprFiles; never one this system made and filed),
+ * newest first, one per player: what Golda reads to build a template from.
+ * No file content, no document id.
+ */
+function agreementExamples(players, { today = israelDate(new Date()), limit = 8 } = {}) {
+  const day = (v) => (/^\d{4}-\d{2}-\d{2}/.test(String(v || '')) ? String(v).slice(0, 10) : null);
+  const rows = [];
+  for (const p of players || []) {
+    if (!p || p.deletedAt || (p.stage && p.stage !== 'represented')) continue;
+    const files = (Array.isArray(p.reprFiles) ? p.reprFiles : []).filter((f) => f && f.name && !f.agreementId && (f.fileId || f.url));
+    if (!files.length) continue;
+    const f = [...files].sort((a, b) => String(day(b.uploadedAt) || '').localeCompare(String(day(a.uploadedAt) || '')))[0];
+    const date = day(f.uploadedAt);
+    const minor = isMinorOn(p.dob, today);
+    const minorThen = date ? isMinorOn(p.dob, date) : null;
+    rows.push({ playerId: p.id, player: nameOf(p), ...(minor === null ? {} : { minor }), ...(minorThen === null ? {} : { minorWhenUploaded: minorThen }),
+      file: f.name, date, ...(f.type ? { type: f.type } : {}), ...(files.length > 1 ? { otherFiles: files.length - 1 } : {}) });
+  }
+  return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).slice(0, limit);
+}
 
 /**
  * Everything an agreement would be, checked, without writing anything:
  * { player, lang, template, period, minor, guardianName, playerSigns, text, missing }.
- * Throws an AgreementError with a sentence an admin or Golda can say.
+ * A minor's agreement always needs both signatures: playerSigns is true on
+ * every new agreement, whatever is sent. Throws an AgreementError with a
+ * sentence an admin or Golda can say.
  */
-async function prepareAgreement(db, { playerId, lang, start, end, months, guardianName, minor, playerSigns, now = Date.now() }) {
+async function prepareAgreement(db, { playerId, lang, start, end, months, guardianName, minor, now = Date.now() }) {
   const l = langOf(lang);
   const snap = await db.collection('players').doc(String(playerId || '-')).get();
   if (!snap.exists || snap.data().deletedAt) throw new AgreementError('player', 'player not found');
   const player = { id: snap.id, ...snap.data() };
   const template = await getTemplate(db, l);
-  if (!template) throw new AgreementError('no_template', NO_TEMPLATE[l]);
+  if (!template) throw new AgreementError('no_template', NO_TEMPLATE[l].app);
   const settings = periodSettings(template);
   const period = agreementPeriod({ start, end, months, ...settings });
   if (!period.ok) {
@@ -258,13 +299,12 @@ async function prepareAgreement(db, { playerId, lang, start, end, months, guardi
   const isMinor = known === null ? minor === true : known;
   const guardian = isMinor ? clean(guardianName, 80) : '';
   if (isMinor && guardian.length < 2) throw new AgreementError('guardian', `${nameOf(player)} is under 18: the full name of the parent or guardian who signs is needed`);
-  const signsToo = isMinor ? playerSigns !== false : true;
   const values = agreementValues({ playerName: nameOf(player), dob: player.dob, guardianName: guardian, start: period.start, end: period.end, months: period.months, agencyName: template.agencyName, today });
   const filled = fillTemplate(template.text, values, { minor: isMinor, lang: l });
   if (filled.missing.length) {
     throw new AgreementError('missing', `the template needs ${filled.missing.map((k) => `{{${k}}}`).join(', ')} and the CRM has no value for it${filled.missing.length > 1 ? 'm' : ''}: fill it in on the player first`);
   }
-  return { player, lang: l, template, period, minor: isMinor, minorFromDob: known !== null, guardianName: guardian, playerSigns: signsToo, text: filled.text };
+  return { player, lang: l, template, period, minor: isMinor, minorFromDob: known !== null, guardianName: guardian, playerSigns: true, text: filled.text };
 }
 
 /** What an admin or Golda reads before saying yes: no ID numbers, nothing private. */
@@ -272,7 +312,7 @@ function summaryOf(p) {
   return {
     player: nameOf(p.player), playerId: p.player.id, lang: p.lang,
     start: dayText(p.period.start), end: dayText(p.period.end), months: p.period.months,
-    minor: p.minor, ...(p.minor ? { guardian: p.guardianName, playerSignsToo: p.playerSigns } : {}),
+    minor: p.minor, ...(p.minor ? { guardian: p.guardianName } : {}),
     templateVersion: p.template.version || 1, maxMonths: periodSettings(p.template).maxMonths,
   };
 }
@@ -700,7 +740,7 @@ async function hasPending(db, now = Date.now()) {
 module.exports = {
   COL, LINKS, TEMPLATES, SIGNATURES, DRAFTS, DEFAULT_LINK_DAYS, MAX_LINK_DAYS, COPY_MINUTES, MAX_FAILED, PNG_MAX_BYTES, BODY_MAX, MAX_TRIES, RELATIONS, NO_TEMPLATE,
   AgreementError, linkDays, linkState, stateOf, signUrl,
-  getTemplate, saveTemplate, templateView, periodSettings, templateProblem,
+  getTemplate, saveTemplate, templateView, periodSettings, templateProblem, agreementExamples,
   pngOf, saveSignature, getSignature, clearSignature,
   prepareAgreement, summaryOf, createAgreement, revokeLink, reissueLink, viewOf, listAgreements, publicAgreement,
   agreementByToken, recordOpening, checkSubmission, signAgreement,

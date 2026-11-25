@@ -30,6 +30,8 @@ const players = [
     ];
   })(),
   ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567', goldaWeek: true, goldaMatchWish: true } : {}), ...(i === 3 ? { goldaAccess: true, goldaPhone: '0527654321', goldaWeek: false, goldaTrainingReminder: false, goldaMatchWish: false, goldaSendsStoppedAt: '2026-11-22T18:40:00.000Z' } : {}) })),
+  // A represented minor, for the agreement dialog (the parent and the player both sign): /players/m1.
+  { id: 'm1', stage: 'represented', category: 'youth', fullName: 'יואב כהן', gender: 'Men', primaryPosition: 'CM', currentClub: CLUBS[0], currentClubIsYouth: true, contractStatus: 'Under Contract', dob: '2011-06-01' },
 ];
 // The monthly report: p1 has a draft for the last full month (the month the dialog opens on).
 const LAST_MONTH = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString().slice(0, 7); })();

@@ -6,6 +6,7 @@
 // (lib/golda-identity.js + can() from the domain package). Every write is
 // logged in the one `audit` collection with the record before and after,
 // marked via: 'golda', so the Golda screen can show it and "undo" can reverse it.
+const zlib = require('zlib');
 const Anthropic = require('@anthropic-ai/sdk');
 const C = require('../data/crm-constants.js');
 
@@ -134,12 +135,51 @@ function matches(v, op, want) {
   }
 }
 
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/**
+ * The text of a Word .docx (a zip holding word/document.xml), one line per
+ * paragraph, or null when it is not one. Node's own zlib only; bounded.
+ */
+function docxText(buf) {
+  try {
+    const end = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    if (end < 0 || end + 22 > buf.length) return null;
+    const count = buf.readUInt16LE(end + 10);
+    let p = buf.readUInt32LE(end + 16);
+    for (let i = 0; i < count && p + 46 <= buf.length; i++) {
+      if (buf.readUInt32LE(p) !== 0x02014b50) return null;
+      const method = buf.readUInt16LE(p + 10), size = buf.readUInt32LE(p + 20);
+      const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), noteLen = buf.readUInt16LE(p + 32), at = buf.readUInt32LE(p + 42);
+      if (buf.toString('utf8', p + 46, p + 46 + nameLen) === 'word/document.xml') {
+        const from = at + 30 + buf.readUInt16LE(at + 26) + buf.readUInt16LE(at + 28);
+        const raw = buf.subarray(from, from + size);
+        const xml = (method === 8 ? zlib.inflateRawSync(raw, { maxOutputLength: 20 * 1024 * 1024 }) : method === 0 ? raw : null)?.toString('utf8');
+        if (!xml) return null;
+        return xml.replace(/<w:tab\/>/g, '\t').replace(/<w:br\/>|<\/w:p>/g, '\n').replace(/<[^>]+>/g, '')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+          .replace(/&#(x?)([0-9a-f]+);/gi, (_, x, n) => String.fromCodePoint(parseInt(n, x ? 16 : 10))).replace(/&amp;/g, '&')
+          .replace(/\n{3,}/g, '\n\n').trim();
+      }
+      p += 46 + nameLen + extraLen + noteLen;
+    }
+    return null;
+  } catch { return null; }
+}
+
 // Stored files are base64 data URLs; split into Claude content blocks.
-function fileBlocks(dataUrl, label) {
+// name: the file's name, for a file stored without a type (a .docx or a .pdf
+// the browser did not name).
+function fileBlocks(dataUrl, label, name = '') {
   const m = /^data:([^;,]+)?(?:;[^,]*)?;base64,(.*)$/s.exec(dataUrl || '');
   if (!m) return null;
-  const type = (m[1] || '').toLowerCase();
+  let type = (m[1] || '').toLowerCase();
   const data = m[2];
+  if (!type || type === 'application/octet-stream') type = /\.docx$/i.test(name) ? DOCX : /\.pdf$/i.test(name) ? 'application/pdf' : type;
+  if (type === DOCX) {
+    const text = docxText(Buffer.from(data, 'base64'));
+    return text ? [{ type: 'text', text: `${label}\n${text.slice(0, 200000)}` }] : null;
+  }
   if (type === 'application/pdf') return [{ type: 'text', text: label }, { type: 'document', source: { type: 'base64', media_type: type, data } }];
   if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(type)) return [{ type: 'text', text: label }, { type: 'image', source: { type: 'base64', media_type: type, data } }];
   if (type.startsWith('text/') || type === 'application/json' || type === 'text/csv') {
@@ -281,7 +321,7 @@ How you work:
 - A video for YouTube ("תעלי ליוטיוב", "סרטון ביצועים חדש של…", or a video sent with a player's name): find the player or prospect, then youtube_upload action=draft (it fills the title, description, privacy, playlist and cover in the style of Lou's channel; pass extra for the free part such as the opponent, and override title/description/playlist only when the writer dictated them). Show the draft in full (כותרת, תיאור, פרטיות, פלייליסט, קאבר) and say the player's current video link will be replaced. Only after the writer's yes in a later message: action=confirm. If confirm returns a page link, send it as is: big videos do not pass through WhatsApp (16 MB), so the writer opens the link on the phone and picks the file. You never upload without that yes, and never to anywhere but Lou's channel. After the upload the record's videoLink is replaced automatically and the writer gets the new and the previous link, so do not update videoLink yourself. An image sent afterwards for the cover → action=cover (add cover=style when it is a plain photo of the player, so the name and facts are drawn on it like the channel's covers; a finished designed cover goes as it is). "איך אנחנו מעלים סרטונים" / the style → youtube_style. A video sent with no player named: ask whose it is.
 - The agency's website gold-as.com (admins only; "תוסיפי את … לאתר", "תעדכני באתר", "תורידי מהאתר", "תשני באתר את הטקסט…"): you change it yourself with website_read, website_edit and website_publish. First website_read (players for the cards; texts or links for their ids). Then website_edit with every change of the request in one call; it builds a draft and nothing is live. A card has: the name in English, the club in English with the age group in brackets for a youth team ("Hapoel Hadera (U19)"), the position in short codes, at most two ("DM / CM"), the year of birth, the foot (Right/Left/Both) and the flags as country codes (["il"], ["il","de"]). Take what you can from the player's CRM record (translate the position and the club to that form) and ask only for what is missing. A new card needs the player's picture: the writer sends it with the request, best as a PNG with a transparent background sent as a document (a regular WhatsApp photo is a JPG and loses the transparency); pass photo:"attached" and you get the finished card photo back, and the writer gets it as a file. If the result says the picture has no transparent background, tell the writer the card will show the picture's own background and ask whether to continue or send a cut-out one. Show the draft line by line, say it is not live yet, and ask with buttons [[כפתורים: כן, לפרסם | לא]]. Only after the yes in a later message: website_publish action=publish (about a minute), then report what is live with the link https://gold-as.com. You never publish without that yes. Several changes asked together go live in one publish. "תבטלי את השינוי באתר" → website_publish action=undo (it asks once more; undo_last is only for the CRM). Lou also edits the site from his own panel; both work side by side, and you always start from the live site.
 - A message you started yourself is in this chat as your own turn. A website draft you prepared after a CRM change (your message that opens with "האתר לא מעודכן לפי ה-CRM" 🌐): the draft already exists, so on the writer's yes call website_publish action=publish; on a no, website_read part=draft and take those lines out with website_edit drop (discard=true when nothing else is in the draft). When that message only asked what to write on a card, take the answer and prepare the draft with website_edit as usual.
-- Your daily question (your message that opens with "שאלה יומית" ❓): the writer's next message is usually its answer, in whatever topic you are. Find that player and save the answer with update: dates as YYYY-MM-DD, foot as Right/Left/Both, contractStatus as Under Contract/Free/Loan/Trial, the position in the CRM's codes, nationalities as country names in English. Confirm in one line. "דלג" / "לא יודע" → fine, no insisting and no other question instead. "בלי שאלה יומית" / "תפסיקי לשאול כל יום" → daily_question action=off; "תחזירי את השאלה היומית" → action=on.
+- Your daily question (your message that opens with "שאלה יומית" ❓): the writer's next message is usually its answer, in whatever topic you are. Find that player and save the answer with update: dates as YYYY-MM-DD, foot as Right/Left/Both, contractStatus as Under Contract/Free/Loan/Trial, the position in the CRM's codes, nationalities as country names in English. Confirm in one line. "דלג" / "לא יודע" → fine, no insisting and no other question instead. When that daily question offered to prepare the representation agreement template (it says there is no agreement template yet): a yes ("כן, תכיני") → prepare it now on the agreements path below (examples, read_file, propose, buttons, save after a later yes), without an agreement at the end; "לא עכשיו" → fine, one line, nothing else. "בלי שאלה יומית" / "תפסיקי לשאול כל יום" → daily_question action=off; "תחזירי את השאלה היומית" → action=on.
 - "מה חסר ל…" / "מה חסר בתיק של…" (a player's file) → find the player, then player_checklist with his playerId: the score, then what is missing, most important first, each with how to fix it, and the link to his page. "למי חסר הכי הרבה" / "איזה תיקים לא מלאים" → player_checklist with no playerId. What it lists as not known yet, say so; never guess it. A photo sent for a player goes in with attach_file field=photoFiles.
 - How a player did in a match ("אתמול X שיחק 70 דקות, גול אחד, 7", "Y לא שיחק", "ראיתי את Z, היה חלש, 5"): find the player, then match_report with his playerId and the match date (yesterday/today resolved against today's date in Israel) or the matchId; minutes 0 when he did not play; a rating only when one was said; the note in the writer's words, one short sentence. One call per player. Your morning question about yesterday's matches (your message that opens with "איך היה אתמול" ⚽) is answered this way, in one or several lines; "דלג" = record nothing. Say what you saved and his season so far in one line. "בלי שאלות על משחקים" / "תחזירי את השאלות על משחקים" → match_questions off / on.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
@@ -293,7 +333,7 @@ ${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה האחרון
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
 - A live player page (admins only) is a different thing from the PDF and never replaces it. Make one ONLY when the writer asks in so many words for a live page or a link to the player ("דף חי", "לינק לשחקן", "לינק חי", "live page"): find the player, then live_page_create with the club when one was named (one link per club; no club → a general link), days only when a period was named (14 otherwise, 90 at most) and lang "he" only when asked for Hebrew. Give the writer the link on its own line with for whom and until when it works. Never offer a live page instead of the PDF, never make one for "דף שחקן" / "CV", and never send the link to anyone but the writer: he sends it on himself. You tell Lou the first time a link is opened (your message that opens with 👀). "מי פתח את הדף של…" / "אילו לינקים פתוחים" → live_page_list. "תבטלי את הלינק" → live_page_list to find it, then live_page_revoke (it stops at once; say so).
-- A representation agreement signed in the system (admins only) is made from the agency's template. "הסכם ייצוג ל<שחקן>": find the player, collect the start, the end or the number of months (none named → the template's default), the language (Hebrew unless asked), and for a player under 18 the full name of the parent or guardian who signs; then agreement_create action=check and show its summary with buttons [[כפתורים: ליצור, לשנות]]. Only after the yes in a later message: action=confirm, and give the writer the signing link on its own line with for whom and until when it works; he sends it on himself, you never send it to the player or the family. No template → say so in the tool's words. You tell Lou once it is signed (your message that opens with ✍️); the signed PDF goes into the player's file and the representation dates are updated by themselves. "<שחקן> חתם?" / "מה עם ההסכם של…" → agreement_list. "תבטלי את הלינק להסכם" / "לינק חדש להסכם" → agreement_list, then agreement_link. "תבני את תבנית ההסכם מההסכם של <שחקן>" → read_file his representation agreement, then agreement_template action=propose with the same wording and placeholders, show it whole and save only after the yes in a later message. Never say an agreement is legally binding, and never repeat an ID number.
+- A representation agreement signed in the system (admins only) is made from the agency's template. "הסכם ייצוג ל<שחקן>": find the player, collect the start, the end or the number of months (none named → the template's default), the language (Hebrew unless asked), and for a player under 18 the full name of the parent or guardian who signs (a minor's agreement is always signed by the parent or guardian and by the player himself, on the same page; an adult signs alone); then agreement_create action=check and show its summary with buttons [[כפתורים: ליצור, לשנות]]. Only after the yes in a later message: action=confirm, and give the writer the signing link on its own line with for whom and until when it works; he sends it on himself, you never send it to the player or the family. No template in that language yet (the tool says so): never send the writer to a screen and never ask him to type anything; say in one short line that there is no template yet and that you are preparing it from the agency's existing agreements, then agreement_template action=examples, read one or two of them with read_file (one of a minor and one of an adult when both exist), and agreement_template action=propose: the agency's own wording copied as it is, placeholders where that player's names, dates and numbers were, {{#minor}}…{{/minor}} and {{#adult}}…{{/adult}} around what differs between the two, never a real person's name, ID, address or phone, never a clause or a word of your own. Show the whole proposal, say you go on with the agreement once it is saved, and ask [[כפתורים: לשמור, לשנות]]; after the yes in a later message action=save, then go on with the agreement that was asked for (agreement_create action=check and its summary with buttons). No example in the system → ask the writer to send the agreement file (a PDF, a photo or a document) here in the chat and build the template from it. Only the template ("תכיני תבנית הסכם") → the same path, without an agreement at the end. You tell Lou once it is signed (your message that opens with ✍️); the signed PDF goes into the player's file and the representation dates are updated by themselves. "<שחקן> חתם?" / "מה עם ההסכם של…" → agreement_list. "תבטלי את הלינק להסכם" / "לינק חדש להסכם" → agreement_list, then agreement_link. A template from a named player's agreement ("מההסכם של <שחקן>") → read_file his representation agreement, then the same path. Never say an agreement is legally binding, and never repeat an ID number.
 - What you send on your own to a connected player (admins only): "תשלחי ל… לוח שבועי" / "תזכירי ל… לפני אימונים" / "תאחלי ל… בהצלחה לפני משחקים" / "תפסיקי לשלוח ל… תזכורות" → find the player, then player_messages with action on/off and kinds week / training / match (or all); "מה גולדה שולחת ל…" → action=status. Each kind is separate and all start off. It works only for a represented player connected to you (the "גולדה לשחקן" card: goldaAccess and his number); if not, say that the card must be turned on first. Say in one line what he will get and when: the week on Saturday at 21:00, a reminder two hours before each training, good luck four hours before each match (the evening before when that falls before 08:00), only between 08:00 and 22:00, fixed texts of his own schedule only. He can stop them by writing "די" to you; the admins hear about it.
 - "חלון העברות" / "מתי נסגר החלון" / "מי מתאים לחלון" → transfer_windows (exact dates and deadline times; Israel is not in it yet, so check the web for the IFA dates and say where you found them), then connect it to players who need a club (free agents, contracts ending, loans ending) and the open requirements.
 - Golda opens follow-up tasks by herself for deals that sit too long in a stage (they say "מעקב:" and close by themselves when the deal moves). When asked what to do with a deal, mention its open follow-up.
@@ -346,7 +386,7 @@ const TOOLS = [
     }, required: ['collection'], additionalProperties: false } },
   { name: 'get', description: 'Read one full record by collection and id.',
     input_schema: { type: 'object', properties: { collection: { type: 'string', enum: Object.keys(ALL) }, id: { type: 'string' } }, required: ['collection', 'id'], additionalProperties: false } },
-  { name: 'read_file', description: "Open a document stored on a player (contract, passport, representation agreement) and see its contents. PDFs and images are shown to you in full. Omit name when the player has a single document in that field.",
+  { name: 'read_file', description: "Open a document stored on a player (contract, passport, representation agreement) and see its contents. PDFs and images are shown to you in full, a Word .docx as its text. Omit name when the player has a single document in that field.",
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, field: { type: 'string', enum: FILE_FIELDS }, name: { type: 'string', description: 'Display name of the document' } }, required: ['playerId', 'field'], additionalProperties: false } },
   { name: 'player_pdf', description: "Make the branded one-page player CV (PDF with the Gold A&S logo: age, position, foot, club, nationality, national team, notes, video and Transfermarkt links) and send it to the writer with your answer. English for clubs abroad (default), Hebrew for Israeli clubs. The writer forwards it; you never send it to anyone else.",
     input_schema: { type: 'object', properties: { playerId: { type: 'string' }, lang: { type: 'string', enum: ['en', 'he'] } }, required: ['playerId'], additionalProperties: false } },
@@ -563,8 +603,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
       if (chunks.some((c) => !c.exists)) throw new Error('the stored file is incomplete');
       dataUrl = chunks.map((c) => c.data().data).join('');
     }
-    const blocks = fileBlocks(dataUrl, `Document "${ref.name}" of ${snap.data().fullName} (${field}), uploaded ${ref.uploadedAt || 'unknown'}:`);
-    if (!blocks) return { name: ref.name, type: ref.type, note: 'This file type (e.g. Word) cannot be opened here; only PDF, images and text. Ask for a PDF or photo.' };
+    const blocks = fileBlocks(dataUrl, `Document "${ref.name}" of ${snap.data().fullName} (${field}), uploaded ${ref.uploadedAt || 'unknown'}:`, ref.originalName || ref.name);
+    if (!blocks) return { name: ref.name, type: ref.type, note: 'This file type (e.g. an old Word .doc) cannot be opened here; only PDF, images, Word .docx and text. Ask for a PDF or photo.' };
     return { __content: blocks };
   }
 
@@ -878,7 +918,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   const currentText = userText + fileNote;
   const current = { role: 'user', content: currentText };
   // A PDF or photo sent with the message is also shown to Claude directly.
-  const seen = media ? fileBlocks(`data:${media.mimeType};base64,${media.buffer.toString('base64')}`, `The file sent with this message (${media.filename}):`) : null;
+  const seen = media ? fileBlocks(`data:${media.mimeType};base64,${media.buffer.toString('base64')}`, `The file sent with this message (${media.filename}):`, media.filename) : null;
   if (messages.length && messages[messages.length - 1].role === 'user') messages[messages.length - 1].content += `\n${current.content}`;
   else messages.push(current);
   if (seen) {
