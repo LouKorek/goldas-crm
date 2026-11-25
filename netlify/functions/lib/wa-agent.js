@@ -12,7 +12,7 @@ const C = require('../data/crm-constants.js');
 const MODEL = 'claude-opus-5-5';
 const { OWNER_EMAIL } = require('./firestore.js');
 const { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
-  computeAlerts, mergeSettings, topMatches, explainMatch, israelDate } = require('@goldas/domain');
+  computeAlerts, mergeSettings, topMatches, explainMatch, israelDate, cleanKnows } = require('@goldas/domain');
 const { internalHeaders } = require('./auth.js');
 const { loadMemories, memorySection, memoryTools } = require('./golda-memory.js');
 const { insightTools } = require('./golda-insights.js');
@@ -30,6 +30,7 @@ const { playerMessagesTools, PLAYER_MESSAGES_TOOL_DEF } = require('./golda-playe
 const { monthlyReportTools, MONTHLY_REPORT_TOOL_DEF } = require('./golda-monthly-report.js');
 const { financeTools, financeSection, PAYMENTS_TOOL_DEFS } = require('./golda-finance.js');
 const { agreementTools, AGREEMENT_TOOL_DEFS } = require('./golda-agreement.js');
+const { networkTools, networkSection, NETWORK_TOOL_DEFS } = require('./golda-network.js');
 const { chooseEffort } = require('./golda-effort.js');
 const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
@@ -196,6 +197,8 @@ function cleanContractTerms(t) {
 function validate(col, data, isCreate) {
   const bad = (m) => { throw new Error(m); };
   if (col === 'players' && 'contractTerms' in data) data.contractTerms = cleanContractTerms(data.contractTerms);
+  if (col === 'contacts' && 'knows' in data) data.knows = cleanKnows(data.knows);
+  if (col === 'meetings' && 'linkedContacts' in data && !Array.isArray(data.linkedContacts)) bad('linkedContacts must be a list of contact ids');
   const inList = (k, list) => { if (data[k] && !list.includes(data[k])) bad(`${k} must be one of: ${list.join(', ')}`); };
   inList('primaryPosition', C.POSITIONS);
   inList('foot', C.FOOT_OPTIONS);
@@ -283,6 +286,7 @@ How you work:
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
 ${financeSection(identity.role)}
 ${outreachSection(channel)}
+${networkSection(identity.role)}
 ${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
 - "דף שחקן" / "CV" / "פרופיל PDF" / "תשלחי לי את הדף של…" → find the player, then player_pdf (English by default, the sheet clubs abroad get; lang "he" when asked in Hebrew for an Israeli club). The PDF is sent right after your answer, so keep the text to one line saying it is attached. Never send it to anyone but the person asking.
@@ -307,14 +311,14 @@ CRM data (field names are exact; values in lists must match exactly; dates are Y
 - players: fullName*, gender* (Men|Women), dob, nationalities [country names], contractStatus (${C.CONTRACT_STATUS.join('|')}), currentClub, currentClubIsYouth (bool), loanFrom (when Loan), contractStart, contractEnd, loanParentEnd, primaryPosition (${C.POSITIONS.join('|')}), secondaryPositions [positions], foot (${C.FOOT_OPTIONS.join('|')}), natTeamStatus (${C.NAT_TEAM_STATUS.join('|')} or ""), passportNumber, passportExpiry, reprStart, reprEnd (representation agreement), goldaAccess (bool) + goldaPhone (digits): admins only, lets this represented player ask you about himself on WhatsApp (read-only, his own data); you write to him first only with what an admin switched on for him with player_messages (goldaWeek, goldaTrainingReminder, goldaMatchWish), never anything else, contractTerms (what the contract itself says: { salary, currency, salaryPeriod month|year|season, signingFee, releaseClause, optionDeadline YYYY-MM-DD, optionYears, optionHolder club|player|both, bonuses, keyDates [{ date, label }], notes, source: the file name }; set it whole, it replaces the previous terms), notes, profileLink, videoLink, ifaTeamUrl (football.org.il player page, Israeli players), league fields. Files: contractFiles, passportFiles, reprFiles, photoFiles (the player's photo) (use attach_file / remove_file, never update these directly).
 - pipeline_men / pipeline_women / pipeline_youth / pipeline_jewish (prospects, NOT linked to players): playerName*, status (${C.PIPELINE_STATUS.join('|')}), profileLink, videoLink, agentName, agentPhone, nationalities, dob, primaryPosition, secondaryPositions, height (cm, 130-225, as a string), foot, currentClub, currentClubIsYouth, natTeamStatus, natTeamCountry, transferFee, salary (digits or "Not specified"), notes, league fields, linkedClubs [{clubName, linkedAt ISO}].
 - club_requirements: clubName*, gender*, clubIsYouth, tablePosition, contactName, contactRole, contactPhone, requiredPosition (position), ageMin, ageMax, ageNotSpecified (bool), transferFee, salary, notes, league fields.
-- contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, league fields.
+- contacts: clubName and/or contactName*, clubIsYouth, contactRole (${C.CONTACT_ROLES.join('|')}), contactPhone, league fields, knows [{contactId, kind knows|introduced, note, at, by}] (written only with contact_link).
 - tasks: title*, dueDate, priority (Low|Normal|High|Urgent), notes, linkedPlayers [player ids], done (bool).
 - tmWatch (read and update; Jewish players found on Transfermarkt): name, club, clubCountry, marketValue, status (new|seen|...), starred (bool), addedToPipeline (bool).
 - igDaily (read-only): date, followers, newFollowers. igPosts (read-only): Instagram posts and their stats.
 - matches: date*, time (HH:MM), homeTeam*, awayTeam*, homeTeamIsYouth, awayTeamIsYouth, stadiumName, notes, linkedPlayers* [player ids], source "manual", watchedBy (who from the team watches it), playerStats {playerId: {minutes, goals, assists, rating, note, watchedBy}} (written only with match_report). (Israeli league fixtures also arrive automatically every morning.)
 - trainings: title*, time (HH:MM), place, notes, linkedPlayers [player ids], ageGroup (noar|nearim_a|nearim_b|nearim_c|yeladim_a|yeladim_b|yeladim_c|trom_a|trom_b|trom_c, for youth groups), and EITHER date (one-off, YYYY-MM-DD) OR rule {freq:"weekly", byWeekday:[0=Sunday…6=Saturday], start: YYYY-MM-DD, until: YYYY-MM-DD or null}. To skip or move one session of a weekly training, update exceptions: [{date, cancelled:true}] or [{date, date2, time}] (date = the original session's date).
 - Games and trainings are kept in sync, both ways, with Lou's Google calendar "Gold A&S Player Schedule": what you create, move or cancel here appears there within a minute, and what Lou adds or moves there ("אימון — <שחקן>", "משחק — <שחקן>") arrives here within ten minutes. The time of a training is the time the player has to be there (Lou's marker); put start times and other details in notes. So you never need to tell anyone to update the calendar by hand.
-- meetings: title*, date*, time (HH:MM start; empty = all day), endTime (HH:MM; default one hour after time), endDate (only for an item longer than a day), allDay (bool), location, notes, linkedPlayers [player ids the meeting is about]. Read-only, from Google: guests, meetUrl, calendarLink. These are Lou's meetings with players, business meetings and everything of the agency that is not a game or training, kept in sync both ways with his Google calendar "Gold A&S" exactly like games and trainings with the player schedule (what Lou adds, moves or deletes there arrives here within ten minutes; what you write appears there within a minute). Games and trainings never go into meetings. You cannot invite guests: if the writer wants invitations sent, they add the guests in Google Calendar. When the writer asks what they have today or this week, include meetings next to games and trainings.
+- meetings: title*, date*, time (HH:MM start; empty = all day), endTime (HH:MM; default one hour after time), endDate (only for an item longer than a day), allDay (bool), location, notes, linkedPlayers [player ids the meeting is about], linkedContacts [contact ids of the people in the meeting; the relationship map reads who met whom from it]. Read-only, from Google: guests, meetUrl, calendarLink. These are Lou's meetings with players, business meetings and everything of the agency that is not a game or training, kept in sync both ways with his Google calendar "Gold A&S" exactly like games and trainings with the player schedule (what Lou adds, moves or deletes there arrives here within ten minutes; what you write appears there within a minute). Games and trainings never go into meetings. You cannot invite guests: if the writer wants invitations sent, they add the guests in Google Calendar. When the writer asks what they have today or this week, include meetings next to games and trainings.
 - deals (a player or candidate against one club): playerId*, playerName, clubName*, stage (${C.PIPELINE_STATUS.join('|')}), requirementId, notes. To move a deal, update its stage; "Contract Signed" and "Not Relevant" close it. A deal that waits more than 14 days in a stage shows as an alert.
 - club_requirements also carry status (open|filled|closed) and validUntil (YYYY-MM-DD); an open requirement past validUntil shows as an alert. Nightly match scores per open requirement are in match_scores (read with get, id = requirement id). On Sunday morning you scout up to 3 open requirements on the web; what you found is in the requirement's scouting field ({ at, candidates [{ name, age, position, club, why, link }] }): outside players, not ours, never contacted.
 - League fields (players, pipeline, requirements, contacts): leagueMode ("select"|"manual"), leagueCountry (country), leagueTier (${C.LEAGUE_TIERS.join('|')}), leagueManual (free text when manual). The "league" label is computed for you.
@@ -385,10 +389,10 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
-const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list', 'outreach_prepare', 'outreach_link', 'writing_style', 'voice_reply']);
+const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list', 'outreach_prepare', 'outreach_link', 'writing_style', 'voice_reply', 'network_path', 'network_cold']);
 const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attach_file: 'edit', remove_file: 'edit', undo_last: 'edit', delete: 'delete', sync_fixtures: 'run_sync', youtube_upload: 'edit',
   // The public website is the agency's face: an admin only, like the settings.
   website_read: 'manage_settings', website_edit: 'manage_settings', website_publish: 'manage_settings',
@@ -409,7 +413,9 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // Money is for admins only, reading included.
   payments: 'money', payment_set: 'money',
   // Recording on a contact that a drafted message went out is an edit of the contact.
-  outreach_log: 'edit' };
+  outreach_log: 'edit',
+  // The explicit "knows" link is an edit of the contact.
+  contact_link: 'edit' };
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -814,7 +820,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...financeTools({ db, identity, role, update }),
     ...agreementTools({ db, identity, role, channel, session }),
     ...outreachTools({ db, admin, identity, role, channel, session, state, can }),
-    ...voiceTools({ identity, channel, turnText, state, db }) };
+    ...voiceTools({ identity, channel, turnText, state, db }),
+    ...networkTools({ db, identity, role, update }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

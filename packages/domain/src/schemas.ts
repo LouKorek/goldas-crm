@@ -6,6 +6,7 @@ import { STAGES, CATEGORIES, DEAL_STAGES } from './stages.js';
 import { POSITIONS, FOOT_OPTIONS, CONTRACT_STATUS, CONTACT_ROLES } from './constants.js';
 import { AGE_GROUPS } from './ageGroups.js';
 import { CURRENCIES, PAYER_KINDS } from './engines/finance.js';
+import { KNOWS_KINDS } from './engines/network.js';
 
 const str = z.string().trim();
 const optStr = str.optional().default('');
@@ -158,6 +159,17 @@ export const touchSchema = z.object({
   note: optStr,                                     // one line: what it was about
 }).passthrough();
 export type Touch = z.infer<typeof touchSchema>;
+// An explicit link from one contact to another (engines/network.ts): "knows"
+// (they know each other) or "introduced" (this contact introduced the agency
+// to the other one). Kept on one of the two contacts; the map reads it both ways.
+export const contactKnowsSchema = z.object({
+  contactId: str.min(1),
+  kind: z.enum(KNOWS_KINDS).optional().default('knows'),
+  note: optStr,
+  at: optStr,
+  by: optStr,
+}).passthrough();
+export type ContactKnows = z.infer<typeof contactKnowsSchema>;
 
 export const contactSchema = z.object({
   clubName: optStr, clubId: optStr, clubIsYouth: z.boolean().optional().default(false),
@@ -165,6 +177,7 @@ export const contactSchema = z.object({
   contactRole: z.enum(CONTACT_ROLES).or(z.literal('')).optional().default(''),
   contactPhone: optStr,
   touches: z.array(touchSchema).optional().default([]),
+  knows: z.array(contactKnowsSchema).optional().default([]),
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
 

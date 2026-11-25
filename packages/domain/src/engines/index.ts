@@ -9,3 +9,4 @@ export * from './matchStats.js';
 export * from './monthlyReport.js';
 export * from './finance.js';
 export * from './agreement.js';
+export * from './network.js';
