@@ -10,6 +10,8 @@
 //   feedbackStats      the team's 👍/👎 on Golda's answers
 const { israelDate, addDays, daysBetween, isClosedStage, daysInStage, scoreRequirement, stageOfPlayer, playerName, expandTrainings, DEAL_STAGE_LABELS } = require('@goldas/domain');
 
+const { isBirthday, ageOn } = require('./golda-graphic.js');
+
 const APP = 'https://goldas-crm.netlify.app';
 const DAY = 86400000;
 const live = (rows) => (rows || []).filter((r) => r && !r.deletedAt);
@@ -165,7 +167,53 @@ const RECAP_WEEKDAY = 4;     // Thursday
 const RECAP_HOUR = 18;
 const isRecapTime = (now = new Date()) => { const c = israelClock(now); return c.weekday === RECAP_WEEKDAY && c.hour === RECAP_HOUR; };
 
+/**
+ * Moments worth an Instagram graphic (lib/golda-instagram.js), for the owner to
+ * decide on: a represented player's birthday today, and a goal recorded for a
+ * represented player in yesterday's match data (matches/{id}.playerStats.{id}.goals).
+ * Each has a key; one already offered (offered[key]) never comes again.
+ * [{ key, kind: 'birthday' | 'goal', playerId, player, female, age?, goals?, match? }], birthdays first.
+ */
+function graphicEvents({ players = [], matches = [], offered = {}, today }) {
+  const yesterday = addDays(today, -1);
+  const reps = live(players).filter((p) => stageOfPlayer(p) === 'represented');
+  const byId = new Map(reps.map((p) => [p.id, p]));
+  const out = [];
+  for (const p of reps) {
+    if (!isBirthday(p.dob, today)) continue;
+    const key = `birthday|${p.id}|${today.slice(0, 4)}`;
+    if (!offered[key]) out.push({ key, kind: 'birthday', playerId: p.id, player: playerName(p), female: p.gender === 'Women', age: ageOn(p.dob, today) });
+  }
+  for (const m of live(matches)) {
+    if (m.date !== yesterday) continue;
+    for (const [pid, s] of Object.entries(m.playerStats || {})) {
+      const goals = Number(s && s.goals) || 0;
+      const p = byId.get(pid);
+      const key = `goal|${m.id}|${pid}`;
+      if (goals < 1 || !p || offered[key]) continue;
+      out.push({ key, kind: 'goal', playerId: pid, player: playerName(p), female: p.gender === 'Women', goals, match: { id: m.id, date: m.date, homeTeam: m.homeTeam || '', awayTeam: m.awayTeam || '' } });
+    }
+  }
+  return out;
+}
+
+/** The offer: what happened, the question, and two buttons. Never the picture itself. */
+function buildGraphicOffer(first, e) {
+  const lines = [`*גרפיקה לאינסטגרם, ${first}?* 🎨`];
+  if (e.kind === 'birthday') {
+    lines.push(`היום יום ההולדת${e.age ? ` ה-${e.age}` : ''} של *${e.player}*.`);
+  } else {
+    const verb = e.female ? 'כבשה' : 'כבש';
+    const what = e.goals === 1 ? 'גול' : e.goals === 2 ? 'צמד' : e.goals === 3 ? 'שלושער' : `${e.goals} גולים`;
+    lines.push(`*${e.player}* ${verb} ${what} אתמול ב${e.match.homeTeam} – ${e.match.awayTeam}.`);
+  }
+  lines.push(`להכין ${e.female ? 'לה' : 'לו'} גרפיקה בצבעי Gold A&S עם כיתוב מוכן? אני רק מכינה, ההעלאה אצלך.`);
+  lines.push(`${APP}/players/${e.playerId}`);
+  return { text: lines.join('\n'), buttons: ['כן, להכין', 'לא הפעם'] };
+}
+
 module.exports = {
   dealFollowups, followupsToClose, newRequirementFits, buildRequirementMessage, teamDealMoves, buildMovesMessage,
   weekAhead, recapFacts, feedbackStats, israelClock, isRecapTime, FOLLOW_DAYS, RECAP_HOUR,
+  graphicEvents, buildGraphicOffer,
 };

@@ -1397,6 +1397,12 @@ const HE = {
   'There is no agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.': 'עוד אין תבנית הסכם. גולדה מכינה אותה מההסכמים הקיימים של הסוכנות כשמבקשים ממנה הסכם, או שאפשר לכתוב אותה במערכת › הסכמי ייצוג.',
   'The template in this language has no text for a player of this age (under 18 or adult). Make the agreement in the other language, or add that part in System › Agreements.': 'בתבנית בשפה הזו אין נוסח לשחקן בגיל הזה (קטין או בגיר). אפשר להכין את ההסכם בשפה השנייה, או להוסיף את החלק הזה במערכת › הסכמי ייצוג.',
   'There is no template in this language yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written here.': 'עוד אין תבנית בשפה הזו. גולדה מכינה אותה מההסכמים הקיימים של הסוכנות כשמבקשים ממנה הסכם, או שאפשר לכתוב אותה כאן.',
+
+  // Instagram graphics (Golda chat)
+  'Caption for Instagram': 'כיתוב לאינסטגרם',
+  'Copy': 'העתק',
+  'Caption copied.': 'הכיתוב הועתק.',
+  'Could not copy the caption.': 'לא הצלחתי להעתיק את הכיתוב.',
 };
 
 export default HE;

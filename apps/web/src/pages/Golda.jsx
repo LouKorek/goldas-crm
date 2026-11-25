@@ -208,6 +208,26 @@ function Chat({ me, email, name, prefill, onPrefilled }) {
   );
 }
 
+// The ready caption of an Instagram graphic Golda made, with a copy button
+// (on WhatsApp it comes as its own message for the same reason).
+function GraphicCaption({ caption }) {
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(caption); toast.success(t('Caption copied.')); } catch { toast.error(t('Could not copy the caption.')); }
+  };
+  return (
+    <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-3)' }}>{t('Caption for Instagram')}</span>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={copy}><Icon name="clipboard" size={12} /><span className="btn-text">{t('Copy')}</span></button>
+      </div>
+      {/* Each line takes its own direction, as Instagram shows it (a Hebrew line, then "#GoldAS …" or "@handle" left to right). */}
+      <div style={{ fontSize: 13, overflowWrap: 'anywhere', color: 'var(--text-1)' }}>
+        {String(caption).split('\n').map((line, i) => <div key={i} dir="auto" style={{ textAlign: 'start', minHeight: '1.4em' }}>{line}</div>)}
+      </div>
+    </div>
+  );
+}
+
 function Bubble({ m, he, rating = 0, onRate = null, onOpenFile = null }) {
   const mine = m.role === 'user';
   const thumb = (v, glyph, label) => (
@@ -228,12 +248,13 @@ function Bubble({ m, he, rating = 0, onRate = null, onOpenFile = null }) {
             {m.files.map((f, i) => (
               <button key={f.fileId || i} type="button" className="chip" onClick={() => onOpenFile?.(i)} title={f.name}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%', minWidth: 0 }}>
-                <span aria-hidden="true">📄</span>
+                <span aria-hidden="true">{f.type?.startsWith('image/') ? '🖼️' : '📄'}</span>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{f.name}</span>
               </button>
             ))}
           </div>
         )}
+        {!m.typing && Array.isArray(m.files) && m.files.filter((f) => f.graphic && f.caption).map((f, i) => <GraphicCaption key={f.fileId || i} caption={f.caption} />)}
         <div style={{ fontSize: 10, color: mine ? 'var(--on-accent)' : 'var(--text-3)', opacity: mine ? 0.75 : 1, marginTop: 4, textAlign: 'end' }}>
           {!mine && !m.typing && onRate && (
             <span style={{ float: 'inline-start', marginTop: -3 }}>

@@ -23,6 +23,14 @@
 [functions."youtube-upload-background"]
   included_files = ["apps/web/public/fonts/*.ttf", "apps/web/public/brand-mark.png"]
 
+# Golda draws Instagram graphics (lib/golda-graphic.js) with the same fonts and
+# mark inside the two functions her answers run in (WhatsApp and the app chat).
+[functions."whatsapp-agent-background"]
+  included_files = ["apps/web/public/fonts/*.ttf", "apps/web/public/brand-mark.png"]
+
+[functions."golda-chat-background"]
+  included_files = ["apps/web/public/fonts/*.ttf", "apps/web/public/brand-mark.png"]
+
 # Build files carry a content hash in their name, so the browser may keep
 # them for good; index.html and sw.js stay fresh so a deploy shows at once.
 [[headers]]

@@ -147,4 +147,4 @@ async function renderPlayerPhoto(input, { quality = 88 } = {}) {
   };
 }
 
-module.exports = { renderPlayerPhoto, imageInfo, outline, placement, exifOrientation, CARD_W, CARD_H, SUBJECT_H, BOTTOM_GAP, CARD_BG };
+module.exports = { renderPlayerPhoto, imageInfo, upright, outline, placement, exifOrientation, CARD_W, CARD_H, SUBJECT_H, BOTTOM_GAP, CARD_BG };

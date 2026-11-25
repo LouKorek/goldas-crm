@@ -214,6 +214,21 @@ async function sendDocument(to, { buffer, filename, mimeType = 'application/pdf'
 }
 
 /**
+ * A picture (JPG or PNG, up to 5 MB) shown as an image in the chat, not as a
+ * file: an Instagram graphic Golda made. Returns [message id].
+ */
+async function sendImage(to, { buffer, filename = 'image.jpg', mimeType = 'image/jpeg', caption = '' }, via) {
+  const from = via || await defaultPhoneId();
+  const id = await uploadMedia(from, buffer, mimeType, filename);
+  const res = await graph(`${from}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: digits(to), type: 'image', image: { id, ...(caption ? { caption: clip(caption, 1024) } : {}) } }),
+  });
+  const json = await res.json().catch(() => ({}));
+  return [json.messages?.[0]?.id || null];
+}
+
+/**
  * A voice note Golda spoke (OGG/Opus from lib/golda-tts.js): uploaded, then
  * sent as audio. `voice: true` asks WhatsApp to show it as a voice note; an
  * API that refuses the flag gets the same audio without it. Returns [message id].
@@ -311,4 +326,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, sendVoice, sendCtaUrl, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, sendImage, sendVoice, sendCtaUrl, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };
