@@ -5,7 +5,7 @@ import { persistSettings, alertLink } from 'lib/alerts';
 import { useAlerts, setAlertSettings } from 'lib/useAlertCount';
 import { PageHeader, Modal, toast, Skeleton } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
-import { useRole } from 'lib/roleContext';
+import { useRole, useCan } from 'lib/roleContext';
 import { t, getLang, relDays } from 'lib/i18n';
 
 // Every alert in one list, from the same engine Home and the daily email use
@@ -24,6 +24,8 @@ const TYPE = {
   task_overdue:        { tag: 'TASK', title: 'Overdue tasks' },
   job_failed:          { tag: 'JOB', title: 'Failed night jobs' },
   sync_mismatch:       { tag: 'SYNC', title: 'Sync found a doubtful squad' },
+  payment_late:        { tag: 'PAY', title: 'Late payments' },
+  payment_due:         { tag: 'PAY', title: 'Payments due this week' },
   match:               { tag: 'FIX', title: 'Upcoming Matches' },
 };
 const COLORS = { critical: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', gold: 'var(--gold)' };
@@ -84,7 +86,7 @@ export default function Notifications() {
   const { canEdit, email } = useRole();
   // The same shared listeners as the bell badge, so the list always shows
   // exactly what the bell counts.
-  const { result: r, loaded, settings } = useAlerts(email);
+  const { result: r, loaded, settings } = useAlerts(email, { money: useCan('money') });
   const [showSettings, setShowSettings] = useState(false);
 
   const saveSettings = async (s) => {
@@ -92,7 +94,7 @@ export default function Notifications() {
     catch (e) { toast.error(e.message || t('Could not save settings.')); }
   };
 
-  const order = ['job_failed', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday', 'match'];
+  const order = ['job_failed', 'payment_late', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'payment_due', 'birthday', 'match'];
 
   return (
     <div>

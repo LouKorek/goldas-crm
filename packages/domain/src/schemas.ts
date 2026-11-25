@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { STAGES, CATEGORIES, DEAL_STAGES } from './stages.js';
 import { POSITIONS, FOOT_OPTIONS, CONTRACT_STATUS, CONTACT_ROLES } from './constants.js';
 import { AGE_GROUPS } from './ageGroups.js';
+import { CURRENCIES, PAYER_KINDS } from './engines/finance.js';
 
 const str = z.string().trim();
 const optStr = str.optional().default('');
@@ -88,6 +89,22 @@ export const teamSchema = z.object({
   ifaTeamUrl: optStr,
 }).passthrough();
 
+// One payment on a deal (engines/finance.ts cleans and reads them).
+export const paymentSchema = z.object({
+  id: str.min(1),
+  label: optStr,
+  amount: z.number().positive(),
+  currency: z.enum(CURRENCIES),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  payer: z.object({ kind: z.enum(PAYER_KINDS), name: optStr }),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional().default(null),
+  paidAmount: z.number().positive().nullable().optional().default(null),
+  note: optStr,
+  createdBy: optStr,
+  createdAt: optStr,
+}).passthrough();
+export type PaymentRecord = z.infer<typeof paymentSchema>;
+
 export const dealStageEntrySchema = z.object({ stage: z.enum(DEAL_STAGES), at: str, by: optStr, note: optStr });
 
 export const dealSchema = z.object({
@@ -101,6 +118,7 @@ export const dealSchema = z.object({
   enteredStageAt: optStr,
   transferFee: optStr, salary: optStr, commission: optStr,
   mandateFiles: z.array(fileRefSchema).optional().default([]),
+  payments: z.array(paymentSchema).optional().default([]),
   owner: optStr,
   notes: optStr,
   source: z.enum(['manual', 'migration', 'golda']).optional().default('manual'),

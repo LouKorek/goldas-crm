@@ -34,6 +34,26 @@ Object.assign(players.find((p) => p.id === 'p1'), { monthlyReports: { [LAST_MONT
   did: ['שיחה עם המאמן על הדקות שלו ועל ההתקדמות באימונים', 'פגישה עם ההורים לסיכום תחילת העונה', 'שלחנו קטעי וידאו מעודכנים לשני סקאוטים בחו"ל'],
   next: 'בחודש הבא נמשיך לעקוב אחרי הדקות שלו בליגה, ונקבע איתכם שיחה קצרה באמצע החודש.', status: 'draft', by: 'owner@example.com', at: '2026-11-02T09:00:00Z' } } });
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+// Payments on deals (Finance screen): paid, one partial, one late, one due
+// this week, two currencies, and an unpaid one on a Not Relevant deal.
+const pay = (id, amount, currency, due, extra = {}) => ({
+  id, label: '', amount, currency, dueDate: day(due), payer: { kind: 'club', name: '' }, paidAt: null, paidAmount: null, note: '',
+  createdBy: 'lou@example.com', createdAt: '2026-09-01T09:00:00Z', ...extra,
+});
+const PAYMENTS = {
+  d8: [
+    pay('pay_a', 8000, 'EUR', -60, { label: 'עמלה — תשלום ראשון', payer: { kind: 'club', name: CLUBS[0] }, paidAt: day(-57) }),
+    pay('pay_b', 6000, 'EUR', -5, { label: 'עמלה — תשלום שני', payer: { kind: 'club', name: CLUBS[0] } }),
+    pay('pay_c', 6000, 'EUR', 120, { label: 'עמלה — תשלום שלישי', payer: { kind: 'club', name: CLUBS[0] } }),
+  ],
+  d5: [
+    pay('pay_d', 12000, 'ILS', -35, { label: 'דמי חתימה', payer: { kind: 'player', name: 'שחקן' }, paidAt: day(-30) }),
+    pay('pay_e', 30000, 'ILS', 3, { label: 'עמלה', payer: { kind: 'club', name: CLUBS[5 % 6] } }),
+    pay('pay_f', 15000, 'ILS', 25, { label: 'בונוס הופעות', paidAt: day(-2), paidAmount: 5000 }),
+  ],
+  d3: [pay('pay_g', 4000, 'EUR', 40, { label: 'עמלה' })],
+  d9: [pay('pay_h', 5000, 'EUR', -10, { label: 'עמלה' })],
+};
 export const FIXTURES = {
   players,
   meetings: [
@@ -41,7 +61,11 @@ export const FIXTURES = {
     { id: 'm2', title: "Gold A&S | Dubinsky's (Shay)", date: day(1), time: '18:00', endTime: '18:45', location: 'G כוכב הצפון', linkedPlayers: [] },
     { id: 'm3', title: 'כנס סוכנים', date: day(2), endDate: day(3), allDay: true, location: 'תל אביב' },
   ],
-  deals: Array.from({ length: 8 }, (_, i) => ({ id: `d${i}`, playerId: `c${i}`, playerName: players[i].playerName, clubName: CLUBS[(i + 2) % 6], stage: ST[i % 6], enteredStageAt: '2026-10-01', createdAt: '2026-09-01' })),
+  deals: [
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `d${i}`, playerId: `c${i}`, playerName: players[i].playerName, clubName: CLUBS[(i + 2) % 6], stage: ST[i % 6], enteredStageAt: '2026-10-01', createdAt: '2026-09-01' })),
+    { id: 'd8', playerId: 'p2', playerName: 'שחקן מיוצג 2', clubName: CLUBS[0], stage: 'Contract Signed', enteredStageAt: '2026-08-01', createdAt: '2026-06-01' },
+    { id: 'd9', playerId: 'p3', playerName: 'שחקן מיוצג 3', clubName: CLUBS[1], stage: 'Not Relevant', enteredStageAt: '2026-10-20', createdAt: '2026-07-01', closedAt: '2026-10-20T10:00:00Z' },
+  ].map((d) => ({ ...d, payments: PAYMENTS[d.id] || [] })),
   club_requirements: Array.from({ length: 6 }, (_, i) => ({ id: `r${i}`, clubName: CLUBS[i], gender: i % 2 ? 'Women' : 'Men', requiredPosition: POS[i], status: 'open', validUntil: '2026-12-31', ageMin: 18, ageMax: 28, salary: '2000',
     ...(i === 0 ? { scouting: { at: '2026-11-15T08:31:00Z', candidates: [
       { name: 'Ido Shahar', age: 24, position: 'GK', club: 'Hapoel Hadera', why: 'חוזה מסתיים ביוני 2027, שוער ראשון בליגת העל, 11 שערים נקיים העונה', link: 'https://www.transfermarkt.com/ido-shahar/profil/spieler/1' },

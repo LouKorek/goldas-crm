@@ -30,7 +30,7 @@
 // re-checks it hourly.
 const { schedule } = require('@netlify/functions');
 const { admin, getDb, OWNER_EMAIL, listRepresented, isLive } = require('./lib/firestore.js');
-const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS } = require('@goldas/domain');
+const { computeAlerts, mergeSettings, israelDate, daysBetween, expandTrainings, AGE_GROUPS, can } = require('@goldas/domain');
 const { dedupeKey } = require('./lib/alert-keys.js');
 const { buildBriefing, urgentAlerts, buildUrgent, opsAlerts, buildOps } = require('./lib/golda-briefing.js');
 const { writeBriefing } = require('./lib/golda-briefing-ai.js');
@@ -223,7 +223,8 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
 
   for (const u of recipients) {
     const mine = u.role === 'admin' ? data.tasks : data.tasks.filter((x) => (x.owner || OWNER_EMAIL) === u.email);
-    const r = computeAlerts({ ...data, tasks: mine, settings: data.settings, now });
+    // Payment alerts only for a reader who may see money (admins).
+    const r = computeAlerts({ ...data, tasks: mine, settings: data.settings, now, money: can(u.role, 'money') });
     const first = (u.name || '').split(' ')[0] || u.name;
     try {
       if ((force || hour === u.briefingHour) && sent.briefings[u.email] !== today) {

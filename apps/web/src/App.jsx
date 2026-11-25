@@ -26,6 +26,7 @@ import Home          from 'pages/Home';
 const Player360 = lazy(() => import('pages/Player360'));
 const Golda = lazy(() => import('pages/Golda'));
 const Deals = lazy(() => import('pages/Deals'));
+const Finance = lazy(() => import('pages/Finance'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Admin = lazy(() => import('pages/Admin'));
 const DesignSystem = lazy(() => import('pages/DesignSystem'));
@@ -158,6 +159,7 @@ function Crm() {
                 <Route path="clubs"          element={<Clubs />} />
                 <Route path="clubs/:id"      element={<Clubs />} />
                 <Route path="recycle"        element={<RecycleBin />} />
+                <Route path="finance" element={access.role === 'admin' ? <Finance /> : <Navigate to="/home" replace />} />
                 <Route path="admin" element={access.role === 'admin' ? <Admin /> : <Navigate to="/home" replace />} />
                 <Route path="admin/design" element={access.role === 'admin' ? <DesignSystem /> : <Navigate to="/home" replace />} />
                 <Route path="admin/:tab" element={access.role === 'admin' ? <Admin /> : <Navigate to="/home" replace />} />

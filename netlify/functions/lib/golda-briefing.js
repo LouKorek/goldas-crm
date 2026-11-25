@@ -16,8 +16,11 @@ const SECTION = {
   requirement_expired: 'דרישות מועדון שפגו',
   task_overdue: 'משימות',
   birthday: 'ימי הולדת',
+  payment_late: 'תשלומים באיחור',
+  payment_due: 'תשלומים שצפויים השבוע',
 };
-const ORDER = ['job_failed', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'birthday'];
+// Payment alerts reach this list only for a reader who may see money (computeAlerts money: can(role, 'money')).
+const ORDER = ['job_failed', 'payment_late', 'sync_mismatch', 'deal_stale', 'contract', 'repr', 'passport', 'requirement_expired', 'task_overdue', 'payment_due', 'birthday'];
 
 const line = (a) => `• ${a.subject.name}: ${a.proof.he}${a.dueDate && a.type !== 'birthday' ? ` (${fmtDate(a.dueDate)})` : ''}`;
 

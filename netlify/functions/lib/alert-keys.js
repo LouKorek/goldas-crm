@@ -14,6 +14,10 @@ function dedupeKey(a, settings, today) {
   if (a.type === 'task_overdue') return `task_overdue|${a.subject.id}|${a.dueDate}|${a.overdue ? 'overdue' : 'due'}`;
   if (a.type === 'job_failed') return `job_failed|${a.subject.id}`;
   if (a.type === 'sync_mismatch') return `sync_mismatch|${a.subject.id}|${a.record?.autoFetch?.ifaFail?.teamId || ''}`;
+  // Money owed: a late payment is told again every day until it is paid; a coming
+  // one a week before and on the day. The key follows the payment, not the deal.
+  if (a.type === 'payment_late') return `payment_late|${a.subject.id}|${a.payment?.id || ''}|${today}`;
+  if (a.type === 'payment_due') return `payment_due|${a.subject.id}|${a.payment?.id || ''}|${a.dueDate}|${a.days === 0 ? 0 : 7}`;
   return `${a.type}|${a.subject.id}|${a.dueDate || ''}`;
 }
 

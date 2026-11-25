@@ -6,7 +6,7 @@ import { loadSettings, unifiedAlerts, alertLink } from 'lib/alerts';
 import { listenTrainings, trainingsInRange } from 'data/trainings';
 import { listenGoldaAudit } from 'data/golda';
 import { fmtDate } from 'lib/constants';
-import { useRole } from 'lib/roleContext';
+import { useRole, useCan } from 'lib/roleContext';
 import { t, fmtDateTime, getLang } from 'lib/i18n';
 import { playerName, israelDate, addDays, AGE_GROUPS } from '@goldas/domain';
 import { PageHeader, Skeleton } from 'components/ui/UI';
@@ -73,6 +73,7 @@ const Quiet = ({ children }) => <p style={{ color: 'var(--text-3)', fontSize: 12
 
 function Today() {
   const { email } = useRole();
+  const money = useCan('money');
   const [players, setPlayers] = useState(null);
   const [matches, setMatches] = useState([]);
   const [deals, setDeals] = useState([]);
@@ -105,8 +106,8 @@ function Today() {
   const he = getLang() === 'he';
 
   // One engine for everything that needs action (domain engines/alerts.ts).
-  const alerts = useMemo(() => (players ? unifiedAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now }) : null), [players, matches, deals, requirements, tasks, jobs, settings]); // eslint-disable-line
-  const TAG = { contract: 'CON', repr: 'REP', passport: 'PAS', birthday: 'DOB', deal_stale: t('Deal waiting'), requirement_expired: 'REQ', task_overdue: t('Task due'), job_failed: t('failed'), sync_mismatch: t('Sync') };
+  const alerts = useMemo(() => (players ? unifiedAlerts({ players, matches, deals, requirements, tasks, jobs, settings, now, money }) : null), [players, matches, deals, requirements, tasks, jobs, settings, money]); // eslint-disable-line
+  const TAG = { contract: 'CON', repr: 'REP', passport: 'PAS', birthday: 'DOB', deal_stale: t('Deal waiting'), requirement_expired: 'REQ', task_overdue: t('Task due'), job_failed: t('failed'), sync_mismatch: t('Sync'), payment_late: t('Late payment'), payment_due: t('Payment due') };
   const COLOR = { critical: 'var(--red)', warning: 'var(--amber)', info: 'var(--blue)', gold: 'var(--gold)' };
   const actions = useMemo(() => (alerts ? alerts.alerts.filter((a) => a.type !== 'match').map((a) => ({
     tag: a.type === 'birthday' && a.age === 18 ? '18' : TAG[a.type], color: COLOR[a.severity], title: a.subject.name,

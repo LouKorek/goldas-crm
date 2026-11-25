@@ -5,9 +5,10 @@ import { listenPlayers, promoteToRepresented } from 'data/players';
 import { listenDeals, openDeal, advanceDeal, checkTransition, reopenDeal, withPlayerMarket } from 'data/deals';
 import { listenInteractions, addInteraction } from 'data/interactions';
 import { fmtDate } from 'lib/constants';
-import { useRole } from 'lib/roleContext';
+import { useRole, useCan } from 'lib/roleContext';
 import { t, tv, fmtDateTime, relDays, getLang } from 'lib/i18n';
-import { DEAL_STAGES, DEAL_STAGE_LABELS, CLOSED_STAGES, daysInStage, isStale, funnel, playerName, clubKey } from '@goldas/domain';
+import { DEAL_STAGES, DEAL_STAGE_LABELS, CLOSED_STAGES, daysInStage, isStale, funnel, playerName, clubKey, hasLatePayment } from '@goldas/domain';
+import { DealPayments } from 'components/finance/PaymentBits';
 import { PageHeader, Modal, Empty, Skeleton, useConfirm, toast, ChipGroup, Field, SearchInput } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 
@@ -26,8 +27,9 @@ const Days = ({ deal }) => {
   return <span title={t('Days in this stage')} style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: stale ? 'var(--red)' : 'var(--text-3)', fontWeight: stale ? 700 : 400 }}>{d} {t('d')}{stale ? ' ⚠' : ''}</span>;
 };
 
-function DealCard({ deal, onOpen }) {
+function DealCard({ deal, onOpen, money }) {
   const stale = isStale(deal);
+  const late = money && hasLatePayment(deal);
   return (
     <button type="button" onClick={() => onOpen(deal)} className="card" style={{
       display: 'block', width: '100%', textAlign: 'start', padding: '9px 11px', marginBottom: 8, cursor: 'pointer',
@@ -38,6 +40,7 @@ function DealCard({ deal, onOpen }) {
         <Days deal={deal} />
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>{deal.clubName}</div>
+      {late && <span className="badge" style={{ background: 'var(--red-bg)', color: 'var(--red)', fontSize: 10, marginTop: 4 }}>{t('Late payment')}</span>}
       {deal.category && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>{tv({ men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish abroad' }[deal.category] || deal.category)}</div>}
     </button>
   );
@@ -45,6 +48,7 @@ function DealCard({ deal, onOpen }) {
 
 function DealDrawer({ deal, players, onClose }) {
   const { canEdit, email } = useRole();
+  const money = useCan('money');
   const { confirm, dialog } = useConfirm();
   const [interactions, setInteractions] = useState([]);
   const [note, setNote] = useState('');
@@ -116,6 +120,7 @@ function DealDrawer({ deal, players, onClose }) {
         </div>
       )}
       {canEdit && deal.closedAt && <button className="btn btn-secondary" style={{ marginBottom: 14 }} onClick={reopen}>{t('Reopen deal')}</button>}
+      {money && <DealPayments deal={deal} canEdit={canEdit} />}
 
       <div className="view-grid-2">
         <div>
@@ -205,6 +210,7 @@ function NewDealModal({ players, clubs, requirements, onClose }) {
 
 export default function Deals() {
   const { canEdit } = useRole();
+  const money = useCan('money');
   const [rawDeals, setDeals] = useState(null);
   const [players, setPlayers] = useState([]);
   const deals = useMemo(() => withPlayerMarket(rawDeals, players), [rawDeals, players]);
@@ -282,7 +288,7 @@ export default function Deals() {
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{stageLabel(s)}</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--gold)' }}>{counts[s] || 0}</span>
               </div>
-              {visible.filter((d) => d.stage === s).sort((a, b) => (daysInStage(b) ?? 0) - (daysInStage(a) ?? 0)).map((d) => <DealCard key={d.id} deal={d} onOpen={setOpen} />)}
+              {visible.filter((d) => d.stage === s).sort((a, b) => (daysInStage(b) ?? 0) - (daysInStage(a) ?? 0)).map((d) => <DealCard key={d.id} deal={d} onOpen={setOpen} money={money} />)}
             </div>
           ))}
         </div>
