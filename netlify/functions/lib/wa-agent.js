@@ -39,6 +39,7 @@ const { chooseEffort } = require('./golda-effort.js');
 const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
 const { instagramTools, INSTAGRAM_TOOL_DEF } = require('./golda-instagram.js');
+const { radarTools, radarSection, RADAR_TOOL_DEFS } = require('./golda-radar.js');   // loading it also registers the radar card's taps (lib/golda-taps.js)
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -333,6 +334,7 @@ How you work:
 ${financeSection(identity.role)}
 ${outreachSection(channel)}
 ${networkSection(identity.role)}
+${radarSection(identity.role)}
 ${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה האחרון שכתבנו עם <מועדון>" / "מה כתבו לנו מ…" / the last e-mails with a club, a contact or about a deal → mail_recent (admins and managers; read-only, from the mail the CRM keeps). Answer with the date, who wrote to whom, the subject and the snippet, newest first, and the Gmail link. You never send or answer mail.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
@@ -468,6 +470,9 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   mail_recent: 'edit',
   // An Instagram graphic of a player: whoever may edit the player.
   instagram_graphic: 'edit' };
+// Golda 3.0, the market radar: the team reads what it found; what is relevant is the owner's to teach it.
+TOOLS.push(...RADAR_TOOL_DEFS);
+Object.assign(TOOL_ACTION, { radar_list: 'edit', radar_get: 'edit', radar_mark: 'manage_settings' });
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -876,6 +881,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...networkTools({ db, identity, role, update }),
     ...mailTools({ db, identity, role }),
     ...instagramTools({ db, identity, role, media, state }) };
+  Object.assign(impl, radarTools({ db, identity, role }));   // Golda 3.0: the market radar
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

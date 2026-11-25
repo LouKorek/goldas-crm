@@ -340,6 +340,13 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
     // An Instagram graphic for a birthday or yesterday's goal: only in an hour when nothing else of hers went out.
     const offer = site.sent || games.sent || reports.sent || asked.sent ? {} : await offerGraphics(db, owner, { players: data.players, matches: data.matches }, now, { hour, send, job }).catch((e) => { job.note(`graphic offer failed: ${e.message}`); return {}; });
     count += (capped.sent || 0) + (site.sent || 0) + (games.sent || 0) + (reports.sent || 0) + (asked.sent || 0) + (offer.sent || 0);
+    // Golda 3.0, the market radar: one opportunity card, else one cold-contact nudge, only in an hour when nothing else of hers went out.
+    // Both tell their state in the job's notes and never a name, so a failure is noted by its kind, not its text.
+    const spoke = capped.sent || site.sent || games.sent || reports.sent || asked.sent || offer.sent;
+    const failed = (what) => (e) => { job.note(`${what} failed (${(e && (e.status || e.code || e.name)) || 'error'})`); return {}; };
+    const card = spoke ? {} : await require('./lib/golda-radar.js').offerRadar(db, owner, now, { hour, send, job }).catch(failed('radar card'));
+    const cold = spoke || card.sent ? {} : await require('./lib/golda-network.js').coldNudge(db, owner, data, now, { hour, send, job }).catch(failed('cold-contact nudge'));
+    count += (card.sent || 0) + (cold.sent || 0);
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning
