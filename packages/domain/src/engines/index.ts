@@ -6,3 +6,4 @@ export * from './recurrence.js';
 export * from './analytics.js';
 export * from './completeness.js';
 export * from './matchStats.js';
+export * from './monthlyReport.js';

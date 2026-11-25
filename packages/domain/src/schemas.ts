@@ -22,6 +22,15 @@ export const ageGroupOverrideSchema = z.object({
   season: z.number().int(),
 });
 
+// The monthly report's text for one month (packages/domain/src/engines/monthlyReport.ts).
+export const monthlyReportEntrySchema = z.object({
+  did: z.array(str).optional().default([]),
+  next: optStr,
+  status: z.enum(['draft', 'approved']).optional().default('draft'),
+  by: optStr,
+  at: optStr,
+}).passthrough();
+
 export const playerSchema = z.object({
   name: str.min(1),
   stage: z.enum(STAGES),
@@ -52,6 +61,8 @@ export const playerSchema = z.object({
   passportFiles: z.array(fileRefSchema).optional().default([]),
   reprFiles: z.array(fileRefSchema).optional().default([]),
   photoFiles: z.array(fileRefSchema).optional().default([]),
+  /** The monthly report for the player and his family, by month ('YYYY-MM'). */
+  monthlyReports: z.record(z.string(), monthlyReportEntrySchema).optional(),
   deletedAt: z.unknown().nullable().optional(),
 }).passthrough();
 export type Player = z.infer<typeof playerSchema>;

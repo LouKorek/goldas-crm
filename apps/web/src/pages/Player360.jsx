@@ -16,6 +16,7 @@ import PlayerChecklist from 'components/player/PlayerChecklist';
 import PlayerSeason from 'components/player/PlayerSeason';
 import PlayerLinks from 'components/player/PlayerLinks';
 import { PlayerCard, StatTile } from 'components/player/PlayerCard';
+import MonthlyReportDialog from 'components/player/MonthlyReportDialog';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -134,6 +135,7 @@ export default function Player360() {
   // once the players had loaded, so React saw more hooks than on the first
   // render and the whole card crashed (React error #310).
   const [docModal, setDocModal] = useState(null); // { field, files, title, idx }
+  const [reportOpen, setReportOpen] = useState(false);   // the monthly report dialog
   const he = getLang() === 'he';
 
   useEffect(() => {
@@ -206,6 +208,7 @@ export default function Player360() {
         action={<>
           <button className="btn btn-secondary" onClick={() => cv('he')} title={t('CV (Hebrew)')}><Icon name="clipboard" size={12} /><span className="btn-text">{t('CV (Hebrew)')}</span><span className="btn-text-sm">עב</span></button>
           <button className="btn btn-secondary" onClick={() => cv('en')} title={t('CV (English)')}><Icon name="clipboard" size={12} /><span className="btn-text">{t('CV (English)')}</span><span className="btn-text-sm">EN</span></button>
+          {canEdit && stage === 'represented' && <button className="btn btn-secondary" onClick={() => setReportOpen(true)} title={t('Monthly report')}><Icon name="calendar" size={12} /><span className="btn-text">{t('Monthly report')}</span></button>}
           {canShare && <button className="btn btn-ghost" onClick={() => cv(he ? 'he' : 'en', true)} title={t('Share PDF')}><Icon name="external" size={12} /><span className="btn-text">{t('Share PDF')}</span></button>}
           {canEdit && <button className="btn btn-primary" onClick={edit}><Icon name="edit" size={12} /><span className="btn-text">{t('Edit player')}</span></button>}
           <button className="btn btn-ghost" onClick={close} title={t('Close')} aria-label={t('Close')}><Icon name="close" size={12} /><span className="btn-text">{t('Close')}</span></button>
@@ -339,6 +342,7 @@ export default function Player360() {
           ))}
         </Card>
       </div>
+      {reportOpen && <MonthlyReportDialog player={p} matches={matches} email={email} onClose={() => setReportOpen(false)} />}
       {docModal && <DocViewer files={docModal.files} initialIndex={docModal.idx} title={docModal.title} onClose={() => setDocModal(null)} onRename={canEdit ? renameDoc : null} />}
     </div>
   );

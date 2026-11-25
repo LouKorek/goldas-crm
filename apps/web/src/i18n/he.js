@@ -1021,6 +1021,31 @@ const HE = {
   'Link copied.': 'הלינק הועתק.',
   'Could not copy the link.': 'לא הצלחנו להעתיק את הלינק.',
   'The link was revoked.': 'הלינק נחסם.',
+
+  // Monthly report
+  'Monthly report': 'דוח חודשי',
+  'Draft': 'טיוטה',
+  'Approved': 'מאושר',
+  'Not written yet': 'עוד לא נכתב',
+  'The month in numbers': 'החודש במספרים',
+  'Season {s} to the end of the month: {apps} matches · {min} min · {g} goals · {a} assists': "עונה {s} עד סוף החודש: {apps} משחקים · {min} דק' · {g} שערים · {a} בישולים",
+  "This month's matches": 'המשחקים של החודש',
+  'No matches of his were recorded this month.': 'החודש לא נרשמו משחקים שלו אצלנו.',
+  'did not play': 'לא שיחק',
+  'What we did this month': 'מה עשינו החודש',
+  'One line per row, up to {n} lines.': 'שורה לכל דבר, עד {n} שורות.',
+  'Only the first {n} lines go into the report.': 'רק {n} השורות הראשונות ייכנסו לדוח.',
+  'The next step': 'הצעד הבא',
+  'One or two sentences.': 'משפט או שניים.',
+  'Written for the player and his family: no ratings, contract terms, deals, other clubs or players.': 'נכתב לשחקן ולמשפחה: בלי ציונים, תנאי חוזה, עסקאות, מועדונים אחרים או שחקנים אחרים.',
+  'Ask Golda to write it': 'לבקש מגולדה לכתוב',
+  'Save draft': 'שמירת טיוטה',
+  'Draft saved.': 'הטיוטה נשמרה.',
+  'Write at least one line of what we did.': 'צריך לכתוב לפחות שורה אחת על מה שעשינו.',
+  'Write the next step.': 'צריך לכתוב את הצעד הבא.',
+  'Discard the changes to this month?': 'לוותר על השינויים בחודש הזה?',
+  'PDF (Hebrew)': 'PDF בעברית',
+  'PDF (English)': 'PDF באנגלית',
 };
 
 export default HE;

@@ -47,6 +47,8 @@ const MUTED     = [0x8A, 0x8A, 0x8A];
 const RULE      = [0xE2, 0xDD, 0xCE];
 const TM_NAVY   = [0x1A, 0x30, 0x49];   // Transfermarkt's house navy
 const PLAY_RED  = [0xC0, 0x2A, 0x2A];
+// The agency's stationery, shared with the monthly report (lib/monthlyReport.js).
+export const BRAND = { DARK, CREST, GOLD, GOLD_DARK, INK, MUTED, RULE };
 
 const FOOT_WORD = { R: 'Right', L: 'Left', B: 'Both', Right: 'Right', Left: 'Left', Both: 'Both' };
 const CAT_WORD  = { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish' };
@@ -55,7 +57,7 @@ const CAT_WORD  = { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish'
 // garbage, so emoji and non-Latin characters are dropped rather than shown.
 const latin1 = pdfSafe;
 
-async function loadLogo() {
+export async function loadLogo() {
   try {
     const res = await fetch('/logo.png');
     if (!res.ok) return null;
@@ -147,7 +149,7 @@ const ICONS = {
 
 // Register the embedded family once per document. Falls back silently to
 // Helvetica so a font problem can never cost Lou the export.
-function useFonts(doc, fonts) {
+export function useFonts(doc, fonts) {
   try {
     doc.addFileToVFS('Poppins-Regular.ttf', fonts.POPPINS_REGULAR);
     doc.addFileToVFS('Poppins-Medium.ttf',  fonts.POPPINS_MEDIUM);
@@ -281,7 +283,7 @@ export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { la
       doc.setLineWidth(0.8);
       doc.roundedRect(lx - 5, ly - 5, w + 10, h + 10, 3, 3, 'S');
       doc.addImage(logo, 'PNG', lx, ly, w, h);
-      textX = lx + w + 30;
+      textX = M + w + 30;   // from the reading start: the mirror puts the name beside the tile on the Hebrew sheet too
     } catch { /* the logo is decoration; never block the export */ }
   }
 

@@ -28,6 +28,11 @@ const players = [
   })(),
   ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567' } : {}) })),
 ];
+// The monthly report: p1 has a draft for the last full month (the month the dialog opens on).
+const LAST_MONTH = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString().slice(0, 7); })();
+Object.assign(players.find((p) => p.id === 'p1'), { monthlyReports: { [LAST_MONTH]: {
+  did: ['שיחה עם המאמן על הדקות שלו ועל ההתקדמות באימונים', 'פגישה עם ההורים לסיכום תחילת העונה', 'שלחנו קטעי וידאו מעודכנים לשני סקאוטים בחו"ל'],
+  next: 'בחודש הבא נמשיך לעקוב אחרי הדקות שלו בליגה, ונקבע איתכם שיחה קצרה באמצע החודש.', status: 'draft', by: 'owner@example.com', at: '2026-11-02T09:00:00Z' } } });
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 export const FIXTURES = {
   players,
@@ -48,7 +53,7 @@ export const FIXTURES = {
     ...[[-150, 0, 0, 0, null], [-140, 15, 0, 0, 6], [-120, 90, 1, 0, 7.5], [-96, 72, 0, 1, 6.5], [-82, 90, 2, 1, 8.5], [-68, 0, 0, 0, null],
       [-54, 64, 0, 0, 6], [-40, 90, 0, 2, 7], [-26, 81, 1, 0, 7], [-12, 90, 0, 0, 6.5], [-5, 30, 0, 0, null]].map(([d, minutes, goals, assists, rating], i) => ({
       id: `x${i}`, date: day(d), time: '19:30', homeTeam: CLUBS[i % 6], awayTeam: CLUBS[(i + 3) % 6], source: i % 2 ? 'ifa' : 'manual', linkedPlayers: ['p1', 'p2'],
-      watchedBy: i === 9 ? 'Lou, Dana' : '',
+      watchedBy: i === 9 ? 'Lou, Dana' : '', competition: i % 3 === 0 ? 'ליגת העל' : '',
       playerStats: { p1: { minutes, goals, assists, ...(rating ? { rating } : {}), ...(i === 4 ? { note: 'Two goals and an assist, best game of the season.' } : {}), by: 'owner@example.com', at: '2026-11-01T08:00:00Z' },
         ...(i === 9 ? { p2: { minutes: 0 } } : {}) },
     })),
