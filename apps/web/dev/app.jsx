@@ -29,6 +29,7 @@ applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark'
 const Finance = lazy(() => import('pages/Finance'));
 const Notifications = lazy(() => import('pages/Notifications'));
 const Home = lazy(() => import('pages/Home'));
+const Golda = lazy(() => import('pages/Golda'));
 // ?role=viewer shows the screens as someone who may not edit; ?role=manager as an editor who is not an admin.
 const asRole = new URLSearchParams(location.search).get('role') || 'admin';
 const role = asRole === 'viewer'
@@ -56,6 +57,7 @@ const App = () => (
           <Route path="notifications" element={<Notifications />} />
           <Route path="home/:tab" element={<Home />} />
           <Route path="matches" element={<Matches />} />
+          <Route path="golda" element={<Golda />} />
           <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="admin/youtube" element={<YouTubeConnect he />} />
           <Route path="admin/website" element={<WebsiteStatus he />} />

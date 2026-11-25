@@ -1391,6 +1391,12 @@ const HE = {
   'Connect again': 'חבר מחדש',
   'Disconnecting…': 'מנתק…',
   'Disconnect': 'נתק',
+
+  // Instagram graphics (Golda chat)
+  'Caption for Instagram': 'כיתוב לאינסטגרם',
+  'Copy': 'העתק',
+  'Caption copied.': 'הכיתוב הועתק.',
+  'Could not copy the caption.': 'לא הצלחתי להעתיק את הכיתוב.',
 };
 
 export default HE;

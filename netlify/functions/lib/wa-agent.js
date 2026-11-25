@@ -35,6 +35,7 @@ const { mailTools, MAIL_TOOL_DEF } = require('./golda-mail.js');
 const { chooseEffort } = require('./golda-effort.js');
 const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
+const { instagramTools, INSTAGRAM_TOOL_DEF } = require('./golda-instagram.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -284,6 +285,7 @@ How you work:
 - Your daily question (your message that opens with "שאלה יומית" ❓): the writer's next message is usually its answer, in whatever topic you are. Find that player and save the answer with update: dates as YYYY-MM-DD, foot as Right/Left/Both, contractStatus as Under Contract/Free/Loan/Trial, the position in the CRM's codes, nationalities as country names in English. Confirm in one line. "דלג" / "לא יודע" → fine, no insisting and no other question instead. "בלי שאלה יומית" / "תפסיקי לשאול כל יום" → daily_question action=off; "תחזירי את השאלה היומית" → action=on.
 - "מה חסר ל…" / "מה חסר בתיק של…" (a player's file) → find the player, then player_checklist with his playerId: the score, then what is missing, most important first, each with how to fix it, and the link to his page. "למי חסר הכי הרבה" / "איזה תיקים לא מלאים" → player_checklist with no playerId. What it lists as not known yet, say so; never guess it. A photo sent for a player goes in with attach_file field=photoFiles.
 - How a player did in a match ("אתמול X שיחק 70 דקות, גול אחד, 7", "Y לא שיחק", "ראיתי את Z, היה חלש, 5"): find the player, then match_report with his playerId and the match date (yesterday/today resolved against today's date in Israel) or the matchId; minutes 0 when he did not play; a rating only when one was said; the note in the writer's words, one short sentence. One call per player. Your morning question about yesterday's matches (your message that opens with "איך היה אתמול" ⚽) is answered this way, in one or several lines; "דלג" = record nothing. Say what you saved and his season so far in one line. "בלי שאלות על משחקים" / "תחזירי את השאלות על משחקים" → match_questions off / on.
+- An Instagram graphic ("תכיני גרפיקה לחתימה של X ב…", "גרפיקה ליום ההולדת של Y", "story לשער של Z מול…"): find the player, then instagram_graphic with kind signing, goal or birthday (custom with a headline for anything else: a first call-up, player of the month); size story only when a story was asked for, lang en only when English was. Pass only facts the writer said or the CRM has (club, opponent, score, minute, competition), never a number you were not told; when the tool says something is missing, ask the writer that one short question. The picture and its caption go to the writer right after your answer, so your text is one line on what it shows, then [[כפתורים: גם סטורי | לשנות טקסט]] (גם פוסט after a story). "גם סטורי" / "גם פוסט" → the same call in the other size; "לשנות טקסט" → ask what to change, then call again with headline, name or caption. You never post it and never send it to anyone but the writer; he uploads it himself. Your offer that opens with "גרפיקה לאינסטגרם" 🎨: the writer's yes ("כן, להכין") means make that graphic now: the player is the one in its link, a birthday → kind birthday, a goal → kind goal against the other team of the match it names (the tool fills the goals from the match data); post size, Hebrew. "לא הפעם" → fine, one line, nothing else.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
 ${financeSection(identity.role)}
 ${outreachSection(channel)}
@@ -392,7 +394,7 @@ const TOOLS = [
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false } },
   { name: 'sync_fixtures', description: 'Start the Israeli fixtures sync now (runs in the background for a few minutes; the Calendar shows the report). Admin and manager only.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false } },
-  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS, MAIL_TOOL_DEF];
+  ...BRIEF_TOOL_DEFS, TRANSFER_TOOL_DEF, ...YOUTUBE_TOOL_DEFS, ...WEBSITE_TOOL_DEFS, DAILY_QUESTION_TOOL_DEF, CHECKLIST_TOOL_DEF, ...MATCH_REPORT_TOOL_DEFS, ...PLAYER_PAGE_TOOL_DEFS, MONTHLY_REPORT_TOOL_DEF, ...PAYMENTS_TOOL_DEFS, ...AGREEMENT_TOOL_DEFS, ...OUTREACH_TOOL_DEFS, VOICE_TOOL_DEF, PLAYER_MESSAGES_TOOL_DEF, ...NETWORK_TOOL_DEFS, MAIL_TOOL_DEF, INSTAGRAM_TOOL_DEF];
 // Which tools each role gets. A viewer reads; a manager edits; an admin does everything.
 // Reading, the big picture and her own memory are open to every role.
 const READ_TOOLS = new Set(['search', 'list', 'get', 'read_file', 'player_pdf', 'suggest_matches', 'alerts_today', 'changes', 'overview', 'remember', 'forget', 'player_brief', 'club_brief', 'opportunities', 'check_schedule', 'transfer_windows', 'youtube_style', 'player_checklist', 'live_page_list', 'agreement_list', 'outreach_prepare', 'outreach_link', 'writing_style', 'voice_reply', 'network_path', 'network_cold']);
@@ -420,7 +422,9 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   // The explicit "knows" link is an edit of the contact.
   contact_link: 'edit',
   // The agency's mail: admins and managers (deal mail inside the tool: admins); never a viewer or a player.
-  mail_recent: 'edit' };
+  mail_recent: 'edit',
+  // An Instagram graphic of a player: whoever may edit the player.
+  instagram_graphic: 'edit' };
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -827,7 +831,8 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...outreachTools({ db, admin, identity, role, channel, session, state, can }),
     ...voiceTools({ identity, channel, turnText, state, db }),
     ...networkTools({ db, identity, role, update }),
-    ...mailTools({ db, identity, role }) };
+    ...mailTools({ db, identity, role }),
+    ...instagramTools({ db, identity, role, media, state }) };
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});

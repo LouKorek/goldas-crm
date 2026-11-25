@@ -304,4 +304,4 @@ async function renderCover({ background, spec, values, withLogo = true, quality 
 /** Only resize / re-encode a picture to a valid cover (no text, no logo). */
 const plainSpec = () => ({ plain: true, logo: 'none' });
 
-module.exports = { renderCover, resvgModule, buildSvg, layoutCover, fill, fillOrDrop, fitSize, roughMeasure, plainSpec, noEmoji, imageType, DEFAULT_SPEC, LAYOUTS, W, H };
+module.exports = { renderCover, resvgModule, siteAsset, measurer, esc, buildSvg, layoutCover, fill, fillOrDrop, fitSize, roughMeasure, plainSpec, noEmoji, imageType, DEFAULT_SPEC, LAYOUTS, W, H };
