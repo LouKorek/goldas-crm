@@ -980,6 +980,7 @@ const HE = {
   'Rating': 'ציון',
   'Rating (1–10)': 'ציון (1–10)',
   'The rating is a number from 1 to 10.': 'הציון הוא מספר בין 1 ל-10.',
+  'From 1 to 10': 'מ-1 עד 10',
   'Note': 'הערה',
   'One sentence on how he played': 'משפט אחד על איך הוא שיחק',
   'Who from the team watched': 'מי מהצוות צפה',

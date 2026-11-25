@@ -15,6 +15,7 @@ import DocViewer from 'components/DocViewer';
 import PlayerChecklist from 'components/player/PlayerChecklist';
 import PlayerSeason from 'components/player/PlayerSeason';
 import PlayerLinks from 'components/player/PlayerLinks';
+import { PlayerCard, StatTile } from 'components/player/PlayerCard';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -23,24 +24,10 @@ const DaysLeft = ({ date, label }) => {
   if (!date) return null;
   const d = daysAway(date);
   const color = d < 0 ? 'var(--red)' : d <= 30 ? 'var(--red)' : d <= 90 ? 'var(--amber)' : 'var(--green-ok)';
-  return (
-    <div style={{ border: '1px solid var(--border)', borderTop: `2px solid ${color}`, padding: '10px 12px', background: 'var(--card)' }}>
-      <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, color, lineHeight: 1.1, marginTop: 4 }}>{d < 0 ? `${-d}` : d}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{d < 0 ? t('days overdue') : t('days')} · {fmtDate(date)}</div>
-    </div>
-  );
+  return <StatTile label={label} value={d < 0 ? `${-d}` : d} tone={color} toned sub={`${d < 0 ? t('days overdue') : t('days')} · ${fmtDate(date)}`} />;
 };
 
-const Card = ({ title, children, action }) => (
-  <section className="card card-body" style={{ padding: '14px 16px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-      <div className="section-label" style={{ marginBottom: 0, flex: 1 }}>{title}</div>
-      {action}
-    </div>
-    {children}
-  </section>
-);
+const Card = PlayerCard;
 
 // Youth age group, read-only like every other fact: the cohort default (IFA
 // rule, season from July 1 — so it rolls over by itself each season) or this
@@ -231,8 +218,9 @@ export default function Player360() {
         <DaysLeft date={p.passportExpiry} label={t('Passport expires')} />
       </div>
 
+      <PlayerChecklist p={p} />
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
-        <PlayerChecklist p={p} />
         <Card title={t('Profile')}>
           <Fact k={t('Nationalities')} v={(p.nationalities || []).map((n) => `${flagEmoji(ISO2[n]) || ''} ${n}`).join(', ')} />
           <Fact k={t('Date of Birth')} v={p.dob ? `${fmtDate(p.dob)} (${calcAge(p.dob)})` : ''} />

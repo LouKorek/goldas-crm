@@ -4,6 +4,7 @@ import { playerCompleteness, calendarBlock, playerName } from '@goldas/domain';
 import { listenSyncReport, scoreTone } from 'data/completeness';
 import { useRole } from 'lib/roleContext';
 import { t, getLang } from 'lib/i18n';
+import { PlayerCard } from './PlayerCard';
 
 // The player's file, on his page: the score and what is missing, most
 // important first, each with the shortest way to fix it (his edit form, or
@@ -41,41 +42,34 @@ export default function PlayerChecklist({ p }) {
     return canEdit ? <button type="button" style={linkBtn} onClick={edit}>{t('Fill in')}</button> : null;
   };
 
+  // A full-width strip above the cards, so its height never stretches them.
+  const strip = { marginBottom: 14 };
+  const unknown = c.unknown.length > 0 ? `${t('Not known yet')}: ${c.unknown.map(label).join(', ')}` : '';
+
   // A complete file: one quiet line, no list.
   if (c.missing.length === 0) {
-    return (
-      <section className="card card-body" style={{ padding: '14px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <div className="section-label" style={{ marginBottom: 0 }}>{title}</div>
-          <span style={{ flex: 1, color: 'var(--text-3)', fontSize: 12.5 }}>
-            {c.onboarding ? t('Onboarding done: everything is in the file.') : t('The file is complete.')}
-            {c.unknown.length > 0 && ` ${t('Not known yet')}: ${c.unknown.map(label).join(', ')}`}
-          </span>
-        </div>
-      </section>
-    );
+    const done = c.onboarding ? t('Onboarding done: everything is in the file.') : t('The file is complete.');
+    return <PlayerCard title={title} style={strip} note={unknown ? `${done} ${unknown}` : done} />;
   }
 
   return (
-    <section className="card card-body" style={{ padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10, gap: 10 }}>
-        <div className="section-label" style={{ marginBottom: 0, flex: 1 }}>{title}</div>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, lineHeight: 1, color: scoreTone(c.score) }} aria-label={`${t('Score')} ${c.score}`}>{c.score}%</span>
-      </div>
+    <PlayerCard title={title} style={strip}
+      action={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, lineHeight: 1, color: scoreTone(c.score) }} aria-label={`${t('Score')} ${c.score}`}>{c.score}%</span>}>
       <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, marginBottom: 4 }}>{t('Missing')} · {c.missing.length}</div>
-      {c.missing.map((i) => {
-        const why = i.key === 'calendar' ? SYNC_WHY[calendarBlock(p, { syncReport: report })] : null;
-        return (
-          <div key={i.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 13, padding: '5px 0', borderBottom: '1px solid var(--rule)' }}>
-            <span style={{ flex: 1, minWidth: 0 }}>{label(i)}{why && <span style={{ color: 'var(--text-3)', fontSize: 11 }}> · {t(why)}</span>}</span>
-            {fix(i)}
-          </div>
-        );
-      })}
+      {/* As many columns as fit: a long list stays short on a wide screen. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', columnGap: 24 }}>
+        {c.missing.map((i) => {
+          const why = i.key === 'calendar' ? SYNC_WHY[calendarBlock(p, { syncReport: report })] : null;
+          return (
+            <div key={i.key} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 13, padding: '5px 0', borderBottom: '1px solid var(--rule)', minWidth: 0 }}>
+              <span style={{ flex: 1, minWidth: 0 }}>{label(i)}{why && <span style={{ color: 'var(--text-3)', fontSize: 11 }}> · {t(why)}</span>}</span>
+              {fix(i)}
+            </div>
+          );
+        })}
+      </div>
       <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>{t('In the file')}: {c.done.map(label).join(', ') || '—'}</div>
-      {c.unknown.length > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>{t('Not known yet')}: {c.unknown.map(label).join(', ')}</div>
-      )}
-    </section>
+      {unknown && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>{unknown}</div>}
+    </PlayerCard>
   );
 }

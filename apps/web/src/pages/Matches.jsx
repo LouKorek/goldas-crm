@@ -8,7 +8,7 @@ import { cleanStat, RATING_MIN, RATING_MAX, NOTE_MAX } from '@goldas/domain';
 import { listenPlayers } from 'data/players';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
-import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ActionBtn, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
@@ -292,11 +292,10 @@ function MatchStatsModal({ match, players, onClose }) {
             <Field label={t('Minutes')}>{num(id, 'minutes', 130)}</Field>
             <Field label={t('Goals')}>{num(id, 'goals', 20)}</Field>
             <Field label={t('Assists')}>{num(id, 'assists', 20)}</Field>
-            <Field label={t('Rating')}>{num(id, 'rating', RATING_MAX, 0.5)}</Field>
+            <Field label={t('Rating')} error={badRating(rows[id].rating) ? t('From 1 to 10') : ''}>{num(id, 'rating', RATING_MAX, 0.5)}</Field>
           </div>
-          {badRating(rows[id].rating) && <div className="form-error" style={{ marginTop: -6, marginBottom: 8 }}>{t('The rating is a number from 1 to 10.')}</div>}
           <Field label={t('Note')}>
-            <input value={rows[id].note} maxLength={NOTE_MAX} onChange={set(id, 'note')} placeholder={t('One sentence on how he played')} />
+            <input dir="auto" value={rows[id].note} maxLength={NOTE_MAX} onChange={set(id, 'note')} placeholder={t('One sentence on how he played')} />
           </Field>
         </div>
       ))}
@@ -729,10 +728,11 @@ export default function Matches() {
             </div>
             {canEdit && (
               <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {played && (m.linkedPlayers || []).length > 0 && (
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setStatsFor(m)}><Icon name="edit" size={11} /> {t('Match data')}</button>
-                )}
-                <RowActions onEdit={() => openEdit(m)} onDelete={() => del(m)} />
+                <RowActions onEdit={() => openEdit(m)} onDelete={() => del(m)}>
+                  {played && (m.linkedPlayers || []).length > 0 && (
+                    <ActionBtn icon="clipboard" tone="blue" title={t('Match data')} onClick={() => setStatsFor(m)} />
+                  )}
+                </RowActions>
               </div>
             )}
           </div>

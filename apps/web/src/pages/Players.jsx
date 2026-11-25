@@ -196,6 +196,13 @@ export default function Players() {
   // File completeness per player, 0-100 (null for a player who is not scored).
   const scoreOf = (p) => playerCompleteness(p, { syncReport })?.score ?? null;
   const INCOMPLETE = t("Incomplete");
+  // Turning the "incomplete" filter on also sorts by the score, the least
+  // complete first, and the File column's arrow says so; he can re-sort after.
+  const setFilesFilter = (next) => {
+    const value = typeof next === 'function' ? next(filters) : next;
+    if (value.file === INCOMPLETE && filters.file !== INCOMPLETE) setSort({field:'score',dir:'asc'});
+    setFilters(value);
+  };
 
   const s = (k) => (v) => { setForm(p=>({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
@@ -324,12 +331,11 @@ export default function Players() {
     return true;
   }).sort((a,b)=>{
     let av,bv;
-    // The least complete first: when sorting by the score, and whenever the "incomplete" filter is on.
-    if (sort.field==='score' || filters.file === INCOMPLETE) {
+    // By the score: the least complete first (a player who is not scored goes last).
+    if (sort.field==='score') {
       av = scoreOf(a) ?? 101;
       bv = scoreOf(b) ?? 101;
-      const dir = sort.field==='score' && sort.dir==='desc' ? -1 : 1;
-      return dir*(av-bv) || (a.fullName||'').localeCompare(b.fullName||'');
+      return (sort.dir==='desc' ? -1 : 1)*(av-bv) || (a.fullName||'').localeCompare(b.fullName||'');
     }
     if (sort.field==='primaryPosition') {
       av = POSITION_ORDER[a.primaryPosition]??99;
@@ -398,7 +404,7 @@ export default function Players() {
         }
       >
         <div style={{marginTop:14}}>
-          <FilterBar filters={filters} setFilters={setFilters} options={[
+          <FilterBar filters={filters} setFilters={setFilesFilter} options={[
             {key:'gender',label:t("Gender"),values:['Men','Women']},
             {key:'position',label:t("Position"),values:POSITIONS},
             {key:'contractStatus',label:t("Contract"),values:CONTRACT_STATUS},

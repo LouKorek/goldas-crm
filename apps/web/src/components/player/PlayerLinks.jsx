@@ -12,6 +12,7 @@ import { useRole } from 'lib/roleContext';
 import { toast, useConfirm } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { listPlayerLinks, revokePlayerLink } from 'data/playerPages';
+import { PlayerCard } from './PlayerCard';
 
 const STATE = {
   active: ['Link active', 'var(--green-bg)', 'var(--green-ok)'],
@@ -54,10 +55,7 @@ export default function PlayerLinks({ playerId }) {
   };
 
   return (
-    <section className="card card-body" style={{ padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-        <div className="section-label" style={{ marginBottom: 0, flex: 1 }}>{t('Live links')}</div>
-      </div>
+    <PlayerCard title={t('Live links')}>
       {links.map((l) => {
         const [label, bg, fg] = STATE[l.state] || STATE.expired;
         const when = l.state === 'revoked' ? `${t('revoked on')} ${fmtDate(day(l.revokedAt))}`
@@ -90,6 +88,6 @@ export default function PlayerLinks({ playerId }) {
         );
       })}
       {dialog}
-    </section>
+    </PlayerCard>
   );
 }

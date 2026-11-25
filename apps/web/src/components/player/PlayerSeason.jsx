@@ -3,26 +3,20 @@ import { playerMatchRows, seasonsOf, summarizeStats, currentSeason } from '@gold
 import { ChipGroup } from 'components/ui/UI';
 import { fmtDate } from 'lib/constants';
 import { t } from 'lib/i18n';
+import { FONT } from 'lib/charts/Charts';
+import { PlayerCard, StatTile } from './PlayerCard';
 
 // The player's season, from the numbers recorded on his matches
 // (matches/{id}.playerStats): totals, and one column per match with minutes
 // as the bar, goals as filled dots, assists as rings and the rating under it.
 // Identity is carried by shape, not colour, so it reads the same in both
 // themes and for colour-blind readers. Same SVG conventions as lib/charts.
-const FONT = 'Heebo, Arial, sans-serif';
 const W = 400;
 const H = 180;
 const PAD = { l: 26, r: 6, t: 36, b: 36 };
 const MAX_MARKS = 3; // dots above a bar; more shows a +
 const FULL = 90;
 const MAX_COLS = 24;
-
-const Tile = ({ label, value }) => (
-  <div style={{ border: '1px solid var(--border)', borderTop: '2px solid var(--gold)', padding: '8px 10px', background: 'var(--card)' }}>
-    <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>{label}</div>
-    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 18, color: 'var(--text-1)', lineHeight: 1.1, marginTop: 4 }}>{value}</div>
-  </div>
-);
 
 // A bar with rounded data-end, anchored to the baseline.
 const barPath = (x, y, w, h) => {
@@ -91,21 +85,18 @@ export default function PlayerSeason({ playerId, matches }) {
   const sum = summarizeStats(inSeason);
 
   return (
-    <section className="card card-body" style={{ padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-        <div className="section-label" style={{ marginBottom: 0, flex: 1 }}>{t('Season')}{season ? ` ${season}` : ''}</div>
-        {seasons.length > 1 && <ChipGroup options={seasons} labels={seasons} value={season} onChange={setPicked} required />}
-      </div>
+    <PlayerCard title={`${t('Season')}${season ? ` ${season}` : ''}`}
+      action={seasons.length > 1 ? <ChipGroup options={seasons} labels={seasons} value={season} onChange={setPicked} required /> : null}>
       {!rows.length ? (
         <p style={{ color: 'var(--text-3)', fontSize: 12.5, margin: 0 }}>{t('No match data yet. Enter minutes, goals and a rating on the Matches page, or tell Golda after the game.')}</p>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))', gap: 8, marginBottom: 12 }}>
-            <Tile label={t('Matches')} value={sum.apps} />
-            <Tile label={t('Minutes')} value={sum.minutes} />
-            <Tile label={t('Goals')} value={sum.goals} />
-            <Tile label={t('Assists')} value={sum.assists} />
-            <Tile label={t('Avg. rating')} value={sum.avgRating ?? '—'} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(52px, 1fr))', gap: 8, marginBottom: 12 }}>
+            <StatTile compact label={t('Matches')} value={sum.apps} />
+            <StatTile compact label={t('Minutes')} value={sum.minutes} />
+            <StatTile compact label={t('Goals')} value={sum.goals} />
+            <StatTile compact label={t('Assists')} value={sum.assists} />
+            <StatTile compact label={t('Avg. rating')} value={sum.avgRating ?? '—'} />
           </div>
           <SeasonChart rows={inSeason} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 11, color: 'var(--text-2)', marginTop: 6 }}>
@@ -127,7 +118,7 @@ export default function PlayerSeason({ playerId, matches }) {
                   {inSeason.map((r) => (
                     <tr key={r.matchId} style={{ borderTop: '1px solid var(--rule)' }} title={r.stat.note || ''}>
                       <td style={{ padding: '5px 0', paddingInlineEnd: 10, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{fmtDate(r.date)}</td>
-                      <td style={{ padding: '5px 0', paddingInlineEnd: 10 }}>{r.homeTeam} – {r.awayTeam}{r.stat.note && <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{r.stat.note}</div>}</td>
+                      <td style={{ padding: '5px 0', paddingInlineEnd: 10 }}>{r.homeTeam} – {r.awayTeam}{r.stat.note && <div dir="auto" style={{ fontSize: 11, color: 'var(--text-3)' }}>{r.stat.note}</div>}</td>
                       <td style={{ padding: '5px 0', paddingInlineEnd: 10, fontFamily: 'var(--font-mono)' }}>{r.stat.minutes ?? '—'}</td>
                       <td style={{ padding: '5px 0', paddingInlineEnd: 10, fontFamily: 'var(--font-mono)' }}>{r.stat.goals ?? '—'}</td>
                       <td style={{ padding: '5px 0', paddingInlineEnd: 10, fontFamily: 'var(--font-mono)' }}>{r.stat.assists ?? '—'}</td>
@@ -140,6 +131,6 @@ export default function PlayerSeason({ playerId, matches }) {
           </details>
         </>
       )}
-    </section>
+    </PlayerCard>
   );
 }
