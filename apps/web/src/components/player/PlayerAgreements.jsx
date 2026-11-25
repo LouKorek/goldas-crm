@@ -141,7 +141,7 @@ function CreateDialog({ player, templates, onClose, onMade }) {
         </Field>
         <div style={{ fontSize: 12.5, padding: '10px 12px', border: '1px solid var(--border)', background: 'var(--surface-2)', lineHeight: 1.6 }}>
           {period.ok
-            ? <>{t('From {a} to {b} ({n} months)', { a: dayText(period.start), b: dayText(period.end), n: period.months })} · {lang === 'he' ? t('Hebrew') : t('English')} · {t('signs:')} <span className="bidi">{who}</span></>
+            ? <>{t('From {a} to {b} ({n} months)', { a: dayText(period.start), b: dayText(period.end), n: period.months })} · {lang === 'he' ? t('Hebrew') : t('English')} · {minor ? t('sign:') : t('signs:')} <span className="bidi">{who}</span></>
             : <span style={{ color: 'var(--red)' }}>{periodError}</span>}
         </div>
         {error && <div className="form-error" role="alert">{error}</div>}

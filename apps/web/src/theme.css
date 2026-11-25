@@ -304,6 +304,8 @@ html[lang="he"] .form-label { font-size: 12.5px; }
 }
 .form-hint { color: var(--text-2); font-size: 12px; }
 .form-error { font-size: 12px; }
+/* A field whose value was refused shows it on the box too, not only in the line under it. */
+.form-field input[aria-invalid="true"], .form-field select[aria-invalid="true"], .form-field textarea[aria-invalid="true"] { border-color: var(--red); }
 
 /* ── Menus ── */
 .dropdown-list { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 4px; }

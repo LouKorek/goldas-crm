@@ -244,8 +244,8 @@ function NodeCard({ net, id, contacts, onSelect, onEdit }) {
           {canEdit && (
             <div style={{ marginTop: 10 }}>
               <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                <button type="button" className={`chip${kind === 'knows' ? ' active' : ''}`} onClick={() => setKind('knows')}>{t('{name} knows…', { name: n.name })}</button>
-                <button type="button" className={`chip${kind === 'introduced' ? ' active' : ''}`} onClick={() => setKind('introduced')}>{t('{name} introduced us to…', { name: n.name })}</button>
+                <button type="button" className={`chip${kind === 'knows' ? ' active' : ''}`} aria-pressed={kind === 'knows'} onClick={() => setKind('knows')}>{t('Knows…')}</button>
+                <button type="button" className={`chip${kind === 'introduced' ? ' active' : ''}`} aria-pressed={kind === 'introduced'} onClick={() => setKind('introduced')}>{t('Introduced us to…')}</button>
               </div>
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Type a contact name')} aria-label={t('Add a link')} />
               {pick.length > 0 && (
