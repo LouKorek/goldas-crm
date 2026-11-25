@@ -11,7 +11,7 @@
 // Pure functions (no Firestore, no clock unless one is passed), shared by the
 // player page, the PDF builder and Golda, so they cannot disagree.
 
-import { israelDate, toDateStr } from './dates.js';
+import { israelDate, toDateStr, addMonths } from './dates.js';
 import { playerMatchRows, summarizeStats, seasonOf, playedIn, type MatchLike } from './matchStats.js';
 
 /** What is stored per month on the player. */
@@ -93,15 +93,6 @@ export const isMonthKey = (s: unknown): s is string => {
 export const monthOf = (date: unknown): string | null => {
   const d = toDateStr(date);
   return d ? d.slice(0, MONTH_KEY_LEN) : null;
-};
-
-/** 'YYYY-MM' plus `n` months (n may be negative). */
-export const addMonths = (month: string, n: number): string => {
-  const y = Number(month.slice(0, YEAR_LEN));
-  const m = Number(month.slice(MONTH_FROM, MONTH_KEY_LEN)) - 1 + n;
-  const yy = y + Math.floor(m / MONTHS_A_YEAR);
-  const mm = ((m % MONTHS_A_YEAR) + MONTHS_A_YEAR) % MONTHS_A_YEAR;
-  return `${yy}-${String(mm + 1).padStart(TWO, '0')}`;
 };
 
 /** The last full calendar month in Israel: in November 2026, '2026-10'. */

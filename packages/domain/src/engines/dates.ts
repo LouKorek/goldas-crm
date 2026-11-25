@@ -61,3 +61,10 @@ export const nextBirthday = (dob: unknown, now: Date = new Date()): { days: numb
 
 /** Day of week (0 = Sunday) of a 'YYYY-MM-DD'. */
 export const weekday = (s: string): number => new Date(utcMidnight(s)).getUTCDay();
+
+/** 'YYYY-MM' plus `n` months (n may be negative). */
+export const addMonths = (month: string, n: number): string => {
+  const [y, m] = month.split('-').map(Number);
+  const i = y * 12 + (m - 1) + n;
+  return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
+};

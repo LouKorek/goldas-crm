@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   cleanPayment, paymentStatus, paymentRows, cashFlow, financeTotals, filterPayments, hasLatePayment,
-  toCurrency, toAmount, formatMoney, addMonths, currenciesIn, describePayment, PAYMENT_DUE_SOON_DAYS,
+  toCurrency, toAmount, formatMoney, currenciesIn, describePayment, PAYMENT_DUE_SOON_DAYS,
 } from '../engines/finance';
+import { addMonths } from '../engines/dates';
 import { computeAlerts } from '../engines/alerts';
 import { can } from '../permissions';
 import { dealSchema } from '../schemas';

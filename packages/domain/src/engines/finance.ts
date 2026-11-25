@@ -11,7 +11,7 @@
 //     leave every total and alert (excluded); what was paid still counts.
 //   - A deal in the recycle bin counts for nothing.
 //   - Seeing and editing money is one permission: can(role, 'money').
-import { israelDate, daysBetween, toDateStr } from './dates.js';
+import { israelDate, daysBetween, toDateStr, addMonths } from './dates.js';
 
 export const CURRENCIES = ['ILS', 'EUR', 'USD', 'GBP'] as const;
 export type Currency = typeof CURRENCIES[number];
@@ -26,8 +26,6 @@ export const CURRENCY_SYMBOL: Record<Currency, string> = { ILS: '₪', EUR: '€
 
 /** Money is kept to the cent. */
 const CENTS = 100;
-const MONTHS_PER_YEAR = 12;
-const MONTH_DIGITS = 2;
 /** Length of 'YYYY-MM' and of 'YYYY' at the start of a 'YYYY-MM-DD'. */
 const MONTH_LEN = 7;
 const YEAR_LEN = 4;
@@ -238,13 +236,6 @@ export function paymentRows(deals: DealIn[] | null | undefined, now: Date = new 
     }))
     .sort((a, b) => a.payment.dueDate.localeCompare(b.payment.dueDate) || a.playerName.localeCompare(b.playerName));
 }
-
-/** 'YYYY-MM' plus n months. */
-export const addMonths = (month: string, n: number): string => {
-  const [y, m] = month.split('-').map(Number);
-  const i = y * MONTHS_PER_YEAR + (m - 1) + n;
-  return `${Math.floor(i / MONTHS_PER_YEAR)}-${String((i % MONTHS_PER_YEAR) + 1).padStart(MONTH_DIGITS, '0')}`;
-};
 
 export interface MoneyCell { expected: number; paid: number; late: number }
 export interface CashFlowMonth { month: string; byCurrency: Partial<Record<Currency, MoneyCell>> }
