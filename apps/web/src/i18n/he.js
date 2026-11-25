@@ -1468,6 +1468,31 @@ const HE = {
   'This video can only be cut {seconds} seconds before moment {n}, which is too early. Export it again as MP4 and pick that file.': 'את הסרטון הזה אפשר לחתוך רק {seconds} שניות לפני רגע {n}, וזה מוקדם מדי. ייצא אותו מחדש כ-MP4 ובחר את הקובץ החדש.',
   'The cut did not come out right, so nothing was uploaded. Pick the video again.': 'החיתוך לא יצא תקין, ולכן שום דבר לא הועלה. בחר שוב את הסרטון.',
   'The upload was cut off and cannot go on from this point. Pick the video again.': 'ההעלאה נקטעה ואי אפשר להמשיך אותה מהמקום הזה. בחר שוב את הסרטון.',
+
+  // Golda's cost meter (System, Quotas): what her model calls cost today and the daily ceiling on the work she starts by herself
+  "Golda's own work today": 'העבודה העצמאית של גולדה היום',
+  'Scouting, research and the other work Golda starts by herself stop for the day once they reach the ceiling. Chats and briefings are never stopped.': 'סקאוטינג, מחקר ושאר העבודה שגולדה מתחילה לבד נעצרים להיום כשהם מגיעים לתקרה. שיחות ותדריכים לא נעצרים אף פעם.',
+  'Stopped until tomorrow': 'נעצר עד מחר',
+  'Switched off': 'כבוי',
+  'The ceiling is 0, so Golda starts no work by herself. Chats and briefings go on as usual.': 'התקרה היא 0, ולכן גולדה לא מתחילה שום עבודה לבד. שיחות ותדריכים ממשיכים כרגיל.',
+  'Could not read what Golda cost today.': 'לא ניתן לקרוא כמה עלתה גולדה היום.',
+  'Everything today, chats included': 'סך הכל היום, כולל שיחות',
+  'Last {n} days': '{n} הימים האחרונים',
+  '{n} calls': '{n} קריאות',
+  'One call': 'קריאה אחת',
+  'Chats': 'שיחות',
+  'Briefings': 'תדריכים',
+  'Radar': 'רדאר',
+  'Research': 'מחקר',
+  'Reviews': 'סקירות',
+  'Deal work': 'עבודה על עסקאות',
+  'Other work': 'עבודה אחרת',
+  'Daily ceiling, in dollars': 'תקרה יומית, בדולרים',
+  'From 0 to {max}. At 0 Golda starts no work by herself.': 'בין 0 ל-{max}. ב-0 גולדה לא מתחילה שום עבודה לבד.',
+  'Enter a number from 0 to {max}.': 'יש להזין מספר בין 0 ל-{max}.',
+  'The ceiling is saved.': 'התקרה נשמרה.',
+  '{n} calls ran on a model with no price in the table and count as 0.': '{n} קריאות רצו על מודל שאין לו מחיר בטבלה, ונספרו כ-0.',
+  'An estimate from the list prices of {date}, not an invoice.': 'הערכה לפי המחירון של {date}, לא חשבונית.',
 };
 
 export default HE;

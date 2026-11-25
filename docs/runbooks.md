@@ -495,5 +495,16 @@ One small page that says how the system is doing, readable without signing in, s
 - `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read, and two counts from the address search: `addressesFilled` (values the server saved by itself) and `suggestionsOpen` (waiting for a decision in System › Email).
 - `backup`: the latest backup and the latest good one (read back, copied outside the database, how many documents).
 - `notifications`: how many devices take notifications.
+- `cost`: what Golda's model calls cost today in US dollars (`todayUsd`), the day's ceiling for the work she does on her own (`capUsd`), and whether that ceiling is reached (`capped`).
 
 It is open, so it holds states, times and counts only: no names, addresses, ids, file names or error texts. Every word in it comes from a fixed list in `lib/system-status.js`; anything else comes out as `unknown`, and `system-status.test.js` proves nothing private gets through. To add a fact, add it there as a number, a time, a yes/no or a word from a list, never as free text. The reason behind an `error` is in System › Health, for a signed-in admin. Netlify's edge keeps an answer for a minute.
+
+## Golda's cost ledger and the daily ceiling (`lib/golda-cost.js`)
+
+Every model call Golda makes ends with `record()`: the tokens and web searches the API reported are priced from the dated table at the top of `lib/golda-cost.js` and added to `golda_cost/{Israel date}` (sums of money and counts only: no message, name or prompt). The collection is read and written by functions only; System › Quotas shows it through the `golda-cost` function (admin only).
+
+- **The ceiling** (`app_meta/goldaCost.capUsd`, 5 US dollars a day unless changed in System › Quotas, 0 to 100) applies to background work only: scouting, the radar, research, reviews, deal work. A conversation and a briefing are counted but never blocked. A background job asks `gate()` first and skips with a job note when the ceiling is reached; 0 switches background work off.
+- **Golda tells the owner once**, in the day and after his briefing, on the day the ceiling is reached (`capNotice()`, wired into the hourly run in `golda-briefing.js`). Nothing is said at night, and a new day starts a new ledger.
+- **Prices change.** The table carries the date it was read and its source. When Anthropic changes a price, or Golda moves to another model, update `PRICES` and `PRICES_AS_OF`; a model with no row is recorded at 0 and counted in `estimatedCalls`, never guessed. A turn the fallback model answered is priced at the requested model's rate.
+- **A ledger that cannot be written never costs an answer**: the failure is logged (`[golda-cost]`) and the call goes on, so on such a day the meter reads low.
+

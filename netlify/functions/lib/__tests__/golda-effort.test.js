@@ -113,3 +113,27 @@ test('the chosen level goes into the request and comes back with the usage; the 
   assert.deepEqual(seen[0].tools.map((t) => t.name), seen[1].tools.map((t) => t.name));
   assert.equal(seen[0].system, seen[1].system);
 });
+
+// --- the model and effort of every kind of work ---------------------------------
+test('every task has its model and effort, and the callers that existed before run as they did', () => {
+  const { effortForTask, TASKS, MODEL } = require('../golda-effort.js');
+  assert.equal(MODEL, 'claude-opus-5-5');
+  const want = {
+    chat: 'xhigh', briefing: 'high', scouting: 'high', radar_scan: 'low', radar_card: 'medium', research: 'high', review: 'medium', deal: 'high',
+    player: 'medium', style: 'high',
+  };
+  for (const [task, effort] of Object.entries(want)) assert.deepEqual(effortForTask(task), { model: 'claude-opus-5-5', effort }, task);
+  assert.deepEqual([...TASKS].sort(), Object.keys(want).sort(), 'no task without a test');
+  // Only levels the code already asked for.
+  for (const task of TASKS) assert.ok(['low', 'medium', 'high', 'xhigh'].includes(effortForTask(task).effort), task);
+  // A chat message without anything to go on runs at the chooser's default, the top.
+  assert.equal(effortForTask('chat').effort, chooseEffort().effort);
+  assert.equal(effortForTask('chat').effort, TOP);
+  // A task nobody defined is a mistake in the caller, said at once.
+  assert.throws(() => effortForTask('poetry'), /unknown task "poetry"/);
+  assert.throws(() => effortForTask(), /unknown task/);
+  assert.throws(() => effortForTask('toString'), /unknown task/);
+  // The callers read their constants from here.
+  assert.deepEqual([require('../golda-briefing-ai.js').MODEL, require('../golda-briefing-ai.js').EFFORT], ['claude-opus-5-5', 'high']);
+  assert.equal(require('../wa-agent.js').MODEL, 'claude-opus-5-5');
+});

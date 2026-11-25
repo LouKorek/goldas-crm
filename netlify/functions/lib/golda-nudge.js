@@ -51,18 +51,20 @@ async function noteInChat(db, identity, { text, buttons = [], kind = 'nudge', no
 }
 
 /**
- * nudge(db, u, { body, buttons, kind, remember, carryOnly, expiresAt }, { now, send, job })
+ * nudge(db, u, { body, buttons, kind, remember, carryOnly, expiresAt, ref }, { now, send, job })
  * Sends one own-initiative message to the owner (or a connected player) and,
  * when it asks something or should be in front of her when he answers
  * (remember: true), keeps it in the chat's history.
  *   carryOnly  outside the window, only a template that carries the text itself
  *   expiresAt  ms: a text still waiting for the window after this is dropped
- *   send  the hourly run's sender (tests inject it): (u, body, kind, buttons) → { state }
+ *   ref        { type, id }: what the message is about, so a tap on one of its
+ *              buttons can be traced back to it (lib/golda-taps.js)
+ *   send  the hourly run's sender (tests inject it): (u, body, kind, buttons, ref) → { state }
  */
-async function nudge(db, u, { body, buttons = [], kind = 'nudge', remember = false, carryOnly = false, expiresAt = null }, { now = Date.now(), send = null, job = null } = {}) {
+async function nudge(db, u, { body, buttons = [], kind = 'nudge', remember = false, carryOnly = false, expiresAt = null, ref = null }, { now = Date.now(), send = null, job = null } = {}) {
   const r = send
-    ? await send(u, body, kind, buttons)
-    : await outbox.deliver(db, { to: u.phone, body, kind, buttons, carryOnly, expiresAt }, { now });
+    ? await send(u, body, kind, buttons, ref)
+    : await outbox.deliver(db, { to: u.phone, body, kind, buttons, carryOnly, expiresAt, ref }, { now });
   if (r && r.state === 'queued' && job) job.note(`${kind} → ${u.email}: window closed, queued`);
   if (remember) await noteInChat(db, u, { text: body, buttons, kind, now }).catch((e) => { if (job) job.note(`${kind}: chat note failed: ${e.message}`); });
   return r;

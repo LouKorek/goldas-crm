@@ -1,6 +1,9 @@
 // Harness stand-in for data/admin: the System screen on sample runs and
 // backups. ?bk=empty shows a database with no backups and two copies kept
-// outside it; anything else a week of backups in every state.
+// outside it; anything else a week of backups in every state. ?cost=capped
+// shows Golda's cost meter on a day that reached its ceiling, ?cost=off with
+// the ceiling at 0, ?cost=error when it cannot be read; anything else an
+// ordinary day.
 export * from '../src/data/admin.js';
 const state = new URLSearchParams(location.search).get('bk') || 'week';
 const H = 3600e3, D = 24 * H, now = Date.now();
@@ -44,3 +47,27 @@ export const findInBackup = async (id, q) => (id === '2c9e4410' ? { legacy: true
 export const restoreRecord = async () => ({ ok: true });
 export const restoreEverything = async () => ({ ok: true });
 export const fetchOffsiteCopies = async () => ({ copies: [{ key: '2026-11-22_b7c1e09a.jsonl.gz', date: '2026-11-22', id: 'b7c1e09a' }, { key: '2026-11-15_a41d77f2.jsonl.gz', date: '2026-11-15', id: 'a41d77f2' }] });
+
+// Golda's cost meter (Quotas): what golda-cost answers.
+const costState = new URLSearchParams(location.search).get('cost') || 'day';
+const dayOf = (daysAgo) => new Date(now - daysAgo * D).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+const PAST = [1.12, 0.84, 2.31, 3.05, 0.4, 0, 1.76, 2.2, 4.61, 5.08, 0.93, 1.48, 2.02];
+const meterOf = (capUsd, background) => {
+  const byKind = {
+    chat: { usd: 1.9342, calls: 41 }, briefing: { usd: 0.4127, calls: 2 },
+    scouting: { usd: background * 0.62, calls: 3 }, research: { usd: background * 0.3, calls: 1 }, other: { usd: background * 0.08, calls: 1 },
+  };
+  const totalUsd = 1.9342 + 0.4127 + background;
+  const capped = capUsd <= 0 || background >= capUsd;
+  const days = [...PAST.map((usd, i) => ({ date: dayOf(PAST.length - i), totalUsd: usd, backgroundUsd: usd * 0.6, calls: Math.round(usd * 14) })),
+    { date: dayOf(0), totalUsd, backgroundUsd: background, calls: 48 }];
+  return {
+    capUsd, defaultCapUsd: 5, capMin: 0, capMax: 100, pricesAsOf: '2026-11-25',
+    today: { date: dayOf(0), totalUsd, backgroundUsd: background, byKind, calls: 48, estimatedCalls: 0, capped, cappedAt: capped && capUsd > 0 ? now - 2 * H : null },
+    days, periodUsd: days.reduce((a, d) => a + d.totalUsd, 0),
+  };
+};
+let costCap = costState === 'off' ? 0 : 5;
+const costSpent = () => (costState === 'capped' ? 5.1846 : 2.2718);
+export const fetchGoldaCost = async () => { if (costState === 'error') throw new Error('golda-cost 500'); return meterOf(costCap, costSpent()); };
+export const saveGoldaCostCap = async (capUsd) => { costCap = Number(capUsd); return meterOf(costCap, costSpent()); };

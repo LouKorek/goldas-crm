@@ -1,12 +1,15 @@
 // What the system says about its own health, for a check from outside the
 // CRM (system-status.js): did the scheduled jobs run, is the mailbox being
-// read, is there a good backup, how many phones take notifications.
+// read, is there a good backup, how many phones take notifications, what
+// Golda's thinking cost today.
 //
 // The page is open to anyone who has the address, so it holds states, times
 // and counts only. Every value is either a number, a time, a yes/no or one
 // word from a fixed list below: never a name, an address, an id, a file name,
 // an error text or anything else a person typed. A value that is not on a
 // list comes out as "unknown".
+const { statusOf } = require('./golda-cost.js');
+
 const JOB_NAME = /^[a-z][a-z0-9-]{1,40}$/;
 const JOB_STATES = new Set(['ok', 'error']);
 const TRIGGERS = new Set(['schedule', 'manual', 'deploy']);
@@ -22,6 +25,8 @@ function when(v) {
   return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : null;
 }
 const data = (snap) => (snap && snap.exists ? snap.data() || {} : {});
+/** A sum of money as a plain number with two decimals; null when it is not a number. */
+const money = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v * 100) / 100 : null);
 
 function jobsOf(status) {
   const out = {};
@@ -52,14 +57,20 @@ function backupOf(rows) {
   return { latest: one(sorted[0]), latestGood: one(sorted.find((b) => (b.status === 'ok' || b.status === 'partial') && b.verified !== false)) };
 }
 
-/** The whole status. Reads four small things and never throws for one of them. */
+/** What Golda's model calls cost today against the day's ceiling for her own work (lib/golda-cost.js): two sums and a yes/no. */
+function costOf(c) {
+  return { todayUsd: money(c.todayUsd), capUsd: money(c.capUsd), capped: c.capped === true };
+}
+
+/** The whole status. Reads five small things and never throws for one of them. */
 async function readStatus(db, now = Date.now()) {
   const safe = async (read, fallback) => { try { return await read(); } catch { return fallback; } };
-  const [jobs, mail, backups, phones] = await Promise.all([
+  const [jobs, mail, backups, phones, cost] = await Promise.all([
     safe(() => db.collection('app_meta').doc('jobStatus').get().then(data), null),
     safe(() => db.collection('app_meta').doc('gmail').get().then(data), null),
     safe(() => db.collection('backups').orderBy('startedAt', 'desc').limit(8).get().then((s) => s.docs.map((d) => d.data() || {})), null),
     safe(() => db.collection('push_subscriptions').limit(200).get().then((s) => s.docs.length), null),
+    safe(() => statusOf(db, now), null),
   ]);
   return {
     at: new Date(now).toISOString(),
@@ -67,6 +78,7 @@ async function readStatus(db, now = Date.now()) {
     mail: mail ? mailOf(mail) : null,
     backup: backups ? backupOf(backups) : null,
     notifications: { devices: phones },
+    cost: cost ? costOf(cost) : null,
   };
 }
 

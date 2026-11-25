@@ -10,7 +10,9 @@ const zlib = require('zlib');
 const Anthropic = require('@anthropic-ai/sdk');
 const C = require('../data/crm-constants.js');
 
-const MODEL = 'claude-opus-5-5';
+// The model and the level a conversation starts from live with the other tasks' (lib/golda-effort.js).
+const { model: MODEL } = require('./golda-effort.js').effortForTask('chat');
+const cost = require('./golda-cost.js');
 const { OWNER_EMAIL } = require('./firestore.js');
 const { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
   computeAlerts, mergeSettings, topMatches, explainMatch, israelDate, cleanKnows } = require('@goldas/domain');
@@ -907,7 +909,7 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   // only place the times of a highlights request may come from (golda-youtube.js).
   const writerTexts = [...history.filter((h) => h.role !== 'assistant').map((h) => String(h.text || '')), text || ''];
   const tools = createTools({ db, admin, identity, media, session, assistantName, channel, turnText: text || '', writerTexts });
-  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, steps: 0 };
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0, steps: 0 };
   // Long-term memory is read once per message; a failed read never blocks the reply.
   const remembered = memories || await loadMemories(db, identity).catch((e) => { console.warn('[golda] memory read failed:', e.message); return []; });
   const mistakes = await recentMistakes(db).catch(() => []);
@@ -941,45 +943,54 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   usage.effortReason = effortReason;
 
   let reply = '';
-  for (let step = 0; step < MAX_STEPS; step++) {
-    // Streamed, so a long report or a deep analysis never hits an HTTP timeout.
-    // The automatic cache breakpoint keeps every step of the loop reading the
-    // tools, the system prompt and the conversation so far from the cache.
-    const res = await anthropic.beta.messages.stream({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort },
-      cache_control: { type: 'ephemeral' },
-      system,
-      tools: [...toolsFor(identity.role, channel), ...SERVER_TOOLS],
-      messages,
-    }).finalMessage();
-    usage.steps++;
-    usage.inputTokens += res.usage?.input_tokens || 0;
-    usage.outputTokens += res.usage?.output_tokens || 0;
-    usage.cacheReadTokens += res.usage?.cache_read_input_tokens || 0;
-    usage.cacheWriteTokens += res.usage?.cache_creation_input_tokens || 0;
-    if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
-    messages.push({ role: 'assistant', content: res.content });
-    // A long web search pauses server-side; resend as-is and it resumes.
-    if (res.stop_reason === 'pause_turn') continue;
-    const uses = res.content.filter((b) => b.type === 'tool_use');
-    if (res.stop_reason !== 'tool_use' || !uses.length) {
-      reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      break;
-    }
-    const results = [];
-    for (const u of uses) {
-      try {
-        const out = await tools.run(u.name, u.input);
-        results.push({ type: 'tool_result', tool_use_id: u.id, content: out && out.__content ? out.__content : JSON.stringify(out) });
-      } catch (e) {
-        results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${e.message}`, is_error: true });
+  let spent = null;   // every step's usage as the API reported it, for the day's cost ledger
+  try {
+    for (let step = 0; step < MAX_STEPS; step++) {
+      // Streamed, so a long report or a deep analysis never hits an HTTP timeout.
+      // The automatic cache breakpoint keeps every step of the loop reading the
+      // tools, the system prompt and the conversation so far from the cache.
+      const res = await anthropic.beta.messages.stream({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        output_config: { effort },
+        cache_control: { type: 'ephemeral' },
+        system,
+        tools: [...toolsFor(identity.role, channel), ...SERVER_TOOLS],
+        messages,
+      }).finalMessage();
+      usage.steps++;
+      usage.inputTokens += res.usage?.input_tokens || 0;
+      usage.outputTokens += res.usage?.output_tokens || 0;
+      usage.cacheReadTokens += res.usage?.cache_read_input_tokens || 0;
+      usage.cacheWriteTokens += res.usage?.cache_creation_input_tokens || 0;
+      usage.webSearches += res.usage?.server_tool_use?.web_search_requests || 0;
+      spent = cost.addUsage(spent, res.usage);
+      if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
+      messages.push({ role: 'assistant', content: res.content });
+      // A long web search pauses server-side; resend as-is and it resumes.
+      if (res.stop_reason === 'pause_turn') continue;
+      const uses = res.content.filter((b) => b.type === 'tool_use');
+      if (res.stop_reason !== 'tool_use' || !uses.length) {
+        reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+        break;
       }
+      const results = [];
+      for (const u of uses) {
+        try {
+          const out = await tools.run(u.name, u.input);
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: out && out.__content ? out.__content : JSON.stringify(out) });
+        } catch (e) {
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${e.message}`, is_error: true });
+        }
+      }
+      messages.push({ role: 'user', content: results });
     }
-    messages.push({ role: 'user', content: results });
+  } finally {
+    // What the message cost goes to the day's ledger, also when a step failed half way.
+    // A conversation is counted and never capped; a ledger that cannot be written never costs the answer.
+    if (spent) await cost.record(db, { kind: 'chat', model: MODEL, usage: spent });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
   return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles,

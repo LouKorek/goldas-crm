@@ -1,7 +1,9 @@
 // The admin area's data: the night jobs and their runs, quotas, backups,
 // the full audit log and the errors the app itself reported. Everything is
 // read straight from the collections the functions already write; the one
-// write here (the TM Watch credit budget) is an admin-only setting.
+// write here (the TM Watch credit budget) is an admin-only setting. What
+// Golda's model calls cost comes from a function (golda-cost): the browser
+// never reads that ledger itself.
 import {
   collection, doc, onSnapshot, query, orderBy, limit, getDocs, setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
@@ -90,6 +92,15 @@ export const listenGoldaUsage = (callback) =>
     });
     callback({ count, inputTokens, outputTokens, sessions, today });
   }, (e) => { console.error('wa_sessions error:', e); callback({ count: 0, inputTokens: 0, outputTokens: 0, sessions: 0 }); });
+
+/**
+ * What Golda's model calls cost (golda-cost, admin only): today and the last
+ * 14 days in USD, per kind of work, and the daily ceiling on the work she
+ * starts by herself. Numbers only.
+ */
+export const fetchGoldaCost = () => callFunctionJson('golda-cost');
+/** Change the daily ceiling (0 to 100 USD; 0 switches her own work off). Answers the meter again. */
+export const saveGoldaCostCap = (capUsd) => callFunctionJson('golda-cost', { method: 'POST', body: { capUsd: Number(capUsd) } });
 
 // ── Backups ─────────────────────────────────────────────────────────
 export const listenBackups = (callback) =>

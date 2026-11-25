@@ -21,6 +21,7 @@ const playerGolda = require('./golda-player.js');
 const playerSends = require('./golda-player-sends.js');
 const speech = require('./golda-speech.js');
 const { VOICE_UNAVAILABLE } = require('./golda-voice.js');
+const taps = require('./golda-taps.js');
 
 const ASSISTANT_NAME = process.env.WA_ASSISTANT_NAME || 'גולדה';
 const LOCK_MS = 15 * 60 * 1000;               // a background function's whole budget
@@ -279,11 +280,18 @@ async function processMessage(messageId) {
     const cmd = isPlayer ? null : topicCommand(text);
     let direct = null;   // a reply that needs no model call
     let list = null;
+    // A tap on a button of a card Golda sent on her own (lib/golda-taps.js): the card's own feature
+    // answers it, before the model and whatever the day's count is. With no card behind the message,
+    // or no feature registered for it, nothing here changes anything.
+    const tap = msg.channel !== 'app' && msg.contextId
+      ? await taps.handleTap(db, msg, { identity, first, admin, now: Date.now() })
+      : { handled: false };
     // A player who writes "די" / "stop" turns off what Golda sends him on her own (before the model, over the daily limit too).
-    const stopped = isPlayer && playerSends.isStopCommand(text)
+    const stopped = !tap.handled && isPlayer && playerSends.isStopCommand(text)
       ? await playerSends.stopForPlayer(db, admin, identity).catch((e) => { console.error('[golda] stopping player messages failed:', e.message); return null; })
       : null;
-    if (stopped?.wasOn) direct = playerSends.stopConfirmation(identity);
+    if (tap.handled) direct = tap.reply || '';
+    else if (stopped?.wasOn) direct = playerSends.stopConfirmation(identity);
     else if (isPlayer && usage.count > playerGolda.DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות להיום. נמשיך מחר 🙂`;
     else if (usage.count > DAILY_LIMIT) direct = `${first}, הגענו למכסת ההודעות היומית (${DAILY_LIMIT}). נמשיך מחר, או שלו יכול להגדיל אותה.`;
     else if (voiceFailed) direct = `${first}, ${speech.excuse(voiceFailed)}. אפשר לכתוב לי את זה במילים?`;
@@ -305,7 +313,7 @@ async function processMessage(messageId) {
     const topic = current === MAIN_TOPIC ? null : { name: current, ...topics[current], history: thread.history };
     let pendingDeletes = Array.isArray(session.pendingDeletes) ? session.pendingDeletes : (session.pendingDelete ? [session.pendingDelete] : []), changed = false, userText = text || '', agentUsage = null, outFiles = [];
     let pendingOutreach, links = [], voice = null;
-    if (direct) reply = direct;
+    if (direct !== null) reply = direct;
     else {
       // A long task gets one "still on it" line, so the writer knows it was received.
       let ack = null;
@@ -347,14 +355,16 @@ async function processMessage(messageId) {
     };
     for (const k of Object.keys(topics)) delete topics[k].history;
     if (Object.keys(topics).length) patch.topics = topics;
-    if (!direct) await thread.ref.set({ topic: current, history: [...thread.history, ...turn].slice(-HISTORY_KEEP), updatedAt: now }, { merge: true });
+    // A handled tap and its answer are part of the conversation too, so the next message is read with them in view.
+    if (direct === null || (tap.handled && reply)) await thread.ref.set({ topic: current, history: [...thread.history, ...turn].slice(-HISTORY_KEEP), updatedAt: now }, { merge: true });
     await sessRef.set(patch, { merge: true });
 
     const done = { reply, buttons, menu: Boolean(list), changed, topic: current, files: fileRefs, links, voiced: Boolean(voice), doneAt: admin.firestore.FieldValue.serverTimestamp(), durationMs: Date.now() - t0,
       usage: agentUsage ? { ...agentUsage, model: MODEL } : null };
     try {
-      const ids = await deliver(msg, reply, { buttons: parsed.buttons, list, files: outFiles, links, voice });
-      await inboxRef.update({ ...done, state: 'done', sentIds: (ids || []).filter(Boolean) });
+      // A tap whose feature had nothing to say is done without a message.
+      const ids = tap.handled && !reply ? [] : await deliver(msg, reply, { buttons: parsed.buttons, list, files: outFiles, links, voice });
+      await inboxRef.update({ ...done, ...(tap.handled ? { tapped: true } : {}), state: 'done', sentIds: (ids || []).filter(Boolean) });
     } catch (e) {
       console.error('[golda] reply delivery failed:', e.message);
       await inboxRef.update({ ...done, state: 'reply_pending', error: String(e.message || e) });
