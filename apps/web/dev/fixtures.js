@@ -13,6 +13,19 @@ const players = [
   { id: 'stale1', stage: 'not_relevant', category: 'men', playerName: 'Stale Stage', gender: 'Men', status: 'Initial Talks', primaryPosition: 'RW' },
   { id: 'gone1', stage: 'not_relevant', category: 'men', playerName: 'Gone Player', gender: 'Men', status: 'Not Relevant', primaryPosition: 'LB' },
   { id: 'old2', stage: 'in_process', playerName: 'Legacy Woman', gender: 'Women', status: 'Initial Talks', primaryPosition: 'ST' },
+  // Represented players for the checklist card and the score on the players list:
+  // r1 added last week (onboarding), r2 a complete veteran, r3 a veteran with gaps whose games do not reach the calendar.
+  ...(() => {
+    const FILE = [{ name: 'doc', fileId: 'f-demo', type: 'application/pdf', uploadedAt: '2026-01-01' }];
+    const base = { stage: 'represented', gender: 'Men', contractStatus: 'Under Contract', contractEnd: '2027-06-30', reprEnd: '2027-06-30', passportExpiry: '2030-01-01', dob: '2006-04-12',
+      primaryPosition: 'CM', currentClub: 'מכבי חיפה', foot: 'Right', nationalities: ['Israel'], leagueCountry: 'Israel', leagueTier: 'Tier 1', reprFiles: FILE, passportFiles: FILE, photoFiles: FILE,
+      videoLink: 'https://youtu.be/demo', ifaTeamUrl: 'https://www.football.org.il/players/player/?player_id=1', profileLink: 'https://www.transfermarkt.com/x/profil/spieler/1', siteCard: { on: true, checkedAt: '2026-11-20' }, createdAt: '2024-03-01T10:00:00Z' };
+    return [
+      { ...base, id: 'r1', fullName: 'Noam Barzilai', createdAt: new Date(Date.now() - 6 * 86400000).toISOString(), reprFiles: [], photoFiles: [], passportFiles: [], videoLink: '', ifaTeamUrl: '', profileLink: '', siteCard: { on: false, checkedAt: '2026-11-20' }, foot: '' },
+      { ...base, id: 'r2', fullName: 'Gavin Karam' },
+      { ...base, id: 'r3', fullName: 'Yair Shemesh', videoLink: '', contractEnd: '', siteCard: undefined },
+    ];
+  })(),
   ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567' } : {}) })),
 ];
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);

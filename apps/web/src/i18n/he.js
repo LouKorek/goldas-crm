@@ -949,6 +949,22 @@ const HE = {
   'No players match your search.': 'אין שחקנים שמתאימים לחיפוש.',
   'No players in this category yet.': 'אין עדיין שחקנים בשוק הזה.',
   'Save Player': 'שמירת שחקן',
+  // Player checklist (onboarding and file completeness)
+  'Player onboarding': 'קליטת שחקן',
+  'File completeness': 'שלמות התיק',
+  'Fill in': 'להשלים',
+  'Missing': 'חסר',
+  'In the file': 'קיים בתיק',
+  'Not known yet': 'עוד לא ידוע',
+  'Score': 'ציון',
+  'Onboarding done: everything is in the file.': 'הקליטה הושלמה: הכל בתיק.',
+  'The file is complete.': 'התיק מלא.',
+  'No country and league on record': 'אין מדינה וליגה ברשומה',
+  'Incomplete': 'לא מלא',
+  'File': 'תיק',
+  'Player Photo': 'תמונת השחקן',
+  'photo': 'תמונה',
+  'For his page and the website card. A PNG with a transparent background is best.': 'לדף השחקן ולכרטיס באתר. הכי טוב PNG עם רקע שקוף.',
 };
 
 export default HE;

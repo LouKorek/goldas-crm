@@ -12,6 +12,7 @@ import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeG
 import { PageHeader, FactLine, Skeleton, Empty, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import DocViewer from 'components/DocViewer';
+import PlayerChecklist from 'components/player/PlayerChecklist';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -202,7 +203,7 @@ export default function Player360() {
     await addInteraction({ kind: 'note', playerId: id, text: note.trim(), by: email });
     setNote(''); toast.success(t('Note added.'));
   };
-  const docs = [['contractFiles', t('Contract'), p?.contractEnd], ['passportFiles', t('Passport'), p?.passportExpiry], ['reprFiles', t('Representation Agreement'), p?.reprEnd]];
+  const docs = [['contractFiles', t('Contract'), p?.contractEnd], ['passportFiles', t('Passport'), p?.passportExpiry], ['reprFiles', t('Representation Agreement'), p?.reprEnd], ['photoFiles', t('Photo'), '']];
 
   return (
     <div>
@@ -225,6 +226,7 @@ export default function Player360() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+        <PlayerChecklist p={p} />
         <Card title={t('Profile')}>
           <Fact k={t('Nationalities')} v={(p.nationalities || []).map((n) => `${flagEmoji(ISO2[n]) || ''} ${n}`).join(', ')} />
           <Fact k={t('Date of Birth')} v={p.dob ? `${fmtDate(p.dob)} (${calcAge(p.dob)})` : ''} />

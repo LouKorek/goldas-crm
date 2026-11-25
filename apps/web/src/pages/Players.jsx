@@ -13,6 +13,8 @@ import DocViewer from 'components/DocViewer';
 import AgeGroupField from 'components/ui/AgeGroupField';
 import { useRole } from 'lib/roleContext';
 import { t } from 'lib/i18n';
+import { playerCompleteness } from '@goldas/domain';
+import { listenSyncReport, scoreTone, scoreBg } from 'data/completeness';
 
 // ── Country code map ──────────────────────────────────────────────
 const CC = {'Afghanistan':'AFG','Albania':'ALB','Algeria':'ALG','Argentina':'ARG','Armenia':'ARM','Australia':'AUS','Austria':'AUT','Azerbaijan':'AZE','Bahrain':'BHR','Belgium':'BEL','Bolivia':'BOL','Bosnia and Herzegovina':'BIH','Brazil':'BRA','Bulgaria':'BUL','Cameroon':'CMR','Canada':'CAN','Chile':'CHI','China':'CHN','Colombia':'COL','Congo':'CGO','Costa Rica':'CRC','Croatia':'CRO','Cyprus':'CYP','Czech Republic':'CZE','Denmark':'DEN','DR Congo':'COD','Ecuador':'ECU','Egypt':'EGY','El Salvador':'SLV','England':'ENG','Estonia':'EST','Ethiopia':'ETH','Finland':'FIN','France':'FRA','Gabon':'GAB','Georgia':'GEO','Germany':'GER','Ghana':'GHA','Greece':'GRE','Guatemala':'GUA','Honduras':'HON','Hungary':'HUN','Iceland':'ISL','India':'IND','Indonesia':'IDN','Iran':'IRN','Iraq':'IRQ','Ireland':'IRL','Israel':'ISR','Italy':'ITA','Ivory Coast':'CIV','Jamaica':'JAM','Japan':'JPN','Jordan':'JOR','Kazakhstan':'KAZ','Kenya':'KEN','Kosovo':'XKX','Kuwait':'KUW','Latvia':'LAT','Lebanon':'LIB','Libya':'LBA','Lithuania':'LTU','Luxembourg':'LUX','Malaysia':'MAS','Mali':'MLI','Malta':'MLT','Mexico':'MEX','Moldova':'MDA','Morocco':'MAR','Netherlands':'NED','New Zealand':'NZL','Nigeria':'NGR','North Macedonia':'MKD','Northern Ireland':'NIR','Norway':'NOR','Oman':'OMA','Pakistan':'PAK','Palestine':'PLE','Panama':'PAN','Paraguay':'PAR','Peru':'PER','Philippines':'PHI','Poland':'POL','Portugal':'POR','Qatar':'QAT','Romania':'ROU','Russia':'RUS','Rwanda':'RWA','Saudi Arabia':'KSA','Scotland':'SCO','Senegal':'SEN','Serbia':'SRB','Slovakia':'SVK','Slovenia':'SVN','South Africa':'RSA','South Korea':'KOR','Spain':'ESP','Sri Lanka':'SRI','Sudan':'SDN','Sweden':'SWE','Switzerland':'SUI','Syria':'SYR','Tanzania':'TAN','Thailand':'THA','Tunisia':'TUN','Turkey':'TUR','Uganda':'UGA','Ukraine':'UKR','United Arab Emirates':'UAE','United Kingdom':'GBR','United States':'USA','Uruguay':'URU','Uzbekistan':'UZB','Venezuela':'VEN','Vietnam':'VIE','Wales':'WAL','Zimbabwe':'ZIM'};
@@ -27,6 +29,14 @@ function NatFlags({ nats=[] }) {
       ))}
     </div>
   );
+}
+
+// ── File completeness ─────────────────────────────────────────────
+// The share of the player's checklist that is in the file (@goldas/domain,
+// engines/completeness.ts); the full list is on his page.
+function ScoreBadge({ score, size = 10 }) {
+  if (score === null || score === undefined) return null;
+  return <span className="badge" title={t("File completeness")} style={{background:scoreBg(score),color:scoreTone(score),fontSize:size,fontFamily:'var(--font-mono)',flexShrink:0}}>{score}%</span>;
 }
 
 // ── Resolved IFA squad ────────────────────────────────────────────
@@ -136,6 +146,7 @@ function PlayerView({ player, onClose }) {
             {label:t("📋 Contract"),        field:'contractFiles', files:player.contractFiles},
             {label:t("Repr. Agreement"), field:'reprFiles',     files:player.reprFiles},
             {label:t("Passport"),        field:'passportFiles', files:player.passportFiles},
+            {label:t("Photo"),           field:'photoFiles',    files:player.photoFiles},
           ].map(({label,field,files})=>(
             <button key={label} className="btn btn-secondary btn-sm"
               onClick={()=>setDocModal({files:files||[],title:label,field})}>
@@ -155,7 +166,7 @@ const EMPTY_PLAYER = {
   leagueCountry:'', leagueTier:'', leagueManual:'', contractStart:'', contractEnd:'',
   loanParentEnd:'', primaryPosition:'', secondaryPositions:[], foot:'', natTeamStatus:'',
   dob:'', passportNumber:'', passportExpiry:'', reprStart:'', reprEnd:'',
-  notes:'', contractFiles:[], passportFiles:[], reprFiles:[],
+  notes:'', contractFiles:[], passportFiles:[], reprFiles:[], photoFiles:[],
   profileLink:'', videoLink:'',
   // For IFA-routed players (Israeli women / youth / lower leagues): paste the
   // football.org.il team page URL (e.g. team-details/?season_id=27&team_id=4032).
@@ -176,10 +187,15 @@ export default function Players() {
   const [sort, setSort]             = useState({field:'fullName',dir:'asc'});
   const { confirm, dialog }         = useConfirm();
   const { canEdit, isAdmin }        = useRole();
+  const [syncReport, setSyncReport] = useState(null);
 
   useEffect(() => {
     return listenPlayers({ stage: 'represented' }, (data) => { setPlayers(data); setLoading(false); });
   }, []);
+  useEffect(() => listenSyncReport(setSyncReport), []);
+  // File completeness per player, 0-100 (null for a player who is not scored).
+  const scoreOf = (p) => playerCompleteness(p, { syncReport })?.score ?? null;
+  const INCOMPLETE = t("Incomplete");
 
   const s = (k) => (v) => { setForm(p=>({...p,[k]:v})); setIsDirty(true); };
   const f = (k) => form[k] ?? '';
@@ -304,9 +320,17 @@ export default function Players() {
     if (filters.contractStatus&&p.contractStatus!==filters.contractStatus) return false;
     if (filters.youthScope === 'Youth'  && !p.currentClubIsYouth) return false;
     if (filters.youthScope === 'Senior' &&  p.currentClubIsYouth) return false;
+    if (filters.file === INCOMPLETE && (scoreOf(p) ?? 100) >= 100) return false;
     return true;
   }).sort((a,b)=>{
     let av,bv;
+    // The least complete first: when sorting by the score, and whenever the "incomplete" filter is on.
+    if (sort.field==='score' || filters.file === INCOMPLETE) {
+      av = scoreOf(a) ?? 101;
+      bv = scoreOf(b) ?? 101;
+      const dir = sort.field==='score' && sort.dir==='desc' ? -1 : 1;
+      return dir*(av-bv) || (a.fullName||'').localeCompare(b.fullName||'');
+    }
     if (sort.field==='primaryPosition') {
       av = POSITION_ORDER[a.primaryPosition]??99;
       bv = POSITION_ORDER[b.primaryPosition]??99;
@@ -379,6 +403,7 @@ export default function Players() {
             {key:'position',label:t("Position"),values:POSITIONS},
             {key:'contractStatus',label:t("Contract"),values:CONTRACT_STATUS},
             {key:'youthScope',label:t("Group"),values:['Youth','Senior']},
+            {key:'file',label:t("File"),values:[INCOMPLETE]},
           ]} />
         </div>
       </PageHeader>
@@ -402,6 +427,7 @@ export default function Players() {
               <div key={p.id} className="m-card" onClick={()=>setViewPlayer(p)}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <Link to={`/players/${p.id}`} style={{fontWeight:600,fontSize:14.5,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'inherit',textDecoration:'none'}}>{p.fullName}</Link>
+                  <ScoreBadge score={scoreOf(p)} size={9.5} />
                   <span className="badge" style={{background:pIsEU?'var(--blue-bg)':'var(--red-bg)',color:pIsEU?'var(--blue)':'var(--red)',fontSize:9.5,flexShrink:0}}>{pIsEU?'EU':'Non-EU'}</span>
                 </div>
                 <div className="m-meta" style={{marginTop:5}}>
@@ -446,6 +472,7 @@ export default function Players() {
                 <tr>
                   <th style={{width:70}}>{t("Actions")}</th>
                   <SortTh label={t("Name")} field="fullName" sort={sort} setSort={setSort} />
+                  <SortTh label={t("File")} field='score' sort={sort} setSort={setSort} />
                   <SortTh label='G' field='gender' sort={sort} setSort={setSort} />
                   <SortTh label={t("Born")} field='dob' sort={sort} setSort={setSort} />
                   <th style={{textAlign:'center'}}>{t("Nat")}</th>
@@ -487,6 +514,7 @@ export default function Players() {
                         />
                       </td>
                       <td style={{fontWeight:600}}><Link to={`/players/${p.id}`} style={{color:'inherit',textDecoration:'none'}}>{p.fullName}</Link></td>
+                      <td style={{textAlign:'center'}}><ScoreBadge score={scoreOf(p)} /></td>
                       <td style={{textAlign:'center',color:'var(--text-2)'}}>{genderShort}</td>
                       <td style={{fontSize:11,color:'var(--text-2)'}}>{dobDisplay}</td>
                       <td>
@@ -644,6 +672,7 @@ export default function Players() {
             <Field label={t("Profile Link")} hint={t("Transfermarkt, Wyscout...")}><input value={f('profileLink')} onChange={e=>s('profileLink')(e.target.value)} placeholder="https://..." /></Field>
             <Field label={t("Video Link")} hint={t("YouTube, highlights...")}><input value={f('videoLink')} onChange={e=>s('videoLink')(e.target.value)} placeholder="https://..." /></Field>
           </div>
+          <Field label={t("Player Photo")} hint={t("For his page and the website card. A PNG with a transparent background is best.")}><FileUpload label={t("photo")} accept=".jpg,.jpeg,.png,.webp" onUpload={(file,name,mode)=>handleFileUpload('photoFiles',file,name,mode)} history={form.photoFiles||[]} /></Field>
           <Field label={t("Notes")}><textarea value={f('notes')} onChange={e=>s('notes')(e.target.value)} placeholder={t("Additional notes...")} rows={3} /></Field>
         </Modal>
       )}
