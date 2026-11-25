@@ -21,7 +21,7 @@ const { admin, listRepresented } = require('./lib/firestore.js');
 const { _lib } = require('./sync-matches-background.js');
 const { checkSyncSecret } = require('./lib/ifa-sync-auth.js');
 const { ifaAgeGroupOf, ifaContainment, ifaNormalizeName, ifaTokens } = require('../../apps/web/public/tools/ifa-text.js');
-const { resolveAgeGroup } = require('@goldas/domain');
+const { resolveAgeGroup, hasStat } = require('@goldas/domain');
 
 const { getDb, decideSources, seasonStartMs, syncMatchesForPlayer } = _lib;
 
@@ -333,6 +333,23 @@ function duplicateGroups(rows, todayStr) {
   }
   return groups;
 }
+// Per-match numbers (playerStats) on the copies that go to the recycle bin
+// move onto the copy that stays, so no watched game's data is lost. The copy
+// that stays keeps its own entry for a player; between two others, the one
+// recorded last wins. Returns { [playerId]: entry } of what must be carried.
+const statAt = (s) => (s && s.at && s.at.toMillis ? s.at.toMillis() : Date.parse((s && s.at) || '') || 0);
+function carriedStats(keep, others) {
+  const own = (keep && keep.playerStats) || {};
+  const out = {};
+  for (const m of others) {
+    for (const [pid, s] of Object.entries(m.playerStats || {})) {
+      if (!hasStat(s) || hasStat(own[pid])) continue;
+      if (!out[pid] || statAt(s) > statAt(out[pid])) out[pid] = s;
+    }
+  }
+  return out;
+}
+
 async function mergeSquadDuplicates(db, sourceTeamId) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const snap = await db.collection('matches').where('source', '==', 'ifa').where('sourceTeamId', '==', sourceTeamId).get();
@@ -348,6 +365,8 @@ async function mergeSquadDuplicates(db, sourceTeamId) {
     const upd = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
     if (players.length) upd.linkedPlayers = admin.firestore.FieldValue.arrayUnion(...new Set(players));
     if (!hasTime(keep)) { const t = others.find(hasTime); if (t) upd.time = t.time; }
+    // Field paths, so an entry typed on the kept copy meanwhile is not overwritten.
+    for (const [pid, st] of Object.entries(carriedStats(keep, others))) upd[`playerStats.${pid}`] = st;
     if (!keep.stadiumName) { const st = others.find((m) => m.stadiumName); if (st) { upd.stadiumName = st.stadiumName; upd.stadiumMapsUrl = st.stadiumMapsUrl || ''; } }
     batch.update(keepRef, upd);
     for (const m of others) {
@@ -366,4 +385,4 @@ async function mergeSquadDuplicates(db, sourceTeamId) {
 exports._plan = plan;
 exports.runImport = runImport;
 exports.viaOf = viaOf;
-exports._internal = { ifaMismatch, squadInfo, duplicateGroups, pickKeeper, identity };
+exports._internal = { ifaMismatch, squadInfo, duplicateGroups, pickKeeper, identity, carriedStats, mergeSquadDuplicates };

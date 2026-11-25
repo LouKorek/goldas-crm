@@ -8,10 +8,15 @@ import { calcAge, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
 import { useRole } from 'lib/roleContext';
 import { t, tv, relDays, fmtDateTime, getLang } from 'lib/i18n';
-import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
+import { playerMatchRows, summarizeStats, currentSeason, playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
 import { PageHeader, FactLine, Skeleton, Empty, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import DocViewer from 'components/DocViewer';
+import PlayerChecklist from 'components/player/PlayerChecklist';
+import PlayerSeason from 'components/player/PlayerSeason';
+import PlayerLinks from 'components/player/PlayerLinks';
+import { PlayerCard, StatTile } from 'components/player/PlayerCard';
+import MonthlyReportDialog from 'components/player/MonthlyReportDialog';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -20,24 +25,10 @@ const DaysLeft = ({ date, label }) => {
   if (!date) return null;
   const d = daysAway(date);
   const color = d < 0 ? 'var(--red)' : d <= 30 ? 'var(--red)' : d <= 90 ? 'var(--amber)' : 'var(--green-ok)';
-  return (
-    <div style={{ border: '1px solid var(--border)', borderTop: `2px solid ${color}`, padding: '10px 12px', background: 'var(--card)' }}>
-      <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700 }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, color, lineHeight: 1.1, marginTop: 4 }}>{d < 0 ? `${-d}` : d}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{d < 0 ? t('days overdue') : t('days')} · {fmtDate(date)}</div>
-    </div>
-  );
+  return <StatTile label={label} value={d < 0 ? `${-d}` : d} tone={color} toned sub={`${d < 0 ? t('days overdue') : t('days')} · ${fmtDate(date)}`} />;
 };
 
-const Card = ({ title, children, action }) => (
-  <section className="card card-body" style={{ padding: '14px 16px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-      <div className="section-label" style={{ marginBottom: 0, flex: 1 }}>{title}</div>
-      {action}
-    </div>
-    {children}
-  </section>
-);
+const Card = PlayerCard;
 
 // Youth age group, read-only like every other fact: the cohort default (IFA
 // rule, season from July 1 — so it rolls over by itself each season) or this
@@ -144,6 +135,7 @@ export default function Player360() {
   // once the players had loaded, so React saw more hooks than on the first
   // render and the whole card crashed (React error #310).
   const [docModal, setDocModal] = useState(null); // { field, files, title, idx }
+  const [reportOpen, setReportOpen] = useState(false);   // the monthly report dialog
   const he = getLang() === 'he';
 
   useEffect(() => {
@@ -194,7 +186,11 @@ export default function Player360() {
   };
   const canShare = (() => { try { return !!navigator.canShare?.({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] }); } catch { return false; } })();
   const cv = async (lang, share = false) => {
-    try { const { exportPlayerCv } = await import('lib/playerCv'); await exportPlayerCv({ ...p, playerName: name }, p.category || 'men', { share, lang }); }
+    // The CV's season line, from the matches this page already has.
+    const label = currentSeason();
+    const rows = playerMatchRows(matches, id).filter((r) => r.season === label);
+    const season = rows.length ? { label, ...summarizeStats(rows) } : null;
+    try { const { exportPlayerCv } = await import('lib/playerCv'); await exportPlayerCv({ ...p, playerName: name }, p.category || 'men', { share, lang, season }); }
     catch (e) { console.error(e); toast.error(t('Could not build the PDF.')); }
   };
   const saveNote = async () => {
@@ -202,7 +198,7 @@ export default function Player360() {
     await addInteraction({ kind: 'note', playerId: id, text: note.trim(), by: email });
     setNote(''); toast.success(t('Note added.'));
   };
-  const docs = [['contractFiles', t('Contract'), p?.contractEnd], ['passportFiles', t('Passport'), p?.passportExpiry], ['reprFiles', t('Representation Agreement'), p?.reprEnd]];
+  const docs = [['contractFiles', t('Contract'), p?.contractEnd], ['passportFiles', t('Passport'), p?.passportExpiry], ['reprFiles', t('Representation Agreement'), p?.reprEnd], ['photoFiles', t('Photo'), '']];
 
   return (
     <div>
@@ -212,6 +208,7 @@ export default function Player360() {
         action={<>
           <button className="btn btn-secondary" onClick={() => cv('he')} title={t('CV (Hebrew)')}><Icon name="clipboard" size={12} /><span className="btn-text">{t('CV (Hebrew)')}</span><span className="btn-text-sm">עב</span></button>
           <button className="btn btn-secondary" onClick={() => cv('en')} title={t('CV (English)')}><Icon name="clipboard" size={12} /><span className="btn-text">{t('CV (English)')}</span><span className="btn-text-sm">EN</span></button>
+          {canEdit && stage === 'represented' && <button className="btn btn-secondary" onClick={() => setReportOpen(true)} title={t('Monthly report')}><Icon name="calendar" size={12} /><span className="btn-text">{t('Monthly report')}</span></button>}
           {canShare && <button className="btn btn-ghost" onClick={() => cv(he ? 'he' : 'en', true)} title={t('Share PDF')}><Icon name="external" size={12} /><span className="btn-text">{t('Share PDF')}</span></button>}
           {canEdit && <button className="btn btn-primary" onClick={edit}><Icon name="edit" size={12} /><span className="btn-text">{t('Edit player')}</span></button>}
           <button className="btn btn-ghost" onClick={close} title={t('Close')} aria-label={t('Close')}><Icon name="close" size={12} /><span className="btn-text">{t('Close')}</span></button>
@@ -223,6 +220,8 @@ export default function Player360() {
         <DaysLeft date={p.reprEnd} label={t('Representation ends')} />
         <DaysLeft date={p.passportExpiry} label={t('Passport expires')} />
       </div>
+
+      <PlayerChecklist p={p} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
         <Card title={t('Profile')}>
@@ -283,6 +282,8 @@ export default function Player360() {
           }))}
         </Card>
 
+        <PlayerLinks playerId={p.id} />
+
         <Card title={t('Matches')} action={<Link to="/matches" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>
           {upcoming.length + recent.length === 0 ? <p style={{ color: 'var(--text-3)', fontSize: 12.5 }}>{t('No matches scheduled.')}</p> : (
             <>
@@ -293,6 +294,8 @@ export default function Player360() {
             </>
           )}
         </Card>
+
+        <PlayerSeason playerId={id} matches={matches} />
 
         {nextMeetings.length > 0 && (
           <Card title={t('Meetings')} action={<Link to="/calendar" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>
@@ -339,6 +342,7 @@ export default function Player360() {
           ))}
         </Card>
       </div>
+      {reportOpen && <MonthlyReportDialog player={p} matches={matches} email={email} onClose={() => setReportOpen(false)} />}
       {docModal && <DocViewer files={docModal.files} initialIndex={docModal.idx} title={docModal.title} onClose={() => setDocModal(null)} onRename={canEdit ? renameDoc : null} />}
     </div>
   );

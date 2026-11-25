@@ -13,8 +13,26 @@ const players = [
   { id: 'stale1', stage: 'not_relevant', category: 'men', playerName: 'Stale Stage', gender: 'Men', status: 'Initial Talks', primaryPosition: 'RW' },
   { id: 'gone1', stage: 'not_relevant', category: 'men', playerName: 'Gone Player', gender: 'Men', status: 'Not Relevant', primaryPosition: 'LB' },
   { id: 'old2', stage: 'in_process', playerName: 'Legacy Woman', gender: 'Women', status: 'Initial Talks', primaryPosition: 'ST' },
+  // Represented players for the checklist card and the score on the players list:
+  // r1 added last week (onboarding), r2 a complete veteran, r3 a veteran with gaps whose games do not reach the calendar.
+  ...(() => {
+    const FILE = [{ name: 'doc', fileId: 'f-demo', type: 'application/pdf', uploadedAt: '2026-01-01' }];
+    const base = { stage: 'represented', gender: 'Men', contractStatus: 'Under Contract', contractEnd: '2027-06-30', reprEnd: '2027-06-30', passportExpiry: '2030-01-01', dob: '2006-04-12',
+      primaryPosition: 'CM', currentClub: 'מכבי חיפה', foot: 'Right', nationalities: ['Israel'], leagueCountry: 'Israel', leagueTier: 'Tier 1', reprFiles: FILE, passportFiles: FILE, photoFiles: FILE,
+      videoLink: 'https://youtu.be/demo', ifaTeamUrl: 'https://www.football.org.il/players/player/?player_id=1', profileLink: 'https://www.transfermarkt.com/x/profil/spieler/1', siteCard: { on: true, checkedAt: '2026-11-20' }, createdAt: '2024-03-01T10:00:00Z' };
+    return [
+      { ...base, id: 'r1', fullName: 'Noam Barzilai', createdAt: new Date(Date.now() - 6 * 86400000).toISOString(), reprFiles: [], photoFiles: [], passportFiles: [], videoLink: '', ifaTeamUrl: '', profileLink: '', siteCard: { on: false, checkedAt: '2026-11-20' }, foot: '' },
+      { ...base, id: 'r2', fullName: 'Gavin Karam' },
+      { ...base, id: 'r3', fullName: 'Yair Shemesh', videoLink: '', contractEnd: '', siteCard: undefined },
+    ];
+  })(),
   ...Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, stage: 'represented', category: 'men', fullName: `שחקן מיוצג ${i}`, gender: 'Men', primaryPosition: POS[i], currentClub: CLUBS[i % 6], contractStatus: 'Under Contract', contractEnd: '2027-06-30', dob: '2002-01-01', ...(i === 1 ? { goldaAccess: true, goldaPhone: '0521234567' } : {}) })),
 ];
+// The monthly report: p1 has a draft for the last full month (the month the dialog opens on).
+const LAST_MONTH = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() - 1, 15).toISOString().slice(0, 7); })();
+Object.assign(players.find((p) => p.id === 'p1'), { monthlyReports: { [LAST_MONTH]: {
+  did: ['שיחה עם המאמן על הדקות שלו ועל ההתקדמות באימונים', 'פגישה עם ההורים לסיכום תחילת העונה', 'שלחנו קטעי וידאו מעודכנים לשני סקאוטים בחו"ל'],
+  next: 'בחודש הבא נמשיך לעקוב אחרי הדקות שלו בליגה, ונקבע איתכם שיחה קצרה באמצע החודש.', status: 'draft', by: 'owner@example.com', at: '2026-11-02T09:00:00Z' } } });
 const day = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 export const FIXTURES = {
   players,
@@ -29,5 +47,18 @@ export const FIXTURES = {
       { name: 'Ido Shahar', age: 24, position: 'GK', club: 'Hapoel Hadera', why: 'חוזה מסתיים ביוני 2027, שוער ראשון בליגת העל, 11 שערים נקיים העונה', link: 'https://www.transfermarkt.com/ido-shahar/profil/spieler/1' },
       { name: 'Tomer Levi', age: 21, position: 'GK', club: 'Maccabi Petah Tikva U21', why: 'שוער שני, מחפש דקות; מועמד להשאלה', link: 'https://www.transfermarkt.com/tomer-levi/profil/spieler/2' },
     ] } } : {}) })),
+  // Matches with per-match player data (playerStats) for p1 across two seasons,
+  // one played match without data, and one upcoming.
+  matches: [
+    ...[[-150, 0, 0, 0, null], [-140, 15, 0, 0, 6], [-120, 90, 1, 0, 7.5], [-96, 72, 0, 1, 6.5], [-82, 90, 2, 1, 8.5], [-68, 0, 0, 0, null],
+      [-54, 64, 0, 0, 6], [-40, 90, 0, 2, 7], [-26, 81, 1, 0, 7], [-12, 90, 0, 0, 6.5], [-5, 30, 0, 0, null]].map(([d, minutes, goals, assists, rating], i) => ({
+      id: `x${i}`, date: day(d), time: '19:30', homeTeam: CLUBS[i % 6], awayTeam: CLUBS[(i + 3) % 6], source: i % 2 ? 'ifa' : 'manual', linkedPlayers: ['p1', 'p2'],
+      watchedBy: i === 9 ? 'Lou, Dana' : '', competition: i % 3 === 0 ? 'ליגת העל' : '',
+      playerStats: { p1: { minutes, goals, assists, ...(rating ? { rating } : {}), ...(i === 4 ? { note: 'Two goals and an assist, best game of the season.' } : {}), by: 'owner@example.com', at: '2026-11-01T08:00:00Z' },
+        ...(i === 9 ? { p2: { minutes: 0 } } : {}) },
+    })),
+    { id: 'x20', date: day(-1), time: '20:00', homeTeam: CLUBS[0], awayTeam: CLUBS[1], source: 'ifa', linkedPlayers: ['p1', 'p3'], watchedBy: 'Lou' },
+    { id: 'x21', date: day(4), time: '18:00', homeTeam: CLUBS[2], awayTeam: CLUBS[0], source: 'ifa', linkedPlayers: ['p1'] },
+  ],
   contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567' })),
 };

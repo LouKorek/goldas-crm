@@ -11,7 +11,13 @@
 //   4. for the owner only, in the day and after his briefing: the website
 //      following the CRM (lib/golda-site-follow.js: a draft and "לפרסם?") and
 //      one question a day about a gap in a player's record
-//      (lib/golda-daily-question.js). Never both in the same hour.
+//      (lib/golda-daily-question.js), and in the morning one question about
+//      yesterday's matches of represented players that have no numbers yet
+//      (lib/golda-match-report.js), and on the 1st of the month a reminder that
+//      last month's player reports can be prepared (lib/golda-monthly-report.js).
+//      Never two in the same hour; on a day she asks about matches the monthly
+//      reminder waits for the next day, and on a day she asks about matches or
+//      reminds about the reports the daily question waits for the next day.
 // The first three come from the alerts engine the app uses; nothing is computed here.
 // The morning briefing's text is written by the model from those facts plus
 // the last day's audit and the person's memories (lib/golda-briefing-ai.js);
@@ -42,8 +48,10 @@ const { whatsappRecipients } = require('./lib/golda-identity.js');
 const outbox = require('./lib/wa-outbox.js');
 const { ensureTemplate, needsRecheck } = require('./lib/wa-templates.js');
 const { ownerOf } = require('./lib/golda-nudge.js');
-const { followSite } = require('./lib/golda-site-follow.js');
+const { followSite, checkSiteCards } = require('./lib/golda-site-follow.js');
 const { askDaily } = require('./lib/golda-daily-question.js');
+const { askMatches, askedMatchesOn } = require('./lib/golda-match-report.js');
+const { askMonthlyReports, remindedOn } = require('./lib/golda-monthly-report.js');
 
 const KEEP_DAYS = 400;
 const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
@@ -174,6 +182,8 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   });
   const today = israelDate(now);
   const hour = israelHour(now);
+  // Once a night: which players have a card on the website, for the player checklist. Nothing is sent.
+  await checkSiteCards(db, data.players, now, { hour, today, site: siteClient, job }).catch((e) => job.note(`site cards failed: ${e.message}`));
   const recipients = whatsappRecipients(data.users);
   if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
 
@@ -285,8 +295,12 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   const owner = ownerOf(recipients);
   if (owner && !quiet && sent.briefings[owner.email] === today) {
     const site = await followSite(db, owner, data.players, now, { admin, send, job, site: siteClient }).catch((e) => { job.note(`site follow failed: ${e.message}`); return {}; });
-    const asked = site.sent ? {} : await askDaily(db, owner, data.players, now, { hour, send, job }).catch((e) => { job.note(`daily question failed: ${e.message}`); return {}; });
-    count += (site.sent || 0) + (asked.sent || 0);
+    const games = site.sent ? {} : await askMatches(db, owner, { matches: data.matches, players: data.players, users: data.users }, now, { hour, send, job }).catch((e) => { job.note(`match question failed: ${e.message}`); return {}; });
+    const matchDay = !!games.sent || await askedMatchesOn(db, today).catch(() => false);
+    const reports = site.sent || matchDay ? {} : await askMonthlyReports(db, owner, { players: data.players }, now, { hour, send, job }).catch((e) => { job.note(`monthly reports reminder failed: ${e.message}`); return {}; });
+    const reportDay = !!reports.sent || await remindedOn(db, today).catch(() => false);
+    const asked = site.sent || matchDay || reportDay ? {} : await askDaily(db, owner, data.players, now, { hour, send, job }).catch((e) => { job.note(`daily question failed: ${e.message}`); return {}; });
+    count += (site.sent || 0) + (games.sent || 0) + (reports.sent || 0) + (asked.sent || 0);
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning

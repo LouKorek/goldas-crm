@@ -21,8 +21,13 @@ const Contacts = lazy(() => import('pages/Contacts'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Player360 = lazy(() => import('pages/Player360'));
 const Admin = lazy(() => import('pages/Admin'));
+const Matches = lazy(() => import('pages/Matches'));
+const PlayerPage = lazy(() => import('pages/PlayerPage'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
-const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
+// ?role=viewer shows the screens as someone who may not edit.
+const role = new URLSearchParams(location.search).get('role') === 'viewer'
+  ? { email: 'viewer@example.com', name: 'צופה', role: 'viewer', canEdit: false, isAdmin: false, canDelete: false }
+  : { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
 setSessionAccess(role);
 const App = () => (
   <RoleContext.Provider value={role}>
@@ -39,6 +44,7 @@ const App = () => (
           <Route path="contacts" element={<Contacts />} />
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
           <Route path="calendar" element={<Calendar />} />
+          <Route path="matches" element={<Matches />} />
           <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="admin/youtube" element={<YouTubeConnect he />} />
           <Route path="admin/website" element={<WebsiteStatus he />} />
@@ -50,4 +56,6 @@ const App = () => (
     </MemoryRouter>
   </RoleContext.Provider>
 );
-createRoot(document.getElementById('root')).render(<App />);
+// ?path=/p/<token> shows the public live player page on its own, as a club sees it (dev/mock-playerPages.js).
+const livePage = /^\/p\/([^/]*)$/.exec(new URLSearchParams(location.search).get('path') || '');
+createRoot(document.getElementById('root')).render(livePage ? <Suspense fallback={null}><PlayerPage token={livePage[1]} /></Suspense> : <App />);

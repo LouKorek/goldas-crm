@@ -19,7 +19,7 @@
 // or left the agency: she asks what to write instead of drafting.
 // A card has no video link and the CRM keeps no card photo, so those two never
 // come from here.
-const { playerName, resolveAgeGroup } = require('@goldas/domain');
+const { playerName, resolveAgeGroup, isScored } = require('@goldas/domain');
 const { readSite, norm, slugOf, countryName } = require('./website-html.js');
 const { chatOf, nudge } = require('./golda-nudge.js');
 
@@ -194,4 +194,40 @@ async function followSite(db, owner, players, now = new Date(), { admin = null, 
   return { sent: 1, drafted: drafted.length, asks: asks.length };
 }
 
-module.exports = { viewOf, flagCode, cardFor, cardChange, buildSiteMessage, followSite, BUTTONS };
+// ── Which players have a card: the player checklist's "website card" ─────────
+// Once a day, in the quiet of the night, the public page is read once and every
+// represented player gets siteCard { on, checkedAt } stamped on his record, but
+// only when it differs from what is already there, so a quiet day writes nothing.
+// The checklist (packages/domain completeness.ts) reads it; a player never
+// checked is "not known yet", not missing.
+const CARDS_META = ['app_meta', 'goldaSiteCards'];
+const CARD_CHECK_HOUR = 5;          // Israel time
+const CARD_CHECK_WINDOW = 3;        // hours: 05:30, then 06:30 and 07:30 if the first run was missed
+
+/** Stamps siteCard on the players whose card state changed. Returns how many were written. */
+async function stampSiteCards(db, players, cards, today) {
+  const changed = (players || []).filter((p) => p && p.id && isScored(p)).map((p) => ({ p, on: Boolean(cardFor(cards, [playerName(p)], p.profileLink)) }))
+    .filter(({ p, on }) => !(p.siteCard && p.siteCard.on === on));
+  await Promise.all(changed.map(({ p, on }) => db.collection('players').doc(p.id).update({ siteCard: { on, checkedAt: today } })));
+  return changed.length;
+}
+
+/**
+ * checkSiteCards(db, players, now, { hour, today, site, job })
+ * Once a day, on the first run in the hours from CARD_CHECK_HOUR (a missed
+ * run is made up an hour later): reads the site and stamps the represented players.
+ */
+async function checkSiteCards(db, players, now = new Date(), { hour, today, site = null, job = { note: () => {} } } = {}) {
+  if (!(hour >= CARD_CHECK_HOUR && hour < CARD_CHECK_HOUR + CARD_CHECK_WINDOW)) return { skipped: 'not the hour' };
+  const ref = db.collection(CARDS_META[0]).doc(CARDS_META[1]);
+  const snap = await ref.get();
+  if (snap.exists && (snap.data() || {}).checkedOn === today) return { skipped: 'checked today' };
+  const client = site || require('./website-publish.js').siteClient();
+  const cards = readSite(await client.publicPage()).players;
+  const stamped = await stampSiteCards(db, players, cards, today);
+  await ref.set({ checkedOn: today, cards: cards.length, updatedAt: now.getTime() });
+  if (stamped) job.note(`site cards: ${stamped} player(s) stamped`);
+  return { stamped, cards: cards.length };
+}
+
+module.exports = { viewOf, flagCode, cardFor, cardChange, buildSiteMessage, followSite, BUTTONS, stampSiteCards, checkSiteCards, CARD_CHECK_HOUR };

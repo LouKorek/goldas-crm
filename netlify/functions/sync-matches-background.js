@@ -26,6 +26,7 @@ const { admin, getDb, listRepresented } = require('./lib/firestore.js');
 const { withAuth } = require('./lib/auth.js');
 const { runJob } = require('./lib/jobs.js');
 const crypto = require('crypto');
+const { hasStat } = require('@goldas/domain');
 const cheerio = require('cheerio');
 const IFA_TEAM_PINS = require('./data/ifa-team-pins.js');
 const {
@@ -692,6 +693,15 @@ function sameFixture(fetched, existing) {
 const syncDocId = (source, sourceMatchId) =>
   `s_${crypto.createHash('sha1').update(`${source}|${sourceMatchId}`).digest('hex').slice(0, 24)}`;
 
+// A match that holds a player's per-match numbers (playerStats, typed on the
+// Matches page or told to Golda) is the agency's own record of a game that was
+// watched. The sync never deletes it and never unlinks the player whose
+// numbers it holds, even if the source stops listing the fixture.
+const holdsStats = (m, playerId) => {
+  const ps = (m && m.playerStats && typeof m.playerStats === 'object') ? m.playerStats : {};
+  return playerId ? hasStat(ps[playerId]) : Object.values(ps).some((s) => hasStat(s));
+};
+
 async function syncMatchesForPlayer(db, player, source, fetched) {
   const col = db.collection('matches');
   const FieldValue = admin.firestore.FieldValue;
@@ -738,7 +748,9 @@ async function syncMatchesForPlayer(db, player, source, fetched) {
     const m = e.data;
     if (claimed.has(e.ref.id) || fetchedIds.has(m.sourceMatchId)) continue;
     if (m.date && m.date >= todayStr) {
+      if (holdsStats(m, player.id)) continue;
       const newLinked = (m.linkedPlayers || []).filter((id) => id !== player.id);
+      if (newLinked.length === 0 && holdsStats(m)) continue;
       if (newLinked.length === 0) await e.ref.delete();
       else await e.ref.update({ linkedPlayers: FieldValue.arrayRemove(player.id), updatedAt: FieldValue.serverTimestamp() });
       removed++;
@@ -1098,6 +1110,6 @@ exports.handler = withAuth({ action: 'run_sync', internal: true }, async (event)
 // Shared with ifa-targets and ifa-import, so the browser sync writes matches
 // exactly the way this function does.
 exports._lib = {
-  getDb, decideSources, seasonStartMs, syncMatchesForPlayer, nameMatcher, sameFixture, syncDocId,
+  getDb, decideSources, seasonStartMs, syncMatchesForPlayer, nameMatcher, sameFixture, syncDocId, holdsStats,
   IFA_TEAM_PINS, IFA_FAIL_TTL_DAYS,
 };

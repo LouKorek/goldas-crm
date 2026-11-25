@@ -106,7 +106,7 @@ async function runPlayerAgent({ db, admin, identity, text, media, history = [], 
   const run = {
     async my_cv({ lang = 'en' } = {}) {
       if (files.length) throw new Error('the CV is already attached');
-      const file = await require('./golda-pdf.js').playerCvPdf(view.player, { lang });
+      const file = await require('./golda-pdf.js').playerCvPdf(view.player, { lang, db });
       files.push(file);
       return { made: true, note: 'It goes out right after your answer.' };
     },

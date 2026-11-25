@@ -4,3 +4,6 @@ export * from './matching.js';
 export * from './deals.js';
 export * from './recurrence.js';
 export * from './analytics.js';
+export * from './completeness.js';
+export * from './matchStats.js';
+export * from './monthlyReport.js';

@@ -24,6 +24,7 @@ const LABELS = {
     mainPos: 'Main position', otherPos: 'Other positions', prefFoot: 'Preferred foot', profile: 'Profile', notes: 'Scouting notes',
     video: 'Watch highlights', tm: 'Transfermarkt profile', footer: 'gold-as.com  ·  Lou Korek  ·  FIFA Licensed Agent',
     foot_: { Right: 'Right', Left: 'Left', Both: 'Both' }, cat: { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish' },
+    season: 'Season', apps: ['match', 'matches'], min: 'min', goals: ['goal', 'goals'], assists: ['assist', 'assists'],
   },
   he: {
     agency: 'Gold A&S  ·  סוכנות כדורגל', player: 'שחקן', age: 'גיל', height: 'גובה', foot: 'רגל', position: 'עמדה',
@@ -31,6 +32,7 @@ const LABELS = {
     mainPos: 'עמדה עיקרית', otherPos: 'עמדות נוספות', prefFoot: 'רגל חזקה', profile: 'פרופיל', notes: 'הערות סקאוטינג',
     video: 'צפייה בקטעים', tm: 'פרופיל טרנספרמרקט', footer: 'gold-as.com  ·  לו קורק  ·  סוכן מורשה FIFA',
     foot_: { Right: 'ימין', Left: 'שמאל', Both: 'שתיהן' }, cat: { men: 'גברים', women: 'נשים', youth: 'נוער', jewish: 'יהודים' },
+    season: 'עונה', apps: ['משחק', 'משחקים'], min: "דק'", goals: ['שער', 'שערים'], assists: ['בישול', 'בישולים'],
   },
 };
 
@@ -45,6 +47,8 @@ const MUTED     = [0x8A, 0x8A, 0x8A];
 const RULE      = [0xE2, 0xDD, 0xCE];
 const TM_NAVY   = [0x1A, 0x30, 0x49];   // Transfermarkt's house navy
 const PLAY_RED  = [0xC0, 0x2A, 0x2A];
+// The agency's stationery, shared with the monthly report (lib/monthlyReport.js).
+export const BRAND = { DARK, CREST, GOLD, GOLD_DARK, INK, MUTED, RULE };
 
 const FOOT_WORD = { R: 'Right', L: 'Left', B: 'Both', Right: 'Right', Left: 'Left', Both: 'Both' };
 const CAT_WORD  = { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish' };
@@ -53,7 +57,7 @@ const CAT_WORD  = { men: 'Men', women: 'Women', youth: 'Youth', jewish: 'Jewish'
 // garbage, so emoji and non-Latin characters are dropped rather than shown.
 const latin1 = pdfSafe;
 
-async function loadLogo() {
+export async function loadLogo() {
   try {
     const res = await fetch('/logo.png');
     if (!res.ok) return null;
@@ -132,6 +136,12 @@ const ICONS = {
     [[-0.22, 0.17, 0.088], [-0.03, 0.13, 0.070], [0.14, 0.15, 0.058], [0.27, 0.20, 0.046]]
       .forEach(([dx, dy, r]) => d.circle(cx + s * dx, y + s * dy, s * r, 'F'));
   },
+  // A ball: an outline with a solid centre panel.
+  ball(d, x, y, s) {
+    const r = s / 2;
+    d.circle(x + r, y + r, r, 'S');
+    d.circle(x + r, y + r, r * 0.34, 'F');
+  },
   play(d, x, y, s) {
     d.triangle(x + s * 0.28, y + s * 0.16, x + s * 0.28, y + s * 0.84, x + s * 0.84, y + s * 0.5, 'F');
   },
@@ -139,7 +149,7 @@ const ICONS = {
 
 // Register the embedded family once per document. Falls back silently to
 // Helvetica so a font problem can never cost Lou the export.
-function useFonts(doc, fonts) {
+export function useFonts(doc, fonts) {
   try {
     doc.addFileToVFS('Poppins-Regular.ttf', fonts.POPPINS_REGULAR);
     doc.addFileToVFS('Poppins-Medium.ttf',  fonts.POPPINS_MEDIUM);
@@ -163,12 +173,12 @@ export function canSharePdf() {
 // `share: true` opens the OS share sheet with the file. Left false, the PDF
 // simply downloads — which on a phone opens it in the viewer, so Lou can read
 // it first and share afterwards if he wants to.
-export async function exportPlayerCv(player, category = 'men', { share = false, lang = 'en' } = {}) {
+export async function exportPlayerCv(player, category = 'men', { share = false, lang = 'en', season = null } = {}) {
   const [{ default: jsPDF }, fonts] = await Promise.all([
     import('jspdf'),
     import('./pdfFonts'),
   ]);
-  const { doc, filename } = await buildPlayerCv(jsPDF, fonts, player, category, { lang, logo: await loadLogo() });
+  const { doc, filename } = await buildPlayerCv(jsPDF, fonts, player, category, { lang, logo: await loadLogo(), season });
 
   // Sharing hands over the file itself. The browser's own share of a
   // downloaded PDF passes its blob: URL as text instead, which is what was
@@ -193,11 +203,31 @@ export async function exportPlayerCv(player, category = 'men', { share = false, 
 }
 
 /**
+ * The season line of the CV: "Season 2026/27" and "12 matches · 840 min ·
+ * 3 goals · 2 assists", or null when there is nothing to show. `season` is a
+ * summary from summarizeStats (@goldas/domain) plus its `label`. The average
+ * rating is the agency's own judgement and stays off a sheet sent to clubs.
+ */
+export function seasonLine(season, lang = 'en') {
+  if (!season || !season.label) return null;
+  const L = LABELS[lang] || LABELS.en;
+  const n = (v) => Math.max(0, Number(v) || 0);
+  if (!n(season.apps) && !n(season.goals) && !n(season.assists)) return null;
+  const word = (v, [one, many]) => `${v} ${v === 1 ? one : many}`;
+  const parts = [word(n(season.apps), L.apps)];
+  if (n(season.minutes)) parts.push(`${n(season.minutes)} ${L.min}`);
+  parts.push(word(n(season.goals), L.goals), word(n(season.assists), L.assists));
+  return { label: `${L.season} ${season.label}`, value: parts.join('   ·   ') };
+}
+
+/**
  * The sheet itself, with no browser in it: the app downloads or shares it,
  * and Golda builds the same sheet on the server and sends it on WhatsApp
  * (netlify/functions/lib/golda-pdf.js). `logo` is a data: URL or null.
+ * `season` (optional): the current season's totals, { label, apps, minutes,
+ * goals, assists }; with data it adds one row, without it the sheet is as before.
  */
-export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { lang = 'en', logo = null } = {}) {
+export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { lang = 'en', logo = null, season = null } = {}) {
   const L = LABELS[lang] || LABELS.en;
   const footWord = (f) => L.foot_[FOOT_WORD[f] || f] || FOOT_WORD[f] || f || '';
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -211,7 +241,8 @@ export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { la
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
   const M = 48;
-  const age = calcAge(player.dob);
+  // The public sheet (a club's live link) carries the age but not the date of birth.
+  const age = calcAge(player.dob) || (Number(player.age) > 0 ? Math.round(Number(player.age)) : null);
   // Mirror helpers: a left-edge x becomes a right-edge x on the Hebrew sheet,
   // and text anchored at it is right-aligned.
   const X = (x) => (rtl ? W - x : x);
@@ -252,7 +283,7 @@ export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { la
       doc.setLineWidth(0.8);
       doc.roundedRect(lx - 5, ly - 5, w + 10, h + 10, 3, 3, 'S');
       doc.addImage(logo, 'PNG', lx, ly, w, h);
-      textX = lx + w + 30;
+      textX = M + w + 30;   // from the reading start: the mirror puts the name beside the tile on the Hebrew sheet too
     } catch { /* the logo is decoration; never block the export */ }
   }
 
@@ -324,6 +355,10 @@ export async function buildPlayerCv(jsPDF, fonts, player, category = 'men', { la
     ['ruler',    L.height,         player.height ? `${(Number(player.height) / 100).toFixed(2)} m` : ''],
     ['foot',     L.prefFoot, footWord(player.foot)],
   ].filter(([, , v]) => v);
+  // One row for the season so far, when someone recorded his matches. A row,
+  // not a block: the notes below already shrink to keep the sheet on one page.
+  const seasonRow = seasonLine(season, lang);
+  if (seasonRow) rows.push(['ball', seasonRow.label, seasonRow.value]);
 
   let y = STRIP_Y + STRIP_H + 44;
   label(L.profile, M, y - 16);

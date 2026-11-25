@@ -8,7 +8,7 @@ import React, { useId, useState } from 'react';
 export const PALETTE = ['#C8A24A', '#5B9DE0', '#4DBE7A', '#9C8AE0', '#D9A036', '#E05A55', '#E4C87A', '#48B5C4', '#F472B6', '#8A6B22', '#6F7C70', '#A3E635'];
 export const colorAt = (i) => PALETTE[i % PALETTE.length];
 
-const FONT = 'Heebo, Arial, sans-serif';
+export const FONT = 'Heebo, Arial, sans-serif';
 const fmt = (v) => (typeof v === 'number' ? v.toLocaleString('he-IL', { maximumFractionDigits: 1 }) : String(v ?? ''));
 const pct = (s) => `${Math.round((s || 0) * 100)}%`;
 

@@ -38,7 +38,7 @@ const FIELD_LABEL = {
     dob: 'תאריך לידה', height: 'גובה', foot: 'רגל', nationalities: 'אזרחויות', contractEnd: 'סיום חוזה', contractStatus: 'סטטוס חוזה',
     reprEnd: 'סיום ייצוג', passportExpiry: 'תוקף דרכון', phone: 'טלפון', contactPhone: 'טלפון', email: 'אימייל', notes: 'הערות',
     status: 'סטטוס', stage: 'שלב', category: 'קטגוריה', agentName: 'סוכן', videoLink: 'וידאו', profileLink: 'פרופיל',
-    contractFiles: 'מסמכי חוזה', passportFiles: 'מסמכי דרכון', reprFiles: 'מסמכי ייצוג', title: 'כותרת', dueDate: 'תאריך יעד',
+    contractFiles: 'מסמכי חוזה', passportFiles: 'מסמכי דרכון', reprFiles: 'מסמכי ייצוג', photoFiles: 'תמונה', title: 'כותרת', dueDate: 'תאריך יעד',
     done: 'בוצע', clubName: 'מועדון', contactName: 'איש קשר', contactRole: 'תפקיד', date: 'תאריך', time: 'שעה',
     homeTeam: 'קבוצה ביתית', awayTeam: 'קבוצה אורחת', venue: 'מגרש', salary: 'שכר', position: 'עמדה', linkedClubs: 'מועדונים מקושרים',
     place: 'מקום', rule: 'חזרה', exceptions: 'חריגים', validUntil: 'בתוקף עד', enteredStageAt: 'נכנס לשלב', history: 'היסטוריה',

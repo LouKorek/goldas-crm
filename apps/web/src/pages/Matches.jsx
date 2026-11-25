@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, deleteField } from 'firebase/firestore';
 import { db } from 'lib/firebase';
 import { callFunction } from 'lib/api';
-import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS } from 'lib/db';
+import { listenCollection, addDoc_, updateDoc_, deleteDoc_, restoreDoc_, PATHS, currentUserMeta } from 'lib/db';
+import { cleanStat, RATING_MIN, RATING_MAX, NOTE_MAX } from '@goldas/domain';
 import { listenPlayers } from 'data/players';
 import { TIME_SLOTS, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
-import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
+import { Modal, Field, DateInput, PageHeader, Empty, Spinner, useConfirm, SearchInput, RowActions, ActionBtn, ChipGroup, ExportMenu, ScraperCredits } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import { toast } from 'components/ui/UI';
 import { useRole } from 'lib/roleContext';
@@ -223,10 +224,92 @@ function LinkedPlayersSelect({ players, value = [], onChange }) {
   );
 }
 
+// ── Per-match player data (matches/{id}.playerStats) ─────────────
+// "70′ · 1G · 1A · 7.5": one player's line on the match card.
+const statText = (st) => [
+  st.minutes != null ? `${st.minutes}′` : '',
+  st.goals ? `${st.goals}${t('G')}` : '',
+  st.assists ? `${st.assists}${t('A')}` : '',
+  st.rating != null ? String(st.rating) : '',
+].filter(Boolean).join(' · ') || (st.note ? '✎' : '');
+
+const STAT_KEYS = ['minutes', 'goals', 'assists', 'rating', 'note'];
+const asForm = (st) => Object.fromEntries(STAT_KEYS.map((k) => [k, st?.[k] ?? '']));
+
+// One row per linked player: minutes, goals, assists, a 1–10 rating and a
+// one-sentence note. Each player's entry is written on its own field path,
+// so two people entering different players never overwrite each other.
+function MatchStatsModal({ match, players, onClose }) {
+  const ids = [...new Set([...(match.linkedPlayers || []), ...Object.keys(match.playerStats || {})])];
+  const nameOf = (id) => players.find((p) => p.id === id)?.fullName || id;
+  const [rows, setRows] = useState(() => Object.fromEntries(ids.map((id) => [id, asForm(match.playerStats?.[id])])));
+  const [watchedBy, setWatchedBy] = useState(Array.isArray(match.watchedBy) ? match.watchedBy.join(', ') : (match.watchedBy || ''));
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const set = (id, k) => (e) => { const v = e.target.value; setRows((r) => ({ ...r, [id]: { ...r[id], [k]: v } })); setDirty(true); };
+  const badRating = (v) => v !== '' && !(Number(v) >= RATING_MIN && Number(v) <= RATING_MAX);
+
+  const save = async () => {
+    if (ids.some((id) => badRating(rows[id].rating))) { toast.error(t('The rating is a number from 1 to 10.')); return; }
+    const { email } = currentUserMeta();
+    const at = new Date().toISOString();
+    const data = {};
+    for (const id of ids) {
+      const prev = match.playerStats?.[id];
+      const next = cleanStat({ ...rows[id], watchedBy: prev?.watchedBy });
+      const same = JSON.stringify(asForm(prev)) === JSON.stringify(asForm(next));
+      if (same) continue;
+      data[`playerStats.${id}`] = next ? { ...next, by: email || '', at } : deleteField();
+    }
+    const w = watchedBy.trim();
+    const wasW = Array.isArray(match.watchedBy) ? match.watchedBy.join(', ') : (match.watchedBy || '');
+    if (w !== wasW) data.watchedBy = w;
+    if (!Object.keys(data).length) { onClose(); return; }
+    setSaving(true);
+    try { await updateDoc_(PATHS.MATCHES, match.id, data); toast.success(t('Match data saved.')); onClose(); }
+    catch (e) { toast.error(e.message || t('Save failed.')); }
+    finally { setSaving(false); }
+  };
+
+  const num = (id, k, max, step = 1) => (
+    <input type="number" inputMode="decimal" min={k === 'rating' ? RATING_MIN : 0} max={max} step={step} value={rows[id][k]} onChange={set(id, k)} placeholder={k === 'rating' ? '1–10' : ''}
+      aria-label={`${nameOf(id)} · ${t(k === 'minutes' ? 'Minutes' : k === 'goals' ? 'Goals' : k === 'assists' ? 'Assists' : 'Rating')}`} />
+  );
+  return (
+    <Modal title={`${t('Match data')} · ${match.homeTeam} – ${match.awayTeam}`} onClose={onClose} isDirty={dirty} onSave={save}
+      footer={<>
+        <button className="btn btn-ghost" onClick={onClose}>{t('Cancel')}</button>
+        <button className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> {t('Saving…')}</> : t('Save')}
+        </button>
+      </>}>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '0 0 12px' }}>{t('Every number is optional. A player who did not play gets 0 minutes.')}</p>
+      {ids.map((id) => (
+        <div key={id} style={{ borderTop: '1px solid var(--rule)', paddingTop: 10, marginBottom: 6 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{nameOf(id)}</div>
+          {/* Four short numbers stay on one row, the phone included. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+            <Field label={t('Minutes')}>{num(id, 'minutes', 130)}</Field>
+            <Field label={t('Goals')}>{num(id, 'goals', 20)}</Field>
+            <Field label={t('Assists')}>{num(id, 'assists', 20)}</Field>
+            <Field label={t('Rating')} error={badRating(rows[id].rating) ? t('From 1 to 10') : ''}>{num(id, 'rating', RATING_MAX, 0.5)}</Field>
+          </div>
+          <Field label={t('Note')}>
+            <input dir="auto" value={rows[id].note} maxLength={NOTE_MAX} onChange={set(id, 'note')} placeholder={t('One sentence on how he played')} />
+          </Field>
+        </div>
+      ))}
+      <Field label={t('Who from the team watched')} hint={t('Golda names them when she asks the morning after.')}>
+        <input value={watchedBy} onChange={(e) => { setWatchedBy(e.target.value); setDirty(true); }} placeholder={t('Names, separated by commas')} />
+      </Field>
+    </Modal>
+  );
+}
+
 const EMPTY = {
   date: '', time: '', homeTeam: '', homeTeamIsYouth: false, awayTeam: '', awayTeamIsYouth: false,
   stadiumName: '', stadiumPlaceId: '', stadiumMapsUrl: '', notes: '', linkedPlayers: [],
-  source: 'manual', sourceMatchId: '', sourceTeamId: '', season: '',
+  source: 'manual', sourceMatchId: '', sourceTeamId: '', season: '', watchedBy: '',
 };
 
 // ── Source badge for the match card ──────────────────────────────
@@ -438,6 +521,7 @@ export default function Matches() {
   const { canEdit, isAdmin }  = useRole();
   const [syncing, setSyncing] = useState(false);
   const [syncReport, setSyncReport] = useState(null);
+  const [statsFor, setStatsFor] = useState(null); // the match whose player data is being entered
 
   // The sync has always recorded, per player, why it produced nothing —
   // and nothing has ever displayed it. That is how players stayed missing
@@ -510,7 +594,9 @@ export default function Matches() {
     setSaving(true);
     try {
       if (modal === 'add') { await addDoc_(PATHS.MATCHES, form); toast.success(t("Match added!")); }
-      else { await updateDoc_(PATHS.MATCHES, modal.edit.id, form); toast.success(t("Match updated.")); }
+      // playerStats is written only by the match-data form (one field path per
+      // player); the edit form leaves it alone so it never writes back a stale copy.
+      else { const { playerStats: _stats, ...data } = form; await updateDoc_(PATHS.MATCHES, modal.edit.id, data); toast.success(t("Match updated.")); }
       setModal(null);
     } catch (e) { toast.error(e.message || 'Save failed.'); }
     finally { setSaving(false); }
@@ -577,6 +663,8 @@ export default function Matches() {
 
   const MatchCard = ({ m }) => {
     const linkedNames = allPlayers.filter(p => (m.linkedPlayers || []).includes(p.id)).map(p => p.fullName);
+    const played = !!m.date && daysAway(m.date) <= 0;
+    const statLines = Object.entries(m.playerStats || {}).map(([pid, st]) => [allPlayers.find(p => p.id === pid)?.fullName || pid, statText(st || {}), st?.note]).filter(([, txt]) => txt);
     return (
       <div className="card card-body match-card" style={{ marginBottom: 10, transition: 'all 0.18s' }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-2)'; }}
@@ -639,13 +727,24 @@ export default function Matches() {
               ))}
             </div>
             {canEdit && (
-              <div style={{ flexShrink: 0 }}>
-                <RowActions onEdit={() => openEdit(m)} onDelete={() => del(m)} />
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RowActions onEdit={() => openEdit(m)} onDelete={() => del(m)}>
+                  {played && (m.linkedPlayers || []).length > 0 && (
+                    <ActionBtn icon="clipboard" tone="blue" title={t('Match data')} onClick={() => setStatsFor(m)} />
+                  )}
+                </RowActions>
               </div>
             )}
           </div>
         )}
 
+        {statLines.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 11.5, color: 'var(--text-2)', marginTop: 6 }}>
+            {statLines.map(([n, txt, note]) => (
+              <span key={n} title={note || ''}><span style={{ color: 'var(--text-3)' }}>{n}</span> <span dir="ltr" style={{ fontFamily: 'var(--font-mono)', unicodeBidi: 'isolate' }}>{txt}</span></span>
+            ))}
+          </div>
+        )}
         {m.notes && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>{m.notes}</div>}
       </div>
     );
@@ -890,11 +989,17 @@ export default function Matches() {
             <LinkedPlayersSelect players={allPlayers} value={f('linkedPlayers') || []} onChange={s('linkedPlayers')} />
           </Field>
 
+          <Field label={t("Who from the team watches")} hint={t("Golda names them when she asks the morning after.")}>
+            <input value={Array.isArray(form.watchedBy) ? form.watchedBy.join(', ') : f('watchedBy')} onChange={e => s('watchedBy')(e.target.value)} placeholder={t("Names, separated by commas")} />
+          </Field>
+
           <Field label={t("Notes")}>
             <textarea value={f('notes')} onChange={e => s('notes')(e.target.value)} placeholder={t("Additional notes...")} rows={3} />
           </Field>
         </Modal>
       )}
+
+      {statsFor && <MatchStatsModal key={statsFor.id} match={statsFor} players={allPlayers} onClose={() => setStatsFor(null)} />}
 
       {dialog}
     </div>
