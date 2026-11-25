@@ -325,7 +325,7 @@ test('one run: sent mail of the last year is read for its recipients only, full 
 
   // Counts only, everywhere outside the admin's own list.
   assert.deepEqual(out, { read: 4, calls: 5, found: 4, done: true, saved: { contacts: 2, clubs: 1 }, suggested: 2, dropped: 0, filled: 3, open: 2 });
-  assert.deepEqual(db.read('app_meta', 'gmail').found, { filled: 3, open: 2 });
+  assert.deepEqual(db.read('app_meta', 'gmail').found, { filled: 3, open: 2, state: 'done', targets: 5, read: 4, yearRead: true });
   const audit = db.all('audit');
   assert.equal(audit.length, 3);
   assert.deepEqual(audit.map((a) => [a.collection, a.docId, a.fields.join(), a.via]).sort(), [['clubs', 'mhfc', 'emailDomain', 'mail-addresses'], ['contacts', 'k1', 'contactEmail', 'mail-addresses'], ['contacts', 'k2', 'contactEmail', 'mail-addresses']]);
@@ -350,7 +350,7 @@ test('the admin list names the records; the mail sync that follows reads for the
   assert.deepEqual(list.suggestions.map((s) => [s.kind, s.name, s.value, s.reason, s.seenName, s.times]), [
     ['club', 'Hapoel Beer Sheva', 'hbs.co.il', 'website_only', '', 0], ['contact', 'Noa', 'noa@friend.example', 'one_word_name', 'Noa', 1],
   ]);
-  assert.deepEqual(list.search, { state: 'done', readBackTo: null, lastRunAt: NOW, yearRead: true });
+  assert.deepEqual(list.search, { state: 'done', readBackTo: null, lastRunAt: NOW, yearRead: true, targets: 5, read: 4 });
 
   // The same job goes on to the ordinary sync: the book is no longer empty, so mail is read and kept.
   gmailAuth._resetCacheForTests();
@@ -358,7 +358,7 @@ test('the admin list names the records; the mail sync that follows reads for the
   assert.equal(out.terms, 4, 'two found addresses, the found domain and the address typed by hand');
   assert.equal(db.read('app_meta', 'gmail').state, 'ok');
   assert.ok(db.read('mail_messages', 's1'));
-  assert.deepEqual(db.read('app_meta', 'gmail').found, { filled: 3, open: 2 }, 'the sync keeps the two numbers');
+  assert.deepEqual(db.read('app_meta', 'gmail').found, { filled: 3, open: 2, state: 'done', targets: 5, read: 4, yearRead: true }, 'the sync keeps the numbers');
   assert.ok(db.read('mail_state', 'sync').fill.doneAt, 'and the search\'s own state');
 });
 
@@ -379,7 +379,7 @@ test('at most one pass a day; a pass that does not fit one run goes on from its 
   assert.deepEqual((await A.listFound(db)).suggestions, []);
   const fill1 = db.read('mail_state', 'sync').fill;
   assert.deepEqual([fill1.upTo, fill1.doneAt, fill1.edge], [NOW - 3 * DAY, null, ['n3']]);
-  assert.deepEqual((await A.listFound(db)).search, { state: 'running', readBackTo: NOW - 3 * DAY, lastRunAt: NOW, yearRead: false });
+  assert.deepEqual((await A.listFound(db)).search, { state: 'running', readBackTo: NOW - 3 * DAY, lastRunAt: NOW, yearRead: false, targets: 5, read: 3 });
 
   // Run 2, fifteen minutes later: goes on below the cursor, reads nothing twice, finishes.
   const g2 = fakeGmail(box, { pageSize: 2 });
@@ -599,7 +599,7 @@ test('the mail function: the list and every address action are for an admin only
     assert.equal((await post({ action: 'disconnect' })).statusCode, 200);
     assert.deepEqual(db.all(A.COL).map((d) => d.state).sort(), ['accepted', 'accepted', 'auto', 'auto', 'removed']);
     assert.equal(db.read('mail_state', 'sync'), undefined, 'the search starts over after a new connection');
-    assert.deepEqual(db.read('app_meta', 'gmail').found, { filled: 2, open: 0 });
+    assert.deepEqual(db.read('app_meta', 'gmail').found, { filled: 2, open: 0, state: 'never', targets: 0, read: 0, yearRead: false });
   } finally {
     global.fetch = realFetch;
     currentDb = null;

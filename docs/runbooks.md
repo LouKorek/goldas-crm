@@ -492,7 +492,7 @@ One small page that says how the system is doing, readable without signing in, s
 `https://goldas-crm.netlify.app/.netlify/functions/system-status`
 
 - `jobs`: each scheduled job's last run (ok or error, when, how long, whether one is running now, when it last failed).
-- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read, and two counts from the address search: `addressesFilled` (values the server saved by itself) and `suggestionsOpen` (waiting for a decision in System › Email).
+- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read, and two counts from the address search: `addressesFilled` (values the server saved by itself) and `suggestionsOpen` (waiting for a decision in System › Email). Three more say how far that search got, so "nothing found" can be told from "nothing to look for": `addressSearch` (`never`, `running`, `done`), `addressTargets` (contacts and clubs it looks for; 0 means every contact already has an address or there is none with a name) and `sentRead` (sent messages read in the current pass).
 - `backup`: the latest backup and the latest good one (read back, copied outside the database, how many documents).
 - `notifications`: how many devices take notifications.
 - `cost`: what Golda's model calls cost today in US dollars (`todayUsd`), the day's ceiling for the work she does on her own (`capUsd`), and whether that ceiling is reached (`capped`).
