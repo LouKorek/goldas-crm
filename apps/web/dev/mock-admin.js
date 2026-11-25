@@ -14,6 +14,7 @@ const RUNS = [
   run('sync-matches', 9), run('ifa-server-sync', 9.2), run('nightly-engines', 9.2), run('send-alerts', 6.5),
   run('tm-watch', 7.5, 'error', { error: 'ScraperAPI 429' }), run('ig-watch', 8.2), run('migrate', 30, 'ok', { trigger: 'deploy' }),
 ];
+RUNS.push(run('golda-research', 2, 'ok', { trigger: 'request', durationMs: 412000 }));
 const STATUS = {
   'backup-weekly': { last: { status: 'ok', startedAt: new Date(now - 3 * D), durationMs: 94000, trigger: 'schedule' } },
   'backup-restore': { last: { status: 'ok', startedAt: new Date(now - 5 * H), durationMs: 2100, trigger: 'manual' } },

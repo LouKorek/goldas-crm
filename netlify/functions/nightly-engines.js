@@ -77,6 +77,8 @@ async function runOrphanCleanup(db, data, job) {
   // Recycle-bin records still own their files; they come back with the record.
   const binned = await db.collection('players').get();
   binned.docs.forEach((d) => collect(d.data()));
+  // A research dossier's PDF belongs to its job (golda_research/{id}.file): it stays as long as the dossier does.
+  (await db.collection('golda_research').get()).docs.forEach((d) => { const f = (d.data() || {}).file; if (f && f.fileId) referenced.add(String(f.fileId)); });
   const files = await db.collection('files').get();
   const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
   const orphans = files.docs.filter((d) => {

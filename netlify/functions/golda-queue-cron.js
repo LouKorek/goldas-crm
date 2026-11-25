@@ -92,6 +92,9 @@ exports.handler = schedule('*/10 * * * *', async () => {
   const pageNotices = await kickPageNotices(db, base);
   const agreementWork = await kickAgreements(db, base);
   const toPlayers = await kickPlayerSends(db, base);
+  // And for research dossiers: a job still queued or running after twenty minutes
+  // is sent to its worker again (lib/golda-research.js kickStuck; two small queries).
+  await require('./lib/golda-research.js').kickStuck(db);
   const since = Date.now() - 2 * 86400000;
   const snap = await db.collection('wa_inbox').where('timestamp', '>', Math.floor(since / 1000)).get();
   const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));

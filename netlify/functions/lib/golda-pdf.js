@@ -89,4 +89,23 @@ async function playerReportPdf(player, month, { lang = 'he', load = defaultLoad,
   return { buffer: Buffer.from(doc.output('arraybuffer')), filename, mimeType: 'application/pdf' };
 }
 
-module.exports = { playerCvPdf, playerReportPdf, matchesOf, logoDataUrl, seasonOf, _reset: () => { _logo = undefined; } };
+function dossierLoad() {
+  /* eslint-disable global-require */
+  const dossier = require('../../../apps/web/src/lib/dossierPdf.js');
+  const fonts = require('../../../apps/web/src/lib/pdfFonts.js');
+  const jspdf = require('jspdf');
+  return { buildDossier: dossier.buildDossier, fonts, jsPDF: jspdf.jsPDF || jspdf.default || jspdf };
+}
+
+/**
+ * A research dossier (lib/golda-research.js cleanDossier) as a PDF buffer:
+ * Hebrew, on the agency's stationery, as many pages as it needs
+ * (apps/web/src/lib/dossierPdf.js). Returns { buffer, filename, mimeType, pages }.
+ */
+async function dossierPdf(dossier, { load = dossierLoad, logo } = {}) {
+  const { buildDossier, fonts, jsPDF } = load();
+  const { doc, filename, pages } = await buildDossier(jsPDF, fonts, dossier, { logo: logo === undefined ? await logoDataUrl() : logo });
+  return { buffer: Buffer.from(doc.output('arraybuffer')), filename, mimeType: 'application/pdf', pages };
+}
+
+module.exports = { playerCvPdf, playerReportPdf, dossierPdf, matchesOf, logoDataUrl, seasonOf, _reset: () => { _logo = undefined; } };
