@@ -7,7 +7,10 @@
 // call that a success, so when Lou was quiet for a day she went silent too.
 //
 // This module makes every proactive message accountable:
-//   deliver(db, {to, body, via, kind})
+//   deliver(db, {to, body, via, kind, buttons})
+//     buttons (optional, up to three reply buttons under the text) travel with
+//     the message wherever it goes: sent with it now, or kept on the queued
+//     row and sent with it when the window opens. A template carries none.
 //     window open or unknown → send the text, record it in wa_outbox under
 //     Meta's message id (state 'sent'); window closed → keep the full text in
 //     wa_outbox (state 'queued') and send a template instead: golda_brief
@@ -28,7 +31,7 @@
 //
 // wa_contacts/{phone}: lastInbound, lastReengageAt, lastReengageTemplate,
 //   lastDelivered, lastFailure {at, code, message}.
-// wa_outbox/{id}: to, via, body, kind, state, queuedAt | sentAt, error, flushedAt.
+// wa_outbox/{id}: to, via, body, kind, buttons, state, queuedAt | sentAt, error, flushedAt.
 const wa = require('./wa-api.js');
 const { digits } = require('./golda-identity.js');
 const { BRIEF, DIGEST, UPDATE, approvedSomewhere } = require('./wa-templates.js');
@@ -196,20 +199,26 @@ async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, l
   }
 }
 
+/** A text, with its reply buttons when it has any. */
+const sendOut = (api, phone, body, buttons, via) => (buttons && buttons.length && api.sendButtons ? api.sendButtons(phone, body, buttons, via) : api.sendText(phone, body, via));
+const cleanButtons = (buttons) => (Array.isArray(buttons) ? buttons.map((b) => String(b || '').trim()).filter(Boolean).slice(0, 3) : []);
+
 /** Send a proactive text, or hold it until the person writes. */
-async function deliver(db, { to, body, via = null, kind = 'text' }, { now = Date.now(), api = wa, log = console.log } = {}) {
+async function deliver(db, { to, body, via = null, kind = 'text', buttons = [] }, { now = Date.now(), api = wa, log = console.log } = {}) {
   const phone = digits(to);
   const contact = await readContact(db, phone);
   const state = windowState(contact, now);
+  const taps = cleanButtons(buttons);
+  const extra = taps.length ? { buttons: taps } : {};
   if (state !== 'closed') {
-    const ids = await api.sendText(phone, body, via);
+    const ids = await sendOut(api, phone, body, taps, via);
     for (const id of ids.filter(Boolean)) {
-      await db.collection('wa_outbox').doc(id).set({ to: phone, via, body, kind, state: 'sent', sentAt: now, window: state });
+      await db.collection('wa_outbox').doc(id).set({ to: phone, via, body, kind, ...extra, state: 'sent', sentAt: now, window: state });
     }
     return { state: 'sent', ids };
   }
   const ref = db.collection('wa_outbox').doc();
-  await ref.set({ to: phone, via, body, kind, state: 'queued', queuedAt: now, reason: 'window closed' });
+  await ref.set({ to: phone, via, body, kind, ...extra, state: 'queued', queuedAt: now, reason: 'window closed' });
   const re = await reengage(db, phone, via, contact, { now, api, log, body });
   if (re.carried) await ref.set({ teaser: re.template, teasedAt: now }, { merge: true });
   return { state: 'queued', id: ref.id, reengage: re };
@@ -268,7 +277,7 @@ async function onInbound(db, phone, via, { now = Date.now(), api = wa, log = con
   let flushed = 0;
   for (const r of rows) {
     try {
-      const ids = await api.sendText(p, r.body, via || r.via);
+      const ids = await sendOut(api, p, r.body, cleanButtons(r.buttons), via || r.via);
       await db.collection('wa_outbox').doc(r.id).set({ state: 'sent', sentAt: now, flushedAt: now, messageIds: ids.filter(Boolean), window: 'open' }, { merge: true });
       flushed++;
     } catch (e) {
