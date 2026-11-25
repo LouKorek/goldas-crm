@@ -183,6 +183,15 @@ test('the period: capped by the template, the end after the start, the link at m
   assert.equal(db.read('agreements', r.id).end, '2027-05-31');
 });
 
+test('a template with text only for adults refuses a minor, and never makes an empty agreement', async () => {
+  const db = seed();
+  await ag.saveTemplate(db, { lang: 'en', text: '{{#adult}}# Contract\n\n{{player_name}} signs alone.{{/adult}}', by: OWNER, now: NOW - DAY });
+  await assert.rejects(ag.createAgreement(db, { playerId: 'p2', lang: 'en', start: '2026-12-01', guardianName: 'Rina Cohen', by, now: NOW }),
+    (e) => e.code === 'no_section' && /English template has no text for a player under 18/.test(e.message));
+  const made = await ag.createAgreement(db, { playerId: 'p1', lang: 'en', start: '2026-12-01', by, now: NOW });
+  assert.match(db.read('agreements', made.id).text, /Noam Levi signs alone/);
+});
+
 test('a minor needs the parent or guardian, and the minor section is in the text', async () => {
   const db = await withTemplates(seed());
   await assert.rejects(ag.createAgreement(db, { playerId: 'p2', start: '2026-12-01', by, now: NOW }), (e) => e.code === 'guardian');

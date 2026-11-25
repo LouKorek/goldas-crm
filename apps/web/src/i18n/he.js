@@ -1395,6 +1395,7 @@ const HE = {
   'The player signs too, on the same page.': 'גם השחקן חותם, באותו עמוד.',
   'An admin makes an agreement on the player\'s page or asks Golda ("הסכם ייצוג ל…"). The player signs on the phone through a private link (a minor together with the parent or guardian, on the same page); the signed PDF goes into the player\'s documents and the representation dates are updated.': 'מנהל מערכת יוצר הסכם בעמוד השחקן או מבקש מגולדה ("הסכם ייצוג ל…"). השחקן חותם בטלפון דרך לינק פרטי (קטין יחד עם ההורה או האפוטרופוס, באותו עמוד); ה-PDF החתום נשמר במסמכי השחקן ותאריכי הייצוג מתעדכנים.',
   'There is no agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.': 'עוד אין תבנית הסכם. גולדה מכינה אותה מההסכמים הקיימים של הסוכנות כשמבקשים ממנה הסכם, או שאפשר לכתוב אותה במערכת › הסכמי ייצוג.',
+  'The template in this language has no text for a player of this age (under 18 or adult). Make the agreement in the other language, or add that part in System › Agreements.': 'בתבנית בשפה הזו אין נוסח לשחקן בגיל הזה (קטין או בגיר). אפשר להכין את ההסכם בשפה השנייה, או להוסיף את החלק הזה במערכת › הסכמי ייצוג.',
   'There is no template in this language yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written here.': 'עוד אין תבנית בשפה הזו. גולדה מכינה אותה מההסכמים הקיימים של הסוכנות כשמבקשים ממנה הסכם, או שאפשר לכתוב אותה כאן.',
 };
 

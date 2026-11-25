@@ -304,6 +304,10 @@ async function prepareAgreement(db, { playerId, lang, start, end, months, guardi
   if (filled.missing.length) {
     throw new AgreementError('missing', `the template needs ${filled.missing.map((k) => `{{${k}}}`).join(', ')} and the CRM has no value for it${filled.missing.length > 1 ? 'm' : ''}: fill it in on the player first`);
   }
+  // A template whose text sits only in the other age's section fills to nothing: never an empty page to sign.
+  if (!filled.text.trim()) {
+    throw new AgreementError('no_section', `the ${l === 'en' ? 'English' : 'Hebrew'} template has no text for ${isMinor ? 'a player under 18' : 'an adult player'}: make this agreement in the other language, or add that part to the template in System › Agreements`);
+  }
   return { player, lang: l, template, period, minor: isMinor, minorFromDob: known !== null, guardianName: guardian, playerSigns: true, text: filled.text };
 }
 

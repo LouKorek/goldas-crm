@@ -239,7 +239,7 @@ export default function Contacts() {
 
       {modal && (
         <Modal
-          title={modal === 'add' ? t('Add Contact') : `${t('Edit')}: ${form.contactName || form.clubName || t('Contact')}`}
+          title={modal === 'add' ? t('Add Contact') : `${t('Edit')}: ${modal?.edit?.contactName || modal?.edit?.clubName || t('Contact')}`}
           onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>

@@ -36,6 +36,8 @@ const LINK_DAYS = 14;
 const MAX_LINK_DAYS = 30;
 // What a person reads when a language has no template yet (lib/agreements.js NO_TEMPLATE app).
 const NO_TEMPLATE = 'There is no agreement template yet. Golda prepares it from the agency\'s existing agreements when she is asked for an agreement, or it can be written in System › Agreements.';
+// The template in the chosen language has no text for this player's age (lib/agreements.js no_section).
+const NO_SECTION = 'The template in this language has no text for a player of this age (under 18 or adult). Make the agreement in the other language, or add that part in System › Agreements.';
 
 /** Making an agreement: language, period, who signs, how long the link works. */
 function CreateDialog({ player, templates, onClose, onMade }) {
@@ -88,7 +90,7 @@ function CreateDialog({ player, templates, onClose, onMade }) {
       });
       setMade(r.agreement);
       onMade(r.agreement);
-    } catch (e) { setError(e.code === 'no_template' ? t(NO_TEMPLATE) : e.message || t('Save failed.')); }
+    } catch (e) { setError(e.code === 'no_template' ? t(NO_TEMPLATE) : e.code === 'no_section' ? t(NO_SECTION) : e.message || t('Save failed.')); }
     setBusy(false);
   };
 

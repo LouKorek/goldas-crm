@@ -13,6 +13,8 @@ import { fetchRecordMail, setMailDeals, hideMail, resetMail, gmailThreadUrl } fr
 const FIRST = 8;
 const muted = { color: 'var(--text-3)' };
 const person = (p) => (p ? p.name || p.email : '');
+// A name or an address moves to the next line whole; it breaks inside only when it is wider than the line.
+const whole = { display: 'inline-block', maxWidth: '100%' };
 const dealLabel = (d) => `${d.playerName || ''} ↔ ${d.clubName || ''}`;
 
 /** kind: 'deal' | 'club' | 'contact'; deals: the deals a message may be put on (admins). */
@@ -95,7 +97,10 @@ export default function RecordMail({ kind, id, deals = [] }) {
                 <span className="badge" style={{ background: m.direction === 'out' ? 'var(--gold-dim)' : 'var(--surface-3)', color: m.direction === 'out' ? 'var(--gold)' : 'var(--text-2)' }}>
                   {m.direction === 'out' ? t('We wrote') : t('They wrote')}
                 </span>
-                <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{person(m.from)} {isRtl() ? '←' : '→'} {m.to.map(person).join(', ')}</span>
+                <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+                  <bdi style={whole}>{person(m.from)}</bdi> {isRtl() ? '←' : '→'}{' '}
+                  {m.to.map((p, i) => <React.Fragment key={i}>{i > 0 && ', '}<bdi style={whole}>{person(p)}</bdi></React.Fragment>)}
+                </span>
                 <span style={{ ...muted, fontFamily: 'var(--font-mono)', fontSize: 10 }}>{fmtDateTime(m.at)}</span>
               </div>
               {m.snippet && <div dir="auto" style={{ marginTop: 6, overflowWrap: 'anywhere' }}>{m.snippet}</div>}
