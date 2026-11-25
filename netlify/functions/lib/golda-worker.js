@@ -130,9 +130,11 @@ async function deliver(msg, reply, { buttons = [], list = null, files = [], link
   const graphics = files.filter((f) => f && f.graphic);
   const docs = files.filter((f) => !(f && f.graphic));
   for (const g of graphics) {
-    try { ids.push(...await wa.sendImage(msg.from, g, msg.phoneId)); } catch (e) {
+    // The caption is not put under the picture as well: it would be there twice.
+    const bare = { buffer: g.buffer, filename: g.filename, mimeType: g.mimeType };
+    try { ids.push(...await wa.sendImage(msg.from, bare, msg.phoneId)); } catch (e) {
       console.error('[golda] image delivery failed, sending it as a file:', g.filename, e.message);
-      try { ids.push(...await wa.sendDocument(msg.from, g, msg.phoneId)); } catch (e2) { console.error('[golda] graphic delivery failed:', g.filename, e2.message); continue; }
+      try { ids.push(...await wa.sendDocument(msg.from, bare, msg.phoneId)); } catch (e2) { console.error('[golda] graphic delivery failed:', g.filename, e2.message); continue; }
     }
     if (g.caption) { try { ids.push(...await wa.sendText(msg.from, g.caption, msg.phoneId)); } catch (e) { console.error('[golda] caption delivery failed:', e.message); } }
   }

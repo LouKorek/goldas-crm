@@ -208,7 +208,8 @@ async function offerGraphics(db, owner, { players = [], matches = [] } = {}, now
   await nudge(db, owner, { body: msg.text, buttons: msg.buttons, kind: 'question', remember: true, expiresAt }, { now: now.getTime(), send, job });
   const offered = Object.fromEntries(Object.entries(state.offered || {}).filter(([, on]) => daysBetween(on, today) < KEEP_OFFERED_DAYS));
   offered[e.key] = today;
-  await db.collection(META[0]).doc(META[1]).set({ offered, day: today, sentToday: sentToday + 1, updatedAt: now.getTime() }, { merge: true });
+  // The whole document is written (no merge), so keys dropped above are really gone.
+  await db.collection(META[0]).doc(META[1]).set({ offered, day: today, sentToday: sentToday + 1, updatedAt: now.getTime() });
   job.note(`graphic offer → ${owner.email}: ${e.kind} ${e.player}`);
   return { sent: 1, key: e.key };
 }
