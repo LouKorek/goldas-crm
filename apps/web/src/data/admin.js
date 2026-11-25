@@ -26,9 +26,11 @@ export const JOBS = [
   { name: 'golda-briefing', he: 'תדריך גולדה והתראות', when: 'כל שעה ב-:30', run: 'golda-briefing' },
   { name: 'tm-watch', he: 'מעקב Transfermarkt', when: 'יומי 04:30 UTC', run: 'tm-watch' },
   { name: 'ig-watch', he: 'אינסטגרם הסוכנות', when: 'יומי 03:50 UTC', run: 'ig-watch' },
-  { name: 'backup-weekly', he: 'גיבוי שבועי', when: 'ראשון 01:30 UTC', run: 'backup' },
+  { name: 'backup-weekly', he: 'גיבוי שבועי', when: 'נבדק כל לילה 01:30 UTC, רץ כשעבר שבוע', run: 'backup' },
+  { name: 'backup-restore', he: 'שחזור מגיבוי', when: 'ידני, ממסך הגיבויים', run: null },
   { name: 'meta-onboard', he: 'מעבר גולדה למספר שלה (055)', when: 'כל שעה ב-:45 עד שמסתיים', run: 'meta-onboard' },
   { name: 'golda-queue', he: 'תור הודעות גולדה (ניסיונות חוזרים)', when: 'כל 10 דקות', run: null },
+  { name: 'golda-meeting-brief', he: 'הכנה של גולדה לפני פגישה', when: 'כשעה לפני כל פגישה ביומן', run: null },
   { name: 'migrate', he: 'מיגרציות נתונים', when: 'אחרי כל פריסה', run: null },
 ];
 
@@ -38,6 +40,14 @@ export const listenMetaConnect = (callback) =>
   onSnapshot(doc(db, 'app_meta', 'metaConnect'), (s) => callback(s.exists() ? s.data() : {}), (e) => { console.error('metaConnect error:', e); callback({}); });
 /** The Facebook sign-in address (meta-connect); the page navigates there. */
 export const startMetaConnect = () => callFunctionJson('meta-connect', { method: 'POST' });
+
+/**
+ * The last run of every job (app_meta/jobStatus, written by lib/jobs.js):
+ * { [name]: { last, lastError, runningSince } }. The recent list holds only
+ * the newest runs, so a weekly job is read from here once it has scrolled out.
+ */
+export const listenJobStatus = (callback) =>
+  onSnapshot(doc(db, 'app_meta', 'jobStatus'), (s) => callback(s.exists() ? s.data() : {}), (e) => { console.error('jobStatus error:', e); callback({}); });
 
 /** Start a job now (admin-run-job → the worker or ops-background). */
 export const runJobNow = (job) => callFunctionJson('admin-run-job', { method: 'POST', body: { job } });
@@ -96,6 +106,15 @@ export async function downloadBackup(backup) {
   setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
   return { name, chars: text.length };
 }
+
+/** Records in one backup whose name holds the words (backup-restore 'find'). */
+export const findInBackup = (backupId, q) => callFunctionJson('backup-restore', { method: 'POST', body: { op: 'find', backupId, q } });
+/** Put one record back as it was in that backup. Starts in the background. */
+export const restoreRecord = (backupId, path) => callFunctionJson('backup-restore', { method: 'POST', body: { op: 'one', backupId, path } });
+/** Put everything back, from a backup or from a copy kept outside the database. */
+export const restoreEverything = ({ backupId, offsiteKey }) => callFunctionJson('backup-restore', { method: 'POST', body: { op: 'all', backupId, offsiteKey } });
+/** The copies kept outside the database, newest first: [{ key, date, id }]. */
+export const fetchOffsiteCopies = () => callFunctionJson('backup-restore', { method: 'POST', body: { op: 'offsite' } });
 
 // ── Audit log ───────────────────────────────────────────────────────
 export const listenAudit = (callback, n = 300) =>

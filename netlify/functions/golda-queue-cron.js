@@ -3,14 +3,35 @@
 // on a transient error, or answered but not delivered, and pushes each one to
 // the background worker again (lib/golda-worker.js pickRetries decides).
 // Messages that failed for good stay as they are; the Golda screen shows them.
+//
+// The same ten-minute beat also watches the calendar: when a meeting is about
+// an hour away, it wakes golda-briefing-background to send Lou its brief
+// (lib/golda-meeting-brief.js). The check itself is two small reads.
 const { schedule } = require('@netlify/functions');
 const { getDb } = require('./lib/firestore.js');
 const { internalHeaders } = require('./lib/auth.js');
 const { pickRetries } = require('./lib/golda-worker.js');
+const { dueNow } = require('./lib/golda-meeting-brief.js');
+
+/** Wakes the briefing worker when a meeting is coming up; never fails the queue check. */
+async function kickMeetingBriefs(db, base) {
+  try {
+    const due = await dueNow(db, new Date());
+    if (!due.length) return 0;
+    await fetch(`${base}/.netlify/functions/golda-briefing-background`, {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(await internalHeaders('golda-meeting-brief')) }, body: JSON.stringify({ task: 'meeting-briefs' }),
+    });
+    return due.length;
+  } catch (e) {
+    console.error('[golda-queue] meeting brief check failed:', e.message);
+    return 0;
+  }
+}
 
 exports.handler = schedule('*/10 * * * *', async () => {
   const db = getDb();
   const base = process.env.URL || 'https://goldas-crm.netlify.app';
+  const briefs = await kickMeetingBriefs(db, base);
   const since = Date.now() - 2 * 86400000;
   const snap = await db.collection('wa_inbox').where('timestamp', '>', Math.floor(since / 1000)).get();
   const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -24,5 +45,5 @@ exports.handler = schedule('*/10 * * * *', async () => {
       if (res.ok || res.status === 202) kicked++;
     } catch (e) { console.error('[golda-queue] kick failed:', m.id, e.message); }
   }
-  return { statusCode: 200, body: `${rows.length} recent, ${retry.length} to retry, ${kicked} kicked` };
+  return { statusCode: 200, body: `${rows.length} recent, ${retry.length} to retry, ${kicked} kicked, ${briefs} meeting brief(s) due` };
 });

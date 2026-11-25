@@ -20,6 +20,7 @@ const Players = lazy(() => import('pages/Players'));
 const Contacts = lazy(() => import('pages/Contacts'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Player360 = lazy(() => import('pages/Player360'));
+const Admin = lazy(() => import('pages/Admin'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
 setSessionAccess(role);
@@ -41,6 +42,7 @@ const App = () => (
           <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="admin/youtube" element={<YouTubeConnect he />} />
           <Route path="admin/website" element={<WebsiteStatus he />} />
+          <Route path="system/:tab" element={<Admin />} />
           <Route path="*" element={<div>other</div>} />
         </Route>
       </Routes>

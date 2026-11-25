@@ -16,7 +16,7 @@ const { admin, getDb } = require('./lib/firestore.js');
 const { runJob } = require('./lib/jobs.js');
 const { firestoreStore } = require('./lib/migrations/store.js');
 const migrations = require('./lib/migrations/index.js');
-const { _runBackup } = require('./backup-weekly.js');
+const { runBackup } = require('./lib/backup.js');
 const nodemailer = require('nodemailer');
 const { OWNER_EMAIL } = require('./lib/firestore.js');
 
@@ -49,7 +49,7 @@ async function runAll(trigger) {
   return runJob('migrate', async (job) => {
     const store = firestoreStore(db, admin);
     if (!(await migrations.hasPending(store))) { job.note('nothing pending'); return { ran: [], backup: null }; }
-    const backup = await _runBackup(job);
+    const backup = await runBackup(job, { reason: 'before-migration' });
     job.note(`backup ${backup.id}: ${backup.docs} docs`);
     let r;
     try {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Restore a backup taken by netlify/functions/backup-weekly.js.
+// Restore a backup taken by netlify/functions/lib/backup.js, from a terminal.
+// (The Backups screen restores one record or everything without a terminal.)
 //
 // The backup is JSON Lines (format jsonl-v1): one line per document,
 //   { "p": "players/abc123", "d": { ...fields } }

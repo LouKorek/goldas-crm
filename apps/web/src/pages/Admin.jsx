@@ -4,7 +4,8 @@
 //   Health   every night job: last run, result, duration, last error, "run now"
 //   Quotas   ScraperAPI credits, Netlify deploys this month, Golda's usage
 //            today, the TM Watch credit budget (editable)
-//   Backups  the weekly backups, "back up now", download as a file
+//   Backups  the weekly backups, "back up now", download as a file, and
+//            restore: one record, or everything
 //   Audit    every change anyone (or Golda) made, with filters
 //   Errors   what the app itself reported from people's browsers
 //   WhatsApp the server's own Meta key (one Facebook sign-in) and Golda's
@@ -15,7 +16,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useRole } from 'lib/roleContext';
 import { t, fmtDateTime, getLang } from 'lib/i18n';
-import { PageHeader, Skeleton, Empty, ChipGroup, Field, SearchInput, toast, useConfirm } from 'components/ui/UI';
+import { PageHeader, Skeleton, Empty, ChipGroup, Field, SearchInput, Modal, toast, useConfirm } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import CalendarSync from 'components/admin/CalendarSync';
 import YouTubeConnect from 'components/admin/YouTubeConnect';
@@ -23,6 +24,7 @@ import WebsiteStatus from 'components/admin/WebsiteStatus';
 import {
   JOBS, listenJobs, runJobNow, groupRuns, fetchScraperStatus, listenTmWatchMeta, saveTmWatchBudget, listenDeploys,
   listenGoldaUsage, listenBackups, downloadBackup, listenAudit, listenClientErrors, listenMetaConnect, startMetaConnect,
+  listenJobStatus, findInBackup, restoreRecord, restoreEverything, fetchOffsiteCopies,
 } from 'data/admin';
 
 const VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
@@ -42,7 +44,12 @@ const STATUS = {
   ok: { he: 'הצליח', en: 'ok', color: 'var(--green-ok)', bg: 'var(--green-bg)' },
   error: { he: 'נכשל', en: 'failed', color: 'var(--red)', bg: 'var(--red-bg)' },
   running: { he: 'רץ', en: 'running', color: 'var(--amber)', bg: 'var(--amber-bg)' },
+  cut: { he: 'נקטע', en: 'cut off', color: 'var(--red)', bg: 'var(--red-bg)' },
 };
+// No run lasts longer than a background function may (15 minutes): one still
+// "running" after that was cut off before it could record how it ended.
+const CUT_AFTER_MS = 20 * 60000;
+const statusOf = (r) => (r && r.status === 'running' && Date.now() - (toDate(r.startedAt)?.getTime() || 0) > CUT_AFTER_MS ? 'cut' : r?.status);
 function Badge({ status, he }) {
   const s = STATUS[status] || { he: status, en: status, color: 'var(--text-3)', bg: 'var(--surface-3)' };
   return <span style={{ display: 'inline-block', padding: '2px 8px', fontSize: 11, fontWeight: 700, color: s.color, background: s.bg }}>{he ? s.he : s.en}</span>;
@@ -88,8 +95,13 @@ function Health({ he }) {
   const [runs, setRuns] = useState(null);
   const [starting, setStarting] = useState('');
   const [open, setOpen] = useState('');
+  const [status, setStatus] = useState({});
   useEffect(() => listenJobs(setRuns), []);
+  useEffect(() => listenJobStatus(setStatus), []);
   const by = useMemo(() => groupRuns(runs || []), [runs]);
+  // The last run of a job: from the recent list, or, once hourly jobs have
+  // pushed it out of that list, from the job's own last-run record.
+  const lastOf = (name) => { const s = status[name] || {}; return (by[name] || [])[0] || (s.runningSince ? { status: 'running', startedAt: s.runningSince } : s.last) || null; };
   const names = useMemo(() => {
     const known = JOBS.map((j) => j.name);
     const extra = Object.keys(by).filter((n) => !known.includes(n) && n !== 'golda');
@@ -102,13 +114,13 @@ function Health({ he }) {
     setStarting('');
   };
   if (!runs) return <Skeleton rows={6} />;
-  const failing = names.filter((j) => (by[j.name] || [])[0]?.status === 'error');
+  const failing = names.filter((j) => ['error', 'cut'].includes(statusOf(lastOf(j.name))));
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <Card style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ width: 10, height: 10, background: failing.length ? 'var(--red)' : 'var(--green-ok)', flexShrink: 0 }} />
         <div style={{ fontWeight: 700 }}>{failing.length ? (he ? `${failing.length} עבודות נכשלו בריצה האחרונה` : `${failing.length} jobs failed on their last run`) : (he ? 'כל העבודות הצליחו בריצה האחרונה' : 'Every job succeeded on its last run')}</div>
-        <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{he ? 'גרסה' : 'Version'} <Mono>{VERSION}</Mono> · {runs.length} {he ? 'ריצות ב-60 הימים האחרונים' : 'runs in the last 60 days'}</div>
+        <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{he ? 'גרסה' : 'Version'} <bdi><Mono>{VERSION}</Mono></bdi> · {he ? `${runs.length} הריצות האחרונות` : `the last ${runs.length} runs`}</div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="table-wrap">
@@ -119,8 +131,8 @@ function Health({ he }) {
             <tbody>
               {names.map((j) => {
                 const list = by[j.name] || [];
-                const last = list[0];
-                const lastErr = list.find((r) => r.status === 'error');
+                const last = lastOf(j.name);
+                const lastErr = list.find((r) => r.status === 'error') || status[j.name]?.lastError;
                 const isOpen = open === j.name;
                 return (
                   <React.Fragment key={j.name}>
@@ -128,7 +140,7 @@ function Health({ he }) {
                       <td style={{ fontWeight: 600 }}>{he ? j.he : j.name}<div><Mono style={{ color: 'var(--text-3)', fontSize: 10 }}>{j.name}</Mono></div></td>
                       <td style={{ fontSize: 12, color: 'var(--text-2)' }}>{j.when}</td>
                       <td style={{ fontSize: 12 }} title={last ? fmtDateTime(toDate(last.startedAt)) : ''}>{ago(toDate(last?.startedAt), he)}{last?.trigger === 'manual' && <span style={{ color: 'var(--text-3)' }}> · {he ? 'ידני' : 'manual'}</span>}</td>
-                      <td>{last ? <Badge status={last.status} he={he} /> : <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
+                      <td>{last ? <Badge status={statusOf(last)} he={he} /> : <span style={{ color: 'var(--text-3)' }}>—</span>}</td>
                       <td><Mono>{dur(last?.durationMs)}</Mono></td>
                       <td style={{ fontSize: 11, color: 'var(--red)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lastErr?.error || ''}>{lastErr ? `${ago(toDate(lastErr.startedAt), he)}: ${lastErr.error}` : ''}</td>
                       <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'end' }}>
@@ -221,13 +233,86 @@ function Quotas({ he }) {
 }
 
 // ── Backups ──────────────────────────────────────────────────────
+const RECORD_HE = { players: 'שחקן', clubs: 'מועדון', contacts: 'איש קשר', deals: 'עסקה', club_requirements: 'דרישת מועדון', tasks: 'משימה', matches: 'משחק', trainings: 'אימון', meetings: 'פגישה', interactions: 'שיחה' };
+const isGood = (b) => ['ok', 'done', 'partial'].includes(b.status) && b.verified !== false;
+
+// Restore from one backup: find a record by name and put it back as it was,
+// or put everything back. Both run in the background and leave a line in
+// the audit log; the result shows on the Backups tab.
+function RestoreDialog({ backup, he, onClose, confirm }) {
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState(null);
+  const [legacy, setLegacy] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [busy, setBusy] = useState('');
+  const when = fmtDateTime(toDate(backup.startedAt));
+  useEffect(() => {
+    const words = q.trim();
+    if (words.length < 2) { setFound(null); setSearching(false); return undefined; }
+    let live = true;
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try { const r = await findInBackup(backup.id, words); if (live) { setFound(r.records || []); setLegacy(!!r.legacy); } }
+      catch (e) { if (live) { setFound(null); toast.error(e.message); } }
+      if (live) setSearching(false);
+    }, 300);
+    return () => { live = false; clearTimeout(timer); };
+  }, [q, backup.id]);
+  const one = async (r) => {
+    const label = r.name || r.id;
+    if (!(await confirm(he ? `להחזיר את "${label}" למצב שהיה בגיבוי מ-${when}? שינויים שנעשו ברשומה הזו אחרי הגיבוי יוחלפו. שאר המערכת לא משתנה.` : `Put "${label}" back as it was in the backup of ${when}? Changes made to this record since then are replaced. Nothing else changes.`, { title: he ? 'שחזור רשומה' : 'Restore a record', confirmLabel: he ? 'שחזר' : 'Restore' }))) return;
+    setBusy(r.path);
+    try { await restoreRecord(backup.id, r.path); toast.success(he ? `השחזור של "${label}" התחיל. התוצאה תופיע במסך הגיבויים בתוך דקה.` : `Restoring "${label}"; the result shows on the Backups tab within a minute.`); onClose(); }
+    catch (e) { toast.error(e.message); }
+    setBusy('');
+  };
+  const all = async () => {
+    if (!(await confirm(he ? `להחזיר את כל המערכת למצב שהיה בגיבוי מ-${when}? כל שינוי שנעשה מאז ברשומות שהיו בגיבוי יוחלף. רשומות שנוספו אחרי הגיבוי נשארות, והחיבורים של המערכת (וואטסאפ, יומן, יוטיוב) לא משתנים. לפני השחזור נעשה גיבוי של המצב הנוכחי, כך שאפשר לחזור גם ממנו.` : `Put the whole system back as it was in the backup of ${when}? Every change made since to records that were in the backup is replaced. Records added after it stay, and the system's connections do not change. The current state is backed up first, so this too can be undone.`, { title: he ? 'שחזור של כל המערכת' : 'Restore everything', confirmLabel: he ? 'שחזר הכל' : 'Restore everything' }))) return;
+    setBusy('all');
+    try { await restoreEverything({ backupId: backup.id }); toast.success(he ? 'השחזור המלא התחיל. זה לוקח כמה דקות והתוצאה תופיע במסך הגיבויים.' : 'The full restore started. It takes a few minutes; the result shows on the Backups tab.'); onClose(); }
+    catch (e) { toast.error(e.message); }
+    setBusy('');
+  };
+  return (
+    <Modal title={he ? `שחזור מהגיבוי של ${when}` : `Restore from the backup of ${when}`} onClose={onClose} viewOnly>
+      <div style={{ display: 'grid', gap: 12 }}>
+        <Field label={he ? 'רשומה אחת' : 'One record'} hint={he ? 'שם של שחקן, מועדון, איש קשר, עסקה, משימה או פגישה. הרשומה חוזרת כמו שהייתה בגיבוי, עם הקבצים שלה.' : 'The name of a player, club, contact, deal, task or meeting. It comes back as it was in the backup, with its files.'}>
+          <div style={{ width: 'fit-content', maxWidth: '100%' }}><SearchInput value={q} onChange={setQ} placeholder={he ? 'חיפוש לפי שם' : 'Search by name'} /></div>
+        </Field>
+        {legacy && <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{he ? 'זה גיבוי ישן וגדול, ואי אפשר לחפש בו רשומה אחת. אפשר לשחזר ממנו את הכל, או לבחור גיבוי חדש יותר.' : 'This is an older, large backup that cannot be searched for one record. Restore everything from it, or pick a newer backup.'}</div>}
+        {searching && !legacy && <Skeleton rows={2} height={36} />}
+        {!searching && found && !legacy && (found.length ? (
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>{found.map((r, i) => (
+            <div key={r.path} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderTop: i ? '1px solid var(--rule)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere' }}>{r.name || <Mono style={{ color: 'var(--text-3)' }}>{r.id.slice(0, 8)}</Mono>}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{he ? (RECORD_HE[r.collection] || r.collection) : r.collection}</div>
+              <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => one(r)} style={{ height: 30 }}>{busy === r.path ? '…' : (he ? 'שחזר' : 'Restore')}</button>
+            </div>
+          ))}</div>
+        ) : <Empty message={he ? 'אין בגיבוי הזה רשומה בשם הזה.' : 'No record by that name in this backup.'} />)}
+        <div style={{ borderTop: '1px solid var(--border-2)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12.5, color: 'var(--text-2)', flex: '1 1 240px' }}>{he ? 'או להחזיר את כל המערכת למצב שהיה בגיבוי הזה. המצב הנוכחי מגובה קודם.' : 'Or put the whole system back as it was in this backup. The current state is backed up first.'}</div>
+          <button className="btn btn-danger" disabled={!!busy} onClick={all} style={{ height: 36 }}>{busy === 'all' ? '…' : (he ? 'שחזר הכל' : 'Restore everything')}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function Backups({ he }) {
   const [list, setList] = useState(null);
   const [busy, setBusy] = useState('');
+  const [restoring, setRestoring] = useState(null);
+  const [status, setStatus] = useState({});
+  const [copies, setCopies] = useState(null);
   const { confirm, dialog } = useConfirm();
   useEffect(() => listenBackups(setList), []);
+  useEffect(() => listenJobStatus(setStatus), []);
+  // The copies outside the database matter when the database has no backup to show.
+  const empty = !!list && !list.length;
+  useEffect(() => { if (empty) fetchOffsiteCopies().then((r) => setCopies(r.copies || [])).catch(() => setCopies([])); }, [empty]);
   const backupNow = async () => {
-    if (!(await confirm(he ? 'לגבות את כל המערכת עכשיו? זה לוקח כמה דקות ומופיע כאן כשמסתיים.' : 'Back up everything now? It takes a few minutes and appears here when done.', { confirmLabel: he ? 'גבה' : 'Back up' }))) return;
+    if (!(await confirm(he ? 'לגבות את כל המערכת עכשיו? זה לוקח כמה דקות ומופיע כאן כשמסתיים.' : 'Back up everything now? It takes a few minutes and appears here when done.', { title: he ? 'גיבוי' : 'Back up', confirmLabel: he ? 'גבה' : 'Back up' }))) return;
     setBusy('new');
     try { await runJobNow('backup'); toast.success(he ? 'הגיבוי התחיל.' : 'Backup started.'); } catch (e) { toast.error(e.message); }
     setBusy('');
@@ -237,30 +322,69 @@ function Backups({ he }) {
     try { const r = await downloadBackup(b); toast.success(he ? `הקובץ ${r.name} ירד.` : `${r.name} downloaded.`); } catch (e) { toast.error(e.message); }
     setBusy('');
   };
+  const fromCopy = async (c) => {
+    if (!(await confirm(he ? `להחזיר את כל המערכת מהעותק החיצוני של ${c.date}? רשומות קיימות שהיו בעותק יוחלפו, ורשומות שנוספו אחריו נשארות.` : `Put the whole system back from the outside copy of ${c.date}? Existing records that were in the copy are replaced; records added after it stay.`, { title: he ? 'שחזור מעותק חיצוני' : 'Restore from an outside copy', confirmLabel: he ? 'שחזר הכל' : 'Restore everything' }))) return;
+    setBusy(c.key);
+    try { await restoreEverything({ offsiteKey: c.key }); toast.success(he ? 'השחזור המלא התחיל. התוצאה תופיע כאן.' : 'The full restore started; the result shows here.'); } catch (e) { toast.error(e.message); }
+    setBusy('');
+  };
   if (!list) return <Skeleton rows={4} />;
+  const restore = status['backup-restore'] || {};
+  const lastRestore = restore.runningSince ? { status: 'running', startedAt: restore.runningSince } : restore.last;
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {dialog}
+      {restoring && <RestoreDialog backup={restoring} he={he} confirm={confirm} onClose={() => setRestoring(null)} />}
       <Card style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12.5, color: 'var(--text-2)' }}>{he ? 'גיבוי שבועי אוטומטי בכל יום ראשון, 8 הגיבויים האחרונים נשמרים. השחזור מתועד ב-docs/runbooks.md.' : 'An automatic weekly backup every Sunday; the last 8 are kept. Restore is documented in docs/runbooks.md.'}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-2)', flex: '1 1 320px' }}>
+          {he ? 'גיבוי אוטומטי פעם בשבוע; אם לילה נכשל, המערכת מנסה שוב בלילה שאחריו. 8 הגיבויים התקינים האחרונים נשמרים. כל גיבוי נקרא בחזרה ונבדק, ועותק שלו נשמר גם מחוץ למסד הנתונים.' : 'An automatic backup once a week; a night that fails is retried the next night. The last 8 good backups are kept. Each one is read back and checked, and a copy is kept outside the database.'}
+          {lastRestore && <div style={{ marginTop: 6 }}>{he ? 'שחזור אחרון' : 'Last restore'}: {ago(toDate(lastRestore.startedAt), he)} <Badge status={statusOf(lastRestore)} he={he} />{lastRestore.error && <span style={{ color: 'var(--red)', fontSize: 11, marginInlineStart: 6 }}>{lastRestore.error}</span>}</div>}
+        </div>
         <button className="btn btn-primary" onClick={backupNow} disabled={!!busy} style={{ height: 36 }}><Icon name="plus" size={12} /><span className="btn-text">{he ? 'גבה עכשיו' : 'Back up now'}</span></button>
       </Card>
       {!list.length ? <Empty message={he ? 'אין גיבויים עדיין.' : 'No backups yet.'} /> : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}><div className="table-wrap">
           <table className="data-table">
-            <thead><tr><th>{he ? 'תאריך' : 'Date'}</th><th>{he ? 'מצב' : 'Status'}</th><th>{he ? 'מסמכים' : 'Documents'}</th><th>{he ? 'גודל' : 'Size'}</th><th>{he ? 'אוספים' : 'Collections'}</th><th style={{ width: 110 }}></th></tr></thead>
-            <tbody>{list.map((b) => (
-              <tr key={b.id}>
-                <td><Mono>{fmtDateTime(toDate(b.startedAt))}</Mono></td>
-                <td><Badge status={b.status === 'done' || b.status === 'ok' ? 'ok' : b.status === 'error' ? 'error' : 'running'} he={he} />{b.partial && <span style={{ color: 'var(--amber)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'חלקי' : 'partial'}</span>}</td>
-                <td><Mono>{(b.docs || 0).toLocaleString()}</Mono></td>
-                <td><Mono>{b.chars ? `${(b.chars / 1048576).toFixed(1)} MB` : ''}</Mono></td>
-                <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{(b.collections || []).length}</td>
-                <td style={{ textAlign: 'end' }}>{b.chunks > 0 && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => download(b)} style={{ height: 30 }}>{busy === b.id ? '…' : (he ? 'הורד' : 'Download')}</button>}</td>
-              </tr>
-            ))}</tbody>
+            <thead><tr><th>{he ? 'תאריך' : 'Date'}</th><th>{he ? 'מצב' : 'Status'}</th><th>{he ? 'מסמכים' : 'Documents'}</th><th>{he ? 'גודל' : 'Size'}</th><th>{he ? 'אוספים' : 'Collections'}</th><th style={{ width: 190 }}></th></tr></thead>
+            <tbody>{list.map((b) => {
+              const st = statusOf(b);
+              return (
+                <tr key={b.id}>
+                  <td><Mono>{fmtDateTime(toDate(b.startedAt))}</Mono></td>
+                  <td title={b.error || b.offsiteError || ''}>
+                    <Badge status={st === 'done' || st === 'ok' || st === 'partial' ? 'ok' : st === 'error' ? 'error' : st} he={he} />
+                    {(b.partial || b.status === 'partial') && <span style={{ color: 'var(--amber)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'חלקי' : 'partial'}</span>}
+                    {b.verified === true && <span style={{ color: 'var(--green-ok)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'נבדק' : 'checked'}</span>}
+                    {b.offsite && <span style={{ color: 'var(--text-3)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'עותק חיצוני' : 'outside copy'}</span>}
+                    {b.verified === true && !b.offsite && b.offsiteError && <span style={{ color: 'var(--amber)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'בלי עותק חיצוני' : 'no outside copy'}</span>}
+                    {b.reason === 'before-restore' && <span style={{ color: 'var(--text-3)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'לפני שחזור' : 'before a restore'}</span>}
+                    {b.reason === 'before-migration' && <span style={{ color: 'var(--text-3)', fontSize: 11, marginInlineStart: 6 }}>{he ? 'לפני מיגרציה' : 'before a migration'}</span>}
+                  </td>
+                  <td><Mono>{(b.docs || 0).toLocaleString()}</Mono></td>
+                  <td><Mono>{b.chars ? `${(b.chars / 1048576).toFixed(1)} MB` : ''}</Mono></td>
+                  <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{(b.collections || []).length}</td>
+                  <td style={{ textAlign: 'end', whiteSpace: 'nowrap' }}>{b.chunks > 0 && (
+                    <span style={{ display: 'inline-flex', gap: 6 }}>
+                      {isGood(b) && <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => setRestoring(b)} style={{ height: 30 }}>{he ? 'שחזר' : 'Restore'}</button>}
+                      <button className="btn btn-secondary btn-sm" disabled={!!busy} onClick={() => download(b)} style={{ height: 30 }}>{busy === b.id ? '…' : (he ? 'הורד' : 'Download')}</button>
+                    </span>
+                  )}</td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </div></div>
+      )}
+      {empty && copies && copies.length > 0 && (
+        <Card>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{he ? 'עותקים מחוץ למסד הנתונים' : 'Copies outside the database'}</div>
+          <div style={{ display: 'grid', gap: 8 }}>{copies.map((c) => (
+            <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <Mono>{c.date}</Mono>
+              <button className="btn btn-danger btn-sm" disabled={!!busy} onClick={() => fromCopy(c)} style={{ height: 30 }}>{busy === c.key ? '…' : (he ? 'שחזר הכל' : 'Restore everything')}</button>
+            </div>
+          ))}</div>
+        </Card>
       )}
     </div>
   );
