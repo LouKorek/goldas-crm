@@ -8,11 +8,12 @@ import { calcAge, fmtDate } from 'lib/constants';
 import { daysAway } from 'lib/alerts';
 import { useRole } from 'lib/roleContext';
 import { t, tv, relDays, fmtDateTime, getLang } from 'lib/i18n';
-import { playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
+import { playerMatchRows, summarizeStats, currentSeason, playerName, flagEmoji, ISO2, STAGE_LABELS, CATEGORY_LABELS, resolveAgeGroup, isYouthAge, seasonLabel, seasonStartYear, DEAL_STAGE_LABELS } from '@goldas/domain';
 import { PageHeader, FactLine, Skeleton, Empty, toast } from 'components/ui/UI';
 import Icon from 'components/ui/Icons';
 import DocViewer from 'components/DocViewer';
 import PlayerChecklist from 'components/player/PlayerChecklist';
+import PlayerSeason from 'components/player/PlayerSeason';
 
 // One screen for a player: profile, contract and representation countdown,
 // documents, matches, open deals, the interaction timeline, related tasks
@@ -195,7 +196,11 @@ export default function Player360() {
   };
   const canShare = (() => { try { return !!navigator.canShare?.({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] }); } catch { return false; } })();
   const cv = async (lang, share = false) => {
-    try { const { exportPlayerCv } = await import('lib/playerCv'); await exportPlayerCv({ ...p, playerName: name }, p.category || 'men', { share, lang }); }
+    // The CV's season line, from the matches this page already has.
+    const label = currentSeason();
+    const rows = playerMatchRows(matches, id).filter((r) => r.season === label);
+    const season = rows.length ? { label, ...summarizeStats(rows) } : null;
+    try { const { exportPlayerCv } = await import('lib/playerCv'); await exportPlayerCv({ ...p, playerName: name }, p.category || 'men', { share, lang, season }); }
     catch (e) { console.error(e); toast.error(t('Could not build the PDF.')); }
   };
   const saveNote = async () => {
@@ -295,6 +300,8 @@ export default function Player360() {
             </>
           )}
         </Card>
+
+        <PlayerSeason playerId={id} matches={matches} />
 
         {nextMeetings.length > 0 && (
           <Card title={t('Meetings')} action={<Link to="/calendar" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none' }}>{t('View all')}</Link>}>

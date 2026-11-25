@@ -21,6 +21,7 @@ const Contacts = lazy(() => import('pages/Contacts'));
 const Calendar = lazy(() => import('pages/Calendar'));
 const Player360 = lazy(() => import('pages/Player360'));
 const Admin = lazy(() => import('pages/Admin'));
+const Matches = lazy(() => import('pages/Matches'));
 applyTheme(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light');
 const role = { email: 'lou@example.com', name: 'לו קורק', role: 'admin', canEdit: true, isAdmin: true, canDelete: true };
 setSessionAccess(role);
@@ -39,6 +40,7 @@ const App = () => (
           <Route path="contacts" element={<Contacts />} />
           {['men', 'women', 'youth', 'jewish'].map((c) => <Route key={c} path={`pipeline/${c}`} element={<Pipeline category={c} />} />)}
           <Route path="calendar" element={<Calendar />} />
+          <Route path="matches" element={<Matches />} />
           <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="admin/youtube" element={<YouTubeConnect he />} />
           <Route path="admin/website" element={<WebsiteStatus he />} />

@@ -42,5 +42,18 @@ export const FIXTURES = {
       { name: 'Ido Shahar', age: 24, position: 'GK', club: 'Hapoel Hadera', why: 'חוזה מסתיים ביוני 2027, שוער ראשון בליגת העל, 11 שערים נקיים העונה', link: 'https://www.transfermarkt.com/ido-shahar/profil/spieler/1' },
       { name: 'Tomer Levi', age: 21, position: 'GK', club: 'Maccabi Petah Tikva U21', why: 'שוער שני, מחפש דקות; מועמד להשאלה', link: 'https://www.transfermarkt.com/tomer-levi/profil/spieler/2' },
     ] } } : {}) })),
+  // Matches with per-match player data (playerStats) for p1 across two seasons,
+  // one played match without data, and one upcoming.
+  matches: [
+    ...[[-150, 0, 0, 0, null], [-140, 15, 0, 0, 6], [-120, 90, 1, 0, 7.5], [-96, 72, 0, 1, 6.5], [-82, 90, 2, 1, 8.5], [-68, 0, 0, 0, null],
+      [-54, 64, 0, 0, 6], [-40, 90, 0, 2, 7], [-26, 81, 1, 0, 7], [-12, 90, 0, 0, 6.5], [-5, 30, 0, 0, null]].map(([d, minutes, goals, assists, rating], i) => ({
+      id: `x${i}`, date: day(d), time: '19:30', homeTeam: CLUBS[i % 6], awayTeam: CLUBS[(i + 3) % 6], source: i % 2 ? 'ifa' : 'manual', linkedPlayers: ['p1', 'p2'],
+      watchedBy: i === 9 ? 'Lou, Dana' : '',
+      playerStats: { p1: { minutes, goals, assists, ...(rating ? { rating } : {}), ...(i === 4 ? { note: 'Two goals and an assist, best game of the season.' } : {}), by: 'owner@example.com', at: '2026-11-01T08:00:00Z' },
+        ...(i === 9 ? { p2: { minutes: 0 } } : {}) },
+    })),
+    { id: 'x20', date: day(-1), time: '20:00', homeTeam: CLUBS[0], awayTeam: CLUBS[1], source: 'ifa', linkedPlayers: ['p1', 'p3'], watchedBy: 'Lou' },
+    { id: 'x21', date: day(4), time: '18:00', homeTeam: CLUBS[2], awayTeam: CLUBS[0], source: 'ifa', linkedPlayers: ['p1'] },
+  ],
   contacts: Array.from({ length: 6 }, (_, i) => ({ id: `k${i}`, clubName: CLUBS[i], contactName: `איש קשר ${i}`, contactRole: 'Sporting Director', contactPhone: '+972501234567' })),
 };
