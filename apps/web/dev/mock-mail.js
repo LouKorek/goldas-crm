@@ -21,7 +21,7 @@ const PUBLIC = {
 PUBLIC.empty = PUBLIC.connected;
 
 // The addresses the server found (System › Email, "Addresses found"); ?gms=noaddr shows none.
-const found = (id, kind, name, club, value, reason, seenName, times) => ({ id, kind, targetId: id, name, club, value, reason, seenName, times, lastSeenAt: now - 30 * H, at: now - 20 * H });
+const found = (id, kind, name, club, value, reason, seenName, times, targetId = id) => ({ id, kind, targetId, name, club, value, reason, seenName, times, lastSeenAt: now - 30 * H, at: now - 20 * H });
 const FOUND = {
   filled: [
     found('f1', 'contact', 'איש קשר 0', 'מכבי חיפה', 'sd@maccabi-haifa.co.il', 'full_name', 'איש קשר 0', 6),
@@ -29,7 +29,7 @@ const FOUND = {
   ],
   suggestions: [
     found('s1', 'contact', 'Dana Example', 'Club Example', 'dana.example.with.a.long.address@club-example.com', 'same_name_two_addresses', 'Dana Example', 4),
-    found('s2', 'contact', 'Dana Example', 'Club Example', 'd.example@mail-example.com', 'same_name_two_addresses', 'Dana Example', 1),
+    found('s2', 'contact', 'Dana Example', 'Club Example', 'd.example@mail-example.com', 'same_name_two_addresses', 'Dana Example', 1, 's1'),   // the same contact as s1
     found('s3', 'contact', 'יוסי', 'הפועל', 'yossi@hapoel-example.co.il', 'one_word_name', 'יוסי כהן', 2),
     found('s4', 'club', 'מועדון לדוגמה', '', 'moadon-example.co.il', 'website_only', '', 0),
   ],
@@ -81,16 +81,14 @@ export const disconnectGmail = async () => ({});
 export const fetchFoundAddresses = async () => { await wait(300); return state === 'noaddr' ? NONE : { ...FOUND }; };
 export const acceptAddress = async (id) => {
   await wait(300);
-  const r = FOUND.suggestions.find((x) => x.id === id);
   take(id);
-  if (r) FOUND.filled = [...FOUND.filled, r];
   return { accepted: 1 };
 };
 export const acceptAllAddresses = async () => {
   await wait(300);
   // As the server does: only the suggestions that stand alone.
-  const alone = FOUND.suggestions.filter((r) => FOUND.suggestions.filter((x) => x.targetId === r.targetId || x.name === r.name).length === 1);
-  alone.forEach((r) => { take(r.id); FOUND.filled = [...FOUND.filled, r]; });
+  const alone = FOUND.suggestions.filter((r) => FOUND.suggestions.filter((x) => x.targetId === r.targetId || x.value === r.value).length === 1);
+  alone.forEach((r) => take(r.id));
   return { accepted: alone.length, skipped: FOUND.suggestions.length };
 };
 export const dismissAddress = async (id) => { await wait(300); take(id); return { dismissed: 1 }; };

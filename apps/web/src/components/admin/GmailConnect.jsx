@@ -53,7 +53,7 @@ function FoundRow({ r, children }) {
           <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
             {r.seenName ? <>{t('Written in the mail as')} <bdi>{r.seenName}</bdi></> : null}
             {r.seenName && r.times > 0 ? ' · ' : null}
-            {r.times > 0 ? <bdi>{t('{n} sent messages', { n: r.times })}</bdi> : null}
+            {r.times > 0 ? <bdi>{r.times === 1 ? t('One sent message') : t('{n} sent messages', { n: r.times })}</bdi> : null}
           </div>
         )}
       </div>
@@ -88,13 +88,22 @@ function FoundAddresses({ counts, busy, act, confirm }) {
   const approveAll = async () => {
     const ok = await confirm(t('Approve every suggestion that stands alone? Suggestions that share a record or a value stay for you to decide one by one.'), { confirmLabel: t('Approve all') });
     if (ok) {
-      run('accept_all', acceptAllAddresses, (out) => (out && out.skipped
-        ? t('{a} approved. {s} wait for a decision one by one.', { a: out.accepted || 0, s: out.skipped })
-        : t('{a} approved.', { a: (out && out.accepted) || 0 })));
+      run('accept_all', acceptAllAddresses, (out) => {
+        const a = (out && out.accepted) || 0;
+        const s = (out && out.skipped) || 0;
+        const approved = a === 0 ? t('Nothing was approved.') : a === 1 ? t('One approved.') : t('{a} approved.', { a });
+        const waiting = s === 0 ? '' : s === 1 ? t('One waits for your decision.') : t('{s} wait for a decision one by one.', { s });
+        return [approved, waiting].filter(Boolean).join(' ');
+      });
     }
   };
 
   const suggestions = (list && list.suggestions) || [];
+  // "Approve all" approves the suggestions that stand alone (one for its record, a value suggested once): shown when there are two or more.
+  const times = (key) => suggestions.reduce((m, r) => m.set(key(r), (m.get(key(r)) || 0) + 1), new Map());
+  const perTarget = times((r) => `${r.kind}|${r.targetId}`);
+  const perValue = times((r) => `${r.kind}|${r.value}`);
+  const alone = suggestions.filter((r) => perTarget.get(`${r.kind}|${r.targetId}`) === 1 && perValue.get(`${r.kind}|${r.value}`) === 1 && r.reason !== 'address_in_use').length;
   const filled = (list && list.filled) || [];
   const search = (list && list.search) || {};
   const searchLine = {
@@ -115,7 +124,7 @@ function FoundAddresses({ counts, busy, act, confirm }) {
       </div>
       {!list && !failed && <Skeleton rows={2} />}
       {failed && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
           <span style={{ color: 'var(--red)' }}>{t('Could not load the addresses.')}</span>
           <button type="button" className="btn btn-ghost btn-sm" onClick={load}>{t('Try again')}</button>
         </div>
@@ -126,7 +135,7 @@ function FoundAddresses({ counts, busy, act, confirm }) {
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
                 <span style={{ ...subLabel, flex: '1 1 180px', minWidth: 0 }}>{t('Waiting for your decision ({n})', { n: suggestions.length })}</span>
-                {suggestions.length > 1 && (
+                {alone > 1 && (
                   <button type="button" className="btn btn-primary btn-sm" disabled={!!busy} onClick={approveAll}>
                     {busy === 'accept_all' ? t('Approving…') : t('Approve all')}
                   </button>
