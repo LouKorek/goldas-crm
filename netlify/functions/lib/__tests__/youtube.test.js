@@ -513,12 +513,12 @@ test("a private video's cover: the frame comes from the owner's address, and wit
 });
 
 // ── Golda's tool ────────────────────────────────────────────────────────────
-function golda({ role = 'admin', turn = 1, media = null, pub = {}, record = NOAM, kicks = [] } = {}) {
+function golda({ role = 'admin', turn = 1, media = null, pub = {}, record = NOAM, kicks = [], said = [] } = {}) {
   const db = fakeDb({
     players: { p1: { ...record } },
     app_meta: { youtube: { connected: true, channel: { id: 'UC', title: 'LOUPI' }, playlistsAllowed: true, ...pub }, youtubeStyle: { style: { ...ytStyle.FALLBACK_STYLE, privacy: 'public', playlists: [{ id: 'PL1', title: "Men's Football", for: 'men' }] }, channelPlaylists: [{ id: 'PL1', title: "Men's Football" }], examples: [] } },
   });
-  const make = (t, m = media) => youtubeTools({ db, admin, identity: BY, media: m, session: { turn: t }, role, resolve: async (c, id) => db.data.players.get(id), kick: async (b) => kicks.push(b) });
+  const make = (t, m = media, texts = said) => youtubeTools({ db, admin, identity: BY, media: m, session: { turn: t }, role, resolve: async (c, id) => db.data.players.get(id), kick: async (b) => kicks.push(b), writerTexts: texts });
   return { db, make, tools: make(turn), kicks };
 }
 
@@ -580,4 +580,140 @@ test('without the playlist permission the draft says the video will not be filed
   const s = await g.tools.youtube_style({});
   assert.match(s.playlistNote, /no permission for playlists/);
   assert.deepEqual(s.playlists, [{ title: "Men's Football", for: 'men' }]);
+});
+
+// ── highlights: chosen moments of a match, only on request ──────────────────
+const ASKED = 'רגעים נבחרים של נועם: 12:30-12:50, 44:10-44:40, 71:05';
+const MOMENTS = [{ start: 750, end: 770 }, { start: 2650, end: 2680 }, { start: 4259, end: 4277 }];
+
+test('a highlights job keeps its moments, always goes through the page, and is checked again when read', async () => {
+  const db = fakeDb({ players: { p1: { ...NOAM } } });
+  // Even with a video that came on WhatsApp, the server never uploads a highlights job itself.
+  const job = await jobs.createDraft(db, draftArgs({ source: { kind: 'whatsapp', mediaId: 'M1' }, highlights: { moments: MOMENTS, total: 68, merged: 0, reordered: false } }));
+  assert.deepEqual(job.highlights, { moments: MOMENTS, total: 68 });
+  assert.deepEqual(jobs.highlightsOf(job), { ok: true, moments: MOMENTS, total: 68 });
+  assert.deepEqual(jobs.highlightsText(jobs.highlightsOf(job)), { moments: ['12:30–12:50', '44:10–44:40', '70:59–71:17'], total: '1:08', count: 3 });
+  const c = await jobs.confirm(db, job, { env: {} });
+  assert.deepEqual([c.mode, c.status], ['page', 'awaiting_file']);
+  assert.match(c.page, /\/yt\/[a-f0-9]{48}$/);
+  assert.doesNotMatch(c.page, /[?#]/, 'the link carries the token only, never the moments');
+  // The page must say what it cut: a session with no cut would be the whole match.
+  await assert.rejects(jobs.openPageSession(db, { ...job, status: 'awaiting_file' }, { size: 1000, mimeType: 'video/mp4' }), /highlights only/);
+  assert.match(jobs.reasonHe(new Error('this link uploads highlights only')), /רק את הרגעים הנבחרים/);
+  // What is stored is not trusted: moments out of order, too long in total, or not numbers are refused.
+  const bad = (moments) => jobs.highlightsOf({ highlights: { moments } });
+  assert.equal(bad([MOMENTS[1], MOMENTS[0]]).ok, false);
+  assert.equal(bad([{ start: 0, end: 5000 }]).ok, false);
+  assert.equal(bad([{ start: '1', end: 9 }]).ok, false);
+  assert.equal(bad([]).ok, false);
+  assert.equal(jobs.highlightsOf(await jobs.createDraft(db, draftArgs())), null, 'an ordinary upload has none');
+  // The message after the upload says it is the highlights.
+  const text = jobs.uploadedText(job, 'https://youtu.be/NEWVIDEO001', { swapped: true, before: NOAM.videoLink });
+  assert.match(text, /הרגעים הנבחרים של Noam Barzilay עלו ליוטיוב \(3 רגעים\)/);
+  assert.match(jobs.uploadedText({ ...job, highlights: { moments: [MOMENTS[0]] } }, 'l', { swapped: true }), /\(רגע אחד\)/);
+  assert.match(jobs.uploadedText({ ...job, highlights: undefined }, 'l', { swapped: true }), /הסרטון של Noam Barzilay עלה/);
+});
+
+test("highlights are drafted only from times the writer wrote, and the yes still comes later", async () => {
+  const g = golda({ turn: 4, said: ['מה קורה', ASKED] });
+  const d = await g.tools.youtube_upload({ action: 'draft', collection: 'players', id: 'p1', moments: ['12:30-12:50', '44:10-44:40', '71:05'] });
+  assert.equal(d.drafted, true);
+  assert.deepEqual([d.highlights.moments, d.highlights.total], [['12:30–12:50', '44:10–44:40', '70:59–71:17'], '1:08']);
+  assert.match(d.highlights.note, /second or two early/);
+  assert.match(d.video, /FULL match video/);
+  assert.match(d.instruction, /list of moments/);
+  const job = await jobs.getJob(g.db, d.jobId);
+  assert.deepEqual([job.status, job.source.kind, job.highlights.total, job.highlights.moments.length], ['draft', 'page', 68, 3]);
+  // The same message cannot be the yes; a later one gets the page, and nothing starts on the server.
+  await assert.rejects(g.tools.youtube_upload({ action: 'confirm' }), /has not answered the draft yet/);
+  const c = await g.make(5).youtube_upload({ action: 'confirm' });
+  assert.deepEqual([c.awaitingFile, c.highlights], [true, true]);
+  assert.match(c.instruction, /FULL match video/);
+  assert.equal(g.kicks.length, 0);
+  const st = await g.make(6).youtube_upload({ action: 'status' });
+  assert.deepEqual([st.status, st.highlights.count, st.highlights.total], ['awaiting_file', 3, '1:08']);
+});
+
+test('Golda cannot come up with moments: a time the writer did not write is refused', async () => {
+  const draft = (said, moments, more = {}) => golda({ said }).tools.youtube_upload({ action: 'draft', collection: 'players', id: 'p1', moments, ...more });
+  await assert.rejects(draft([ASKED], ['12:30-12:50', '13:00-13:20']), /not in the writer's messages: 13:00, 13:20/);
+  await assert.rejects(draft([], ['12:30-12:50']), /only when the writer asked/);
+  await assert.rejects(draft(['תעלי את הסרטון של נועם ליוטיוב'], ['12:30-12:50']), /only when the writer asked/);
+  // A time shifted by Golda is not the writer's time either.
+  await assert.rejects(draft([ASKED], ['12:28-12:50']), /12:28/);
+  // What the writer wrote is read whichever way she copies it: hours, or a single line.
+  assert.equal((await draft([ASKED], ['1:11:05'])).highlights.moments[0], '70:59–71:17');
+  assert.equal((await draft([ASKED], '12:30-12:50, 71:05')).highlights.moments.length, 2);
+  // Times from an earlier message of the conversation count: the draft may be redone later.
+  assert.equal((await draft([ASKED, 'תשני את הכותרת'], ['44:10-44:40'])).highlights.total, '0:30');
+  // Moments that cannot be used are explained, not repaired.
+  await assert.rejects(draft(['12:50-12:30'], ['12:50-12:30']), /"12:50-12:30" ends before it starts\. Ask the writer/);
+  await assert.rejects(draft(['10:00-14:00'], ['10:00-14:00']), /at most 3:00/);
+  // A download link or a WhatsApp video is not what highlights are cut from.
+  await assert.rejects(draft([ASKED], ['12:30-12:50'], { sourceUrl: 'https://files.example/match.mp4' }), /download link cannot be used/);
+  const video = { mimeType: 'video/mp4', mediaId: 'M1', phoneId: 'PH1', buffer: Buffer.alloc(1048576), filename: 'clip.mp4' };
+  const g = golda({ media: video, said: [ASKED] });
+  const d = await g.tools.youtube_upload({ action: 'draft', collection: 'players', id: 'p1', moments: ['71:05', '12:30-12:50'] });
+  assert.equal((await jobs.getJob(g.db, d.jobId)).source.kind, 'page');
+  assert.match(d.highlights.note, /sent with this message is not used/);
+  assert.match(d.highlights.reordered, /order they come in the video/);
+  // An ordinary upload is untouched: no moments, no highlights.
+  const plain = await golda({ said: [ASKED] }).tools.youtube_upload({ action: 'draft', collection: 'players', id: 'p1' });
+  assert.equal(plain.highlights, undefined);
+});
+
+test("the upload page's endpoint gives the moments from the job and takes only what was cut", async () => {
+  ytAuth._resetCacheForTests();
+  const db = fakeDb({ players: { p1: { ...NOAM } }, app_meta: { youtube: { connected: true } }, app_secrets: { youtube: { clientId: CLIENT.clientId, clientSecret: CLIENT.clientSecret, refreshToken: 'r' } } });
+  const fsPath = require.resolve('../firestore.js');
+  const kept = require.cache[fsPath];
+  require.cache[fsPath] = { id: fsPath, filename: fsPath, loaded: true, exports: { admin, getDb: () => db } };
+  const realFetch = globalThis.fetch;
+  const opened = [];
+  globalThis.fetch = async (url, opts = {}) => {
+    if (/oauth2/.test(url)) return res(200, { access_token: 'a', expires_in: 3600 });
+    if (/uploadType=resumable/.test(url)) { opened.push(opts.headers); return res(200, {}, { location: 'https://upload.example/s' }); }
+    throw new Error(`unexpected ${opts.method} ${url}`);
+  };
+  try {
+    const { handler } = require('../../youtube-upload.js');
+    const call = async (method, payload) => {
+      const r = await handler(method === 'GET' ? { httpMethod: 'GET', queryStringParameters: payload, headers: {} } : { httpMethod: 'POST', body: JSON.stringify(payload), headers: { host: 'goldas-crm.netlify.app' } });
+      return [r.statusCode, JSON.parse(r.body)];
+    };
+    const job = await jobs.createDraft(db, draftArgs({ highlights: { moments: MOMENTS, total: 68 } }));
+    await jobs.confirm(db, job, { env: {} });
+    const t = job.token;
+    const [code, seen] = await call('GET', { t });
+    assert.equal(code, 200);
+    assert.deepEqual(seen.highlights, { moments: MOMENTS, total: 68 });
+    assert.equal(seen.player, 'Noam Barzilay');
+    const session = (over) => call('POST', { t, action: 'session', size: 5000000, type: 'video/mp4', cut: { seconds: 71.5, clips: 3 }, ...over });
+    // No cut, a cut longer than the moments allow, more clips than moments, or another kind of file: refused.
+    assert.equal((await session({ cut: undefined }))[0], 400);
+    assert.equal((await session({ cut: { seconds: 68 + 3 * 30 + 11, clips: 3 } }))[0], 400);
+    assert.equal((await session({ cut: { seconds: 60, clips: 4 } }))[0], 400);
+    assert.equal((await session({ cut: { seconds: 0, clips: 1 } }))[0], 400);
+    assert.equal((await session({ type: 'video/quicktime' }))[0], 400);
+    assert.match((await session({ cut: undefined }))[1].error, /רק את הרגעים הנבחרים/);
+    assert.equal(opened.length, 0, 'YouTube was not asked for anything');
+    const [ok, body] = await session({});
+    assert.deepEqual([ok, body.uploadUrl], [200, 'https://upload.example/s']);
+    assert.equal(opened[0]['X-Upload-Content-Type'] || opened[0]['x-upload-content-type'], 'video/mp4');
+    assert.deepEqual((await jobs.getJob(db, job.id)).cut, { seconds: 71.5, clips: 3 });
+    // Moments spoiled in the database: the page gets no moments and can upload nothing.
+    await jobs.patchJob(db, job.id, { highlights: { moments: [MOMENTS[1], MOMENTS[0]], total: 50 } });
+    assert.equal((await call('GET', { t }))[0], 409);
+    assert.equal((await session({}))[0], 409);
+    // An ordinary upload through the page is as before: no moments, no cut asked.
+    const plain = await jobs.createDraft(db, draftArgs());
+    await jobs.confirm(db, plain, { env: {} });
+    const [, view] = await call('GET', { t: plain.token });
+    assert.equal(view.highlights, undefined);
+    assert.equal((await call('POST', { t: plain.token, action: 'session', size: 9000000, type: 'video/quicktime' }))[0], 200);
+  } finally {
+    globalThis.fetch = realFetch;
+    if (kept) require.cache[fsPath] = kept; else delete require.cache[fsPath];
+    ytAuth._resetCacheForTests();
+  }
 });

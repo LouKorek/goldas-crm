@@ -6,3 +6,4 @@ export * from './clubs.js';
 export * from './mail.js';
 export * from './schemas.js';
 export * from './engines/index.js';
+export * from './highlights.js';

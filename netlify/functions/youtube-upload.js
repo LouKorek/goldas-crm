@@ -10,6 +10,14 @@
 //   GET  ?t=<token>                              → what is being uploaded
 //   POST { t, action: 'session', size, type }    → { uploadUrl }
 //   POST { t, action: 'done', videoId }          → { link }
+//
+// A highlights job (the writer asked Golda for chosen moments of a match): the
+// GET also answers `highlights: { moments: [{ start, end }], total }`, read
+// from the job and checked again here. The page cuts those moments out of the
+// match file on the phone and uploads only them, so its session request says
+// what it cut: { …, type: 'video/mp4', cut: { seconds, clips } }. A session
+// for such a job without a cut, or with one longer than the moments allow, is
+// refused: the whole match never goes up through a highlights link.
 const { json, internalHeaders } = require('./lib/auth.js');
 const { getDb, admin } = require('./lib/firestore.js');
 const jobs = require('./lib/youtube-jobs.js');
@@ -19,11 +27,27 @@ const outbox = require('./lib/wa-outbox.js');
 const { originOf, isOurOrigin } = require('./lib/site.js');
 
 const MAX_BYTES = 12 * 1024 * 1024 * 1024;
+// A clip starts at the keyframe before its moment, so the cut runs a little
+// longer than the moments: at most this many seconds per moment (the page
+// refuses a file whose keyframes are further apart), plus a little for the ends.
+const CUT_LEAD = 30;
+const CUT_SLACK = 10;
+const BAD_MOMENTS = 'הרגעים שנשמרו לקישור הזה לא תקינים. בקש מגולדה קישור חדש.';
 
-const view = (job) => ({
+const view = (job, highlights) => ({
   status: job.status, player: job.target?.name || '', title: job.meta?.title || '', privacy: job.meta?.privacy || '',
   link: job.videoUrl || null,
+  ...(highlights ? { highlights: { moments: highlights.moments, total: highlights.total } } : {}),
 });
+
+/** What the page says it cut, when it fits the job's moments; null otherwise. */
+function cutOf(body, highlights) {
+  const seconds = Number(body.cut && body.cut.seconds), clips = Number(body.cut && body.cut.clips);
+  if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isInteger(clips) || clips < 1) return null;
+  const count = highlights.moments.length;
+  if (clips > count || seconds > highlights.total + count * CUT_LEAD + CUT_SLACK) return null;
+  return { seconds: Math.round(seconds * 10) / 10, clips };
+}
 
 exports.handler = async (event) => {
   const db = getDb();
@@ -31,7 +55,9 @@ exports.handler = async (event) => {
     if (event.httpMethod === 'GET') {
       const job = await jobs.jobByToken(db, (event.queryStringParameters || {}).t);
       if (!job) return json(404, { error: 'הקישור הזה כבר לא בתוקף. בקש מגולדה קישור חדש.' });
-      return json(200, view(job));
+      const highlights = jobs.highlightsOf(job);
+      if (highlights && !highlights.ok) return json(409, { error: BAD_MOMENTS });
+      return json(200, view(job, highlights));
     }
     if (event.httpMethod !== 'POST') return json(405, { error: 'method not allowed' });
     let body = {};
@@ -43,10 +69,17 @@ exports.handler = async (event) => {
       const size = Number(body.size) || 0;
       if (!size || size > MAX_BYTES) return json(400, { error: 'הקובץ ריק או גדול מדי.' });
       if (body.type && !/^video\//.test(body.type)) return json(400, { error: 'זה לא קובץ וידאו.' });
+      const highlights = jobs.highlightsOf(job);
+      let cut = null;
+      if (highlights) {
+        if (!highlights.ok) return json(409, { error: BAD_MOMENTS });
+        cut = cutOf(body, highlights);
+        if (!cut || body.type !== 'video/mp4') return json(400, { error: 'הקישור הזה מעלה רק את הרגעים הנבחרים. רענן את הדף ובחר שוב את סרטון המשחק.' });
+      }
       // The session is opened for the page's own address (the site or a preview of it),
       // so the browser there may send the bytes to YouTube.
       const origin = (event.headers || {}).origin || '';
-      const uploadUrl = await jobs.openPageSession(db, job, { size, mimeType: body.type || 'video/*' },
+      const uploadUrl = await jobs.openPageSession(db, job, { size, mimeType: body.type || 'video/*', cut },
         { origin: isOurOrigin(origin) ? origin : originOf(event) });
       return json(200, { uploadUrl });
     }
