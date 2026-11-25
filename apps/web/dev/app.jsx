@@ -4,6 +4,7 @@ import React, { Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import CalendarSync from 'components/admin/CalendarSync';
 import YouTubeConnect from 'components/admin/YouTubeConnect';
+import WebsiteStatus from 'components/admin/WebsiteStatus';
 import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import '../src/index.css';
 import '../src/theme.css';
@@ -39,6 +40,7 @@ const App = () => (
           <Route path="calendar" element={<Calendar />} />
           <Route path="admin/calendar" element={<CalendarSync he />} />
           <Route path="admin/youtube" element={<YouTubeConnect he />} />
+          <Route path="admin/website" element={<WebsiteStatus he />} />
           <Route path="*" element={<div>other</div>} />
         </Route>
       </Routes>
