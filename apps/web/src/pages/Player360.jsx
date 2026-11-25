@@ -112,8 +112,8 @@ function GoldaAccess({ p, he }) {
   return (
     <Card title={he ? 'גולדה לשחקן' : 'Golda for the player'}>
       <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 10 }}>
-        {he ? 'השחקן יוכל לשאול את גולדה בוואטסאפ על המשחקים, האימונים, תאריכי החוזה והמסמכים שלו, ולבקש את דף השחקן שלו. היא כותבת אליו ראשונה רק מה שהפעלת כאן למטה, ולא מראה לו עסקאות, שחקנים אחרים או הערות פנימיות. מה שהוא מדווח מגיע אליך.'
-          : "The player can ask Golda on WhatsApp about his games, trainings, contract and document dates, and get his own player sheet. She writes to him first only what you switch on below, and never shows him deals, other players or internal notes. What he reports comes to you."}
+        {he ? 'השחקן יוכל לשאול את גולדה בוואטסאפ על המשחקים, האימונים, תאריכי החוזה והמסמכים שלו, ולבקש את דף השחקן שלו. היא כותבת אליו ראשונה רק מה שתפעיל כאן, אחרי שהטלפון שלו נשמר, ולא מראה לו עסקאות, שחקנים אחרים או הערות פנימיות. מה שהוא מדווח מגיע אליך.'
+          : "The player can ask Golda on WhatsApp about his games, trainings, contract and document dates, and get his own player sheet. She writes to him first only what you switch on here once his phone is saved, and never shows him deals, other players or internal notes. What he reports comes to you."}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} inputMode="tel" dir="ltr" placeholder="05x-xxxxxxx"

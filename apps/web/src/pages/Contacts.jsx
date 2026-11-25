@@ -21,7 +21,9 @@ export default function Contacts() {
   const [youthScope, setYouthScope] = useState('');  // '' | 'Youth' | 'Senior'
   const [modal, setModal]   = useState(null);   // 'add' | { edit }
   const [touchesOf, setTouchesOf] = useState(null);   // the id of the contact whose touches are open
+  const [touchDirty, setTouchDirty] = useState(false);  // a note typed in the touches window and not added yet
   const [form, setForm]     = useState(EMPTY);
+  const [isDirty, setIsDirty] = useState(false);
   const { confirm, dialog } = useConfirm();
   const { canEdit } = useRole();
   // The list or the relationship map (?view=map), one destination.
@@ -32,16 +34,16 @@ export default function Contacts() {
   useEffect(() => listenCollection(PATHS.CONTACTS, setItems, 'clubName'), []);
 
   const f = (k) => form[k];
-  const s = (k) => (v) => setForm(p => ({ ...p, [k]: v }));
+  const s = (k) => (v) => { setForm(p => ({ ...p, [k]: v })); setIsDirty(true); };
 
   const league = form.leagueMode === 'manual'
     ? form.leagueManual
     : (form.leagueCountry && form.leagueTier ? `${form.leagueCountry} ${form.leagueTier.replace('Tier ', '')}` : '');
 
-  const openAdd  = () => { setForm({ ...EMPTY }); setModal('add'); };
-  const openEdit = (c) => { setForm({ ...EMPTY, ...c }); setModal({ edit: c }); };
+  const openAdd  = () => { setForm({ ...EMPTY }); setIsDirty(false); setModal('add'); };
+  const openEdit = (c) => { setForm({ ...EMPTY, ...c }); setIsDirty(false); setModal({ edit: c }); };
   // A copy keeps the club, not the person: the e-mail address belongs to one contact.
-  const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest, contactEmail: '' }); setModal('add'); };
+  const openDup  = (c) => { const rest = { ...c }; delete rest.id; setForm({ ...EMPTY, ...rest, contactEmail: '' }); setIsDirty(false); setModal('add'); };
 
   const save = async () => {
     if (!form.clubName.trim() && !form.contactName.trim()) {
@@ -87,8 +89,8 @@ export default function Contacts() {
     const line = lastTouchLine(c);
     if (!line) return null;
     return (
-      <button type="button" onClick={() => setTouchesOf(c.id)} title={t('Touches')}
-        style={{ display: 'block', background: 'none', border: 0, padding: 0, marginTop: 3, fontSize: 11, color: 'var(--text-2)',
+      <button type="button" className="tap-text" onClick={() => setTouchesOf(c.id)} title={t('Touches')}
+        style={{ background: 'none', border: 0, padding: 0, marginTop: 3, fontSize: 11, color: 'var(--text-2)',
           cursor: 'pointer', textDecoration: 'underline dotted', textUnderlineOffset: 3, textAlign: 'start' }}>
         {`${t('Last touch')}: ${line}`}
       </button>
@@ -149,8 +151,7 @@ export default function Contacts() {
         <ContactNetwork contacts={items} search={search} onEdit={openEdit} params={params} setParams={setParams} />
       ) : filtered.length === 0 ? (
         <Empty
-         
-          message={items.length === 0 ? 'No contacts yet — add your first one.' : 'No matching contacts.'}
+          message={items.length === 0 ? t('No contacts yet. Add the first one.') : t('No matching contacts.')}
           action={canEdit && items.length === 0 ? <button className="btn btn-primary" onClick={openAdd}>{t("+ Add Contact")}</button> : null}
         />
       ) : (
@@ -238,8 +239,8 @@ export default function Contacts() {
 
       {modal && (
         <Modal
-          title={modal === 'add' ? 'Add Contact' : `Edit: ${form.contactName || form.clubName || 'Contact'}`}
-          onClose={() => setModal(null)}
+          title={modal === 'add' ? t('Add Contact') : `${t('Edit')}: ${form.contactName || form.clubName || t('Contact')}`}
+          onClose={() => setModal(null)} isDirty={isDirty} onSave={save}
           footer={<>
             <button className="btn btn-ghost" onClick={() => setModal(null)}>{t("Cancel")}</button>
             <button className="btn btn-primary" onClick={save}>{t("Save")}</button>
@@ -283,7 +284,7 @@ export default function Contacts() {
           <Field label={t("Phone")} hint={t("With country code, e.g. +972...")}>
             <input value={f('contactPhone')} onChange={e => s('contactPhone')(e.target.value.replace(/[^0-9+]/g, ''))} placeholder="+972..." />
           </Field>
-          <Field label={t('E-mail address')}hint={t('The CRM shows the agency\'s mail with this address on the contact and its club.')}>
+          <Field label={t('E-mail address')} hint={t('The CRM shows the agency\'s mail with this address on the contact and its club.')}>
             <input type="email" value={f('contactEmail') || ''} onChange={e => s('contactEmail')(e.target.value)} placeholder="name@club.com" dir="ltr" autoComplete="off" />
           </Field>
           {modal.edit && <RecordMail kind="contact" id={modal.edit.id} />}
@@ -291,8 +292,8 @@ export default function Contacts() {
       )}
 
       {touchContact && (
-        <Modal title={`${t('Touches')}: ${touchContact.contactName || touchContact.clubName || ''}`} onClose={() => setTouchesOf(null)} viewOnly>
-          <ContactTouches contact={touchContact} canEdit={canEdit} />
+        <Modal title={`${t('Touches')}: ${touchContact.contactName || touchContact.clubName || ''}`} onClose={() => { setTouchesOf(null); setTouchDirty(false); }} viewOnly={!canEdit} isDirty={touchDirty}>
+          <ContactTouches contact={touchContact} canEdit={canEdit} onDirty={setTouchDirty} />
         </Modal>
       )}
 

@@ -80,13 +80,14 @@ export default function RecordMail({ kind, id, deals = [] }) {
                 <span style={{ ...muted, fontFamily: 'var(--font-mono)', fontSize: 10, whiteSpace: 'nowrap' }}>{fmtDateTime(th.lastAt)}</span>
               </span>
               <span style={{ ...muted, display: 'block', fontSize: 11, overflowWrap: 'anywhere' }}>
-                {th.people.join(', ')}{th.count > 1 ? ` · ${t('{n} messages', { n: th.count })}` : ''}
+                {th.people.map((p, i) => <React.Fragment key={i}>{i > 0 && ', '}<bdi>{p}</bdi></React.Fragment>)}
+                {th.count > 1 && <> · <bdi>{t('{n} messages', { n: th.count })}</bdi></>}
               </span>
               {!isOpen && last.snippet && (
                 <span dir="auto" style={{ ...muted, display: 'block', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{last.snippet}</span>
               )}
             </button>
-            <a href={gmailThreadUrl(data.address, th.threadId)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t('Open in Gmail')} ↗</a>
+            <a className="tap-text" href={gmailThreadUrl(data.address, th.threadId)} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--gold)', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t('Open in Gmail')} ↗</a>
           </div>
           {isOpen && th.messages.map((m) => (
             <div key={m.id} style={{ margin: '8px 0 0', padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 6, opacity: busy === m.id ? 0.6 : 1 }}>
@@ -99,13 +100,13 @@ export default function RecordMail({ kind, id, deals = [] }) {
               </div>
               {m.snippet && <div dir="auto" style={{ marginTop: 6, overflowWrap: 'anywhere' }}>{m.snippet}</div>}
               {m.attachments.length > 0 && <div style={{ ...muted, marginTop: 4, fontSize: 11, overflowWrap: 'anywhere' }}>{t('Attachments')}: {m.attachments.join(', ')}</div>}
-              {money && kind !== 'deal' && m.dealIds.length > 0 && (
-                <div style={{ ...muted, marginTop: 4, fontSize: 11 }}>{t('On deal')}: {m.dealIds.map(dealName).filter(Boolean).join(', ') || m.dealIds.length}</div>
+              {money && kind !== 'deal' && m.dealIds.some(dealName) && (
+                <div style={{ ...muted, marginTop: 4, fontSize: 11 }}>{t('On deal')}: {m.dealIds.map(dealName).filter(Boolean).join(', ')}</div>
               )}
               {m.corrected && <div style={{ ...muted, marginTop: 4, fontSize: 11 }}>{t('Links corrected by hand; the sync keeps them.')}</div>}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
                 {money && deals.some((d) => !m.dealIds.includes(d.id)) && (
-                  <select aria-label={t('Move to deal')} value="" disabled={!!busy} onChange={(e) => moveTo(m, e.target.value)} style={{ maxWidth: 240, height: 28, fontSize: 12 }}>
+                  <select aria-label={t('Move to deal')} value="" disabled={!!busy} onChange={(e) => moveTo(m, e.target.value)} style={{ maxWidth: 240, width: 'auto' }}>
                     <option value="">{t('Move to deal…')}</option>
                     {deals.filter((d) => !m.dealIds.includes(d.id)).map((d) => <option key={d.id} value={d.id}>{dealLabel(d)}</option>)}
                   </select>

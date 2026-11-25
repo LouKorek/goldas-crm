@@ -8,14 +8,16 @@ import { listenCollection, updateDoc_, PATHS } from 'lib/db';
 import { listenPlayers } from 'data/players';
 import { listenMeetings } from 'data/meetings';
 import { PhoneActions, toast, Empty } from 'components/ui/UI';
-import { formatPhone } from 'lib/constants';
+import { formatPhone, fmtDate } from 'lib/constants';
+import Icon from 'components/ui/Icons';
 import { t, getLang } from 'lib/i18n';
 import { useRole } from 'lib/roleContext';
 import NetworkMap, { WARMTH_COLOR } from './NetworkMap';
 
 const COLD_CHOICES = [60, 90, 180, 365];
 const SHOW_COLD = 12;
-const fmt = (d) => (d ? d.split('-').reverse().join('.') : '');
+// The app's one short date (21/10/26), the same as every other list.
+const fmt = (d) => (d ? fmtDate(d) : '');
 const kindLabel = (kinds) => kinds.map((k) => NET_LINK_LABELS[k][getLang() === 'en' ? 'en' : 'he']).join(' · ');
 const CHANNEL = { call: 'Call', whatsapp: 'WhatsApp', meeting: 'Meeting', email: 'Email', sms: 'SMS', requirement: 'Requirement', deal: 'Deal', touch: 'Touch' };
 const channelLabel = (c) => t(CHANNEL[c] || c);
@@ -141,7 +143,7 @@ function ColdList({ net, onOpen }) {
           ))}
         </ul>
       )}
-      {cold.length > SHOW_COLD && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAll(!all)}>{all ? t('Show less') : t('Show all {n}', { n: cold.length })}</button>}
+      {cold.length > SHOW_COLD && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAll(!all)}>{all ? t('Show fewer') : t('Show all {n}', { n: cold.length })}</button>}
       <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-3)' }}>
         {t('{n} spoken to lately.', { n: recent })}{' '}
         {noRecord.length > 0 && (
@@ -201,7 +203,7 @@ function NodeCard({ net, id, contacts, onSelect, onEdit }) {
           <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{[n.role, n.club && net.nodes.get(n.club)?.name, n.type === 'deal' ? t(n.stage) : ''].filter(Boolean).join(' · ')}</div>
         </div>
         {record && canEdit && onEdit && <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEdit(record)}>{t('Edit')}</button>}
-        <button type="button" className="btn btn-ghost btn-sm" aria-label={t('Close')} onClick={() => onSelect(null)}>✕</button>
+        <button type="button" className="modal-close-btn" aria-label={t('Close')} onClick={() => onSelect(null)}><Icon name="close" size={13} /></button>
       </div>
       {record?.contactPhone && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
@@ -231,12 +233,13 @@ function NodeCard({ net, id, contacts, onSelect, onEdit }) {
           <h4 style={{ fontSize: 13, margin: '0 0 6px' }}>{t('Knows')}</h4>
           {explicit.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>{t('No one yet.')}</p>}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {explicit.map(({ node, link }) => (
-              <span key={node.id} className="chip active" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {node.name}{link.kinds.includes('introduced') ? ` · ${t('introduction')}` : ''}
-                {canEdit && <button type="button" aria-label={t('Remove link to {name}', { name: node.name })} disabled={busy} onClick={() => remove(node.ref)} style={{ background: 'none', border: 0, color: 'inherit', cursor: 'pointer', padding: 0 }}>✕</button>}
-              </span>
-            ))}
+            {explicit.map(({ node, link }) => {
+              const label = `${node.name}${link.kinds.includes('introduced') ? ` · ${t('introduction')}` : ''}`;
+              // The whole chip takes the link off, like the chips of a meeting's people.
+              return canEdit
+                ? <button key={node.id} type="button" className="chip active" aria-label={t('Remove link to {name}', { name: node.name })} disabled={busy} onClick={() => remove(node.ref)}>{label} ✕</button>
+                : <span key={node.id} className="chip active">{label}</span>;
+            })}
           </div>
           {canEdit && (
             <div style={{ marginTop: 10 }}>
@@ -293,7 +296,7 @@ export default function ContactNetwork({ contacts, search = '', onEdit, params, 
   const term = search.trim().toLowerCase();
   const highlight = useMemo(() => new Set(term ? [...net.nodes.values()].filter((n) => n.type === 'contact' && `${n.name} ${n.role || ''}`.toLowerCase().includes(term)).map((n) => n.id) : []), [net, term]);
 
-  if (!contacts.length) return <Empty message={t('No contacts yet — add your first one.')} />;
+  if (!contacts.length) return <Empty message={t('No contacts yet. Add the first one.')} />;
 
   return (
     <div className="net-view" style={{ display: 'grid', gap: 16 }}>

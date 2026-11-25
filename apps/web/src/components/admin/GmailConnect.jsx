@@ -78,11 +78,13 @@ export default function GmailConnect() {
         )}
         {!d.connected && !yt.clientReady && <Link to="/admin/youtube" className="btn btn-secondary btn-sm" style={{ textDecoration: 'none' }}>{t('Go to System › YouTube')}</Link>}
         {d.lastError?.message && !apiOff && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 8, overflowWrap: 'anywhere' }}>{d.lastError.message}</div>}
-        {apiOff && d.api?.message && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 4, overflowWrap: 'anywhere' }}>{d.api.message}</div>}
         {apiOff && (
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
             {t('The server tries to switch it on once a day. If it stays off, switch on "Gmail API" in the Google Cloud console of the project the YouTube client belongs to.')}
           </div>
+        )}
+        {apiOff && d.api?.message && (
+          <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4, overflowWrap: 'anywhere' }}>{t('Google\'s answer')}: <bdi dir="ltr">{d.api.message}</bdi></div>
         )}
       </Card>
 
@@ -103,7 +105,7 @@ export default function GmailConnect() {
               {busy === 'sync' ? t('Starting…') : t('Sync now')}
             </button>
             <button type="button" className="btn btn-ghost btn-sm" disabled={!!busy} onClick={connect}>{t('Connect again')}</button>
-            <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} disabled={!!busy} onClick={disconnect}>
+            <button type="button" className="btn btn-danger btn-sm" disabled={!!busy} onClick={disconnect}>
               {busy === 'disconnect' ? t('Disconnecting…') : t('Disconnect')}
             </button>
           </div>

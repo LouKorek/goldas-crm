@@ -1287,7 +1287,6 @@ const HE = {
   'Not spoken to for a long time': 'לא דיברנו הרבה זמן',
   'More than': 'יותר מ-',
   'Everyone with a record was spoken to in this time.': 'עם כל מי שיש לו תיעוד דיברנו בזמן הזה.',
-  'Show all {n}': 'להציג את כל ה-{n}',
   '{n} spoken to lately.': 'עם {n} דיברנו לאחרונה.',
   'No record at all: {n}': 'בלי תיעוד בכלל: {n}',
   'Link saved.': 'הקשר נשמר.',
@@ -1391,6 +1390,11 @@ const HE = {
   'Connect again': 'חבר מחדש',
   'Disconnecting…': 'מנתק…',
   'Disconnect': 'נתק',
+  'Google\'s answer': 'התשובה של Google',
+  'No contacts yet. Add the first one.': 'אין עדיין אנשי קשר. מוסיפים את הראשון.',
+  'No matching contacts.': 'אין אנשי קשר מתאימים.',
+  'How we reached them': 'איך פנינו',
+  'No player': 'בלי שחקן',
 };
 
 export default HE;

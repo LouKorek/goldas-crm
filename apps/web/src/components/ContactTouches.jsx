@@ -7,17 +7,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { touchesOf, lastTouch, playerName, israelDate } from '@goldas/domain';
 import { listenCollection, updateDoc_, currentUserMeta, PATHS } from 'lib/db';
-import { DateInput, ChipGroup, toast } from 'components/ui/UI';
+import { DateInput, ChipGroup, Field, toast } from 'components/ui/UI';
+import { fmtDate } from 'lib/constants';
 import { t, locale } from 'lib/i18n';
 
 const CHANNELS = ['call', 'meeting', 'whatsapp', 'email', 'other'];
 const CHANNEL_LABEL = { whatsapp: 'WhatsApp', call: 'Phone call', meeting: 'Meeting', email: 'Email', other: 'Other' };
 export const channelLabel = (c) => t(CHANNEL_LABEL[c] || 'Other');
 
-const shortDate = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(locale(), { day: '2-digit', month: '2-digit', year: '2-digit' });
-};
+// The app's one short date (24/11/26), the same as every other list.
+const shortDate = (iso) => (iso && !Number.isNaN(new Date(iso).getTime()) ? fmtDate(iso) : '');
 
 /** The one-line summary for a row: "24/11/26 · WhatsApp", or null with no touches. */
 export function lastTouchLine(contact) {
@@ -27,12 +26,16 @@ export function lastTouchLine(contact) {
 
 const newId = () => `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-export default function ContactTouches({ contact, canEdit }) {
+/** onDirty(bool): tells the window that a note was typed and not added yet, so closing asks first. */
+export default function ContactTouches({ contact, canEdit, onDirty }) {
   const [players, setPlayers] = useState([]);
   const today = israelDate(new Date());
   const [form, setForm] = useState({ date: today, channel: 'call', playerId: '', note: '' });
   const [saving, setSaving] = useState(false);
+  const [noteError, setNoteError] = useState('');
   useEffect(() => listenCollection(PATHS.PLAYERS, setPlayers), []);
+  const dirty = !!form.note.trim();
+  useEffect(() => { if (onDirty) onDirty(dirty); }, [dirty, onDirty]);
 
   const names = useMemo(() => Object.fromEntries(players.map((p) => [p.id, playerName(p)])), [players]);
   const list = touchesOf(contact);
@@ -40,7 +43,7 @@ export default function ContactTouches({ contact, canEdit }) {
 
   const add = async () => {
     const note = form.note.trim();
-    if (!note) { toast.error(t('Write in one line what it was about.')); return; }
+    if (!note) { setNoteError(t('Write in one line what it was about.')); return; }
     // A touch dated today keeps the time of day; an earlier day is stamped at noon.
     const at = form.date && form.date !== today ? new Date(`${form.date}T12:00:00`).toISOString() : new Date().toISOString();
     const touch = { id: newId(), at, channel: form.channel || 'other', by: currentUserMeta().email, playerId: form.playerId, dealId: '', note: note.slice(0, 140) };
@@ -59,19 +62,27 @@ export default function ContactTouches({ contact, canEdit }) {
       {canEdit && (
         <div className="card" style={{ padding: 12, marginBottom: 14, display: 'grid', gap: 10 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{t('Add a touch')}</div>
-          <ChipGroup options={CHANNELS} value={form.channel} onChange={(v) => setForm((p) => ({ ...p, channel: v || 'other' }))} labels={CHANNELS.map(channelLabel)} required />
+          <Field label={t('How we reached them')}>
+            <ChipGroup options={CHANNELS} value={form.channel} onChange={(v) => setForm((p) => ({ ...p, channel: v || 'other' }))} labels={CHANNELS.map(channelLabel)} required />
+          </Field>
           <div className="form-grid-2">
-            <DateInput value={form.date} onChange={(v) => setForm((p) => ({ ...p, date: v || today }))} />
-            <select value={form.playerId} onChange={(e) => setForm((p) => ({ ...p, playerId: e.target.value }))}>
-              <option value="">{t('About a player (optional)')}</option>
-              {sortedPlayers.map((p) => <option key={p.id} value={p.id}>{playerName(p)}</option>)}
-            </select>
+            <Field label={t('Date')}>
+              <DateInput value={form.date} onChange={(v) => setForm((p) => ({ ...p, date: v || today }))} />
+            </Field>
+            <Field label={t('About a player (optional)')}>
+              <select value={form.playerId} onChange={(e) => setForm((p) => ({ ...p, playerId: e.target.value }))}>
+                <option value="">{t('No player')}</option>
+                {sortedPlayers.map((p) => <option key={p.id} value={p.id}>{playerName(p)}</option>)}
+              </select>
+            </Field>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input value={form.note} maxLength={140} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === 'Enter') add(); }} placeholder={t('What it was about, in one line')} style={{ flex: 1, minWidth: 0 }} />
-            <button type="button" className="btn btn-primary" onClick={add} disabled={saving} style={{ flexShrink: 0 }}>{t('Add')}</button>
-          </div>
+          <Field label={t('What it was about, in one line')} error={noteError} required>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input value={form.note} maxLength={140} aria-invalid={!!noteError} onChange={(e) => { setNoteError(''); setForm((p) => ({ ...p, note: e.target.value })); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') add(); }} style={{ flex: 1, minWidth: 0 }} />
+              <button type="button" className="btn btn-primary" onClick={add} disabled={saving} style={{ flexShrink: 0 }}>{t('Add')}</button>
+            </div>
+          </Field>
         </div>
       )}
       {list.length === 0 ? (

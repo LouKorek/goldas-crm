@@ -95,7 +95,7 @@ function TrainingModal({ initial, players, onClose, onSaved }) {
       </Field>
       <Field label={t('Linked Players')}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-          {form.linkedPlayers.map((id) => <span key={id} className="chip active" onClick={() => s('linkedPlayers')(form.linkedPlayers.filter((x) => x !== id))} style={{ cursor: 'pointer' }}>{playerName(players.find((p) => p.id === id) || {}) || id} ✕</span>)}
+          {form.linkedPlayers.map((id) => <button key={id} type="button" className="chip active" onClick={() => s('linkedPlayers')(form.linkedPlayers.filter((x) => x !== id))}>{playerName(players.find((p) => p.id === id) || {}) || id} ✕</button>)}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Type to search')} />
         {list.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>{list.map((p) => <button key={p.id} type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { if (!form.linkedPlayers.includes(p.id)) s('linkedPlayers')([...form.linkedPlayers, p.id]); setQ(''); }}>{playerName(p)}</button>)}</div>}
@@ -157,14 +157,14 @@ function MeetingModal({ initial, players, contacts = [], onClose }) {
       <Field label={t('Place')}><input value={form.location} onChange={(e) => s('location')(e.target.value)} placeholder={t('Address, office or online')} /></Field>
       <Field label={t('Linked Players')}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-          {form.linkedPlayers.map((id) => <span key={id} className="chip active" onClick={() => s('linkedPlayers')(form.linkedPlayers.filter((x) => x !== id))} style={{ cursor: 'pointer' }}>{playerName(players.find((p) => p.id === id) || {}) || id} ✕</span>)}
+          {form.linkedPlayers.map((id) => <button key={id} type="button" className="chip active" onClick={() => s('linkedPlayers')(form.linkedPlayers.filter((x) => x !== id))}>{playerName(players.find((p) => p.id === id) || {}) || id} ✕</button>)}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Type to search')} />
         {list.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>{list.map((p) => <button key={p.id} type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { if (!form.linkedPlayers.includes(p.id)) s('linkedPlayers')([...form.linkedPlayers, p.id]); setQ(''); }}>{playerName(p)}</button>)}</div>}
       </Field>
       <Field label={t('Contacts in the meeting')}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-          {(form.linkedContacts || []).map((id) => <span key={id} className="chip active" onClick={() => s('linkedContacts')(form.linkedContacts.filter((x) => x !== id))} style={{ cursor: 'pointer' }}>{contactName(id)} ✕</span>)}
+          {(form.linkedContacts || []).map((id) => <button key={id} type="button" className="chip active" onClick={() => s('linkedContacts')(form.linkedContacts.filter((x) => x !== id))}>{contactName(id)} ✕</button>)}
         </div>
         <input value={cq} onChange={(e) => setCq(e.target.value)} placeholder={t('Type to search')} />
         {contactList.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>{contactList.map((c) => <button key={c.id} type="button" className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start' }} onClick={() => { const cur = form.linkedContacts || []; if (!cur.includes(c.id)) s('linkedContacts')([...cur, c.id]); setCq(''); }}>{c.contactName}{c.clubName ? ` · ${c.clubName}` : ''}</button>)}</div>}
