@@ -346,12 +346,14 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
     // Golda 3.0, the market radar: one opportunity card, else one cold-contact nudge, only in an hour when nothing else of hers went out.
     // Both tell their state in the job's notes and never a name, so a failure is noted by its kind, not its text.
     const spoke = capped.sent || site.sent || games.sent || reports.sent || asked.sent || offer.sent;
-    const failed = (what) => (e) => { job.note(`${what} failed (${(e && (e.status || e.code || e.name)) || 'error'})`); return {}; };
+    // A step that threw may have sent its message before it failed, so a failure counts as having spoken for the rest of the chain.
+    const failed = (what) => (e) => { job.note(`${what} failed (${(e && (e.status || e.code || e.name)) || 'error'})`); return { failed: true }; };
     const card = spoke ? {} : await require('./lib/golda-radar.js').offerRadar(db, owner, now, { hour, send, job }).catch(failed('radar card'));
-    const cold = spoke || card.sent ? {} : await require('./lib/golda-network.js').coldNudge(db, owner, data, now, { hour, send, job }).catch(failed('cold-contact nudge'));
+    const cardSpoke = card.sent || card.failed;
+    const cold = spoke || cardSpoke ? {} : await require('./lib/golda-network.js').coldNudge(db, owner, data, now, { hour, send, job }).catch(failed('cold-contact nudge'));
     count += (card.sent || 0) + (cold.sent || 0);
     // A rule she proposed for herself after a 👎: at most one a day, only in an hour when nothing else of hers went out.
-    const proposal = spoke || card.sent || cold.sent ? {} : await offerProposal(db, owner, now, { hour, send, job }).catch(() => { job.note('rule proposal failed'); return {}; });
+    const proposal = spoke || cardSpoke || cold.sent || cold.failed ? {} : await offerProposal(db, owner, now, { hour, send, job }).catch(() => { job.note('rule proposal failed'); return {}; });
     count += proposal.sent || 0;
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));

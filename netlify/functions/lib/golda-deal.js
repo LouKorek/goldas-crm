@@ -10,8 +10,9 @@
 //    contract on record; what to watch. Nothing is estimated: when the CRM has
 //    no number for a scenario, the scenario says which number is missing.
 // 3. deal_scenarios: the tool. With a question it may make ONE model call to
-//    word the reasoning; a sentence of the model that carries a number the
-//    facts do not have is dropped, so the numbers always come from code.
+//    word the reasoning; a sentence of the model that carries any number at
+//    all (a digit of any script, a number word, a currency, a percent) is
+//    dropped, so every number the owner sees comes from code.
 // 4. finance_whatif: commission and payment-schedule what-ifs
 //    (packages/domain/src/engines/finance.ts). Nothing is saved, ever.
 //
@@ -43,42 +44,99 @@ const money = (amount, currency) => formatMoney(amount, currency);
 const perMo = (f) => `${money(f.perMonth, f.currency)} לחודש`;
 const inDays = (n) => (n < 0 ? `לפני ${-n} ימים` : n === 0 ? 'היום' : `בעוד ${n} ימים`);
 
-const MULTIPLIER = { k: 1e3, m: 1e6, אלף: 1e3, מיליון: 1e6 };
-const PERIOD_WORDS = [['month', /month|\/\s*mo|חודש/i], ['year', /year|annual|שנה|שנתי/i], ['season', /season|עונה/i]];
+const MULTIPLIER = { k: 1e3, m: 1e6, אלף: 1e3, אלפים: 1e3, מיליון: 1e6 };
+// A period is read only from an explicit phrase. "בשנה הראשונה" is an ordinal, not a period: it is left over, so the figure is unclear.
+const notLetter = '(?![\\p{L}])';
+const PERIODS = [
+  ['month', new RegExp(`(?<![\\p{L}])(?:לחודש|חודשית|חודשי|per\\s+month|monthly)${notLetter}|\\/\\s*(?:month|mo)${notLetter}`, 'iu')],
+  ['year', new RegExp(`(?<![\\p{L}])(?:לשנה|שנתית|שנתי|per\\s+(?:year|annum)|yearly|annual(?:ly)?)${notLetter}|\\/\\s*(?:year|yr)${notLetter}`, 'iu')],
+  ['season', new RegExp(`(?<![\\p{L}])(?:לעונה|per\\s+season)${notLetter}|\\/\\s*season${notLetter}`, 'iu')],
+];
+// What the app itself writes when there is no number: missing, not unclear.
+const NO_NUMBER = /^(?:not specified|לא צוין|לא ידוע|n\/?a|tbd|[-–—?]+)$/i;
+// Two numbers joined by a dash, "עד" or "to": a range, not a number.
+const RANGE = /\d\s*(?:[-–—]|עד|to)\s*[€$₪£]?\s*\d/i;
+// The number itself. "." or "," followed by exactly three digits is a thousands separator ("€8.000", "8,000").
+const NUMBER = /\d[\d.,]*/;
+const READ_NUMBER = [
+  [/^\d+$/, (t) => Number(t)],
+  [/^\d+\.\d{1,2}$/, (t) => Number(t)],
+  [/^\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?$/, (t) => Number(t.replace(/,/g, ''))],
+  [/^\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?$/, (t) => Number(t.replace(/\./g, '').replace(',', '.'))],
+];
+const unclear = (s) => ({ unclear: true, text: s.slice(0, TEXT_MAX) });
 
 /**
  * A figure typed as free text ("8000", "€8,000 לחודש", "120k לשנה").
- * → { amount, currency, period?, perMonth?, assumed: [..] } or null when there is no number.
+ * → { amount, currency, period?, perMonth?, assumed: [..] }, null when there is no number,
+ *   or { unclear: true, text } when the text holds more than one number, a currency and a period:
+ *   a range ("8000-10000"), an ordinal ("בשנה הראשונה"), words left over. An unclear
+ *   figure is treated like a missing one, and its text is shown as it is.
  * A currency or a period that is not written is the app's own (euros, per
  * month), and `assumed` says so: it is shown to the owner, never hidden.
  */
 function readFigure(text, { salary = false } = {}) {
   const s = String(text ?? '').trim();
-  // The number, and "k" / "m" / "אלף" / "מיליון" only as a word of its own ("120k", not the m of "month").
-  const m = /(\d[\d,]*(?:\.\d+)?)(?:\s*(k|m|אלף|מיליון)(?![a-z֐-׿]))?/i.exec(s);
-  if (!m) return null;
-  const amount = Number(m[1].replace(/,/g, '')) * (MULTIPLIER[(m[2] || '').toLowerCase()] || 1);
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  const sym = s.match(/[€$₪£]/);
-  const word = s.split(/[\s\d.,/()%+-]+/).filter(Boolean).map(toCurrency).find(Boolean);
-  const currency = (sym && toCurrency(sym[0])) || word || null;
+  if (!s) return null;
+  if (!/\d/.test(s)) return NO_NUMBER.test(s) ? null : unclear(s);
+  // A digit of another script ("٩٠٠٠") is not read: shown as it is.
+  if (/\p{N}/u.test(s.replace(/[0-9]/g, ''))) return unclear(s);
+  if (RANGE.test(s)) return unclear(s);
+  const n = NUMBER.exec(s);
+  const token = n[0].replace(/[.,]+$/, '');
+  const reader = READ_NUMBER.find(([re]) => re.test(token));
+  if (!reader) return unclear(s);
+  let rest = `${s.slice(0, n.index)} ${s.slice(n.index + token.length)}`;
+  let amount = reader[1](token);
+  // "k" / "m" / "אלף" / "מיליון" right after the number, as a word of its own ("120k", not the m of "month").
+  const after = s.slice(n.index + token.length);
+  const mult = /^\s*(k|m|אלפים|אלף|מיליון)(?![\p{L}])/iu.exec(after);
+  if (mult) {
+    amount *= MULTIPLIER[mult[1].toLowerCase()];
+    rest = `${s.slice(0, n.index)} ${after.slice(mult[0].length)}`;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) return unclear(s);
+  // The currency: a sign, or a word the domain knows; two different ones are unclear.
+  const found = new Set();
+  rest = rest.replace(/[€$₪£]/g, (c) => { found.add(toCurrency(c)); return ' '; });
+  rest = rest.replace(/ש["״׳']ח|ליש["״׳']ט/g, (w) => { found.add(toCurrency(w)); return ' '; });
+  rest = rest.replace(/[\p{L}]+/gu, (w) => { const c = toCurrency(w); if (!c) return w; found.add(c); return ' '; });
+  if (found.size > 1) return unclear(s);
+  const currency = found.size ? [...found][0] : null;
+  // The period, only from an explicit phrase, and only for a salary.
+  let period = null;
+  if (salary) {
+    for (const [key, re] of PERIODS) {
+      if (!re.test(rest)) continue;
+      if (period) return unclear(s);
+      period = key;
+      rest = rest.replace(re, ' ');
+    }
+  }
+  if (rest.replace(/[\s.,:;()]+/g, '')) return unclear(s);
   const assumed = currency ? [] : ['currency'];
   const out = { amount, currency: currency || APP_CURRENCY, assumed, text: s.slice(0, TEXT_MAX) };
   if (!salary) return out;
-  const hit = PERIOD_WORDS.find(([, re]) => re.test(s));
-  if (!hit) assumed.push('period');
-  out.period = hit ? hit[0] : APP_PERIOD;
+  if (!period) assumed.push('period');
+  out.period = period || APP_PERIOD;
   out.perMonth = perMonth(amount, out.period);
   return out;
 }
 
+/** A figure that can carry a number: not missing and not unclear. */
+const clear = (f) => (f && !f.unclear ? f : null);
+
 /** The commission written on a deal: a percent ("10%") or a fixed sum. */
 function readCommission(text) {
   const s = String(text ?? '').trim();
-  const pct = /(\d+(?:\.\d+)?)\s*%/.exec(s);
-  if (pct) return { percent: Number(pct[1]), text: s.slice(0, TEXT_MAX) };
+  if (s.includes('%')) {
+    // One percent and nothing else ("10%"); "8%-10%" or "10% + bonus" is unclear.
+    const pct = /^(\d+(?:\.\d+)?)\s*%$/.exec(s);
+    return pct && Number(pct[1]) > 0 && Number(pct[1]) <= 100 ? { percent: Number(pct[1]), text: s.slice(0, TEXT_MAX) } : unclear(s);
+  }
   const f = readFigure(s);
-  return f ? { amount: f.amount, currency: f.currency, assumed: f.assumed, text: f.text } : null;
+  if (!f || f.unclear) return f;
+  return { amount: f.amount, currency: f.currency, assumed: f.assumed, text: f.text };
 }
 
 /** The salary of a contract on record, per month, when its currency and its period are written. */
@@ -108,25 +166,42 @@ function comparablesOf({ players, deals }, player) {
   const seen = new Set();
   return [...fromContracts, ...fromDeals]
     .filter((x) => x.f && x.f.currency && x.f.perMonth && !seen.has(x.p.id) && seen.add(x.p.id))
-    .map((x) => ({ player: playerName(x.p), position: x.p.primaryPosition, perMonth: x.f.perMonth, currency: x.f.currency, from: x.from, assumed: x.f.assumed }))
+    .map((x) => ({ player: playerName(x.p), position: x.p.primaryPosition, perMonth: x.f.perMonth, currency: x.f.currency, period: x.f.period, from: x.from, assumed: x.f.assumed }))
     .sort((a, b) => b.perMonth - a.perMonth)
     .slice(0, MAX_COMPARABLES);
 }
 
-/** One line for the figures that were read the app's way (a bare number = euros, a salary = per month). */
-function assumptionsOf(pairs) {
+/** A salary for a season is turned into a monthly one as a year: twelve months. Said whenever it was done. */
+const SEASON_LINE = (what) => `${what}: רשום לעונה, וחילקתי אותו ב-12 כדי לקבל סכום לחודש (הנחתי שעונה היא שנה של 12 חודשים).`;
+
+/** One line for the figures that were read the app's way (a bare number = euros, a salary = per month), and one for a season divided into months. */
+function assumptionsOf(pairs, seasonal = []) {
   const bare = pairs.filter(([, f]) => f && f.assumed && f.assumed.length).map(([what, f]) => `${what} ("${f.text}")`);
-  return bare.length ? [`${bare.join(', ')}: רשום כמספר בלי מטבע, אז קראתי אותו כאירו, ושכר כסכום לחודש, כמו שהמערכת מציגה.`] : [];
+  const seasons = seasonal.filter(([, f]) => f && f.period === 'season').map(([what]) => what);
+  return [
+    ...(bare.length ? [`${bare.join(', ')}: רשום כמספר בלי מטבע, אז קראתי אותו כאירו, ושכר כסכום לחודש, כמו שהמערכת מציגה.`] : []),
+    ...(seasons.length ? [SEASON_LINE(seasons.join(', '))] : []),
+  ];
 }
+
+// The fields a figure is read from, as the owner calls them.
+const FIELD_HE = { salary: 'השכר המבוקש בעסקה', transferFee: 'דמי ההעברה בעסקה', commission: 'העמלה בעסקה', budgetSalary: 'השכר בדרישה של המועדון', budgetFee: 'דמי ההעברה בדרישה של המועדון' };
+const unclearLine = (u) => `${u.label} לא ברור ("${u.text}"), אז לא בניתי עליו מספר`;
 
 function factsFor({ deals = [], players = [], requirements = [], now = new Date() }, deal, player) {
   const today = israelDate(now);
   const p = player || {};
   const terms = p.contractTerms || null;
   const requirement = deal && deal.requirementId ? requirements.find((r) => r.id === deal.requirementId && !r.deletedAt) || null : null;
-  const ask = deal ? { salary: readFigure(deal.salary, { salary: true }), transferFee: readFigure(deal.transferFee), commission: readCommission(deal.commission) } : { salary: null, transferFee: null, commission: null };
-  const budget = requirement ? { salary: readFigure(requirement.salary, { salary: true }), transferFee: readFigure(requirement.transferFee) } : null;
+  const read = deal ? { salary: readFigure(deal.salary, { salary: true }), transferFee: readFigure(deal.transferFee), commission: readCommission(deal.commission) } : {};
+  const readBudget = requirement ? { budgetSalary: readFigure(requirement.salary, { salary: true }), budgetFee: readFigure(requirement.transferFee) } : {};
+  // An unclear figure is treated like a missing one: it names its field and shows the text on record, and no number is built on it.
+  const unclear = Object.entries({ ...read, ...readBudget }).filter(([, f]) => f && f.unclear).map(([field, f]) => ({ field, label: FIELD_HE[field], text: f.text }));
+  const isUnclear = (field) => unclear.some((u) => u.field === field);
+  const ask = deal ? { salary: clear(read.salary), transferFee: clear(read.transferFee), commission: clear(read.commission) } : { salary: null, transferFee: null, commission: null };
+  const budget = requirement ? { salary: clear(readBudget.budgetSalary), transferFee: clear(readBudget.budgetFee) } : null;
   const currentSalary = termsSalary(terms);
+  const comparables = comparablesOf({ players, deals }, p);
   const rows = deal ? paymentRows([deal], now) : [];
   const payments = Object.fromEntries(CURRENCIES.filter((c) => rows.some((r) => r.payment.currency === c)).map((c) => {
     const mine = rows.filter((r) => r.payment.currency === c);
@@ -134,10 +209,11 @@ function factsFor({ deals = [], players = [], requirements = [], now = new Date(
   }));
   const missing = [
     !deal && 'אין עסקה פתוחה על השחקן, אז אין שכר מבוקש ואין מועדון',
-    deal && !ask.salary && 'השכר המבוקש לא רשום בעסקה',
-    deal && !ask.commission && 'העמלה לא רשומה בעסקה',
+    deal && !ask.salary && !isUnclear('salary') && 'השכר המבוקש לא רשום בעסקה',
+    deal && !ask.commission && !isUnclear('commission') && 'העמלה לא רשומה בעסקה',
     deal && !requirement && 'העסקה לא מקושרת לדרישה של המועדון, אז אין תקציב של המועדון',
-    requirement && !budget.salary && 'בדרישה של המועדון לא רשום שכר',
+    requirement && !budget.salary && !isUnclear('budgetSalary') && 'בדרישה של המועדון לא רשום שכר',
+    ...unclear.map(unclearLine),
     !terms && 'תנאי החוזה הנוכחי של השחקן לא שמורים בתיק',
     terms && !currentSalary && 'בתנאי החוזה שבתיק לא רשום שכר',
     currentSalary && !currentSalary.currency && 'המטבע של השכר בחוזה שבתיק לא רשום',
@@ -154,15 +230,16 @@ function factsFor({ deals = [], players = [], requirements = [], now = new Date(
       position: p.primaryPosition || '', contractStatus: p.contractStatus || '', currentClub: p.currentClub || '', loanFrom: p.loanFrom || '',
       contractEnd, daysToContractEnd: contractEnd ? daysBetween(today, contractEnd) : null, reprEnd: p.reprEnd || '',
     },
-    ask, budget,
+    ask, budget, unclear,
     current: terms ? {
       salary: currentSalary, signingFee: termsMoney(terms, 'signingFee'), releaseClause: termsMoney(terms, 'releaseClause'),
       optionDeadline: terms.optionDeadline || '', optionYears: Number(terms.optionYears) || 0, optionHolder: terms.optionHolder || '',
       bonuses: String(terms.bonuses || '').slice(0, TEXT_MAX), keyDates: Array.isArray(terms.keyDates) ? terms.keyDates.filter((k) => k && k.date) : [], source: terms.source || '',
     } : null,
     payments,
-    comparables: comparablesOf({ players, deals }, p),
-    assumptions: assumptionsOf([['השכר בעסקה', ask.salary], ['דמי ההעברה בעסקה', ask.transferFee], ['העמלה בעסקה', ask.commission], ['השכר בדרישה של המועדון', budget && budget.salary]]),
+    comparables,
+    assumptions: assumptionsOf([['השכר בעסקה', ask.salary], ['דמי ההעברה בעסקה', ask.transferFee], ['העמלה בעסקה', ask.commission], ['השכר בדרישה של המועדון', budget && budget.salary]],
+      [['השכר בעסקה', ask.salary], ['השכר בדרישה של המועדון', budget && budget.salary], ['השכר בחוזה שבתיק', currentSalary], ...comparables.map((c) => [`השכר של ${c.player}`, c])]),
     missing,
   };
 }
@@ -240,7 +317,8 @@ function buildScenarios(facts) {
   const top = candidates[0] || null;
   const anchor = make('anchor', 'עוגן פתיחה', top && top.f, top && top.restsOn,
     'אין אצלנו מספר שגבוה מהיעד (שכר שהמועדון רשם בדרישה, או שכר של שחקן דומה שלנו באותו מטבע), אז אין עוגן מהנתונים');
-  const targetScenario = make('target', 'יעד', target, target && `השכר שרשום בעסקה: ${perMo(target)}`, 'השכר המבוקש לא רשום בעסקה');
+  const askUnclear = (facts.unclear || []).find((u) => u.field === 'salary');
+  const targetScenario = make('target', 'יעד', target, target && `השכר שרשום בעסקה: ${perMo(target)}`, askUnclear ? unclearLine(askUnclear) : 'השכר המבוקש לא רשום בעסקה');
   const walkaway = make('walkaway', 'קו עצירה', floor, floor && `השכר של השחקן בחוזה הנוכחי שבתיק: ${perMo(floor)}`,
     facts.player.contractStatus === 'Free' ? 'השחקן חופשי ואין חוזה נוכחי בתיק, אז אין רצפה מהנתונים' : 'השכר בחוזה הנוכחי לא רשום בתיק (עם מטבע ותקופה), אז אין רצפה מהנתונים');
 
@@ -280,24 +358,60 @@ const REASON_SYSTEM = [
   "You are Golda (גולדה), the assistant of Gold A&S, a football players' agency in Israel. The owner is preparing a negotiation.",
   'You get JSON: his question, the facts the CRM holds, three scenarios and the red lines. All of it was computed by code from the CRM.',
   'Write in Hebrew, short and plain, for the owner: one sentence of reasoning for each scenario that has a number (why open there, why aim there, why stop there), and one or two sentences that answer his question.',
-  'Use only numbers that appear in the JSON, written exactly as they are there. Never add a number, a percentage, a date, an estimate, a market value or a name that is not in the JSON. When a scenario has no number, do not give one: its value is null. Never convert a currency. No legal conclusions. No em-dashes.',
+  'Write NO numbers at all: no digits, no number words (אלף, מיליון, שמונה…), no currency, no percent. The system shows every number next to each scenario itself; your words only explain the reasoning ("כי זה מה ששחקן דומה שלנו מקבל"). Never add an estimate, a market value, a date or a name that is not in the JSON. When a scenario has no number, its value is null. No legal conclusions. No em-dashes.',
   'Answer with JSON only: {"anchor": "" | null, "target": "" | null, "walkaway": "" | null, "advice": ""}.',
 ].join('\n');
 
-/** Every number in a text, as plain digits: "€8,000" → "8000", "06" → "6". */
-const numbersIn = (s) => (String(s ?? '').replace(/(\d),(?=\d{3})/g, '$1').match(/\d+/g) || []).map((x) => String(Number(x)));
+// What makes a sentence of the model carry a number, in any form. Every number the owner sees comes from code.
+// Matches "€", "₪", "%" and the like.
+const MONEY_SIGN = /[€$₪£¥%]/;
+// Matches "ש"ח", "ש״ח", "ליש"ט".
+const QUOTED_CURRENCY = /ש["״׳']ח|ליש["״׳']ט/;
+const AMOUNT_WORDS = new Set(['אלף', 'אלפים', 'אלפי', 'מיליון', 'מיליונים', 'מיליוני', 'מיליארד', 'מאה', 'מאות', 'עשרות', 'thousand', 'thousands', 'million', 'millions', 'billion', 'billions']);
+const CURRENCY_WORDS = new Set(['יורו', 'אירו', 'דולר', 'דולרים', 'שקל', 'שקלים', 'שח', 'פאונד', 'euro', 'euros', 'eur', 'dollar', 'dollars', 'usd', 'shekel', 'shekels', 'ils', 'nis', 'pound', 'pounds', 'gbp']);
+const PERCENT_WORDS = new Set(['אחוז', 'אחוזים', 'אחוזי', 'percent', 'percentage']);
+const PERIOD_AFTER = new Set(['לחודש', 'בחודש', 'לשנה', 'בשנה', 'לעונה', 'בעונה']);
+const SPELLED = new Set(['אחד', 'אחת', 'שניים', 'שתיים', 'שני', 'שתי', 'שלוש', 'שלושה', 'שלושת', 'ארבע', 'ארבעה', 'ארבעת', 'חמש', 'חמישה', 'חמשת', 'שש', 'שישה', 'ששת', 'שבע', 'שבעה', 'שבעת', 'שמונה', 'שמונת', 'תשע', 'תשעה', 'תשעת', 'עשר', 'עשרה', 'עשרת',
+  'עשרים', 'שלושים', 'ארבעים', 'חמישים', 'שישים', 'שבעים', 'שמונים', 'תשעים', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'twenty', 'thirty', 'forty', 'fifty', 'hundred']);
+const PREFIXES = 'והבכלמש';
+/** A Hebrew word and the same word without one to three of the one-letter prefixes ("ביורו" → "יורו"). */
+function forms(word) {
+  const out = [word];
+  for (let i = 1; i <= 3 && i < word.length - 1 && PREFIXES.includes(word[i - 1]); i++) out.push(word.slice(i));
+  return out;
+}
+const lettersOf = (s) => (String(s ?? '').toLowerCase().match(/\p{L}+/gu) || []);
 
-/** The model's sentences, kept only when every number in them is a number of the facts. */
-function checkReasoning(text, payload) {
+/** Does this text carry a number: a digit of any script, a currency, a percent, an amount word, or a spelled number before an amount? */
+function carriesNumber(text) {
+  const s = String(text ?? '');
+  if (/\p{N}/u.test(s) || MONEY_SIGN.test(s) || QUOTED_CURRENCY.test(s)) return true;
+  const w = lettersOf(s);
+  const isIn = (set, word) => forms(word).some((f) => set.has(f));
+  for (let i = 0; i < w.length; i++) {
+    if (isIn(AMOUNT_WORDS, w[i]) || isIn(CURRENCY_WORDS, w[i]) || isIn(PERCENT_WORDS, w[i])) return true;
+    if (isIn(SPELLED, w[i]) && w[i + 1] && (isIn(PERIOD_AFTER, w[i + 1]) || PERIOD_AFTER.has(w[i + 1]))) return true;
+  }
+  return false;
+}
+
+const sentencesOf = (s) => s.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter(Boolean);
+
+/**
+ * The model's wording, kept sentence by sentence: a sentence that carries any
+ * number is dropped, whatever the number. null when nothing is left, and the
+ * answer is then the code's own text.
+ */
+function checkReasoning(text) {
   const m = String(text || '').match(/\{[\s\S]*\}/);
   if (!m) return null;
   let j;
   try { j = JSON.parse(m[0]); } catch { return null; }
-  const allowed = new Set(numbersIn(JSON.stringify(payload)));
   const out = {};
   for (const k of ['anchor', 'target', 'walkaway', 'advice']) {
-    const s = typeof j[k] === 'string' ? j[k].replace(/\s*[—–]\s*/g, ', ').replace(/\s+/g, ' ').trim().slice(0, REASON_MAX) : '';
-    if (s && numbersIn(s).every((n) => allowed.has(n))) out[k] = s;
+    const s = typeof j[k] === 'string' ? j[k].replace(/\s*[—–]\s*/g, ', ').replace(/[ \t]+/g, ' ').trim() : '';
+    const kept = sentencesOf(s).filter((x) => !carriesNumber(x)).join(' ').slice(0, REASON_MAX);
+    if (kept) out[k] = kept;
   }
   return Object.keys(out).length ? out : null;
 }
@@ -309,6 +423,7 @@ async function wordReasoning(db, { facts, plan, question, client = null, now = n
   if (!allowed.ok) return { skipped: "the day's background cost ceiling is reached" };
   const payload = { question: String(question || '').slice(0, REASON_MAX), facts, scenarios: plan.scenarios, redLines: plan.redLines, warnings: plan.warnings, missing: plan.missing };
   let spent = null;
+  let usedModel = MODEL;
   try {
     const anthropic = client || new (require('@anthropic-ai/sdk'))();
     const res = await anthropic.beta.messages.stream({
@@ -316,12 +431,13 @@ async function wordReasoning(db, { facts, plan, question, client = null, now = n
       system: REASON_SYSTEM, messages: [{ role: 'user', content: JSON.stringify(payload) }],
     }).finalMessage();
     spent = cost.addUsage(spent, res.usage);
+    usedModel = cost.billedModel(res.model, usedModel);
     const text = (res.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
-    return checkReasoning(text, payload) || { skipped: 'the wording carried a number that is not in the CRM, so it was dropped' };
+    return checkReasoning(text) || { skipped: 'the wording carried numbers, so it was dropped: the numbers are the code\'s' };
   } catch {
     return { skipped: 'the wording could not be written' };
   } finally {
-    if (spent) await cost.record(db, { kind: 'deal', model: MODEL, usage: spent, now });
+    if (spent) await cost.record(db, { kind: 'deal', model: usedModel, usage: spent, now });
   }
 }
 
@@ -333,8 +449,9 @@ const MISSING_HE = {
 const NOT_SAVED = 'זה חישוב בלבד: שום דבר לא נשמר.';
 const monthHe = (m) => `${Number(m.slice(5, 7))}/${m.slice(0, 4)}`;
 
-function commissionText(r) {
+function commissionText(r, input = {}) {
   const lines = [`*מה אם: עמלה של ${r.percent}%*`];
+  if (r.onSalary !== null && input.salaryPeriod === 'season') lines.push(SEASON_LINE('השכר'));
   if (r.onSalary !== null) lines.push(`שכר לאורך ${r.months} חודשים: ${money(r.salaryTotal, r.currency)}`, `עמלה על השכר: ${money(r.onSalary, r.currency)} (${money(r.perYear, r.currency)} לשנה)`);
   if (r.onFee !== null) lines.push(`עמלה על ${money(r.fee, r.currency)}: ${money(r.onFee, r.currency)}`);
   if (r.onSalary !== null && r.onFee !== null) lines.push(`ביחד: ${money(r.total, r.currency)}`);
@@ -420,7 +537,7 @@ function dealTools({ db, identity = {}, role, client = null }) {
         comparables: facts.comparables, paymentsOnDeal: facts.payments,
         ...(reasoning && !reasoning.skipped ? { reasoning } : {}),
         ...(reasoning && reasoning.skipped ? { reasoningSkipped: reasoning.skipped } : {}),
-        regulation: { flags: regs.flags.filter((f) => f.area !== 'agents').map((f) => f.line), notVerified: regs.notVerified.map((n) => n.topic), more: 'regulation_check with this dealId has the agent rules too.' },
+        regulation: { flags: regs.flags.filter((f) => f.area !== 'agents').map((f) => f.line), notVerified: regs.notVerified.map((n) => n.topic), missing: regs.missing.map((m) => m.he), more: 'regulation_check with this dealId has the agent rules too.' },
         rule: 'Answer with `text` as it is (you may shorten, never change a number). Every number comes from the CRM: never add, round, convert or estimate one, and never fill what `missing` lists: say it is missing and ask; once the writer gives it, save it on the deal or in the contract terms and call again. `reasoning`, when present, is wording only. A scenario with salaryPerMonth null has no number: say which fact is missing. A counter-offer to the club is a draft the writer sends himself: outreach_prepare, then outreach_link. You never send it.',
       };
     },
@@ -429,7 +546,7 @@ function dealTools({ db, identity = {}, role, client = null }) {
       need();
       if (input.kind === 'commission') {
         const r = commissionWhatIf(input);
-        return r.ok ? { saved: false, kind: 'commission', result: r, text: commissionText(r), rule: 'A calculation only: say that nothing was saved. Never add a number that is not in the result.' } : missingOut(r.missing);
+        return r.ok ? { saved: false, kind: 'commission', result: r, text: commissionText(r, input), rule: 'A calculation only: say that nothing was saved. Never add a number that is not in the result.' } : missingOut(r.missing);
       }
       if (input.kind !== 'schedule') throw new Error('kind is commission or schedule');
       let schedule = Array.isArray(input.payments) ? input.payments : null;
@@ -456,4 +573,4 @@ function dealSection(role) {
 - Money what-ifs (admins only): "כמה נרוויח אם…" / "מה אם העמלה 8%…" / "מה יקרה לתזרים אם ישלמו ב-3 תשלומים…" → finance_whatif (kind commission or schedule) with the numbers exactly as he said them, or as a record you read has them. A number he did not give is asked for in one short question, never assumed. Nothing is saved by a what-if: say so in one line. Amounts in different currencies are separate lines, never added and never converted. To make it real he asks for it (payment_set add).`;
 }
 
-module.exports = { dealFacts, playerFacts, buildScenarios, scenariosText, readFigure, readCommission, checkReasoning, wordReasoning, dealTools, dealSection, DEAL_TOOL_DEFS };
+module.exports = { dealFacts, playerFacts, buildScenarios, scenariosText, readFigure, readCommission, checkReasoning, carriesNumber, wordReasoning, dealTools, dealSection, DEAL_TOOL_DEFS };

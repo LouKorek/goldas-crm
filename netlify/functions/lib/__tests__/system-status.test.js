@@ -124,3 +124,17 @@ test('a cost ledger that cannot be read comes out empty and leaves the rest', as
   assert.equal(s.mail.state, 'ok');
   assert.deepEqual(s.notifications, { devices: 1 });
 });
+
+test("Golda's own number: done or not and Meta's two words, never the number or a name", async () => {
+  const full = seed();
+  full.app_meta.metaConnect = { token: 'refresh-token-value', onboard: { done: false, checkedAt: NOW - 900000, phoneId: 'p_secret_id', waba: 'p_secret_id',
+    account: { review: 'APPROVED', businessVerification: 'pending' }, phone: { number: '+972 55-000-0000', name: 'Dana Levi' }, notifyError: 'Permission denied for dana' } };
+  const s = await readStatus(fakeDb(full), NOW);
+  assert.deepEqual(s.whatsapp, { ownNumber: false, ownNumberAt: null, checkedAt: new Date(NOW - 900000).toISOString(), businessVerification: 'pending', accountReview: 'approved' });
+  const text = JSON.stringify(s);
+  for (const p of [...PRIVATE, '972', '55-000']) assert.ok(!text.includes(p), `${p} must not come out`);
+
+  full.app_meta.metaConnect.onboard = { done: true, doneAt: NOW - 3600000, checkedAt: NOW, account: { review: 'weird free text', businessVerification: 'verified' } };
+  assert.deepEqual((await readStatus(fakeDb(full), NOW)).whatsapp, { ownNumber: true, ownNumberAt: new Date(NOW - 3600000).toISOString(), checkedAt: new Date(NOW).toISOString(), businessVerification: 'verified', accountReview: 'unknown' });
+  assert.equal((await readStatus(fakeDb({}), NOW)).whatsapp, null, 'never checked: no section');
+});

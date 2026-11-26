@@ -83,7 +83,7 @@ test('agent rules: the suspended ones say so, each with its article, and the sta
   for (const id of ['agent_licence', 'agent_fee_cap_suspended', 'agent_client_pays_suspended', 'agent_clearing_house_suspended', 'agent_dual_representation_suspended', 'agent_rules_cjeu_2026']) assert.ok(got.includes(id), id);
   const cap = out.flags.find((x) => x.id === 'agent_fee_cap_suspended');
   assert.equal(cap.source.article, 'art. 15 pars 1-4');
-  assert.match(cap.he, /מושעה/);
+  assert.match(cap.he, /הודיעה ב-8\.9\.2023 על השעיית הכלל/);
   assert.equal(out.flags.find((x) => x.id === 'agent_dual_representation_suspended').source.article, 'art. 12 pars 8-10');
 });
 
@@ -157,4 +157,61 @@ test('regulation_check: reads the player, his one open deal and the club, and te
   await assert.rejects(() => tools.regulation_check({ dealId: 'nope' }), /deal not found/);
   const general = await tools.regulation_check({ topic: 'minors' });
   assert.ok(general.flags.some((x) => x.id === 'minor_international_transfer'));
+});
+
+test('every row reads as a pointer, never a legal conclusion', () => {
+  const he = (id) => { const r = RULES.find((x) => x.id === id); return typeof r.he === 'function' ? r.he({ today: TODAY }) : r.he; };
+  const minorRow = he('minor_international_transfer');
+  assert.match(minorRow, /עוסק בהעברות בינלאומיות של שחקנים מתחת לגיל 18 ומגביל אותן/);
+  assert.match(minorRow, /החריגים מפורטים בסעיף עצמו/);
+  assert.doesNotMatch(minorRow, /מותרת רק|ששת|שישה חריגים|אוסר/);
+  assert.match(he('agent_licence'), /עוסק בדרישה לרישיון סוכן/);
+  assert.doesNotMatch(he('agent_licence'), /חובה/);
+  for (const id of ['agent_fee_cap_suspended', 'agent_client_pays_suspended', 'agent_clearing_house_suspended', 'agent_dual_representation_suspended']) {
+    const t = he(id);
+    assert.match(t, /פיפ"א הודיעה ב-8\.9\.2023 על השעיית הכלל/, id);
+    assert.ok(RULES.find((x) => x.id === id).source.readIn.includes('8.9.2023'), `${id}: the date is the notice's own`);
+    assert.match(t, /נכון ל-25\.11\.2026, היום שבו נקרא, לא מצאתי הודעה רשמית שההשעיה הסתיימה/, id);
+    assert.match(t, /פסק הדין של בית הדין של האיחוד האירופי מיולי 2026 זה עשוי להשתנות/, id);
+    assert.doesNotMatch(t, /מושעה בכל העולם|האיסור/, id);
+  }
+  assert.match(he('agent_fee_cap_suspended'), /לא אישור שהעמלה הרשומה בעסקה תקינה/);
+  assert.doesNotMatch(he('agent_rules_cjeu_2026'), /ניתנים להצדקה/);
+  // Nothing in the table states a conclusion.
+  for (const r of RULES.filter((x) => x.he)) assert.doesNotMatch(he(r.id), /חובה|אסור|מותר|חוקי/, r.id);
+  // Statuses are as they were: no row was verified by rewording it.
+  assert.deepEqual(RULES.filter((r) => r.status === 'verified').map((r) => r.id),
+    ['agent_licence', 'agent_fee_cap_suspended', 'agent_client_pays_suspended', 'agent_clearing_house_suspended', 'agent_dual_representation_suspended', 'agent_rules_cjeu_2026', 'minor_international_transfer', 'rstp_new_2027']);
+  // The league window says its dates are not official, on the flag itself.
+  const w = regulationFlags({ player: adult(), deal: deal({ playerId: 'p2' }), club: { country: 'Germany' }, today: TODAY }).flags.find((x) => x.id === 'window_league');
+  assert.match(w.he, /המועדים האלה לא ממקור רשמי/);
+  assert.ok(w.line.endsWith(DISCLAIMER));
+});
+
+test('the age that decides is the age on the deal\'s registration date, and without one the flag says so', () => {
+  // Seventeen today, eighteen on the registration date: not a minor for this move.
+  const turning = minor({ dob: '2008-12-20' });
+  const later = regulationFlags({ player: turning, deal: deal({ registrationDate: '2027-01-05' }), club: { country: 'Germany' }, today: TODAY });
+  assert.ok(!ids(later.flags).includes('minor_international_transfer'));
+  // Sixteen on the date: flagged, and the date is named.
+  const young = regulationFlags({ player: minor(), deal: deal({ registrationDate: '2027-01-05' }), club: { country: 'Germany' }, today: TODAY });
+  assert.match(young.flags.find((x) => x.id === 'minor_international_transfer').why, /השחקן יהיה בן 16 ב-5\.1\.2027, מועד הרישום הצפוי בעסקה/);
+  // No date on the deal: the age today, and the flag says the registration date decides.
+  const today = regulationFlags({ player: turning, deal: deal(), club: { country: 'Germany' }, today: TODAY });
+  assert.match(today.flags.find((x) => x.id === 'minor_international_transfer').why, /בן 17 היום; הגיל שקובע הוא הגיל במועד הרישום, שלא רשום בעסקה/);
+});
+
+test('no date of birth: minority could not be checked, and that is said', () => {
+  const out = regulationFlags({ player: minor({ dob: '' }), deal: deal(), club: { country: 'Germany' }, today: TODAY });
+  assert.deepEqual(out.missing.map((m) => m.id), ['minor_age_unknown']);
+  assert.match(out.missing[0].he, /תאריך הלידה של השחקן לא רשום, אז לא בדקתי אם הוא מתחת לגיל 18/);
+  assert.deepEqual(regulationFlags({ player: minor(), deal: deal(), today: TODAY }).missing, []);
+  assert.deepEqual(regulationFlags({ topic: 'minors', today: TODAY }).missing, [], 'a general question has no player to check');
+});
+
+test('regulation_check passes on what could not be checked', async () => {
+  const db = fakeDb({ players: { p1: minor({ dob: '' }) }, deals: { d1: deal() } });
+  const out = await regulationTools({ db, role: 'manager' }).regulation_check({ playerId: 'p1' });
+  assert.equal(out.missing.length, 1);
+  assert.match(out.missing[0], /לא בדקתי/);
 });

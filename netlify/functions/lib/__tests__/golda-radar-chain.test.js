@@ -109,7 +109,7 @@ test('at night, before his briefing, or with the owner off WhatsApp, neither goe
   assert.equal(DB.read('app_meta', 'goldaColdContacts'), undefined);
 });
 
-test('a failure of either is noted by its kind and costs the hour nothing else', async () => {
+test('a failure of either is noted by its kind, ends her own turn for that hour, and costs the hour nothing else', async () => {
   DB = seed({ extra: COLD });
   const real = radar.offerRadar;
   radar.offerRadar = async () => { throw Object.assign(new Error('could not read the card about Benny Levi'), { code: 'unavailable' }); };
@@ -117,7 +117,8 @@ test('a failure of either is noted by its kind and costs the hour nothing else',
     const h = await hour('09:30');
     assert.ok(h.notes.includes('radar card failed (unavailable)'));
     assert.ok(!h.notes.some((n) => /Benny Levi/.test(n) && /failed/.test(n)), 'the error text is not copied into the notes');
-    assert.deepEqual(h.hers.map((m) => m.kind), ['cold'], 'the nudge still goes');
+    // The card may have gone out before it threw, so nothing else of hers goes in that hour: one thing an hour at most.
+    assert.deepEqual(h.hers.map((m) => m.kind), [], 'no nudge after a card that failed');
     assert.ok(DB.read('app_meta', 'goldaSent').eventsAt, 'the hour\'s state is saved as always');
   } finally { radar.offerRadar = real; }
 });

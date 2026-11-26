@@ -284,3 +284,30 @@ test('a chat answer and a briefing are recorded under their own kinds, and neith
   assert.deepEqual(day.byKind, { chat: { usd: 0.02, calls: 1 }, briefing: { usd: 0.04, calls: 1 } });
   assert.deepEqual([day.totalUsd, day.backgroundUsd, day.calls], [0.06, 0, 2]);
 });
+
+test('the model a call is priced as: the one that answered when the table knows it, the dearest one when it does not, never 0', () => {
+  assert.equal(cost.billedModel('claude-opus-5', OPUS), 'claude-opus-5', 'a fallback that answered is priced as itself');
+  assert.equal(cost.billedModel('claude-opus-5-5-20261101', 'claude-opus-5'), 'claude-opus-5-5', 'a dated id is priced as its undated name');
+  assert.equal(cost.billedModel('', OPUS), OPUS);
+  assert.equal(cost.billedModel(undefined, OPUS), OPUS);
+  const dear = cost.billedModel('claude-unknown-9', OPUS);
+  assert.ok(cost.PRICES[dear]);
+  for (const p of Object.values(cost.PRICES)) assert.ok(cost.PRICES[dear].output >= p.output);
+  assert.ok(cost.priceOf({ model: dear, usage: { output_tokens: M } }).usd > 0);
+});
+
+test('a call that threw is recorded as an estimate on the high side, and counted as one', async () => {
+  const req = { max_tokens: 10000, system: 'x'.repeat(1000), messages: [{ role: 'user', content: 'y'.repeat(1000) }], tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }] };
+  const u = cost.estimateUsage(req);
+  assert.equal(u.output_tokens, 5000);
+  assert.equal(u.server_tool_use.web_search_requests, 6);
+  assert.ok(u.input_tokens >= 1000, 'at least one token per two characters of the request');
+  assert.equal(cost.estimateUsage({ max_tokens: 100, messages: [] }).server_tool_use.web_search_requests, 0);
+  db = fakeDb();
+  const r = await cost.record(db, { kind: 'radar', model: OPUS, usage: u, now: NOW, estimate: true });
+  assert.ok(r.usd > 0.1);
+  const day = db.read('golda_cost', DAY);
+  assert.deepEqual([day.calls, day.estimatedCalls], [1, 1]);
+  await cost.record(db, { kind: 'radar', model: OPUS, usage: { output_tokens: 10 }, now: NOW });
+  assert.deepEqual([db.read('golda_cost', DAY).calls, db.read('golda_cost', DAY).estimatedCalls], [2, 1]);
+});

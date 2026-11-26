@@ -1,7 +1,7 @@
 // What the system says about its own health, for a check from outside the
 // CRM (system-status.js): did the scheduled jobs run, is the mailbox being
 // read, is there a good backup, how many phones take notifications, what
-// Golda's thinking cost today.
+// Golda's thinking cost today, is Golda on her own WhatsApp number yet.
 //
 // The page is open to anyone who has the address, so it holds states, times
 // and counts only. Every value is either a number, a time, a yes/no or one
@@ -17,6 +17,9 @@ const MAIL_STATES = new Set(['ok', 'no_addresses', 'needs_api', 'error']);
 const API_STATES = new Set(['on', 'off', 'switched_on']);
 const SEARCH_STATES = new Set(['never', 'running', 'done']);
 const BACKUP_STATES = new Set(['ok', 'partial', 'error', 'running']);
+// What Meta answers about the WhatsApp account (lib/meta-onboard.js), in lower case.
+const VERIFICATION_STATES = new Set(['verified', 'not_verified', 'pending', 'pending_need_more_info', 'pending_submission', 'rejected', 'failed', 'expired', 'revoked', 'ineligible']);
+const REVIEW_STATES = new Set(['approved', 'pending', 'rejected']);
 
 const word = (v, allowed) => (allowed.has(v) ? v : v == null ? null : 'unknown');
 const count = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.floor(Number(v)) : null);
@@ -65,15 +68,26 @@ function costOf(c) {
   return { todayUsd: money(c.todayUsd), capUsd: money(c.capUsd), capped: c.capped === true };
 }
 
-/** The whole status. Reads five small things and never throws for one of them. */
+/** Golda's move to her own WhatsApp number (lib/meta-onboard.js): done or not, and Meta's two words about the account. Never the number. */
+function whatsappOf(o) {
+  const low = (v) => (typeof v === 'string' ? v.toLowerCase() : v);
+  const account = o.account || {};
+  return {
+    ownNumber: o.done === true, ownNumberAt: when(o.doneAt), checkedAt: when(o.checkedAt),
+    businessVerification: word(low(account.businessVerification), VERIFICATION_STATES), accountReview: word(low(account.review), REVIEW_STATES),
+  };
+}
+
+/** The whole status. Reads six small things and never throws for one of them. */
 async function readStatus(db, now = Date.now()) {
   const safe = async (read, fallback) => { try { return await read(); } catch { return fallback; } };
-  const [jobs, mail, backups, phones, cost] = await Promise.all([
+  const [jobs, mail, backups, phones, cost, onboard] = await Promise.all([
     safe(() => db.collection('app_meta').doc('jobStatus').get().then(data), null),
     safe(() => db.collection('app_meta').doc('gmail').get().then(data), null),
     safe(() => db.collection('backups').orderBy('startedAt', 'desc').limit(8).get().then((s) => s.docs.map((d) => d.data() || {})), null),
     safe(() => db.collection('push_subscriptions').limit(200).get().then((s) => s.docs.length), null),
     safe(() => statusOf(db, now), null),
+    safe(() => db.collection('app_meta').doc('metaConnect').get().then((snap) => data(snap).onboard || null), null),
   ]);
   return {
     at: new Date(now).toISOString(),
@@ -82,7 +96,8 @@ async function readStatus(db, now = Date.now()) {
     backup: backups ? backupOf(backups) : null,
     notifications: { devices: phones },
     cost: cost ? costOf(cost) : null,
+    whatsapp: onboard ? whatsappOf(onboard) : null,
   };
 }
 
-module.exports = { readStatus, jobsOf, mailOf, backupOf, when };
+module.exports = { readStatus, jobsOf, mailOf, backupOf, whatsappOf, when };

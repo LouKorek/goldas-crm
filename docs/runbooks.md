@@ -516,6 +516,7 @@ One small page that says how the system is doing, readable without signing in, s
 - `backup`: the latest backup and the latest good one (read back, copied outside the database, how many documents).
 - `notifications`: how many devices take notifications.
 - `cost`: what Golda's model calls cost today in US dollars (`todayUsd`), the day's ceiling for the work she does on her own (`capUsd`), and whether that ceiling is reached (`capped`).
+- `whatsapp`: whether Golda is on her own number yet (`ownNumber`, `ownNumberAt`), when the server last asked Meta (`checkedAt`), and Meta's two words about the account (`businessVerification`, `accountReview`). Never the number itself.
 
 It is open, so it holds states, times and counts only: no names, addresses, ids, file names or error texts. Every word in it comes from a fixed list in `lib/system-status.js`; anything else comes out as `unknown`, and `system-status.test.js` proves nothing private gets through. To add a fact, add it there as a number, a time, a yes/no or a word from a list, never as free text. The reason behind an `error` is in System › Health, for a signed-in admin. Netlify's edge keeps an answer for a minute.
 

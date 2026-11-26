@@ -142,13 +142,45 @@ async function readDay(db, now = Date.now()) {
 }
 
 /**
- * record(db, { kind, model, usage, searches, now }) → { usd, totalUsd }
+ * billedModel(reported, asked) → the model id a call is priced as.
+ * The model the answer says it came from (a fallback may have answered), when
+ * the table prices it (a dated id is priced as its undated name); an id the
+ * table does not know is priced as the dearest
+ * model in the table, never at 0; no id at all → the model that was asked for.
+ */
+function billedModel(reported, asked) {
+  const r = String(reported || '');
+  if (!r) return asked;
+  if (PRICES[r]) return r;
+  const undated = r.replace(/-\d{8}$/, '');           // 'claude-opus-5-5-20261101' is 'claude-opus-5-5'
+  if (PRICES[undated]) return undated;
+  return Object.keys(PRICES).reduce((a, b) => (PRICES[b].output > PRICES[a].output || (PRICES[b].output === PRICES[a].output && PRICES[b].input > PRICES[a].input) ? b : a));
+}
+
+/**
+ * estimateUsage(request) → usage in the SDK's field names, for a call that
+ * threw or was stopped before its answer said what it used. On the high side:
+ * one input token per two characters of the request, half of max_tokens as
+ * output, and every web search the request allowed.
+ */
+function estimateUsage(req = {}) {
+  const r = req || {};
+  const text = JSON.stringify({ system: r.system || '', messages: r.messages || [], tools: r.tools || [] });
+  const searches = (Array.isArray(r.tools) ? r.tools : []).reduce((n, t) => n + (t && /web_search/.test(String(t.type || '')) ? num(t.max_uses) : 0), 0);
+  return { input_tokens: Math.ceil(text.length / 2), output_tokens: Math.ceil(num(r.max_tokens) / 2), server_tool_use: { web_search_requests: searches } };
+}
+
+/**
+ * record(db, { kind, model, usage, searches, now, estimate }) → { usd, totalUsd }
  * Adds one answer's cost to the day's ledger, in a transaction. Never throws:
  * when the ledger cannot be written, totalUsd is null and the caller goes on.
+ * estimate: true marks a cost that was estimated (estimateUsage), not reported:
+ * it is counted in estimatedCalls.
  */
-async function record(db, { kind = 'other', model, usage, searches, now = Date.now() } = {}) {
+async function record(db, { kind = 'other', model, usage, searches, now = Date.now(), estimate = false } = {}) {
   const k = KINDS.includes(kind) ? kind : 'other';
-  const { usd, estimated } = priceOf({ model, usage, searches });
+  const priced = priceOf({ model, usage, searches });
+  const usd = priced.usd, estimated = priced.estimated || Boolean(estimate);
   if (!db) return { usd, totalUsd: null };
   try {
     const date = dayOf(now);
@@ -269,6 +301,6 @@ async function statusOf(db, now = Date.now()) {
 }
 
 module.exports = {
-  priceOf, record, gate, capNotice, capNoticeUnsent, meter, setCap, statusOf, readCap, readDay, validCap, isBackground, tokensOf, addUsage, lastDays,
+  priceOf, record, billedModel, estimateUsage, gate, capNotice, capNoticeUnsent, meter, setCap, statusOf, readCap, readDay, validCap, isBackground, tokensOf, addUsage, lastDays,
   PRICES, PRICES_AS_OF, WEB_SEARCH_USD, KINDS, DEFAULT_CAP_USD, CAP_MIN, CAP_MAX, LEDGER,
 };

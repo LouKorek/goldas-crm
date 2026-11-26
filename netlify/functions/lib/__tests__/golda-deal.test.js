@@ -25,13 +25,58 @@ test('a figure typed as text: the number, its currency and period when written, 
   assert.deepEqual(readFigure('8000', { salary: true }), { amount: 8000, currency: 'EUR', assumed: ['currency', 'period'], text: '8000', period: 'month', perMonth: 8000 });
   assert.deepEqual(readFigure('₪240,000 לשנה', { salary: true }), { amount: 240000, currency: 'ILS', assumed: [], text: '₪240,000 לשנה', period: 'year', perMonth: 20000 });
   assert.equal(readFigure('120k דולר לעונה', { salary: true }).perMonth, 10000);
-  assert.equal(readFigure('8000 month', { salary: true }).amount, 8000, 'the m of "month" is not a million');
+  assert.equal(readFigure('8000 per month', { salary: true }).amount, 8000, 'the m of "month" is not a million');
   assert.equal(readFigure('8000eur').amount, 8000);
   assert.equal(readFigure('Not specified'), null);
   assert.equal(readFigure(''), null);
   assert.deepEqual(readCommission('10%'), { percent: 10, text: '10%' });
   assert.equal(readCommission('€5,000').amount, 5000);
   assert.equal(readCommission(''), null);
+});
+
+test('a figure is read only when it is one clear number: a range, an ordinal or words left over are unclear', () => {
+  // "." or "," before exactly three digits is a thousands separator.
+  assert.deepEqual(readFigure('€8.000 לחודש', { salary: true }), { amount: 8000, currency: 'EUR', assumed: [], text: '€8.000 לחודש', period: 'month', perMonth: 8000 });
+  assert.equal(readFigure('1.250.000').amount, 1250000);
+  assert.equal(readFigure('8.5k').amount, 8500, 'a decimal point before one or two digits is a decimal');
+  // A range is not a number.
+  for (const t of ['8000-10000', '8000 – 10000', '8000 עד 10000', '8k to 10k']) assert.deepEqual(readFigure(t, { salary: true }), { unclear: true, text: t }, t);
+  // A period only from an explicit phrase; "בשנה הראשונה" is an ordinal.
+  assert.deepEqual(readFigure('8000 בשנה הראשונה', { salary: true }), { unclear: true, text: '8000 בשנה הראשונה' });
+  assert.equal(readFigure('8000 שנתי', { salary: true }).period, 'year');
+  assert.equal(readFigure('8000 חודשי', { salary: true }).period, 'month');
+  assert.deepEqual(readFigure('8000 month', { salary: true }), { unclear: true, text: '8000 month' }, 'a bare "month" is not a phrase');
+  // Anything left over beyond the number, the currency and the period.
+  for (const t of ['8000 + בונוסים', 'בערך 8000', '8000 נטו', '8,5', '٩٠٠٠ ₪', '8000 € $', 'שמונת אלפים יורו']) assert.equal(readFigure(t, { salary: true }).unclear, true, t);
+  assert.equal(readFigure('Not specified'), null, 'what the app writes for no number is missing, not unclear');
+  assert.deepEqual(readCommission('8%-10%'), { unclear: true, text: '8%-10%' });
+});
+
+test('an unclear figure is treated like a missing one: its field and its text are named, and no number is built on it', () => {
+  for (const salary of ['8000-10000', '€8.000 לחודש בשנה הראשונה', '٩٠٠٠ ₪']) {
+    const f = dealFacts(data({ deals: [deal({ salary })] }), 'd1');
+    assert.equal(f.ask.salary, null, salary);
+    const plan = buildScenarios(f);
+    const target = byKey(plan, 'target');
+    assert.equal(target.salaryPerMonth, null, salary);
+    assert.equal(target.missing, `השכר המבוקש בעסקה לא ברור ("${salary}"), אז לא בניתי עליו מספר`);
+    assert.ok(plan.missing.includes(target.missing));
+    assert.ok(!plan.missing.includes('השכר המבוקש לא רשום בעסקה'), 'it is on record: unclear, not absent');
+    // No commission is computed on the unclear salary either.
+    assert.ok(plan.scenarios.every((s) => s.salaryPerMonth === null || s.key !== 'target'));
+    assert.match(scenariosText(f, plan), /\*יעד:\* אין מספר\. השכר המבוקש בעסקה לא ברור/);
+  }
+  const range = dealFacts(data({ requirements: [requirement({ salary: '9000-12000' })] }), 'd1');
+  assert.equal(range.budget.salary, null);
+  assert.ok(range.missing.includes('השכר בדרישה של המועדון לא ברור ("9000-12000"), אז לא בניתי עליו מספר'));
+});
+
+test('a salary for a season divided into months says so in the assumptions', () => {
+  const f = dealFacts(data({ deals: [deal({ salary: '96000 לעונה' })] }), 'd1');
+  assert.equal(f.ask.salary.perMonth, 8000);
+  assert.ok(f.assumptions.some((a) => a.startsWith('השכר בעסקה: רשום לעונה') && a.includes('12')), 'the twelve months are an assumption, and it is shown');
+  const yearly = dealFacts(data({ deals: [deal({ salary: '96000 לשנה' })] }), 'd1');
+  assert.ok(!yearly.assumptions.some((a) => a.includes('לעונה')));
 });
 
 test('dealFacts: what the CRM holds about the deal, and nothing else', () => {
@@ -132,13 +177,16 @@ test('a player with no deal: his contract and red lines, and the scenarios say w
   assert.match(scenariosText(f, plan), /אין עסקה פתוחה/);
 });
 
-test('the model\'s wording is kept only when every number in it is a number of the facts', () => {
-  const payload = { question: 'מה אם יציעו 7000?', scenarios: [{ display: '€8,000 לחודש' }], date: '2027-01-31' };
-  const ok = checkReasoning('{"anchor":"לפתוח ב-8,000 ולרדת עד 7000.","target":"עד 31.1.2027 יש זמן.","advice":"להישאר על 8000"}', payload);
+test('the model\'s wording may carry no number at all: a sentence with one is dropped', () => {
+  const ok = checkReasoning('{"anchor":"לפתוח גבוה כי שחקנית דומה שלנו מקבלת יותר.","target":"זה מה שרשום בעסקה.","advice":"להתחיל גבוה ולרדת לאט."}');
   assert.deepEqual(Object.keys(ok), ['anchor', 'target', 'advice']);
-  const bad = checkReasoning('{"anchor":"שווי השוק שלה 450,000.","target":"8,000 זה 15% מעל הממוצע.","advice":"טוב — מאוד"}', payload);
-  assert.deepEqual(bad, { advice: 'טוב, מאוד' }, 'a sentence with a number that is not ours is dropped; an em-dash is taken out');
-  assert.equal(checkReasoning('not json', payload), null);
+  // Numbers in any form: digits, digits of another script, number words, currencies and percents.
+  for (const s of ['לפתוח ב-12k דולר.', 'שמונת אלפים יורו זה הוגן.', '٩٠٠٠ ₪ זה הרף.', 'לפתוח ב-8,000.', 'עשרה אחוז מעל הממוצע.', 'שווי השוק שלה חצי מיליון.', 'זה שלושה לחודש יותר.', 'רק כמה שקלים יותר.', 'טוב, ש"ח זה המטבע.']) {
+    assert.equal(checkReasoning(JSON.stringify({ anchor: s })), null, s);
+  }
+  // Sentence by sentence: the clean one stays.
+  assert.deepEqual(checkReasoning('{"anchor":"לפתוח גבוה. לפתוח ב-12k דולר.","advice":"טוב — מאוד"}'), { anchor: 'לפתוח גבוה.', advice: 'טוב, מאוד' }, 'an em-dash is taken out');
+  assert.equal(checkReasoning('not json'), null);
 });
 
 const seed = (over = {}) => fakeDb({ players: { p1: dana(), p2: other, p3: dollars }, deals: { d1: deal() }, club_requirements: { r1: requirement() }, clubs: { c1: { name: 'FC Köln', country: 'Germany' } }, ...over });
@@ -191,7 +239,9 @@ test('with a question: one model call at the deal effort, counted in the ledger,
   assert.equal(calls.length, 1);
   assert.equal(calls[0].model, 'claude-opus-5-5');
   assert.deepEqual(calls[0].output_config, { effort: 'high' });
-  assert.deepEqual(Object.keys(out.reasoning), ['anchor', 'target', 'advice'], 'the sentence with an invented market value is gone');
+  assert.deepEqual(out.reasoning, { advice: 'להתחיל גבוה.' }, 'every sentence with a number is gone, the ones with our own numbers too');
+  // The instruction says the same: no numbers at all, the system shows them.
+  assert.match(calls[0].system, /Write NO numbers at all/);
   const day = db.all('golda_cost')[0];
   assert.equal(day.byKind.deal.calls, 1);
   // The numbers of the answer are still the code's.
@@ -261,4 +311,17 @@ test('the tool list: both tools exist and neither has a way to send or to save',
     const props = Object.keys(t.input_schema.properties);
     for (const banned of ['to', 'phone', 'send', 'email', 'save', 'confirmed']) assert.ok(!props.includes(banned), `${t.name}.${banned}`);
   }
+});
+
+test('the ledger is told the model that answered, by the name the price table knows', async () => {
+  const cost = require('../golda-cost.js');
+  const real = cost.record;
+  const seen = [];
+  cost.record = async (db, row) => { seen.push(row.model); return real(db, row); };
+  try {
+    const reported = { beta: { messages: { stream: () => ({ finalMessage: async () => ({ model: 'claude-opus-5-20260801', content: [{ type: 'text', text: '{"advice":"להתחיל גבוה."}' }], usage: { input_tokens: 10, output_tokens: 5 } }) }) } } };
+    await dealTools({ db: seed(), identity: {}, role: 'admin', client: reported }).deal_scenarios({ dealId: 'd1', question: 'מה דעתך?' });
+    await dealTools({ db: seed(), identity: {}, role: 'admin', client: fakeClient('{"advice":"טוב."}') }).deal_scenarios({ dealId: 'd1', question: 'מה דעתך?' });
+  } finally { cost.record = real; }
+  assert.deepEqual(seen, ['claude-opus-5', 'claude-opus-5-5']);
 });

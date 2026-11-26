@@ -41,7 +41,9 @@ const SUSPENSION = {
   readIn: 'FIFA, "Information on the preliminary injunction granted by the Landgericht Dortmund in the procedure 8 O 1/23 (Kart)", 8.9.2023',
   url: 'https://www.inside.fifa.com/news/information-on-the-preliminary-injunction-granted-by-the-landgericht',
 };
-const SUSPENDED_TAIL = 'מושעה בכל העולם עד להודעה חדשה, לפי הודעת פיפ"א. פיפ"א המליצה להתאחדויות החברות להשעות גם את הכללים המקבילים שלהן; מה שקבעה ההתאחדות המקומית לא נבדק כאן.';
+const SUSPENSION_NOTICE_ON = '8.9.2023';
+// A pointer, never a conclusion: who announced what and when, what was not found by the day it was read, and what may change it.
+const SUSPENDED_TAIL = `פיפ"א הודיעה ב-${SUSPENSION_NOTICE_ON} על השעיית הכלל הזה. נכון ל-${Number(READ_ON.slice(8, 10))}.${Number(READ_ON.slice(5, 7))}.${READ_ON.slice(0, 4)}, היום שבו נקרא, לא מצאתי הודעה רשמית שההשעיה הסתיימה, ואחרי פסק הדין של בית הדין של האיחוד האירופי מיולי 2026 זה עשוי להשתנות. מה שקבעה ההתאחדות המקומית לא נבדק כאן.`;
 // Where an unverified topic is to be checked. Only addresses that were found
 // while reading are written here; where the document's own address was not
 // found, the regulator's site is given and the document is named.
@@ -51,42 +53,54 @@ const IFA_SITE = 'https://www.football.org.il';
 const IFA_AGENTS_PDF = 'https://www.football.org.il/files/agent/%D7%AA%D7%A7%D7%A0%D7%95%D7%9F%20%D7%A1%D7%95%D7%9B%D7%A0%D7%99%20%D7%9B%D7%93%D7%95%D7%A8%D7%92%D7%9C.pdf';
 const IFA_REGISTRATION_PDF = 'https://www.football.org.il/files/Rules/Registration.pdf';
 
+// The deal's expected registration or start date, when one is on record: the age that decides is the age on that day.
+const DEAL_DATE_FIELDS = ['registrationDate', 'expectedRegistration', 'expectedStart', 'startDate', 'contractStart'];
+const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
+const dmyOf = (d) => `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}.${d.slice(0, 4)}`;
+/** Why a minors' row touches this case: the age, and on which day it was taken. */
+function ageWhy(c) {
+  if (c.ageOnDate) return `השחקן יהיה בן ${c.age} ב-${dmyOf(c.ageOnDate)}, מועד הרישום הצפוי בעסקה`;
+  if (c.openDeal) return `השחקן בן ${c.age} היום; הגיל שקובע הוא הגיל במועד הרישום, שלא רשום בעסקה`;
+  return `השחקן בן ${c.age}`;
+}
+const MINOR_UNKNOWN = { id: 'minor_age_unknown', area: 'minors', he: 'תאריך הלידה של השחקן לא רשום, אז לא בדקתי אם הוא מתחת לגיל 18 ואם הכללים על קטינים נוגעים לו.' };
+
 const RULES = [
   // ── Agents (FFAR) ──────────────────────────────────────────────────────────
   {
     id: 'agent_licence', area: 'agents', status: 'verified', readOn: READ_ON,
-    he: 'לפי פיפ"א, מאז 1 באוקטובר 2023 חובה לעבוד רק עם סוכני כדורגל בעלי רישיון.',
+    he: 'תקנון סוכני הכדורגל של פיפ"א (FFAR) עוסק בדרישה לרישיון סוכן; לפי הודעת פיפ"א הוא נכנס לתוקף מלא ב-1.10.2023. כדאי לבדוק בתקנון מה הוא קובע לעסקה הזאת.',
     source: { document: FFAR, article: '', readIn: 'FIFA media release, "FIFA Football Agent Regulations to fully enter into force as of 1 October", 29.9.2023', url: 'https://inside.fifa.com/transfer-system/agents/media-releases/fifa-football-agent-regulations-to-fully-enter-into-force-as-of-1-october' },
     when: (c) => (c.openDeal ? 'יש עסקה פתוחה שבה הסוכנות פועלת כסוכן' : null),
   },
   {
     id: 'agent_fee_cap_suspended', area: 'agents', status: 'verified', readOn: READ_ON, suspended: true,
-    he: `הכלל שמגביל את גובה העמלה של סוכן (תקרת העמלה, FFAR) ${SUSPENDED_TAIL}`,
+    he: `הכלל ב-FFAR שעוסק בתקרת העמלה של סוכן: ${SUSPENDED_TAIL} ההפניה הזאת היא לא אישור שהעמלה הרשומה בעסקה תקינה.`,
     source: { document: FFAR, article: 'art. 15 pars 1-4', ...SUSPENSION },
     when: (c) => (c.hasCommission ? 'בעסקה רשומה עמלה' : null),
   },
   {
     id: 'agent_client_pays_suspended', area: 'agents', status: 'verified', readOn: READ_ON, suspended: true,
-    he: `הכלל שלפיו הלקוח הוא שמשלם לסוכן (FFAR) ${SUSPENDED_TAIL}`,
+    he: `הכלל ב-FFAR שעוסק בשאלה מי משלם לסוכן: ${SUSPENDED_TAIL}`,
     source: { document: FFAR, article: 'art. 14 pars 2 and 10', ...SUSPENSION },
     when: (c) => (c.represented && c.clubPays ? 'בעסקה רשום תשלום מהמועדון על שחקן שהסוכנות מייצגת' : null),
   },
   {
     id: 'agent_clearing_house_suspended', area: 'agents', status: 'verified', readOn: READ_ON, suspended: true,
-    he: `הכלל שלפיו תשלום העמלה עובר דרך מסלקת פיפ"א (FFAR) ${SUSPENDED_TAIL}`,
+    he: `הכלל ב-FFAR שעוסק בתשלום העמלה דרך מסלקת פיפ"א: ${SUSPENDED_TAIL}`,
     source: { document: FFAR, article: 'art. 14 par. 13', ...SUSPENSION },
     when: (c) => (c.hasPayments ? 'בעסקה רשומים תשלומים לסוכנות' : null),
   },
   {
     id: 'agent_dual_representation_suspended', area: 'agents', status: 'verified', readOn: READ_ON, suspended: true,
-    he: `האיסור על ייצוג כפול (FFAR) ${SUSPENDED_TAIL}`,
+    he: `הכלל ב-FFAR שעוסק בייצוג כפול (סוכן שפועל עבור שני הצדדים): ${SUSPENDED_TAIL}`,
     source: { document: FFAR, article: 'art. 12 pars 8-10', ...SUSPENSION },
     when: (c) => (c.represented && c.mandate ? 'השחקן מיוצג על ידי הסוכנות ובעסקה יש מנדט: אם המנדט הוא מהמועדון, הסוכנות פועלת עבור שני הצדדים' : null),
   },
   {
     // Shown with any suspended rule: the suspension is the part most likely to move.
     id: 'agent_rules_cjeu_2026', area: 'agents', status: 'verified', readOn: READ_ON, withSuspended: true,
-    he: 'בעקבות פסק הדין של בית הדין של האיחוד האירופי מ-16.7.2026, פיפ"א הודיעה שבית הדין מצא שעיקרי תקנון הסוכנים (חובת רישיון, תקרת עמלה, איסור ייצוג כפול, "הלקוח משלם", תשלום יחסי) ניתנים להצדקה, ושהיא בוחנת את ההשלכות המעשיות. ההודעה לא אומרת שההשעיה הסתיימה, כך שהמצב עשוי להשתנות.',
+    he: 'פיפ"א פרסמה הודעה על פסק הדין של בית הדין של האיחוד האירופי מ-16.7.2026 בעניין תקנון הסוכנים, ולפיה היא בוחנת את ההשלכות המעשיות. בהודעה לא מצאתי שההשעיה של הכללים שלמעלה הסתיימה; המצב עשוי להשתנות, וכדאי לבדוק את ההודעה ואת מה שפורסם אחריה.',
     source: { document: FFAR, article: '', readIn: 'FIFA news on the judgment of the Court of Justice of the European Union, 16.7.2026', url: 'https://inside.fifa.com/news/welcomes-court-of-justice-european-union-decision-football-agent-regulations' },
     when: () => null,
   },
@@ -107,7 +121,7 @@ const RULES = [
     id: 'agent_minor_representation', area: 'minors', status: 'unverified',
     topic: 'פנייה לקטין וייצוג של קטין על ידי סוכן (מתי מותר לפנות, מי חותם)',
     check: FFAR_PDF,
-    when: (c) => (c.minor ? `השחקן בן ${c.age}` : null),
+    when: (c) => (c.minor ? ageWhy(c) : null),
   },
   {
     id: 'ifa_agents', area: 'agents', status: 'unverified',
@@ -118,11 +132,11 @@ const RULES = [
   // ── Minors (RSTP) ──────────────────────────────────────────────────────────
   {
     id: 'minor_international_transfer', area: 'minors', status: 'verified', readOn: READ_ON, rstp: true,
-    he: 'תקנון RSTP של פיפ"א אוסר העברה בינלאומית של שחקן מתחת לגיל 18. היא מותרת רק כשמתקיים אחד מששת החריגים שבתקנון ופיפ"א אישרה מראש.',
+    he: 'סעיף 19 בתקנון RSTP של פיפ"א עוסק בהעברות בינלאומיות של שחקנים מתחת לגיל 18 ומגביל אותן. החריגים מפורטים בסעיף עצמו, וכדאי לבדוק בו את העסקה הזאת.',
     source: { document: RSTP, article: 'art. 19', readIn: 'FIFA Legal news on the guide to submitting a minor application, 19.2.2026 (the article number: FIFA media release of 22.2.2019)', url: 'https://inside.fifa.com/legal/news/new-edition-guide-submitting-minor-application' },
     when: (c) => {
       if (!c.minor || !c.openDeal || c.international === false) return null;
-      return c.international ? `השחקן בן ${c.age} והמועדון במדינה אחרת (${c.clubCountry})` : `השחקן בן ${c.age}; לא רשום באיזו מדינה המועדון, והכלל נוגע רק למעבר בין מדינות`;
+      return c.international ? `${ageWhy(c)}, והמועדון במדינה אחרת (${c.clubCountry})` : `${ageWhy(c)}; לא רשום באיזו מדינה המועדון, והכלל נוגע רק למעבר בין מדינות`;
     },
   },
   {
@@ -137,13 +151,13 @@ const RULES = [
     id: 'rstp_minor_contract', area: 'minors', status: 'unverified', rstp: true,
     topic: 'אורך החוזה המקצועני של שחקן קטין',
     check: RSTP_DOC,
-    when: (c) => (c.minor && c.openDeal ? `השחקן בן ${c.age} ויש עסקה פתוחה` : null),
+    when: (c) => (c.minor && c.openDeal ? `${ageWhy(c)}, ויש עסקה פתוחה` : null),
   },
   {
     id: 'ifa_minors', area: 'minors', status: 'unverified',
     topic: 'תקנון מעמד והעברות של שחקנים קטינים של ההתאחדות לכדורגל בישראל',
     check: { document: 'ההתאחדות לכדורגל בישראל, תקנון מעמד והעברות של שחקנים קטינים', url: IFA_SITE },
-    when: (c) => (c.minor && c.israel ? `השחקן בן ${c.age} ומשחק בישראל או עובר למועדון בישראל` : null),
+    when: (c) => (c.minor && c.israel ? `${ageWhy(c)}, ומשחק בישראל או עובר למועדון בישראל` : null),
   },
   // ── Transfer windows and timing ────────────────────────────────────────────
   {
@@ -173,13 +187,14 @@ const monthsBetween = (from, to) => {
 /** What the rules look at, taken from the records. `money` false: payments and commission are not read. */
 function contextOf({ player = null, deal = null, club = null, requirement = null, today, money = true }) {
   const p = player || {};
-  const age = p.dob ? ageOn(p.dob, today) : null;
+  const ageOnDate = (deal && DEAL_DATE_FIELDS.map((k) => deal[k]).find(isDay)) || null;
+  const age = p.dob ? ageOn(p.dob, ageOnDate || today) : null;
   const playerCountry = String(p.leagueCountry || '').trim();
   const clubCountry = String((club && club.country) || (requirement && requirement.leagueCountry) || (deal && deal.leagueCountry) || '').trim();
   const payments = money && deal && Array.isArray(deal.payments) ? deal.payments : [];
   const stage = deal ? String(deal.stage || '') : '';
   return {
-    today, deal, age, minor: age === null ? null : age < ADULT_AGE,
+    today, deal, age, ageOnDate, minor: age === null ? null : age < ADULT_AGE,
     represented: !!player && stageOfPlayer(p) === 'represented',
     openDeal: !!deal && !deal.deletedAt && !isClosedStage(stage),
     hasCommission: money && !!deal && (String(deal.commission || '').trim() !== '' || payments.length > 0),
@@ -225,16 +240,20 @@ function windowFlag(ctx, windows) {
     he = `חלון ההעברות ב-${league} נסגר ב-${dmy(open.closes)}${open.closesAt ? ` בשעה ${open.closesAt}` : ''}: נשארו ${left} ימים.`;
   } else if (next) he = `חלון ההעברות ב-${league} סגור היום, ונפתח ב-${dmy(next.opens)}.`;
   else he = `חלון ההעברות ב-${league} סגור היום, והמועד הבא לא רשום אצלי.`;
+  he = `${he} המועדים האלה לא ממקור רשמי: הם מאתר שאינו של הליגה או של פיפ"א.`;
   return flagOf({ id: 'window_league', area: 'windows', status: 'unverified', he, source: WINDOWS_SOURCE, readOn: WINDOWS_READ_ON }, ctx, 'העסקה מול מועדון בליגה הזאת');
 }
 
 /**
- * regulationFlags({ player, deal, today }) → { today, flags, notVerified, disclaimer }
+ * regulationFlags({ player, deal, today }) → { today, flags, notVerified, missing, disclaimer }
  *   flags        rules that touch this player or deal, each with its source and
  *                closing line; all read on the regulator's own page, except the
  *                league window, which says it is not officially verified.
  *   notVerified  topics that touch it but were not read at the source: the
  *                topic and where to check, never a statement of the rule.
+ *   missing      what could not be checked for lack of a fact (no date of birth: minority).
+ * The age for the minors' rows is the age on the deal's expected registration or
+ * start date when the deal has one, otherwise today, and the flag says which.
  * Optional: club, requirement (for the club's country), topic (an area, or
  * 'all': every row of it, whatever the records say), money (false = payments
  * are not read), rules and windows (tests).
@@ -260,7 +279,9 @@ function regulationFlags({ player = null, deal = null, club = null, requirement 
     if (follows || ((r.withSuspended || r.withRstp) && asked(r))) flags.push(flagOf(r, ctx, ''));
   }
   const w = windowFlag(ctx, windows);
-  return { today, flags: [...flags, ...(w ? [w] : [])], notVerified, disclaimer: DISCLAIMER };
+  // A player with no date of birth: minority could not be checked, and that is said, not left silent.
+  const missing = (player || deal) && ctx.age === null ? [MINOR_UNKNOWN] : [];
+  return { today, flags: [...flags, ...(w ? [w] : [])], notVerified, missing, disclaimer: DISCLAIMER };
 }
 
 const REGULATION_TOOL_DEF = {
@@ -301,7 +322,8 @@ function regulationTools({ db, role, can = () => false }) {
         ...(!deal && openDeals.length > 1 ? { openDeals: openDeals.map((d) => ({ dealId: d.id, club: d.clubName || '', stage: d.stage || '' })), note: 'Several open deals: call again with the dealId of the one that is meant.' } : {}),
         flags: out.flags.map((f) => ({ id: f.id, area: f.area, status: f.status, text: f.line, source: f.source, readOn: f.readOn })),
         notVerified: out.notVerified,
-        rule: 'Show each flag as its text says, with the source link and its closing line unchanged. A flag with status unverified is said as not officially verified. Topics in notVerified were not read at the source: say "לא בדקתי" and where to check, never state the rule from memory. Never conclude that something is allowed, forbidden or legal.',
+        missing: out.missing.map((m) => m.he),
+        rule: 'Show each flag as its text says, with the source link and its closing line unchanged. A flag with status unverified is said as not officially verified. Topics in notVerified were not read at the source: say "לא בדקתי" and where to check, never state the rule from memory. What missing lists could not be checked: say so. Never conclude that something is allowed, forbidden or legal.',
         ...(out.flags.length || out.notVerified.length ? {} : { nothing: 'No rule in the table touches this. That is not a clearance: the table covers only agents, minors and windows.' }),
       };
     },

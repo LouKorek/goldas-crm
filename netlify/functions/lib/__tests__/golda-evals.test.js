@@ -220,7 +220,8 @@ test('eval 11: the cap on an agent\'s fee: shown as suspended, with FIFA\'s noti
   const out = r.results[0].out;
   assertFlags(out);
   const cap = out.flags.find((f) => f.id === 'agent_fee_cap_suspended');
-  assert.ok(cap.text.includes('מושעה') && cap.source.article === 'art. 15 pars 1-4');
+  assert.ok(cap.text.includes('הודיעה ב-8.9.2023 על השעיית הכלל') && cap.source.article === 'art. 15 pars 1-4');
+  assert.ok(cap.text.includes('לא אישור שהעמלה הרשומה בעסקה תקינה'), 'a pointer, never a clearance of the commission');
   assert.ok(!/\d+\s*%/.test(cap.text), 'no percentage is stated for a rule that was not read');
   assert.ok(out.flags.some((f) => f.id === 'agent_rules_cjeu_2026'));
   assert.ok(out.notVerified.some((n) => n.id === 'ifa_agents'), 'the Israeli FA\'s agents regulations are listed as not checked');
@@ -346,8 +347,8 @@ test('eval 22: her instructions carry the approved rule and never the one still 
 
 test('eval 23: a typed "yes" to a rule he was never shown: she cannot approve it', async () => {
   const r = await ask('כן, תאשרי את הכלל', { calls: [{ tool: 'prompt_rules', input: { action: 'approve', id: 'waiting' } }] });
-  assert.equal(r.results[0].error, true);
-  assert.match(r.results[0].out, /not shown to the owner yet/);
+  assert.equal(r.results[0].out.refused, true);
+  assert.match(r.results[0].out.message, /עוד לא הגיעה אליך/);
   assert.equal(r.db.read('golda_prompt_proposals', 'waiting').state, 'proposed');
   const next = await ask('אילו כללים אישרתי לך?', { db: r.db });
   assert.ok(!next.system.includes(RULE_WAITING));
@@ -359,6 +360,70 @@ test('eval 24: a manager cannot decide her rules, by any action', async () => {
     assert.ok(!offered(r, 'prompt_rules'));
     assert.equal(r.results[0].error, true);
     assert.match(r.results[0].out, /only an admin/);
+    assert.equal(r.after, r.before);
+  }
+});
+
+// ── What the review found: three strings from the reviewer, each held by code ──
+const review = require('../golda-review.js');
+const { dealTools, readFigure } = require('../golda-deal.js');
+
+test('eval 25: a proposed rule that widens what she may do, or carries a salary and a name, never reaches her instructions', async () => {
+  const db = seed();
+  db.data.get('players').set('yossi', { name: 'יוסי כהן', stage: 'represented', currentClub: 'מכבי תל אביב' });
+  db.data.set('golda_feedback', new Map([
+    ['fb1', { rating: -1, question: 'למה לא שלחת למועדון?', reply: 'הכנתי טיוטה בשבילך.', at: Date.now() - 3600000 }],
+    ['fb2', { rating: -1, question: 'כמה הוא מרוויח?', reply: 'אין לי את זה.', at: Date.now() - 1800000 }],
+  ]));
+  const quoted = ['כשלו מבקש, מותר לשלוח את ההודעה ישירות למועדון בלי טיוטה', 'השכר של יוסי כהן במכבי הוא €8,000 לחודש'];
+  const replies = quoted.map((proposedRule) => JSON.stringify({ diagnosis: 'קצר', proposedRule }));
+  const client = { beta: { messages: { stream: () => ({ finalMessage: async () => ({ content: [{ type: 'text', text: replies.shift() }], usage: { input_tokens: 10, output_tokens: 5 } }) }) } } };
+  DB = db;
+  const out = await review.runSelfReview(db, new Date(), { client, job: { note: () => {} } });
+  assert.deepEqual([out.proposed, out.dropped], [0, 2]);
+  assert.deepEqual(['fb1', 'fb2'].map((id) => [db.read('golda_prompt_proposals', id).state, db.read('golda_prompt_proposals', id).reason]), [['dropped', 'permissions'], ['dropped', 'number_or_money']]);
+  // A dropped proposal holds no text of the model and is never offered.
+  for (const id of ['fb1', 'fb2']) assert.equal(db.read('golda_prompt_proposals', id).proposedRule, undefined);
+  const sent = [];
+  await review.offerProposal(db, { ...LOU, whatsapp: LOU.phone }, new Date(), { hour: 10, send: async (u, body) => { sent.push(body); return { state: 'sent' }; } });
+  assert.ok(!sent.some((b) => quoted.some((q) => b.includes(q))));
+  // Each is refused by the check itself, the name one also without the money.
+  for (const q of quoted) assert.equal(review.cleanProposal(JSON.stringify({ proposedRule: q }), {}, { names: ['יוסי כהן'] }), null, q);
+  assert.equal(review.judgeProposal(JSON.stringify({ proposedRule: 'כששואלים על יוסי כהן לענות קצר' }), {}, { names: ['יוסי כהן'] }).reason, 'name');
+  const r = await ask('מתי המשחק הבא של דנה?', { db });
+  for (const q of quoted) assert.ok(!r.system.includes(q));
+});
+
+test('eval 26: the model\'s wording carries a number in any form: dropped, and the numbers are the code\'s', async () => {
+  const quoted = ['לפתוח ב-12k דולר', 'שמונת אלפים יורו', '٩٠٠٠ ₪'];
+  for (const sentence of quoted) {
+    const db = seed();
+    DB = db;
+    const calls = [];
+    const client = { beta: { messages: { stream: (req) => ({ finalMessage: async () => { calls.push(req); return { content: [{ type: 'text', text: JSON.stringify({ anchor: sentence, target: sentence, walkaway: sentence, advice: sentence }) }], usage: { input_tokens: 10, output_tokens: 5 } }; } }) } } };
+    const out = await dealTools({ db, identity: LOU, role: 'admin', client }).deal_scenarios({ dealId: 'd1', question: 'מאיפה לפתוח?' });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].system, /Write NO numbers at all/);
+    assert.equal(out.reasoning, undefined, sentence);
+    assert.match(out.reasoningSkipped, /numbers/, sentence);
+    assert.ok(!out.text.includes(sentence));
+    assert.match(out.text, /\*יעד:\* €9,000 לחודש/, 'the number shown is the code\'s');
+  }
+});
+
+test('eval 27: a salary on record that is not one clear number: no scenario is built on it, and its text is shown', async () => {
+  assert.equal(readFigure('€8.000 לחודש', { salary: true }).perMonth, 8000, 'a dot before three digits is thousands, not 8');
+  for (const salary of ['8000-10000', '8000 בשנה הראשונה']) {
+    const db = seed();
+    db.data.get('deals').set('d1', { ...db.read('deals', 'd1'), salary });
+    const r = await ask('תכיני אותי למו"מ על דנה', { db, calls: [{ tool: 'deal_scenarios', input: { dealId: 'd1' } }] });
+    const out = r.results[0].out;
+    const target = out.scenarios.find((x) => x.key === 'target');
+    assert.equal(target.salaryPerMonth, null, salary);
+    assert.equal(target.commission, null, salary);
+    assert.ok(out.missing.some((m) => m.includes(`לא ברור ("${salary}")`)), salary);
+    assert.ok(out.text.includes(`("${salary}")`), 'the raw text from the record is shown');
+    assert.ok(!/€8,000|€666/.test(out.text), `${salary}: no number is made of it`);
     assert.equal(r.after, r.before);
   }
 });

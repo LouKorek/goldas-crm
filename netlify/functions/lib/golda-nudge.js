@@ -65,8 +65,9 @@ async function nudge(db, u, { body, buttons = [], kind = 'nudge', remember = fal
   const r = send
     ? await send(u, body, kind, buttons, ref)
     : await outbox.deliver(db, { to: u.phone, body, kind, buttons, carryOnly, expiresAt, ref }, { now });
-  if (r && r.state === 'queued' && job) job.note(`${kind} → ${u.email}: window closed, queued`);
-  if (remember) await noteInChat(db, u, { text: body, buttons, kind, now }).catch((e) => { if (job) job.note(`${kind}: chat note failed: ${e.message}`); });
+  // Job notes hold states only: never the address, the number or an error's text, which could carry either.
+  if (r && r.state === 'queued' && job) job.note(`${kind}: window closed, queued`);
+  if (remember) await noteInChat(db, u, { text: body, buttons, kind, now }).catch((e) => { if (job) job.note(`${kind}: chat note failed (${(e && e.name) || 'error'})`); });
   return r;
 }
 

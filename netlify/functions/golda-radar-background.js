@@ -25,7 +25,8 @@ exports.handler = withAuth({ action: 'manage_settings', internal: true }, async 
   try {
     await runJob('golda-radar', (job) => radar.runRadar(db, now, job, { force: !scheduled }), { trigger: scheduled ? 'schedule' : 'manual' });
   } catch (e) {
-    console.error('[golda-radar] failed:', e && e.message);
+    // runRadar's own failure says only its kind ("radar scan failed: HTTP 529"); any other error's text could carry a name.
+    console.error('[golda-radar] failed:', e && /^radar scan failed: /.test(String(e.message)) ? e.message : (e && (e.code || e.name)) || 'error');
   } finally {
     await radar.unlockScan(db);
   }
