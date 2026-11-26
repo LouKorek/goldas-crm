@@ -29,7 +29,7 @@ export const syncGmailNow = () => post({ action: 'sync' });
 export const disconnectGmail = () => post({ action: 'disconnect' });
 
 // The addresses the server found by itself (lib/mail-addresses.js), admin only.
-/** { filled: [...], suggestions: [...], search: { state, readBackTo, lastRunAt, yearRead } }; each row { id, kind, name, club, value, reason, seenName, times }. */
+/** { filled: [...], suggestions: [...], search: { state, readBackTo, lastRunAt, yearRead, targets, read, yearTotal } }; each row { id, kind, name, club, value, reason, seenName, times }. */
 export const fetchFoundAddresses = () => callFunctionJson('mail', { query: { addresses: '1' } });
 export const acceptAddress = (id) => post({ action: 'address_accept', id });
 /** Approves every suggestion that stands alone: { accepted, skipped }. */

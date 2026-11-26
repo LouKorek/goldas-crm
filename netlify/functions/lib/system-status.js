@@ -52,8 +52,10 @@ function mailOf(m) {
     messagesKept: count(m.linkedCount), waiting: count(m.backlog), lastReadAt: when(m.lastSyncAt), lastFailedAt: when(m.lastError && m.lastError.at),
     // The address search (lib/mail-addresses.js): two numbers, never the values themselves.
     addressesFilled: count(m.found && m.found.filled), suggestionsOpen: count(m.found && m.found.open),
-    // How far the search got: its state, how many contacts and clubs it looks for, how many sent messages it has read.
+    // How far the search got: its state, how many contacts and clubs it looks for, how many sent messages its current
+    // (daily) pass has read, and how many the last pass over the whole year read (null until one has finished and counted).
     addressSearch: word(m.found && m.found.state, SEARCH_STATES), addressTargets: count(m.found && m.found.targets), sentRead: count(m.found && m.found.read),
+    sentReadYear: m.found && m.found.yearTotal != null ? count(m.found.yearTotal) : null,
   };
 }
 

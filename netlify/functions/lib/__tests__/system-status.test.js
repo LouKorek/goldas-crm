@@ -39,7 +39,7 @@ test('the status says states, times and counts', async () => {
   assert.deepEqual(Object.keys(s.jobs).sort(), ['backup-weekly', 'gmail-sync']);
   assert.deepEqual(s.mail, { connected: true, state: 'ok', api: 'on', contactAddresses: 12, clubDomains: 5, messagesKept: 40, waiting: 3,
     lastReadAt: new Date(NOW - 60000).toISOString(), lastFailedAt: new Date(NOW - 3600000).toISOString(), addressesFilled: 7, suggestionsOpen: 2,
-    addressSearch: 'running', addressTargets: 31, sentRead: 240 });
+    addressSearch: 'running', addressTargets: 31, sentRead: 240, sentReadYear: null });
   assert.deepEqual(s.backup.latest, { status: 'error', at: '2026-11-25T01:00:00.000Z', readBackOk: false, outsideCopy: false, documents: 10 });
   assert.deepEqual(s.backup.latestGood, { status: 'ok', at: '2026-11-18T01:00:00.000Z', readBackOk: true, outsideCopy: true, documents: 5000 });
   assert.deepEqual(s.notifications, { devices: 1 });

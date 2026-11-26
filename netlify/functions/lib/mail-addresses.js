@@ -471,6 +471,7 @@ async function settle(db, { records, own, covered, now }) {
 // ── the search ──────────────────────────────────────────────────────────────
 
 const stateRef = (db) => db.collection(store.STATE[0]).doc(store.STATE[1]);
+const isCount = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 const META = 'format=metadata&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Bcc&metadataHeaders=Date&fields=id%2CinternalDate%2Cpayload%2Fheaders';
 
 /**
@@ -481,6 +482,10 @@ const META = 'format=metadata&metadataHeaders=To&metadataHeaders=Cc&metadataHead
  * did not finish within one run's share of Gmail calls goes on from where it
  * stopped (mail_state/sync.fill) in the next run. Values are saved and
  * suggestions opened only when a pass has finished.
+ * The number of sent messages the last whole-year pass read is kept
+ * (fill.yearTotal) through the daily passes that follow, so "the year held
+ * nothing for these contacts" can be told from "the year was hardly read". A
+ * year read before that number was kept is read once more, to have it.
  * Returns counts only.
  */
 async function findAddresses(db, { fetchImpl = fetch, now = Date.now(), job = { note() {} }, env = process.env, maxCalls = MAX_CALLS, maxMs = MAX_MS, clock = Date.now } = {}) {
@@ -507,10 +512,11 @@ async function findAddresses(db, { fetchImpl = fetch, now = Date.now(), job = { 
   let fill = prev;
   if (!running) {
     const seen = new Set(prev.seen || []);
-    const full = !prev.yearDoneAt || marks.some((m) => !seen.has(m));
+    const full = !prev.yearDoneAt || !isCount(prev.yearTotal) || marks.some((m) => !seen.has(m));
     fill = {
       gen: (prev.gen || 0) + (full ? 1 : 0), full, startedAt: now, from: full ? now - YEAR_DAYS * DAY : prev.startedAt, upTo: null, edge: [],
       doneAt: null, yearDoneAt: prev.yearDoneAt || null, seen: prev.seen || [], marks, failedAt: null,
+      readTotal: 0, yearTotal: isCount(prev.yearTotal) ? prev.yearTotal : null,
     };
     if (!marks.length) {
       // Every contact has an address and no club is waiting for a domain: nothing to ask Gmail.
@@ -564,15 +570,17 @@ async function findAddresses(db, { fetchImpl = fetch, now = Date.now(), job = { 
     const edge = [...(second === Math.floor((fill.upTo || 0) / 1000) ? fill.edge || [] : []), ...readAt.filter(([, at]) => Math.floor(at / 1000) === second).map(([id]) => id)];
     fill = { ...fill, upTo, edge: [...new Set(edge)].slice(-200) };
   }
+  // readTotal: how many sent messages this pass has read so far (a number for the status page, nothing else).
+  const readTotal = (fill.readTotal || 0) + readAt.length;
   let settled = { saved: { contacts: 0, clubs: 0 }, suggested: 0, dropped: 0 };
   if (done) {
     const seen = fill.full ? [...new Set([...(fill.seen || []), ...(fill.marks || [])])].slice(-SEEN_MAX) : fill.seen || [];
-    fill = { ...fill, doneAt: now, yearDoneAt: fill.full ? now : fill.yearDoneAt, seen, edge: [] };
+    // yearTotal: what the pass over the whole year read; the daily passes after it leave it as it is.
+    fill = { ...fill, doneAt: now, yearDoneAt: fill.full ? now : fill.yearDoneAt, yearTotal: fill.full ? readTotal : isCount(fill.yearTotal) ? fill.yearTotal : null, seen, edge: [] };
     const ok = new Set(seen);
     settled = await settle(db, { records, own, covered: (m) => ok.has(m), now });
   }
-  // readTotal: how many sent messages this pass has read so far (a number for the status page, nothing else).
-  fill = { ...fill, failedAt: failed ? now : null, lastRunAt: now, lastCalls: calls, readTotal: (fill.readTotal || 0) + readAt.length };
+  fill = { ...fill, failedAt: failed ? now : null, lastRunAt: now, lastCalls: calls, readTotal };
   await ref.set({ fill }, { merge: true });
   const counts = await saveCounts(db);
   const out = { read: readAt.length, calls, found: found.filter((c) => c.kind === 'contact' || c.n).length, done, ...settled, ...counts, ...(failed ? { failed: failed.status || 'error' } : {}) };
@@ -609,20 +617,21 @@ async function listFound(db, records = null) {
   return {
     filled: filled.sort(byName), suggestions: suggestions.sort(byName),
     search: { state: !fill.startedAt ? 'never' : fill.doneAt ? 'done' : 'running', readBackTo: fill.doneAt ? null : fill.upTo || null, lastRunAt: fill.lastRunAt || fill.doneAt || null, yearRead: !!fill.yearDoneAt,
-      targets: (fill.marks || []).length, read: fill.readTotal || 0 },
+      targets: (fill.marks || []).length, read: fill.readTotal || 0, yearTotal: isCount(fill.yearTotal) ? fill.yearTotal : null },
   };
 }
 
 /**
  * The numbers of the public document: values saved by themselves and still in place, open suggestions, and how
- * far the search got (its state, how many contacts and clubs it looks for, how many sent messages it has read),
- * so "nothing found" can be told apart from "nothing to look for" and "nothing read" without opening the screen.
+ * far the search got (its state, how many contacts and clubs it looks for, how many sent messages its current
+ * pass has read, and how many the last pass over the whole year read), so "nothing found" can be told apart
+ * from "nothing to look for" and "nothing read" without opening the screen.
  */
 async function saveCounts(db, records = null) {
   const list = await listFound(db, records);
   const counts = { filled: list.filled.length, open: list.suggestions.length };
-  const { state, targets, read, yearRead } = list.search;
-  await auth.savePublic(db, { found: { ...counts, state, targets, read, yearRead } });
+  const { state, targets, read, yearRead, yearTotal } = list.search;
+  await auth.savePublic(db, { found: { ...counts, state, targets, read, yearRead, yearTotal } });
   return counts;
 }
 
