@@ -571,7 +571,8 @@ async function findAddresses(db, { fetchImpl = fetch, now = Date.now(), job = { 
     const ok = new Set(seen);
     settled = await settle(db, { records, own, covered: (m) => ok.has(m), now });
   }
-  fill = { ...fill, failedAt: failed ? now : null, lastRunAt: now, lastCalls: calls };
+  // readTotal: how many sent messages this pass has read so far (a number for the status page, nothing else).
+  fill = { ...fill, failedAt: failed ? now : null, lastRunAt: now, lastCalls: calls, readTotal: (fill.readTotal || 0) + readAt.length };
   await ref.set({ fill }, { merge: true });
   const counts = await saveCounts(db);
   const out = { read: readAt.length, calls, found: found.filter((c) => c.kind === 'contact' || c.n).length, done, ...settled, ...counts, ...(failed ? { failed: failed.status || 'error' } : {}) };
@@ -607,15 +608,21 @@ async function listFound(db, records = null) {
   const fill = ((await stateRef(db).get()).data() || {}).fill || {};
   return {
     filled: filled.sort(byName), suggestions: suggestions.sort(byName),
-    search: { state: !fill.startedAt ? 'never' : fill.doneAt ? 'done' : 'running', readBackTo: fill.doneAt ? null : fill.upTo || null, lastRunAt: fill.lastRunAt || fill.doneAt || null, yearRead: !!fill.yearDoneAt },
+    search: { state: !fill.startedAt ? 'never' : fill.doneAt ? 'done' : 'running', readBackTo: fill.doneAt ? null : fill.upTo || null, lastRunAt: fill.lastRunAt || fill.doneAt || null, yearRead: !!fill.yearDoneAt,
+      targets: (fill.marks || []).length, read: fill.readTotal || 0 },
   };
 }
 
-/** The two numbers of the public document: values saved by themselves and still in place, and open suggestions. */
+/**
+ * The numbers of the public document: values saved by themselves and still in place, open suggestions, and how
+ * far the search got (its state, how many contacts and clubs it looks for, how many sent messages it has read),
+ * so "nothing found" can be told apart from "nothing to look for" and "nothing read" without opening the screen.
+ */
 async function saveCounts(db, records = null) {
   const list = await listFound(db, records);
   const counts = { filled: list.filled.length, open: list.suggestions.length };
-  await auth.savePublic(db, { found: counts });
+  const { state, targets, read, yearRead } = list.search;
+  await auth.savePublic(db, { found: { ...counts, state, targets, read, yearRead } });
   return counts;
 }
 

@@ -10,7 +10,9 @@ const zlib = require('zlib');
 const Anthropic = require('@anthropic-ai/sdk');
 const C = require('../data/crm-constants.js');
 
-const MODEL = 'claude-opus-5-5';
+// The model and the level a conversation starts from live with the other tasks' (lib/golda-effort.js).
+const { model: MODEL } = require('./golda-effort.js').effortForTask('chat');
+const cost = require('./golda-cost.js');
 const { OWNER_EMAIL } = require('./firestore.js');
 const { stageFromStatus, stageOfPlayer, categoryFromPlayer, playerName, LEGACY_PIPELINE_COLLECTIONS, can, canTransition, applyTransition, isDealStage,
   computeAlerts, mergeSettings, topMatches, explainMatch, israelDate, cleanKnows } = require('@goldas/domain');
@@ -37,6 +39,12 @@ const { chooseEffort } = require('./golda-effort.js');
 const { outreachTools, outreachSection, OUTREACH_TOOL_DEFS } = require('./golda-outreach.js');
 const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js');
 const { instagramTools, INSTAGRAM_TOOL_DEF } = require('./golda-instagram.js');
+const { radarTools, radarSection, RADAR_TOOL_DEFS } = require('./golda-radar.js');   // loading it also registers the radar card's taps (lib/golda-taps.js)
+const { researchTools, RESEARCH_TOOL_DEFS, researchSection } = require('./golda-research.js');
+// Golda 3.0: the deal room and what-ifs, regulation pointers, her own approved rules.
+const { dealTools, dealSection, DEAL_TOOL_DEFS } = require('./golda-deal.js');
+const { regulationTools, regulationSection, REGULATION_TOOL_DEF } = require('./regulations.js');
+const { reviewTools, reviewSection, approvedRules, rulesSection, PROMPT_RULES_TOOL_DEF } = require('./golda-review.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -287,7 +295,7 @@ const ROLE_LINE = {
   viewer: 'a viewer: they may read and ask anything, but you must NOT change the CRM for them (the write tools are not available in this chat; say so politely if asked)',
 };
 
-function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = [], mistakes = []) {
+function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = [], mistakes = [], rules = []) {
   const sender = identity.name || 'לו';
   const where = channel === 'app' ? 'in the chat screen inside the CRM app' : 'on WhatsApp (each in their own private chat; the same conversation continues in the app)';
   return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you ${where}. You know the agency's CRM inside out: you read and analyse everything in it, including the documents stored in it, give recommendations, and carry out changes yourself using the tools. You can also search the web. The person writing is ${sender}, ${ROLE_LINE[identity.role] || ROLE_LINE.viewer}. Every change you make is recorded in their name.
@@ -329,8 +337,11 @@ How you work:
 - An Instagram graphic ("תכיני גרפיקה לחתימה של X ב…", "גרפיקה ליום ההולדת של Y", "story לשער של Z מול…"): find the player, then instagram_graphic with kind signing, goal or birthday (custom with a headline for anything else: a first call-up, player of the month); size story only when a story was asked for, lang en only when English was. Pass only facts the writer said or the CRM has (club, opponent, score, minute, competition), never a number you were not told; when the tool says something is missing, ask the writer that one short question. The picture and its caption go to the writer right after your answer, so your text is one line on what it shows, then [[כפתורים: גם סטורי | לשנות טקסט]] (גם פוסט after a story). "גם סטורי" / "גם פוסט" → the same call in the other size; "לשנות טקסט" → ask what to change, then call again with headline, name or caption. You never post it and never send it to anyone but the writer; he uploads it himself. Your offer that opens with "גרפיקה לאינסטגרם" 🎨: the writer's yes ("כן, להכין") means make that graphic now: the player is the one in its link, a birthday → kind birthday, a goal → kind goal against the other team of the match it names (the tool fills the goals from the match data); post size, Hebrew. "לא הפעם" → fine, one line, nothing else.
 - A monthly report for a player and his family ("דוח חודשי ל…", or "להתחיל" on your reminder that opens with "הדוחות החודשיים" 📄): find the player (represented players only), then monthly_report action=prepare (the month defaults to the last full month). From its facts only, write the two parts in Hebrew, warmly and factually, for a parent: what we did this month (2 to 5 short lines) and the next step (one or two sentences). Never put in them ratings, match notes, who watched, internal notes, contract terms, salary, deals or their stages, club requirements, names of clubs we are talking to, other players, phone numbers or emails; a quiet month is said simply, never padded. Save with action=save, then show the writer the month in numbers in one line and the two parts in full, say nothing has gone to anyone, and ask with buttons [[כפתורים: מאשר, לשלוח | לשנות]]. A change → save again and ask again. Only after the yes in a later message: action=send (lang en only when English was asked for); the PDF comes to the writer, who forwards it himself; you never send it to the player or the family. "להתחיל" on the reminder → list the represented players still without a report for that month and start with the first; "לדלג החודש" → fine, one line. "בלי תזכורת לדוחות" / "תחזירי את התזכורת לדוחות" → action=reminder, reminder off / on.
 ${financeSection(identity.role)}
+${researchSection()}
 ${outreachSection(channel)}
 ${networkSection(identity.role)}
+${radarSection(identity.role)}
+${[dealSection(identity.role), regulationSection(), reviewSection(identity.role)].filter(Boolean).join('\n')}
 ${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה האחרון שכתבנו עם <מועדון>" / "מה כתבו לנו מ…" / the last e-mails with a club, a contact or about a deal → mail_recent (admins and managers; read-only, from the mail the CRM keeps). Answer with the date, who wrote to whom, the subject and the snippet, newest first, and the Gmail link. You never send or answer mail.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
@@ -372,7 +383,7 @@ Free agents (contractStatus "Free") automatically lose club, contract dates and 
 Today's date: ${israelDate(new Date())} (Israel time zone).
 
 ${memorySection(memories)}
-${mistakesSection(mistakes)}`;
+${mistakesSection(mistakes)}${rules.length ? `\n${rulesSection(rules)}` : ''}`;
 }
 
 const TOOLS = [
@@ -466,6 +477,18 @@ const TOOL_ACTION = { create: 'edit', update: 'edit', rename_file: 'edit', attac
   mail_recent: 'edit',
   // An Instagram graphic of a player: whoever may edit the player.
   instagram_graphic: 'edit' };
+// Golda 3.0, the market radar: the team reads what it found; what is relevant is the owner's to teach it.
+TOOLS.push(...RADAR_TOOL_DEFS);
+Object.assign(TOOL_ACTION, { radar_list: 'edit', radar_get: 'edit', radar_mark: 'manage_settings' });
+// The research dossier (lib/golda-research.js): admins and managers ask for one and read its state.
+// What money it may show is decided there, by the asker's own permission.
+TOOLS.push(...RESEARCH_TOOL_DEFS);
+Object.assign(TOOL_ACTION, { research_start: 'edit', research_status: 'edit' });
+// Golda 3.0. Negotiation scenarios and what-ifs are money: admins only. A regulation pointer is reading.
+// The rules she proposed for herself are the owner's to decide.
+TOOLS.push(...DEAL_TOOL_DEFS, REGULATION_TOOL_DEF, PROMPT_RULES_TOOL_DEF);
+READ_TOOLS.add('regulation_check');
+Object.assign(TOOL_ACTION, { deal_scenarios: 'money', finance_whatif: 'money', prompt_rules: 'manage_settings' });
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -874,6 +897,9 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...networkTools({ db, identity, role, update }),
     ...mailTools({ db, identity, role }),
     ...instagramTools({ db, identity, role, media, state }) };
+  Object.assign(impl, radarTools({ db, identity, role }));   // Golda 3.0: the market radar
+  Object.assign(impl, researchTools({ db, identity, role, channel, state }));
+  Object.assign(impl, dealTools({ db, identity, role }), regulationTools({ db, role, can }), reviewTools({ db, identity, role }));
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -907,11 +933,12 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   // only place the times of a highlights request may come from (golda-youtube.js).
   const writerTexts = [...history.filter((h) => h.role !== 'assistant').map((h) => String(h.text || '')), text || ''];
   const tools = createTools({ db, admin, identity, media, session, assistantName, channel, turnText: text || '', writerTexts });
-  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, steps: 0 };
+  const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0, steps: 0 };
   // Long-term memory is read once per message; a failed read never blocks the reply.
   const remembered = memories || await loadMemories(db, identity).catch((e) => { console.warn('[golda] memory read failed:', e.message); return []; });
   const mistakes = await recentMistakes(db).catch(() => []);
-  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered, mistakes);
+  // Only rules the owner approved (lib/golda-review.js) reach the prompt; a failed read means none.
+  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered, mistakes, await approvedRules(db));
   const messages = [];
   for (const h of history) {
     const role = h.role === 'assistant' ? 'assistant' : 'user';
@@ -941,45 +968,54 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   usage.effortReason = effortReason;
 
   let reply = '';
-  for (let step = 0; step < MAX_STEPS; step++) {
-    // Streamed, so a long report or a deep analysis never hits an HTTP timeout.
-    // The automatic cache breakpoint keeps every step of the loop reading the
-    // tools, the system prompt and the conversation so far from the cache.
-    const res = await anthropic.beta.messages.stream({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort },
-      cache_control: { type: 'ephemeral' },
-      system,
-      tools: [...toolsFor(identity.role, channel), ...SERVER_TOOLS],
-      messages,
-    }).finalMessage();
-    usage.steps++;
-    usage.inputTokens += res.usage?.input_tokens || 0;
-    usage.outputTokens += res.usage?.output_tokens || 0;
-    usage.cacheReadTokens += res.usage?.cache_read_input_tokens || 0;
-    usage.cacheWriteTokens += res.usage?.cache_creation_input_tokens || 0;
-    if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
-    messages.push({ role: 'assistant', content: res.content });
-    // A long web search pauses server-side; resend as-is and it resumes.
-    if (res.stop_reason === 'pause_turn') continue;
-    const uses = res.content.filter((b) => b.type === 'tool_use');
-    if (res.stop_reason !== 'tool_use' || !uses.length) {
-      reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      break;
-    }
-    const results = [];
-    for (const u of uses) {
-      try {
-        const out = await tools.run(u.name, u.input);
-        results.push({ type: 'tool_result', tool_use_id: u.id, content: out && out.__content ? out.__content : JSON.stringify(out) });
-      } catch (e) {
-        results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${e.message}`, is_error: true });
+  let spent = null;   // every step's usage as the API reported it, for the day's cost ledger
+  try {
+    for (let step = 0; step < MAX_STEPS; step++) {
+      // Streamed, so a long report or a deep analysis never hits an HTTP timeout.
+      // The automatic cache breakpoint keeps every step of the loop reading the
+      // tools, the system prompt and the conversation so far from the cache.
+      const res = await anthropic.beta.messages.stream({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        output_config: { effort },
+        cache_control: { type: 'ephemeral' },
+        system,
+        tools: [...toolsFor(identity.role, channel), ...SERVER_TOOLS],
+        messages,
+      }).finalMessage();
+      usage.steps++;
+      usage.inputTokens += res.usage?.input_tokens || 0;
+      usage.outputTokens += res.usage?.output_tokens || 0;
+      usage.cacheReadTokens += res.usage?.cache_read_input_tokens || 0;
+      usage.cacheWriteTokens += res.usage?.cache_creation_input_tokens || 0;
+      usage.webSearches += res.usage?.server_tool_use?.web_search_requests || 0;
+      spent = cost.addUsage(spent, res.usage);
+      if (res.stop_reason === 'refusal') { reply = `מצטערת ${sender}, את זה אני לא יכולה לבצע.`; break; }
+      messages.push({ role: 'assistant', content: res.content });
+      // A long web search pauses server-side; resend as-is and it resumes.
+      if (res.stop_reason === 'pause_turn') continue;
+      const uses = res.content.filter((b) => b.type === 'tool_use');
+      if (res.stop_reason !== 'tool_use' || !uses.length) {
+        reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+        break;
       }
+      const results = [];
+      for (const u of uses) {
+        try {
+          const out = await tools.run(u.name, u.input);
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: out && out.__content ? out.__content : JSON.stringify(out) });
+        } catch (e) {
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${e.message}`, is_error: true });
+        }
+      }
+      messages.push({ role: 'user', content: results });
     }
-    messages.push({ role: 'user', content: results });
+  } finally {
+    // What the message cost goes to the day's ledger, also when a step failed half way.
+    // A conversation is counted and never capped; a ledger that cannot be written never costs the answer.
+    if (spent) await cost.record(db, { kind: 'chat', model: MODEL, usage: spent });
   }
   if (!reply) reply = `${sender}, משהו השתבש באמצע ולא סיימתי. אפשר לנסח שוב?`;
   return { reply, pendingDeletes: tools.state.pendingDeletes, changed: tools.state.changed, userText: currentText, usage, files: tools.state.outFiles,

@@ -1,7 +1,9 @@
 // The admin area's data: the night jobs and their runs, quotas, backups,
 // the full audit log and the errors the app itself reported. Everything is
 // read straight from the collections the functions already write; the one
-// write here (the TM Watch credit budget) is an admin-only setting.
+// write here (the TM Watch credit budget) is an admin-only setting. What
+// Golda's model calls cost comes from a function (golda-cost): the browser
+// never reads that ledger itself.
 import {
   collection, doc, onSnapshot, query, orderBy, limit, getDocs, setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
@@ -33,7 +35,9 @@ export const JOBS = [
   { name: 'golda-meeting-brief', he: 'הכנה של גולדה לפני פגישה', when: 'כשעה לפני כל פגישה ביומן', run: null },
   { name: 'golda-player-sends', he: 'הודעות של גולדה לשחקנים', when: 'נבדק כל 10 דקות, 08:00–22:00', run: null },
   { name: 'gmail-sync', he: 'מיילים מ-Gmail לרשומות', when: 'כל 15 דקות, כשהתיבה מחוברת', run: 'gmail-sync' },
+  { name: 'golda-radar', he: 'רדאר השוק של גולדה (חדשות, פציעות, מאמנים)', when: 'כל 3 שעות, 07:00–22:00', run: 'golda-radar' },
   { name: 'migrate', he: 'מיגרציות נתונים', when: 'אחרי כל פריסה', run: null },
+  { name: 'golda-research', he: 'תחקיר עומק של גולדה (PDF)', when: 'לפי בקשה; תחקיר שנתקע נבדק כל 10 דקות', run: 'golda-research' },
 ];
 
 // ── WhatsApp: the server's own Meta key and Golda's move to her number ──
@@ -90,6 +94,15 @@ export const listenGoldaUsage = (callback) =>
     });
     callback({ count, inputTokens, outputTokens, sessions, today });
   }, (e) => { console.error('wa_sessions error:', e); callback({ count: 0, inputTokens: 0, outputTokens: 0, sessions: 0 }); });
+
+/**
+ * What Golda's model calls cost (golda-cost, admin only): today and the last
+ * 14 days in USD, per kind of work, and the daily ceiling on the work she
+ * starts by herself. Numbers only.
+ */
+export const fetchGoldaCost = () => callFunctionJson('golda-cost');
+/** Change the daily ceiling (0 to 100 USD; 0 switches her own work off). Answers the meter again. */
+export const saveGoldaCostCap = (capUsd) => callFunctionJson('golda-cost', { method: 'POST', body: { capUsd: Number(capUsd) } });
 
 // ── Backups ─────────────────────────────────────────────────────────
 export const listenBackups = (callback) =>

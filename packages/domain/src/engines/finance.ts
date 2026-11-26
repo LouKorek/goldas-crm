@@ -338,6 +338,8 @@ export function filterPayments(rows: PaymentRow[], filter: PaymentFilter, now: D
 
 const daysHe = (n: number): string => (n === 1 ? 'יום אחד' : `${n} ימים`);
 /** "ממכבי חיפה", but "מ-FC Porto": the prefix is not glued to a name in another script. */
+// The test: a name that starts with a Hebrew letter. Matches "מכבי חיפה"; rejects "FC Porto".
+// https://regex101.com/?regex=%5E%5B%5Cu0590-%5Cu05FF%5D&flavor=javascript
 const fromHe = (name: string): string => (/^[\u0590-\u05FF]/.test(name) ? `מ${name}` : `מ-${name}`);
 const daysEn = (n: number): string => `${n} day${n === 1 ? '' : 's'}`;
 
@@ -355,4 +357,228 @@ export function describePayment(r: Pick<PaymentRow, 'payment' | 'status' | 'days
   if (d < 0) return { he: `${head.he} באיחור של ${daysHe(-d)}`, en: `${head.en} ${daysEn(-d)} late` };
   if (d === 0) return { he: `${head.he} צפוי היום`, en: `${head.en} due today` };
   return { he: `${head.he} צפוי בעוד ${d === 1 ? 'יום' : daysHe(d)}`, en: `${head.en} due in ${daysEn(d)}` };
+}
+
+// ── What-ifs ─────────────────────────────────────────────────────────────────
+// "What would we earn if…" and "what would this schedule do to the months
+// ahead". Pure arithmetic on the numbers the caller gives: nothing is read
+// from a record, nothing is saved, and a missing number is named, never
+// assumed. One calculation is one currency: amounts in another currency are a
+// separate line, never added and never converted.
+
+export const SALARY_PERIODS = ['month', 'year', 'season'] as const;
+export type SalaryPeriod = typeof SALARY_PERIODS[number];
+
+const MONTHS_PER_YEAR = 12;
+const PERCENT = 100;
+/** The longest what-if window: five years of months. */
+const WHATIF_MAX_MONTHS = 60;
+const WHATIF_MAX_PAYMENTS = 60;
+/** Length of 'YYYY-MM-DD', and of the 'DD' in it. */
+const DAY_LEN = 10;
+const DAY_DIGITS = 2;
+
+export const isSalaryPeriod = (v: unknown): v is SalaryPeriod => (SALARY_PERIODS as readonly string[]).includes(String(v));
+const given = (v: unknown): boolean => v !== undefined && v !== null && v !== '';
+
+/** A salary per period as a salary per month: a year and a season are twelve months. */
+export const perMonth = (amount: number, period: SalaryPeriod): number =>
+  round2(period === 'month' ? amount : amount / MONTHS_PER_YEAR);
+
+export interface CommissionInput {
+  /** The agency's share, in percent: 10 = 10%. */
+  percent?: unknown;
+  currency?: unknown;
+  /** The player's salary per `salaryPeriod`. */
+  salary?: unknown;
+  salaryPeriod?: unknown;
+  /** The length of the contract: months, or years. */
+  months?: unknown;
+  years?: unknown;
+  /** A one-off sum the same percent is taken on (a transfer fee, a signing fee), in the same currency. */
+  fee?: unknown;
+}
+
+export type CommissionResult =
+  | {
+    ok: true; currency: Currency; percent: number;
+    /** The contract's length in months (null when only a fee was given). */
+    months: number | null;
+    /** The salary over the whole contract. */
+    salaryTotal: number | null;
+    /** The commission on the salary over the whole contract. */
+    onSalary: number | null;
+    /** The commission on one year of salary. */
+    perYear: number | null;
+    fee: number | null;
+    onFee: number | null;
+    total: number;
+  }
+  | { ok: false; missing: string[] };
+
+const readMonths = (months: unknown, years: unknown): number | null => {
+  const m = given(months) ? toAmount(months) : null;
+  if (m !== null && m > 0) return m;
+  const y = given(years) ? toAmount(years) : null;
+  return y !== null && y > 0 ? round2(y * MONTHS_PER_YEAR) : null;
+};
+
+/**
+ * The commission for a percent on a salary over a contract's length and/or on
+ * a one-off fee. Every number must be given: what is absent or unreadable is
+ * listed in `missing`, and nothing is calculated.
+ */
+export function commissionWhatIf(input: CommissionInput): CommissionResult {
+  const percent = given(input.percent) ? toAmount(input.percent) : null;
+  const currency = toCurrency(input.currency);
+  const hasSalary = given(input.salary);
+  const hasFee = given(input.fee);
+  const salary = hasSalary ? toAmount(input.salary) : null;
+  const fee = hasFee ? toAmount(input.fee) : null;
+  const months = readMonths(input.months, input.years);
+  const period = isSalaryPeriod(input.salaryPeriod) ? input.salaryPeriod : null;
+  const missing = [
+    percent === null || percent <= 0 || percent > PERCENT ? 'percent' : '',
+    currency ? '' : 'currency',
+    !hasSalary && !hasFee ? 'salary or fee' : '',
+    hasSalary && (salary === null || salary <= 0) ? 'salary' : '',
+    hasSalary && !period ? 'salaryPeriod' : '',
+    hasSalary && months === null ? 'months' : '',
+    hasFee && (fee === null || fee <= 0) ? 'fee' : '',
+  ].filter(Boolean);
+  if (missing.length) return { ok: false, missing };
+  const share = (percent as number) / PERCENT;
+  // Not rounded here: the totals below are rounded once, from the exact monthly figure.
+  const monthly = hasSalary ? (salary as number) / (period === 'month' ? 1 : MONTHS_PER_YEAR) : null;
+  const salaryTotal = monthly === null ? null : round2(monthly * (months as number));
+  const onSalary = salaryTotal === null ? null : round2(salaryTotal * share);
+  const perYear = monthly === null ? null : round2(monthly * MONTHS_PER_YEAR * share);
+  const onFee = hasFee ? round2((fee as number) * share) : null;
+  return {
+    ok: true, currency: currency as Currency, percent: percent as number, months: hasSalary ? months : null,
+    salaryTotal, onSalary, perYear, fee: hasFee ? fee : null, onFee, total: round2((onSalary ?? 0) + (onFee ?? 0)),
+  };
+}
+
+export interface WhatIfPayment { amount: number; currency: Currency; dueDate: string; label: string }
+
+/** 'YYYY-MM-DD' plus `n` months, on the same day of the month or on its last day. */
+const addMonthsToDay = (day: string, n: number): string => {
+  const month = addMonths(monthOf(day), n);
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${month}-${String(Math.min(Number(day.slice(MONTH_LEN + 1, DAY_LEN)), last)).padStart(DAY_DIGITS, '0')}`;
+};
+
+export type InstallmentsResult = { ok: true; payments: WhatIfPayment[] } | { ok: false; missing: string[] };
+
+/**
+ * A total split into equal payments, one every `everyMonths` months from
+ * `firstDue`. The cents that do not divide go on the last payment, so the
+ * payments always add up to the total.
+ */
+export function installments(input: { total?: unknown; currency?: unknown; count?: unknown; firstDue?: unknown; everyMonths?: unknown; label?: unknown }): InstallmentsResult {
+  const total = given(input.total) ? toAmount(input.total) : null;
+  const currency = toCurrency(input.currency);
+  const count = given(input.count) ? Number(input.count) : 1;
+  const every = given(input.everyMonths) ? Number(input.everyMonths) : 1;
+  const firstDue = toDateStr(input.firstDue);
+  const missing = [
+    total === null || total <= 0 ? 'total' : '',
+    currency ? '' : 'currency',
+    Number.isInteger(count) && count >= 1 && count <= WHATIF_MAX_PAYMENTS ? '' : 'count',
+    Number.isInteger(every) && every >= 1 ? '' : 'everyMonths',
+    firstDue && isDay(firstDue) ? '' : 'firstDue',
+  ].filter(Boolean);
+  if (missing.length) return { ok: false, missing };
+  const sum = total as number;
+  const part = Math.floor((sum * CENTS) / count) / CENTS;
+  const label = String(input.label ?? '').trim();
+  return {
+    ok: true,
+    payments: Array.from({ length: count }, (_, i) => ({
+      amount: i === count - 1 ? round2(sum - part * (count - 1)) : part,
+      currency: currency as Currency,
+      dueDate: addMonthsToDay(firstDue as string, i * every),
+      label,
+    })),
+  };
+}
+
+/** One month and one currency: what is already expected, what the what-if adds, and both together. */
+export interface WhatIfCell { expected: number; added: number; withWhatIf: number }
+export interface WhatIfMonth { month: string; byCurrency: Partial<Record<Currency, WhatIfCell>> }
+export type ScheduleWhatIfResult =
+  | {
+    ok: true; from: string; months: WhatIfMonth[];
+    totals: Partial<Record<Currency, WhatIfCell>>;
+    /** Payments of the what-if that fall outside the months shown. */
+    outside: WhatIfPayment[];
+    payments: WhatIfPayment[];
+  }
+  | { ok: false; errors: string[] };
+
+const readWhatIfPayment = (raw: unknown, i: number): { payment?: WhatIfPayment; errors: string[] } => {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const amount = toAmount(r.amount);
+  const currency = toCurrency(r.currency);
+  const dueDate = toDateStr(r.dueDate);
+  const n = i + 1;
+  const errors = [
+    amount === null || amount <= 0 ? `payment ${n}: amount must be a number above 0` : '',
+    currency ? '' : `payment ${n}: currency must be one of ${CURRENCIES.join(', ')}`,
+    dueDate && isDay(dueDate) ? '' : `payment ${n}: dueDate must be YYYY-MM-DD`,
+  ].filter(Boolean);
+  if (errors.length) return { errors };
+  return { errors, payment: { amount: amount as number, currency: currency as Currency, dueDate: dueDate as string, label: String(r.label ?? '').trim() } };
+};
+
+const monthsApart = (from: string, to: string): number => {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return (ty - fy) * MONTHS_PER_YEAR + (tm - fm);
+};
+
+const sumCells = (cells: WhatIfCell[]): WhatIfCell | null => {
+  if (!cells.length) return null;
+  const expected = round2(cells.reduce((n, x) => n + x.expected, 0));
+  const added = round2(cells.reduce((n, x) => n + x.added, 0));
+  return { expected, added, withWhatIf: round2(expected + added) };
+};
+
+const perCurrency = (cellOf: (c: Currency) => WhatIfCell | null): Partial<Record<Currency, WhatIfCell>> =>
+  Object.fromEntries(CURRENCIES.map((c) => [c, cellOf(c)]).filter(([, v]) => v)) as Partial<Record<Currency, WhatIfCell>>;
+
+/**
+ * What a payment schedule would do to the cash flow that is already expected,
+ * month by month and per currency, from `from` ('YYYY-MM', this month when
+ * absent) for `months` months (to the schedule's last payment when absent).
+ * `rows` are the payments on record (paymentRows); they are read, never
+ * changed. A currency of the schedule never touches another currency's line.
+ */
+export function scheduleWhatIf(rows: PaymentRow[], schedule: unknown, opts: { from?: string; months?: number; now?: Date } = {}): ScheduleWhatIfResult {
+  const list = Array.isArray(schedule) ? schedule : [];
+  if (!list.length) return { ok: false, errors: ['the schedule is empty'] };
+  if (list.length > WHATIF_MAX_PAYMENTS) return { ok: false, errors: [`at most ${WHATIF_MAX_PAYMENTS} payments in one what-if`] };
+  const read = list.map(readWhatIfPayment);
+  const errors = read.flatMap((r) => r.errors);
+  if (errors.length) return { ok: false, errors };
+  const payments = read.flatMap((r) => (r.payment ? [r.payment] : [])).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const from = opts.from ?? monthOf(israelDate(opts.now ?? new Date()));
+  if (!isDay(`${from}-01`)) return { ok: false, errors: ['from must be YYYY-MM'] };
+  const span = opts.months ?? monthsApart(from, monthOf(payments[payments.length - 1].dueDate)) + 1;
+  const count = Math.min(WHATIF_MAX_MONTHS, Math.max(1, Math.floor(span)));
+  const window = Array.from({ length: count }, (_, i) => addMonths(from, i));
+  const cellOf = (month: string, currency: Currency): WhatIfCell | null => {
+    const expected = monthCell(rows, month, currency)?.expected ?? 0;
+    const added = round2(payments.filter((p) => p.currency === currency && monthOf(p.dueDate) === month).reduce((n, p) => n + p.amount, 0));
+    return expected || added ? { expected, added, withWhatIf: round2(expected + added) } : null;
+  };
+  const months = window.map((month): WhatIfMonth => ({ month, byCurrency: perCurrency((c) => cellOf(month, c)) }));
+  return {
+    ok: true, from, months,
+    totals: perCurrency((c) => sumCells(months.flatMap((m) => (m.byCurrency[c] ? [m.byCurrency[c] as WhatIfCell] : [])))),
+    outside: payments.filter((p) => !window.includes(monthOf(p.dueDate))),
+    payments,
+  };
 }

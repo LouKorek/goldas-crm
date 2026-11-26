@@ -31,6 +31,8 @@
 | `golda-queue` | כל 10 דק' | ניסיונות חוזרים להודעות שנתקעו; בדיקה אם פגישה מתקרבת (הכנה של גולדה); בדיקה אם הודעה לשחקן מחובר צריכה לצאת | ראה סעיף 6 |
 | `golda-player-sends` | נבדק כל 10 דק' (ב-`golda-queue`), רק 08:00–22:00 שעון ישראל | לשחקן מחובר לגולדה, לפי המתגים בכרטיס "גולדה לשחקן": הלוח השבועי (מוצ"ש 21:00), תזכורת לפני אימון, בהצלחה לפני משחק. נרשמת רק כשנשלחה, דולגה או נכשלה הודעה | ראה סעיף 6 |
 | `gmail-sync` | כל 15 דק' (רק כשתיבת Gmail מחוברת) | מיילים עם אנשי הקשר והמועדונים שב-CRM נצמדים לרשומות (`mail_messages`) | ראה "Gmail" בסוף המסמך |
+| `golda-radar` | כל 3 שעות ב-:10 (סורק רק 07:00–22:00 שעון ישראל) | רדאר השוק: גולדה מחפשת ברשת חדשות, פציעות, חילופי מאמנים והעברות שנוגעים לשחקנים ולמועדונים שב-CRM, ושומרת ממצאים עם מקור ב-`golda_radar`. לא שולחת כלום: הכרטיסים יוצאים מ-`golda-briefing`, עד 3 ביום | בהערות הריצה יש רק מספרים. "skipped: cost ceiling / radar share" = הגיעה לתקרת העלות (מסך מערכת ← מכסות). "radar scan failed" = הקריאה למודל נכשלה; הרץ שוב מ"בריאות". ראה סעיף 6 |
+| `golda-research` | לפי בקשה ("תחקיר על…" לגולדה); תחקיר שנתקע 20 דקות נבדק ב-`golda-queue` | תחקיר עומק על שחקן, מועדון או איש מקצוע: כמה חיפושי רשת, ניקוי (כל ממצא עם מקור, השאר ב"לא מאומת"), PDF ממותג ושליחה למבקש בלבד. עד 3 ביום לאדם ואחד בכל פעם; תקרה של 1.5 דולר ו-10 דקות לתחקיר, ומעליה תקרת העלות היומית (`golda_cost`). נשמר ב-`golda_research`, הקובץ ב-`files` | סטטוס `failed` עם מילת מצב ב-`error`: `cap` (התקרה היומית: מחר, או להעלות במסך מערכת), `no_key`, `search_failed`, `pdf`, `gave_up` (שני ניסיונות). המבקש מקבל הודעה ויכול לבקש שוב. "הרץ עכשיו" ב"בריאות" מעיר תחקיר תקוע |
 | `backup-weekly` | כל לילה 01:30 (רץ כשעבר שבוע) | גיבוי מלא ל-`backups/{id}/chunks`, בדיקה עצמית ועותק חיצוני | ראה סעיף 3 |
 
 "הרץ עכשיו" במסך הבריאות מריץ את אותו הקוד שהתזמון מריץ, ומסומן `trigger: manual`
@@ -142,6 +144,24 @@
   - האתר עוקב אחרי ה-CRM (`lib/golda-site-follow.js`): בריצה השעתית, ביום
     ואחרי התדריך, שחקן מיוצג שהשתנה מול `app_meta/goldaSiteFollow.seen`
     מקבל טיוטה לאתר ושאלה "לפרסם?". שום דבר לא מתפרסם בלי "כן" בהודעה מאוחרת.
+  - רדאר השוק (`lib/golda-radar.js`): הסריקה (`golda-radar`) בונה לבד את רשימת
+    המעקב מה-CRM (מועדונים וליגות של השחקנים, של דרישות פתוחות ושל עסקאות
+    פתוחות, ועוד ליגות הבכירות בישראל), כמה מועדונים בכל סריקה לפי תור, ושומרת
+    רק ממצא שיש לו קישור למקור שהחיפוש עצמו החזיר ושנוגע לשחקן או למועדון שלנו.
+    שום סכום ושום תנאי חוזה לא נשלחים למודל. בריצה השעתית, ביום, אחרי התדריך
+    ורק בשעה שלא יצאה בה הודעה אחרת שלה, יוצא כרטיס אחד ("רדאר שוק" 📡) עם שלושה
+    כפתורים, עד 3 ביום. "לא רלוונטי" ו"תזכירי בעוד שבוע" נענים בלי קריאה למודל
+    ומעדכנים את `golda_radar/{id}.state` ואת מה שהיא למדה
+    (`app_meta/goldaRadar.prefs`: סוג, מועדון וליגה שנדחו שוקעים, כאלה שביקשו
+    עליהם פנייה עולים). "להכין פנייה" עובר לשיחה, שמנסחת טיוטה בלבד דרך
+    `golda-outreach`; לו שולח בעצמו. הסריקה עוצרת בתקרת העלות היומית, ולא
+    לוקחת לבדה יותר מחצי ממנה. לעצור את הרדאר לגמרי: תקרה 0 במסך מערכת ← מכסות
+    (עוצר את כל העבודה העצמאית של גולדה).
+  - זיכרון קשרים (`coldNudge` ב-`lib/golda-network.js`): באותה ריצה שעתית, בשעה
+    שלא יצא בה כלום, לכל היותר פעם ביום: איש קשר שקשור לעסקה פתוחה או לדרישה
+    פתוחה ולא דיברו איתו 60 יום, עם הצעה לנסח הודעה (טיוטה בלבד). אותו איש קשר
+    לכל היותר פעם ב-30 יום (`app_meta/goldaColdContacts`). הסף במפת הקשרים
+    באפליקציה (90 יום) לא השתנה.
   - **החריג היחיד: שחקן מחובר (`lib/golda-player-sends.js`).** שחקן מיוצג
     שאדמין חיבר לגולדה (מספר + מתג בכרטיס "גולדה לשחקן") מקבל רק מה שאדמין
     הפעיל לו, כל סוג במתג משלו (`players.goldaWeek`, `goldaTrainingReminder`,
@@ -492,8 +512,35 @@ One small page that says how the system is doing, readable without signing in, s
 `https://goldas-crm.netlify.app/.netlify/functions/system-status`
 
 - `jobs`: each scheduled job's last run (ok or error, when, how long, whether one is running now, when it last failed).
-- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read, and two counts from the address search: `addressesFilled` (values the server saved by itself) and `suggestionsOpen` (waiting for a decision in System › Email).
+- `mail`: whether the mailbox is connected and being read (`state`: `ok`, `no_addresses`, `needs_api`, `error`), how many contact addresses and club domains mail is read for, how many messages are kept, when it was last read, and two counts from the address search: `addressesFilled` (values the server saved by itself) and `suggestionsOpen` (waiting for a decision in System › Email). Three more say how far that search got, so "nothing found" can be told from "nothing to look for": `addressSearch` (`never`, `running`, `done`), `addressTargets` (contacts and clubs it looks for; 0 means every contact already has an address or there is none with a name) and `sentRead` (sent messages read in the current pass).
 - `backup`: the latest backup and the latest good one (read back, copied outside the database, how many documents).
 - `notifications`: how many devices take notifications.
+- `cost`: what Golda's model calls cost today in US dollars (`todayUsd`), the day's ceiling for the work she does on her own (`capUsd`), and whether that ceiling is reached (`capped`).
+- `whatsapp`: whether Golda is on her own number yet (`ownNumber`, `ownNumberAt`), when the server last asked Meta (`checkedAt`), and Meta's two words about the account (`businessVerification`, `accountReview`). Never the number itself.
 
 It is open, so it holds states, times and counts only: no names, addresses, ids, file names or error texts. Every word in it comes from a fixed list in `lib/system-status.js`; anything else comes out as `unknown`, and `system-status.test.js` proves nothing private gets through. To add a fact, add it there as a number, a time, a yes/no or a word from a list, never as free text. The reason behind an `error` is in System › Health, for a signed-in admin. Netlify's edge keeps an answer for a minute.
+
+## Golda's cost ledger and the daily ceiling (`lib/golda-cost.js`)
+
+Every model call Golda makes ends with `record()`: the tokens and web searches the API reported are priced from the dated table at the top of `lib/golda-cost.js` and added to `golda_cost/{Israel date}` (sums of money and counts only: no message, name or prompt). The collection is read and written by functions only; System › Quotas shows it through the `golda-cost` function (admin only).
+
+- **The ceiling** (`app_meta/goldaCost.capUsd`, 5 US dollars a day unless changed in System › Quotas, 0 to 100) applies to background work only: scouting, the radar, research, reviews, deal work. A conversation and a briefing are counted but never blocked. A background job asks `gate()` first and skips with a job note when the ceiling is reached; 0 switches background work off.
+- **Golda tells the owner once**, in the day and after his briefing, on the day the ceiling is reached (`capNotice()`, wired into the hourly run in `golda-briefing.js`). Nothing is said at night, and a new day starts a new ledger.
+- **Prices change.** The table carries the date it was read and its source. When Anthropic changes a price, or Golda moves to another model, update `PRICES` and `PRICES_AS_OF`; a model with no row is recorded at 0 and counted in `estimatedCalls`, never guessed. A turn the fallback model answered is priced at the requested model's rate.
+- **A ledger that cannot be written never costs an answer**: the failure is logged (`[golda-cost]`) and the call goes on, so on such a day the meter reads low.
+
+## Golda 3.0: the deal room, regulation pointers and her nightly self-review
+
+**The deal room and what-ifs (`lib/golda-deal.js`, admins only).** `deal_scenarios` builds three scenarios (opening anchor, target, walk-away) from numbers on record only: the deal's salary, the salary in the club's requirement, the player's contract terms and what similar players of ours earn. A number the CRM does not have is listed as missing and never estimated; to fill it, save it on the deal or in the player's contract terms. A bare number in a deal or a requirement is read as euros per month, as the app shows it, and the answer says so. With the owner's own question one model call may word the reasoning (cost kind `deal`, skipped at the day's ceiling); a sentence with a number that is not in the facts is dropped. `finance_whatif` calculates a commission or a payment schedule and saves nothing; the arithmetic is in `packages/domain/src/engines/finance.ts`. A counter-offer is a draft through `outreach_prepare` / `outreach_link` that the owner sends himself.
+
+**Regulation pointers (`lib/regulations.js`).** A dated table, like `lib/transfer-windows.js`. Each row has a status:
+
+- `verified`: the statement was read on the regulator's own page on `readOn`, and the row carries the document, the article and the link.
+- `unverified`: the document could not be opened from the build machine (FIFA's PDF library and the Israel FA's site refuse automated readers). Such a row states no rule: Golda says the topic was not checked and where to check it.
+
+To verify or update a row, read the document, write the statement in `he`, fill `source` (document, article, readIn, url) and `readOn`, and set `status: 'verified'`; for the length of a representation agreement also fill `limitMonths`. A row read more than 180 days ago says so on its flag. FIFA's new RSTP takes effect on 1.1.2027: re-read the RSTP rows then. The suspension of the agent rules (fee cap, client pays, clearing house, dual representation) may end: re-read FIFA's agents news when it does. Israel is not in the windows table; add it to `lib/transfer-windows.js` with its source once the dates are read. Every flag ends with the line that it is a pointer and a lawyer should be asked; never remove it.
+
+**Nightly self-review (`lib/golda-review.js`).** A step of the hourly `golda-briefing` run, once a night between 02:00 and 05:00 Israel time: for each answer marked 👎 in the last day that has no proposal yet (at most 5 a night, cost kind `review`, skipped at the day's ceiling) one model call proposes one short rule, written to `golda_prompt_proposals/{feedback id}` (functions only). A proposal that carries an address, a link, a long number or words copied from the conversation is dropped. The owner gets at most one proposal a day, between 09:00 and 20:00, in an hour when nothing else of hers went out, as a card with "לאשר" / "לדחות". Only approved rules enter her prompt, the ten newest. To take a rule out, tell her ("תבטלי את הכלל…") or set the document's `state` to `rejected`. `app_meta/goldaReview` holds the night it last ran and the day it last offered. The job's notes carry counts only.
+
+**Eval cases (`netlify/functions/lib/__tests__/golda-evals.test.js`).** Hebrew requests run through the agent with a scripted model; they check the code's guardrails and run in CI with the other tests. Add a case there when a guardrail is added.
+

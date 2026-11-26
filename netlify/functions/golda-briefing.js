@@ -21,6 +21,8 @@
 //      In an hour when none of those went out, she offers an Instagram graphic
 //      for a represented player's birthday or yesterday's goal
 //      (lib/golda-instagram.js; the picture only after his yes).
+//      Before all of those, once on the day it happens: that her own work
+//      reached the day's cost ceiling and waits for tomorrow (lib/golda-cost.js).
 //      Never two in the same hour; on a day she asks about matches the monthly
 //      reminder waits for the next day, and on a day she asks about matches or
 //      reminds about the reports the daily question waits for the next day.
@@ -53,12 +55,14 @@ const { scraperAccount } = require('./lib/scraper-account.js');
 const { whatsappRecipients } = require('./lib/golda-identity.js');
 const outbox = require('./lib/wa-outbox.js');
 const { ensureTemplate, needsRecheck } = require('./lib/wa-templates.js');
-const { ownerOf } = require('./lib/golda-nudge.js');
+const { ownerOf, nudge } = require('./lib/golda-nudge.js');
 const { followSite, checkSiteCards } = require('./lib/golda-site-follow.js');
 const { askDaily } = require('./lib/golda-daily-question.js');
 const { askMatches, askedMatchesOn } = require('./lib/golda-match-report.js');
 const { askMonthlyReports, remindedOn } = require('./lib/golda-monthly-report.js');
 const { offerGraphics } = require('./lib/golda-instagram.js');
+const cost = require('./lib/golda-cost.js');
+const { reviewNightly, offerProposal } = require('./lib/golda-review.js');
 
 const KEEP_DAYS = 400;
 const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
@@ -120,6 +124,26 @@ async function syncFollowups(db, data, now, job, budget = FOLLOWUPS_PER_DAY) {
   }
   if (created.length || closed.length) job.note(`follow-ups: ${created.length} opened, ${closed.length} closed`);
   return created;
+}
+
+/**
+ * Tells the owner, once a day, that Golda's own work reached the day's cost
+ * ceiling (lib/golda-cost.js). A message that could not go out is offered
+ * again the next hour. Never throws.
+ */
+async function tellCap(db, owner, now, { send, job } = {}) {
+  let body = null;
+  try {
+    body = await cost.capNotice(db, { now });
+    if (!body) return {};
+    await nudge(db, owner, { body, kind: 'cost', remember: true }, { now: now.getTime(), send, job });
+    job.note('cost ceiling reached → told the owner');
+    return { sent: 1 };
+  } catch (e) {
+    job.note(`cost notice failed: ${e.message}`);
+    if (body) await cost.capNoticeUnsent(db, { now }).catch(() => {});
+    return {};
+  }
 }
 
 function buildFollowupMessage(first, tasks) {
@@ -191,6 +215,8 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   const hour = israelHour(now);
   // Once a night: which players have a card on the website, for the player checklist. Nothing is sent.
   await checkSiteCards(db, data.players, now, { hour, today, site: siteClient, job }).catch((e) => job.note(`site cards failed: ${e.message}`));
+  // Once a night: she reads back the answers marked 👎 and proposes a rule for each (lib/golda-review.js). Nothing is sent.
+  await reviewNightly(db, now, { hour, today, job }).catch(() => job.note('self-review failed'));
   const recipients = whatsappRecipients(data.users);
   if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
 
@@ -244,7 +270,7 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
           opportunities: safeOpportunities(data, now),
           weekAhead: pro.israelClock(now).weekday === 0 ? safe(() => pro.weekAhead(data, now), []) : [],
           transferWindows: windowsNow,
-          memories: visibleMemories(data.memories || [], { email: u.email, phone: u.phone }), fallbackText,
+          memories: visibleMemories(data.memories || [], { email: u.email, phone: u.phone }), fallbackText, db,
         });
         if (!b.ai) job.note(`briefing ${u.email}: template (${b.reason})`);
         await say(u, b.text, 'briefing');
@@ -285,7 +311,7 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
         const facts = pro.recapFacts({ ...data, audit: recapData.audit, feedback: data.feedback || [] }, now);
         const quality = u.role === 'admin' ? facts.quality : null;
         const nextWeek = safe(() => pro.weekAhead(data, new Date(now.getTime() + 3 * 86400000)), []);
-        const b = await (write?.recap || writeRecap)({ name: first, facts, nextWeek, quality, fallbackText: buildRecap(first, facts, quality) });
+        const b = await (write?.recap || writeRecap)({ name: first, facts, nextWeek, quality, fallbackText: buildRecap(first, facts, quality), db });
         if (!b.ai) job.note(`recap ${u.email}: template (${b.reason})`);
         await say(u, b.text, 'recap');
         sent.recaps[u.email] = today; count++;
@@ -306,7 +332,9 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   // What Golda starts on her own with the owner. A failure here never costs the hour's other messages.
   const owner = ownerOf(recipients);
   if (owner && !quiet && sent.briefings[owner.email] === today) {
-    const site = await followSite(db, owner, data.players, now, { admin, send, job, site: siteClient }).catch((e) => { job.note(`site follow failed: ${e.message}`); return {}; });
+    // The day's ceiling on what she spends on her own was reached: said once, and it takes this hour's turn.
+    const capped = await tellCap(db, owner, now, { send, job });
+    const site = capped.sent ? {} : await followSite(db, owner, data.players, now, { admin, send, job, site: siteClient }).catch((e) => { job.note(`site follow failed: ${e.message}`); return {}; });
     const games = site.sent ? {} : await askMatches(db, owner, { matches: data.matches, players: data.players, users: data.users }, now, { hour, send, job }).catch((e) => { job.note(`match question failed: ${e.message}`); return {}; });
     const matchDay = !!games.sent || await askedMatchesOn(db, today).catch(() => false);
     const reports = site.sent || matchDay ? {} : await askMonthlyReports(db, owner, { players: data.players }, now, { hour, send, job }).catch((e) => { job.note(`monthly reports reminder failed: ${e.message}`); return {}; });
@@ -314,7 +342,19 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
     const asked = site.sent || matchDay || reportDay ? {} : await askDaily(db, owner, data.players, now, { hour, send, job }).catch((e) => { job.note(`daily question failed: ${e.message}`); return {}; });
     // An Instagram graphic for a birthday or yesterday's goal: only in an hour when nothing else of hers went out.
     const offer = site.sent || games.sent || reports.sent || asked.sent ? {} : await offerGraphics(db, owner, { players: data.players, matches: data.matches }, now, { hour, send, job }).catch((e) => { job.note(`graphic offer failed: ${e.message}`); return {}; });
-    count += (site.sent || 0) + (games.sent || 0) + (reports.sent || 0) + (asked.sent || 0) + (offer.sent || 0);
+    count += (capped.sent || 0) + (site.sent || 0) + (games.sent || 0) + (reports.sent || 0) + (asked.sent || 0) + (offer.sent || 0);
+    // Golda 3.0, the market radar: one opportunity card, else one cold-contact nudge, only in an hour when nothing else of hers went out.
+    // Both tell their state in the job's notes and never a name, so a failure is noted by its kind, not its text.
+    const spoke = capped.sent || site.sent || games.sent || reports.sent || asked.sent || offer.sent;
+    // A step that threw may have sent its message before it failed, so a failure counts as having spoken for the rest of the chain.
+    const failed = (what) => (e) => { job.note(`${what} failed (${(e && (e.status || e.code || e.name)) || 'error'})`); return { failed: true }; };
+    const card = spoke ? {} : await require('./lib/golda-radar.js').offerRadar(db, owner, now, { hour, send, job }).catch(failed('radar card'));
+    const cardSpoke = card.sent || card.failed;
+    const cold = spoke || cardSpoke ? {} : await require('./lib/golda-network.js').coldNudge(db, owner, data, now, { hour, send, job }).catch(failed('cold-contact nudge'));
+    count += (card.sent || 0) + (cold.sent || 0);
+    // A rule she proposed for herself after a 👎: at most one a day, only in an hour when nothing else of hers went out.
+    const proposal = spoke || cardSpoke || cold.sent || cold.failed ? {} : await offerProposal(db, owner, now, { hour, send, job }).catch(() => { job.note('rule proposal failed'); return {}; });
+    count += proposal.sent || 0;
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning
@@ -340,4 +380,4 @@ exports.handler = schedule('30 * * * *', async () => {
     return { statusCode: 500, body: String(e.message || e) };
   }
 });
-exports._internal = { todaysGames, todaysMeetings, pruneSent, israelHour, run, buildFollowupMessage, QUIET, syncFollowups, FOLLOWUPS_PER_DAY };
+exports._internal = { todaysGames, todaysMeetings, pruneSent, israelHour, run, buildFollowupMessage, QUIET, syncFollowups, FOLLOWUPS_PER_DAY, tellCap };

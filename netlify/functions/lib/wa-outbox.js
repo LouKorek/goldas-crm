@@ -24,6 +24,11 @@
 //     go; a player is never sent a content-free template.
 //     expiresAt (ms): a queued text not released by then is dropped (a
 //     reminder must not arrive after its training).
+//     ref ({ type, id }, optional): what the message is about (a radar card,
+//     a deal). It stays on the outbox row next to the WhatsApp message id
+//     the send returned (messageId on a row sent at once, messageIds on a row
+//     released later), so a tap on one of the message's buttons, which names
+//     that id, can be traced back to it (lib/golda-taps.js).
 //   onStatuses(db, statuses)   webhook: 'delivered' / 'read' / 'failed' on the
 //     outbox row; a 131047 failure turns the row into 'queued' and re-engages.
 //   onInbound(db, phone, via, {release})  webhook: the person wrote, so the
@@ -35,7 +40,7 @@
 //
 // wa_contacts/{phone}: lastInbound, lastReengageAt, lastReengageTemplate,
 //   lastDelivered, lastFailure {at, code, message}.
-// wa_outbox/{id}: to, via, body, kind, buttons, state, queuedAt | sentAt, error, flushedAt.
+// wa_outbox/{id}: to, via, body, kind, buttons, ref, messageId | messageIds, state, queuedAt | sentAt, error, flushedAt.
 const wa = require('./wa-api.js');
 const { digits } = require('./golda-identity.js');
 const { BRIEF, DIGEST, UPDATE, approvedSomewhere } = require('./wa-templates.js');
@@ -211,18 +216,21 @@ async function reengage(db, phone, via, contact, { now = Date.now(), api = wa, l
 /** A text, with its reply buttons when it has any. */
 const sendOut = (api, phone, body, buttons, via) => (buttons && buttons.length && api.sendButtons ? api.sendButtons(phone, body, buttons, via) : api.sendText(phone, body, via));
 const cleanButtons = (buttons) => (Array.isArray(buttons) ? buttons.map((b) => String(b || '').trim()).filter(Boolean).slice(0, 3) : []);
+/** What a message is about, as { type, id }; null when it is not given whole. */
+const cleanRef = (ref) => (ref && ref.type && ref.id ? { type: String(ref.type).slice(0, 60), id: String(ref.id).slice(0, 200) } : null);
 
 /** Send a proactive text, or hold it until the person writes. */
-async function deliver(db, { to, body, via = null, kind = 'text', buttons = [], carryOnly = false, expiresAt = null }, { now = Date.now(), api = wa, log = console.log } = {}) {
+async function deliver(db, { to, body, via = null, kind = 'text', buttons = [], carryOnly = false, expiresAt = null, ref: about = null }, { now = Date.now(), api = wa, log = console.log } = {}) {
   const phone = digits(to);
   const contact = await readContact(db, phone);
   const state = windowState(contact, now);
   const taps = cleanButtons(buttons);
-  const extra = { ...(taps.length ? { buttons: taps } : {}), ...(Number(expiresAt) > 0 ? { expiresAt: Number(expiresAt) } : {}), ...(carryOnly ? { carryOnly: true } : {}) };
+  const subject = cleanRef(about);
+  const extra = { ...(taps.length ? { buttons: taps } : {}), ...(Number(expiresAt) > 0 ? { expiresAt: Number(expiresAt) } : {}), ...(carryOnly ? { carryOnly: true } : {}), ...(subject ? { ref: subject } : {}) };
   if (state !== 'closed') {
     const ids = await sendOut(api, phone, body, taps, via);
     for (const id of ids.filter(Boolean)) {
-      await db.collection('wa_outbox').doc(id).set({ to: phone, via, body, kind, ...extra, state: 'sent', sentAt: now, window: state });
+      await db.collection('wa_outbox').doc(id).set({ to: phone, via, body, kind, ...extra, messageId: id, state: 'sent', sentAt: now, window: state });
     }
     return { state: 'sent', ids };
   }

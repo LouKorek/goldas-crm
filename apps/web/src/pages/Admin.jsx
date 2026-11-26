@@ -3,7 +3,9 @@
 // let the admin act without a terminal.
 //   Health   every night job: last run, result, duration, last error, "run now"
 //   Quotas   ScraperAPI credits, Netlify deploys this month, Golda's usage
-//            today, the TM Watch credit budget (editable)
+//            today, what her model calls cost today with the daily ceiling
+//            on the work she starts by herself (editable), the TM Watch
+//            credit budget (editable)
 //   Backups  the weekly backups, "back up now", download as a file, and
 //            restore: one record, or everything
 //   Audit    every change anyone (or Golda) made, with filters
@@ -26,7 +28,7 @@ import AgreementTemplates from 'components/admin/AgreementTemplates';
 import {
   JOBS, listenJobs, runJobNow, groupRuns, fetchScraperStatus, listenTmWatchMeta, saveTmWatchBudget, listenDeploys,
   listenGoldaUsage, listenBackups, downloadBackup, listenAudit, listenClientErrors, listenMetaConnect, startMetaConnect,
-  listenJobStatus, findInBackup, restoreRecord, restoreEverything, fetchOffsiteCopies,
+  listenJobStatus, findInBackup, restoreRecord, restoreEverything, fetchOffsiteCopies, fetchGoldaCost, saveGoldaCostCap,
 } from 'data/admin';
 
 const VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
@@ -179,17 +181,85 @@ function Health({ he }) {
 }
 
 // ── Quotas ───────────────────────────────────────────────────────
-function Gauge({ used, limit, label, sub, warnAt = 0.8 }) {
+const plain = (n) => Number(n).toLocaleString();
+// A gauge without its card: the label, the numbers, the bar and a line under it.
+function GaugeBody({ used, limit, label, sub, warnAt = 0.8, format = plain, mark = null }) {
   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const color = !limit ? 'var(--text-3)' : used >= limit ? 'var(--red)' : pct >= warnAt * 100 ? 'var(--amber)' : 'var(--green-ok)';
   return (
-    <Card>
+    <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <div style={{ fontWeight: 700 }}>{label}</div>
-        <Mono style={{ color }}>{limit ? `${Number(used).toLocaleString()} / ${Number(limit).toLocaleString()}` : Number(used).toLocaleString()}</Mono>
+        <div style={{ fontWeight: 700 }}>{label}{mark}</div>
+        <Mono style={{ color, whiteSpace: 'nowrap' }}>{limit ? `${format(used)} / ${format(limit)}` : format(used)}</Mono>
       </div>
       <div style={{ height: 6, background: 'var(--surface-3)', marginTop: 10 }}><div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width var(--trans)' }} /></div>
       {sub && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>{sub}</div>}
+    </>
+  );
+}
+const Gauge = (props) => <Card><GaugeBody {...props} /></Card>;
+
+// What Golda's model calls cost today, against the daily ceiling on the work
+// she starts by herself (scouting, research and the like): one row across
+// the grid, the gauge and the ceiling on one side, where the money went on
+// the other. The numbers come from the golda-cost function; the ceiling is
+// the one thing set here.
+const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+const COST_KINDS = [['chat', 'Chats'], ['briefing', 'Briefings'], ['scouting', 'Scouting'], ['radar', 'Radar'], ['research', 'Research'], ['review', 'Reviews'], ['deal', 'Deal work'], ['other', 'Other work']];
+const WIDE = { gridColumn: '1 / -1' };
+const CostRow = ({ label, value, note, strong, first }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '6px 0', borderTop: first ? 'none' : '1px solid var(--rule)', fontSize: 12.5 }}>
+    <span style={{ color: strong ? 'var(--text-1)' : 'var(--text-2)', fontWeight: strong ? 600 : 400 }}>{label}{note && <span style={{ color: 'var(--text-3)', marginInlineStart: 6 }}>{note}</span>}</span>
+    <Mono>{value}</Mono>
+  </div>
+);
+function GoldaCost() {
+  const [meter, setMeter] = useState(null);
+  const [cap, setCap] = useState('');
+  const [saving, setSaving] = useState(false);
+  const take = (m) => { setMeter(m); setCap(String(m.capUsd)); };
+  useEffect(() => { fetchGoldaCost().then(take).catch((e) => setMeter({ error: e.message })); }, []);
+  const title = t("Golda's own work today");
+  if (!meter) return <Card style={WIDE}><div style={{ fontWeight: 700, marginBottom: 10 }}>{title}</div><Skeleton rows={3} height={18} /></Card>;
+  if (meter.error) return <Card style={WIDE}><div style={{ fontWeight: 700 }}>{title}</div><div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>{t('Could not read what Golda cost today.')}</div></Card>;
+  const { today, capUsd, capMax } = meter;
+  const off = capUsd <= 0;
+  const asked = cap.trim() === '' ? NaN : Number(cap);
+  const valid = Number.isFinite(asked) && asked >= 0 && asked <= capMax;
+  const save = async () => {
+    if (!valid) { toast.error(t('Enter a number from 0 to {max}.', { max: capMax })); return; }
+    setSaving(true);
+    try { take(await saveGoldaCostCap(asked)); toast.success(t('The ceiling is saved.')); }
+    catch (e) { toast.error(e.message); }
+    setSaving(false);
+  };
+  const calls = (n) => (n === 1 ? t('One call') : t('{n} calls', { n }));
+  const kinds = COST_KINDS.filter(([k]) => today.byKind?.[k]?.calls);
+  const stopped = off ? t('Switched off') : today.capped ? t('Stopped until tomorrow') : '';
+  return (
+    <Card style={WIDE}>
+      <div style={{ display: 'grid', gap: '16px 40px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', alignItems: 'start' }}>
+        <div>
+          <GaugeBody label={title} used={today.backgroundUsd} limit={capUsd} format={usd}
+            mark={stopped && <span style={{ display: 'inline-block', marginInlineStart: 8, padding: '2px 8px', fontSize: 11, fontWeight: 700, color: off ? 'var(--text-2)' : 'var(--red)', background: off ? 'var(--surface-3)' : 'var(--red-bg)' }}>{stopped}</span>}
+            sub={off ? t('The ceiling is 0, so Golda starts no work by herself. Chats and briefings go on as usual.') : t('Scouting, research and the other work Golda starts by herself stop for the day once they reach the ceiling. Chats and briefings are never stopped.')} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginTop: 14 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Field label={t('Daily ceiling, in dollars')} hint={t('From 0 to {max}. At 0 Golda starts no work by herself.', { max: capMax })}>
+                <input type="number" inputMode="decimal" min="0" max={capMax} step="0.5" value={cap} aria-invalid={!valid} onChange={(e) => setCap(e.target.value)} />
+              </Field>
+            </div>
+            <button className="btn btn-primary btn-sm" disabled={saving || !valid || asked === capUsd} onClick={save} style={{ height: 40, flex: 'none', marginTop: 24 }}>{saving ? '…' : t('Save')}</button>
+          </div>
+        </div>
+        <div>
+          <CostRow first strong label={t('Everything today, chats included')} value={usd(today.totalUsd)} />
+          {kinds.map(([k, label]) => <CostRow key={k} label={t(label)} note={calls(today.byKind[k].calls)} value={usd(today.byKind[k].usd)} />)}
+          <CostRow label={t('Last {n} days', { n: meter.days.length })} value={usd(meter.periodUsd)} />
+          {today.estimatedCalls > 0 && <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 8 }}>{t('{n} calls ran on a model with no price in the table and count as 0.', { n: today.estimatedCalls })}</div>}
+          <div style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8 }}>{t('An estimate from the list prices of {date}, not an invoice.', { date: String(meter.pricesAsOf || '').split('-').reverse().join('/') })}</div>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -232,6 +302,7 @@ function Quotas({ he }) {
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}><button className="btn btn-primary btn-sm" onClick={save} style={{ height: 32 }}>{t('Save')}</button></div>
       </Card>
+      <GoldaCost />
     </div>
   );
 }

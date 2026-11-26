@@ -143,6 +143,12 @@ function splitForButtons(text, max = INTERACTIVE_BODY_MAX) {
 }
 
 /**
+ * The buttons as WhatsApp shows them: cut to its title length, no repeats, three at most.
+ * Button i is sent with the id `b${i}`, which is what a tap comes back with (lib/golda-taps.js).
+ */
+const buttonTitles = (buttons) => [...new Set((buttons || []).map((b) => clip(b, BUTTON_TITLE_MAX)).filter(Boolean))].slice(0, 3);
+
+/**
  * Reply buttons: up to three taps under a message. A tap comes back as an
  * ordinary message whose text is the button's title. A body longer than an
  * interactive message allows goes first as text, the buttons follow under
@@ -150,7 +156,7 @@ function splitForButtons(text, max = INTERACTIVE_BODY_MAX) {
  */
 async function sendButtons(to, body, buttons, via) {
   const from = via || await defaultPhoneId();
-  const titles = [...new Set((buttons || []).map((b) => clip(b, BUTTON_TITLE_MAX)).filter(Boolean))].slice(0, 3);
+  const titles = buttonTitles(buttons);
   if (!titles.length) return sendText(to, body, via);
   const ids = [];
   let text = String(body || '').trim();
@@ -292,6 +298,10 @@ function extractMessages(payload) {
           text: m.text?.body || m.document?.caption || m.image?.caption || m.video?.caption || m.button?.text || m.interactive?.button_reply?.title || m.interactive?.list_reply?.title || '',
           // A tap on a template's quick-reply button, an interactive button or a menu row.
           payload: m.button?.payload || m.interactive?.button_reply?.id || m.interactive?.list_reply?.id || null,
+          // The message this one answers, when WhatsApp names it: a tap on a button names the message that
+          // carried the buttons (messages[].context.id), and so does a reply made by swiping on a message.
+          // lib/golda-taps.js uses it to tell which card was tapped. Null when there is none.
+          contextId: m.context?.id || null,
           // Forwarded from another chat (WhatsApp marks it; "frequently" = forwarded many times).
           forwarded: Boolean(m.context?.forwarded || m.context?.frequently_forwarded),
           voice: Boolean(m.audio?.voice),
@@ -326,4 +336,4 @@ function extractStatuses(payload) {
   return out;
 }
 
-module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, sendImage, sendVoice, sendCtaUrl, splitForButtons, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };
+module.exports = { defaultPhoneId, tokenFor, _resetRoutingForTests: () => { _routing = null; }, isAllowed, senderName, validSignature, sendText, splitText, sendTemplate, markRead, sendButtons, sendList, sendDocument, sendImage, sendVoice, sendCtaUrl, splitForButtons, buttonTitles, BUTTON_TITLE_MAX, downloadMedia, extractMessages, extractStatuses, digits };

@@ -87,10 +87,11 @@ test('nudge sends through the given sender; only a remembered message enters the
   await nudge(db, owner, { body: 'שאלה?', buttons: ['כן'], kind: 'question', remember: true }, { now: 2, send, job });
   assert.equal(db.all('wa_sessions/972500000001/threads')[0].history[0].text, 'שאלה?');
   assert.deepEqual(sent.map((s) => [s.kind, s.buttons]), [['meeting', []], ['question', ['כן']]]);
-  assert.match(notes[0], /window closed, queued/);
+  assert.equal(notes[0], 'meeting: window closed, queued');
+  for (const n of notes) assert.ok(!n.includes(owner.email) && !n.includes(owner.phone), 'a job note holds states only, never the address or the number');
   // the chat cannot be written: the message still went out
   const broken = { collection: () => { throw new Error('offline'); } };
   const r = await nudge(broken, owner, { body: 'שאלה?', kind: 'question', remember: true }, { now: 3, send, job });
   assert.equal(r.state, 'queued');
-  assert.match(notes.at(-1), /chat note failed: offline/);
+  assert.equal(notes.at(-1), 'question: chat note failed (Error)', 'the error\'s own text is not kept');
 });

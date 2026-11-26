@@ -17,8 +17,10 @@ const { playerName, flagEmoji, POSITIONS } = require('@goldas/domain');
 const yt = require('./youtube.js');
 const { fill, DEFAULT_SPEC, LAYOUTS } = require('./youtube-thumb.js');
 
-const MODEL = 'claude-opus-5-5';
-const EFFORT = 'high';
+const { effortForTask } = require('./golda-effort.js');
+const cost = require('./golda-cost.js');
+
+const { model: MODEL, effort: EFFORT } = effortForTask('style');
 const MAX_TOKENS = 8000;
 const DOC = ['app_meta', 'youtubeStyle'];
 const COVERS_SHOWN = 6;
@@ -220,6 +222,7 @@ async function learnStyle(db, { token, channel, anthropic, fetchImpl = fetch, no
       model: MODEL, max_tokens: MAX_TOKENS, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: EFFORT },
       system: SYSTEM, tools: [STYLE_TOOL], messages: [{ role: 'user', content }],
     }).finalMessage();
+    await cost.record(db, { kind: 'other', model: MODEL, usage: msg.usage, now });
     const call = (msg.content || []).find((b) => b.type === 'tool_use' && b.name === 'save_style');
     if (call?.input) {
       style = cleanStyle(call.input, { lists });

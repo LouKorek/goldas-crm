@@ -10,8 +10,10 @@
 // the hourly briefing pass delivers to the admins.
 const { playerName, expandTrainings, AGE_GROUPS, israelDate } = require('@goldas/domain');
 
-const MODEL = 'claude-opus-5-5';
-const EFFORT = 'medium';
+const { effortForTask } = require('./golda-effort.js');
+const cost = require('./golda-cost.js');
+
+const { model: MODEL, effort: EFFORT } = effortForTask('player');
 const MAX_TOKENS = 4000;
 const MAX_STEPS = 4;
 const DAILY_LIMIT = 30;
@@ -127,27 +129,34 @@ async function runPlayerAgent({ db, admin, identity, text, media, history = [], 
 
   const usage = { inputTokens: 0, outputTokens: 0, steps: 0 };
   let reply = '';
+  let spent = null;
   const system = systemPrompt(view, first);
-  for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await anthropic.beta.messages.stream({
-      model: MODEL, max_tokens: MAX_TOKENS, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: EFFORT },
-      system, tools: TOOLS, messages,
-    }).finalMessage();
-    usage.steps++;
-    usage.inputTokens += res.usage?.input_tokens || 0;
-    usage.outputTokens += res.usage?.output_tokens || 0;
-    if (res.stop_reason === 'refusal') { reply = `${first}, את זה אני לא יכולה לענות. כדאי לדבר עם לו.`; break; }
-    messages.push({ role: 'assistant', content: res.content });
-    const uses = res.content.filter((b) => b.type === 'tool_use');
-    if (res.stop_reason !== 'tool_use' || !uses.length) { reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim(); break; }
-    const results = [];
-    for (const u of uses) {
-      try {
-        if (!run[u.name]) throw new Error('unknown tool');
-        results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(await run[u.name](u.input || {})) });
-      } catch (e) { results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${e.message}`, is_error: true }); }
+  try {
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const res = await anthropic.beta.messages.stream({
+        model: MODEL, max_tokens: MAX_TOKENS, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: EFFORT },
+        system, tools: TOOLS, messages,
+      }).finalMessage();
+      usage.steps++;
+      usage.inputTokens += res.usage?.input_tokens || 0;
+      usage.outputTokens += res.usage?.output_tokens || 0;
+      spent = cost.addUsage(spent, res.usage);
+      if (res.stop_reason === 'refusal') { reply = `${first}, את זה אני לא יכולה לענות. כדאי לדבר עם לו.`; break; }
+      messages.push({ role: 'assistant', content: res.content });
+      const uses = res.content.filter((b) => b.type === 'tool_use');
+      if (res.stop_reason !== 'tool_use' || !uses.length) { reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim(); break; }
+      const results = [];
+      for (const u of uses) {
+        try {
+          if (!run[u.name]) throw new Error('unknown tool');
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(await run[u.name](u.input || {})) });
+        } catch (e) { results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${e.message}`, is_error: true }); }
+      }
+      messages.push({ role: 'user', content: results });
     }
-    messages.push({ role: 'user', content: results });
+  } finally {
+    // A player's question is a conversation: counted in the day's ledger, never capped (lib/golda-cost.js).
+    if (spent) await cost.record(db, { kind: 'chat', model: MODEL, usage: spent, now });
   }
   if (!reply) reply = `${first}, משהו השתבש ולא סיימתי. אפשר לנסח שוב?`;
   const fileNote = media ? ` [file: ${media.filename || 'file'}]` : '';

@@ -88,4 +88,43 @@ function chooseEffort({ text = '', media = null, session = {}, history = [], top
   return top('not clearly a lookup');
 }
 
-module.exports = { chooseEffort, awaitsAnswer, TOP, LOOKUP, CHAT, LOOKUP_MAX_CHARS };
+// One model for everything Golda does; effort is what changes with the task.
+const MODEL = 'claude-opus-5-5';
+
+// How hard each kind of work thinks. A conversation picks its own level per
+// message (chooseEffort above); here it is the level it starts from. The
+// background jobs used to carry their own constants; they read them from here.
+//   briefing     the morning briefing and the weekly recap
+//   scouting     the weekly web search for a club requirement
+//   radar_scan   a wide, cheap pass over many items: is anything here worth a look
+//   radar_card   writing up the one item that was
+//   research     a deep look at one question, on request
+//   review       reading back over her own work
+//   deal         thinking a deal through: fit, terms, next step
+//   player       an answer to a represented player (lib/golda-player.js)
+//   style        learning the YouTube channel's style (lib/youtube-style.js)
+const TASK_EFFORT = {
+  briefing: 'high',
+  scouting: 'high',
+  radar_scan: 'low',
+  radar_card: 'medium',
+  research: 'high',
+  review: 'medium',
+  deal: 'high',
+  player: 'medium',
+  style: 'high',
+};
+
+/**
+ * effortForTask(task) → { model, effort }
+ * 'chat' is the conversation's default (what chooseEffort answers when
+ * nothing says the message is simple). An unknown task is a mistake in the
+ * code, so it throws instead of quietly running at some level.
+ */
+function effortForTask(task) {
+  if (task === 'chat') return { model: MODEL, effort: chooseEffort().effort };
+  if (!Object.prototype.hasOwnProperty.call(TASK_EFFORT, task)) throw new TypeError(`effortForTask: unknown task "${task}"`);
+  return { model: MODEL, effort: TASK_EFFORT[task] };
+}
+
+module.exports = { chooseEffort, awaitsAnswer, effortForTask, MODEL, TASKS: ['chat', ...Object.keys(TASK_EFFORT)], TOP, LOOKUP, CHAT, LOOKUP_MAX_CHARS };

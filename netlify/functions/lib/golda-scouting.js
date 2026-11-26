@@ -5,8 +5,10 @@
 // gets one WhatsApp summary. Golda only suggests names; nobody is contacted.
 const { playerName } = require('@goldas/domain');
 
-const MODEL = 'claude-opus-5-5';
-const EFFORT = 'high';
+const { effortForTask } = require('./golda-effort.js');
+const cost = require('./golda-cost.js');
+
+const { model: MODEL, effort: EFFORT } = effortForTask('scouting');
 const MAX_TOKENS = 16000;
 const SCOUT_WEEKDAY = 0;          // Sunday
 const SCOUT_HOUR = 10;            // after the morning briefings
@@ -65,9 +67,13 @@ function parseCandidates(text) {
   })).filter((c) => c.name && c.link).slice(0, MAX_CANDIDATES);
 }
 
-/** One requirement, one search. Returns { candidates, ai, reason? }; never throws. */
-async function scoutRequirement(req, { client, ours = [] } = {}) {
+/**
+ * One requirement, one search. Returns { candidates, ai, reason? }; never throws.
+ * With `db`, each answer's cost (tokens and web searches) goes to the day's ledger.
+ */
+async function scoutRequirement(req, { client, ours = [], db = null, now = new Date() } = {}) {
   if (!client && !process.env.ANTHROPIC_API_KEY) return { candidates: [], ai: false, reason: 'no ANTHROPIC_API_KEY' };
+  let spent = null;
   try {
     const anthropic = client || new (require('@anthropic-ai/sdk'))();
     const messages = [{ role: 'user', content: JSON.stringify({ requirement: requirementFacts(req), alreadyOurs: ours.slice(0, 300) }) }];
@@ -77,6 +83,7 @@ async function scoutRequirement(req, { client, ours = [] } = {}) {
         model: MODEL, max_tokens: MAX_TOKENS, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default', output_config: { effort: EFFORT },
         system: SYSTEM, tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }], messages,
       }).finalMessage();
+      spent = cost.addUsage(spent, res.usage);
       if (res.stop_reason !== 'pause_turn') break;
       messages.push({ role: 'assistant', content: res.content });   // a long search pauses; send it back to resume
     }
@@ -87,6 +94,9 @@ async function scoutRequirement(req, { client, ours = [] } = {}) {
     return { candidates: candidates.filter((c) => !mine.has(c.name.toLowerCase())), ai: true };
   } catch (e) {
     return { candidates: [], ai: false, reason: e.message || String(e) };
+  } finally {
+    // What was spent is counted even when the search failed half way.
+    if (spent) await cost.record(db, { kind: 'scouting', model: MODEL, usage: spent, now });
   }
 }
 
@@ -94,9 +104,15 @@ async function scoutRequirement(req, { client, ours = [] } = {}) {
 async function runScouting(db, { requirements, players }, now, job, { client, scout = scoutRequirement } = {}) {
   const picked = pickRequirements(requirements, now);
   if (!picked.length) return [];
+  // Scouting is work Golda does on her own, so it stops at the day's cost ceiling (lib/golda-cost.js).
+  const allowed = await cost.gate(db, 'scouting', { now });
+  if (!allowed.ok) {
+    job.note(`scouting skipped: the day's background cost ceiling is reached ($${allowed.spentUsd.toFixed(2)} of $${allowed.capUsd.toFixed(2)})`);
+    return [];
+  }
   const ours = (players || []).filter((p) => !p.deletedAt).map((p) => playerName(p)).filter(Boolean);
   const results = await Promise.all(picked.map(async (req) => {
-    const r = await scout(req, { client, ours });
+    const r = await scout(req, { client, ours, db, now });
     if (!r.ai) job.note(`scouting ${req.clubName}: ${r.reason}`);
     // A failed search is not saved, so the requirement is tried again next week.
     if (r.ai) await db.collection('club_requirements').doc(req.id).set({ scouting: { at: now.toISOString(), candidates: r.candidates } }, { merge: true });

@@ -7,8 +7,10 @@
 const { isClosedStage } = require('@goldas/domain');
 const { fmtDate } = require('./golda-briefing.js');
 
-const MODEL = 'claude-opus-5-5';
-const EFFORT = 'high';
+const { effortForTask } = require('./golda-effort.js');
+const cost = require('./golda-cost.js');
+
+const { model: MODEL, effort: EFFORT } = effortForTask('briefing');
 const MAX_TOKENS = 16000;
 const APP_LINK = 'https://goldas-crm.netlify.app/home/today';
 
@@ -72,11 +74,12 @@ function briefingFacts({ name, today, games = [], alerts = [], changes24h = [], 
 }
 
 /**
- * writeBriefing({ name, today, games, alerts, changes24h, deals, requirements, memories, fallbackText, client })
+ * writeBriefing({ name, today, games, alerts, changes24h, deals, requirements, memories, fallbackText, client, db })
  * Returns { text, ai: true } or { text: fallbackText, ai: false, reason }.
+ * With `db`, what the answer cost is added to the day's ledger (lib/golda-cost.js).
  */
 async function writeBriefing(opts) {
-  const { name, today, fallbackText, client } = opts;
+  const { name, today, fallbackText, client, db = null } = opts;
   if (!client && !process.env.ANTHROPIC_API_KEY) return { text: fallbackText, ai: false, reason: 'no ANTHROPIC_API_KEY' };
   try {
     const anthropic = client || new (require('@anthropic-ai/sdk'))();
@@ -89,6 +92,7 @@ async function writeBriefing(opts) {
       system: SYSTEM,
       messages: [{ role: 'user', content: `First line: ${firstLine(name, today)}\n\nFacts:\n${JSON.stringify(briefingFacts(opts))}` }],
     }).finalMessage();
+    await cost.record(db, { kind: 'briefing', model: MODEL, usage: msg.usage });
     const text = (msg.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     const shaped = shapeBriefing(text, name, today);
     if (!shaped || shaped.split('\n').filter((l) => l.trim()).length < 3) return { text: fallbackText, ai: false, reason: 'empty answer' };
@@ -114,7 +118,7 @@ const RECAP_SYSTEM = [
 const recapFirstLine = (name) => `*סיכום שבוע, ${name}* 📋`;
 
 /** The Thursday recap, written by the model; the fallback is a short template. */
-async function writeRecap({ name, facts, nextWeek = [], quality = null, fallbackText, client }) {
+async function writeRecap({ name, facts, nextWeek = [], quality = null, fallbackText, client, db = null }) {
   if (!client && !process.env.ANTHROPIC_API_KEY) return { text: fallbackText, ai: false, reason: 'no ANTHROPIC_API_KEY' };
   try {
     const anthropic = client || new (require('@anthropic-ai/sdk'))();
@@ -124,6 +128,7 @@ async function writeRecap({ name, facts, nextWeek = [], quality = null, fallback
       system: RECAP_SYSTEM,
       messages: [{ role: 'user', content: `First line: ${recapFirstLine(name)}\n\nThe week:\n${JSON.stringify({ ...week, nextWeek: nextWeek.slice(0, 7), ...(quality ? { quality } : {}) })}` }],
     }).finalMessage();
+    await cost.record(db, { kind: 'briefing', model: MODEL, usage: msg.usage });
     let text = (msg.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
     if (!text || text.split('\n').filter((l) => l.trim()).length < 3) return { text: fallbackText, ai: false, reason: 'empty answer' };
     const lines = text.split('\n').filter((l) => !l.includes(APP_LINK));
