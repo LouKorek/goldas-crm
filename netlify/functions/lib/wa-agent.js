@@ -41,6 +41,10 @@ const { voiceTools, voiceSection, VOICE_TOOL_DEF } = require('./golda-voice.js')
 const { instagramTools, INSTAGRAM_TOOL_DEF } = require('./golda-instagram.js');
 const { radarTools, radarSection, RADAR_TOOL_DEFS } = require('./golda-radar.js');   // loading it also registers the radar card's taps (lib/golda-taps.js)
 const { researchTools, RESEARCH_TOOL_DEFS, researchSection } = require('./golda-research.js');
+// Golda 3.0: the deal room and what-ifs, regulation pointers, her own approved rules.
+const { dealTools, dealSection, DEAL_TOOL_DEFS } = require('./golda-deal.js');
+const { regulationTools, regulationSection, REGULATION_TOOL_DEF } = require('./regulations.js');
+const { reviewTools, reviewSection, approvedRules, rulesSection, PROMPT_RULES_TOOL_DEF } = require('./golda-review.js');
 
 // Since the model unification every person lives in `players` with a stage
 // and a category. Golda keeps speaking in the old collection names (the
@@ -291,7 +295,7 @@ const ROLE_LINE = {
   viewer: 'a viewer: they may read and ask anything, but you must NOT change the CRM for them (the write tools are not available in this chat; say so politely if asked)',
 };
 
-function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = [], mistakes = []) {
+function systemPrompt(name, identity = { name: 'לו', role: 'admin' }, topic = null, topics = [], channel = 'whatsapp', memories = [], mistakes = [], rules = []) {
   const sender = identity.name || 'לו';
   const where = channel === 'app' ? 'in the chat screen inside the CRM app' : 'on WhatsApp (each in their own private chat; the same conversation continues in the app)';
   return `You are ${name} (${name === 'גולדה' ? 'Golda' : name}), the assistant of the Gold A&S football agency. People from the agency write to you ${where}. You know the agency's CRM inside out: you read and analyse everything in it, including the documents stored in it, give recommendations, and carry out changes yourself using the tools. You can also search the web. The person writing is ${sender}, ${ROLE_LINE[identity.role] || ROLE_LINE.viewer}. Every change you make is recorded in their name.
@@ -337,6 +341,7 @@ ${researchSection()}
 ${outreachSection(channel)}
 ${networkSection(identity.role)}
 ${radarSection(identity.role)}
+${[dealSection(identity.role), regulationSection(), reviewSection(identity.role)].filter(Boolean).join('\n')}
 ${voiceSection(channel) ? `${voiceSection(channel)}\n` : ''}- "מה האחרון שכתבנו עם <מועדון>" / "מה כתבו לנו מ…" / the last e-mails with a club, a contact or about a deal → mail_recent (admins and managers; read-only, from the mail the CRM keeps). Answer with the date, who wrote to whom, the subject and the snippet, newest first, and the Gmail link. You never send or answer mail.
 - "מה השתנה…" / what changed (this week, since yesterday, on a player, by someone) → changes. "מה המצב" / the big picture → overview.
 - "ספרי לי על <שחקן>" / "מה המצב של…" / before a call or meeting about a player → find the player, then player_brief (one call has everything), plus a short web search for recent news when useful. Answer as a briefing: who he is and where he stands, the dates that matter with days left, deals and fits, the next games, what is missing, and "*מה עכשיו:*". The same for a club with club_brief ("מה יש לנו עם מכבי…").
@@ -378,7 +383,7 @@ Free agents (contractStatus "Free") automatically lose club, contract dates and 
 Today's date: ${israelDate(new Date())} (Israel time zone).
 
 ${memorySection(memories)}
-${mistakesSection(mistakes)}`;
+${mistakesSection(mistakes)}${rules.length ? `\n${rulesSection(rules)}` : ''}`;
 }
 
 const TOOLS = [
@@ -479,6 +484,11 @@ Object.assign(TOOL_ACTION, { radar_list: 'edit', radar_get: 'edit', radar_mark: 
 // What money it may show is decided there, by the asker's own permission.
 TOOLS.push(...RESEARCH_TOOL_DEFS);
 Object.assign(TOOL_ACTION, { research_start: 'edit', research_status: 'edit' });
+// Golda 3.0. Negotiation scenarios and what-ifs are money: admins only. A regulation pointer is reading.
+// The rules she proposed for herself are the owner's to decide.
+TOOLS.push(...DEAL_TOOL_DEFS, REGULATION_TOOL_DEF, PROMPT_RULES_TOOL_DEF);
+READ_TOOLS.add('regulation_check');
+Object.assign(TOOL_ACTION, { deal_scenarios: 'money', finance_whatif: 'money', prompt_rules: 'manage_settings' });
 // The app has no voice notes, so voice_reply is offered on WhatsApp only.
 const toolsFor = (role, channel = 'whatsapp') => TOOLS.filter((t) => (READ_TOOLS.has(t.name) || can(role, TOOL_ACTION[t.name])) && !(t.name === 'voice_reply' && channel === 'app'));
 // Anthropic-hosted tools; they run server-side, nothing to implement here.
@@ -889,6 +899,7 @@ function createTools({ db, admin, identity, media, session, assistantName, chann
     ...instagramTools({ db, identity, role, media, state }) };
   Object.assign(impl, radarTools({ db, identity, role }));   // Golda 3.0: the market radar
   Object.assign(impl, researchTools({ db, identity, role, channel, state }));
+  Object.assign(impl, dealTools({ db, identity, role }), regulationTools({ db, role, can }), reviewTools({ db, identity, role }));
   return { state, run: async (name, input) => {
     if (!impl[name]) throw new Error(`unknown tool ${name}`);
     const out = await impl[name](input || {});
@@ -926,7 +937,8 @@ async function runAgent({ db, admin, identity, text, media, session, assistantNa
   // Long-term memory is read once per message; a failed read never blocks the reply.
   const remembered = memories || await loadMemories(db, identity).catch((e) => { console.warn('[golda] memory read failed:', e.message); return []; });
   const mistakes = await recentMistakes(db).catch(() => []);
-  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered, mistakes);
+  // Only rules the owner approved (lib/golda-review.js) reach the prompt; a failed read means none.
+  const system = systemPrompt(assistantName, identity, topic, topics, channel, remembered, mistakes, await approvedRules(db));
   const messages = [];
   for (const h of history) {
     const role = h.role === 'assistant' ? 'assistant' : 'user';

@@ -62,6 +62,7 @@ const { askMatches, askedMatchesOn } = require('./lib/golda-match-report.js');
 const { askMonthlyReports, remindedOn } = require('./lib/golda-monthly-report.js');
 const { offerGraphics } = require('./lib/golda-instagram.js');
 const cost = require('./lib/golda-cost.js');
+const { reviewNightly, offerProposal } = require('./lib/golda-review.js');
 
 const KEEP_DAYS = 400;
 const israelHour = (now) => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', hour: '2-digit', hour12: false }).format(now));
@@ -214,6 +215,8 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
   const hour = israelHour(now);
   // Once a night: which players have a card on the website, for the player checklist. Nothing is sent.
   await checkSiteCards(db, data.players, now, { hour, today, site: siteClient, job }).catch((e) => job.note(`site cards failed: ${e.message}`));
+  // Once a night: she reads back the answers marked 👎 and proposes a rule for each (lib/golda-review.js). Nothing is sent.
+  await reviewNightly(db, now, { hour, today, job }).catch(() => job.note('self-review failed'));
   const recipients = whatsappRecipients(data.users);
   if (!recipients.length) return { sent: 0, note: 'no WhatsApp recipients' };
 
@@ -347,6 +350,9 @@ async function run(job, now = new Date(), { force = false, send, write, scout, s
     const card = spoke ? {} : await require('./lib/golda-radar.js').offerRadar(db, owner, now, { hour, send, job }).catch(failed('radar card'));
     const cold = spoke || card.sent ? {} : await require('./lib/golda-network.js').coldNudge(db, owner, data, now, { hour, send, job }).catch(failed('cold-contact nudge'));
     count += (card.sent || 0) + (cold.sent || 0);
+    // A rule she proposed for herself after a 👎: at most one a day, only in an hour when nothing else of hers went out.
+    const proposal = spoke || card.sent || cold.sent ? {} : await offerProposal(db, owner, now, { hour, send, job }).catch(() => { job.note('rule proposal failed'); return {}; });
+    count += proposal.sent || 0;
   }
   if (notesHeard) await Promise.all(playerNotes.map((n) => db.collection('golda_player_notes').doc(n.id).update({ delivered: true, deliveredAt: now.toISOString() }).catch(() => {})));
   if (!quiet) sent.eventsAt = now.getTime();   // at night the events wait for the morning
