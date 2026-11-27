@@ -73,8 +73,14 @@ const IFA_RULES_PAGE = 'https://www.football.org.il/association/aboutassociation
 const ifaSource = (name, version, article) => ({ document: `${IFA}, ${name}, גרסת ${version}`, article, readIn: `הקובץ "${name} - ${version}" בעמוד התקנונים באתר ההתאחדות`, url: IFA_RULES_PAGE });
 // A circular with amendments to the RSTP that was seen listed and not read.
 const RSTP_CIRCULAR_NOT_READ = 'חוזר של פיפ"א מספטמבר 2026 עם תיקונים ל-RSTP לא נקרא, אז לא בדקתי אם הוא נוגע לסעיף הזה.';
+/** A day `months` calendar months after `day` (YYYY-MM-DD). */
+const addMonths = (day, months) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+};
 // The Israel FA's agents regulations, by whether the player is a minor: the part on minors is spelled out only where it touches.
-const IFA_AGENTS_MINORS = 'לפי סעיפים 21 עד 23, סוכן רשאי לפנות לקטין או לאפוטרופוס שלו ולחתום איתו על הסכם ייצוג רק בששת החודשים שלפני הגיל שבו הקטין רשאי לפי הדין בישראל לחתום על חוזה עבודה; הפנייה טעונה הסכמה בכתב מראש של האפוטרופוס; הסוכן צריך להשלים קודם את קורס פיפ"א בנושא קטינים; וההסכם אכיף רק אם חתמו עליו הקטין והאפוטרופוסים שלו. לפי סעיף 24, הפרה גוררת קנס, השעיה של הרישום כסוכן בהתאחדות עד שנתיים ודיווח לפיפ"א. לפי סעיף 28, סוכן לא מקבל עמלה על ייצוג של שחקן קטין או על עסקה שקשורה בו, אלא אם הקטין חתם על חוזה העבודה הראשון שלו או על חוזה מאוחר יותר.';
+const IFA_AGENTS_MINORS = 'לפי סעיפים 21 עד 23, פנייה של סוכן לקטין או לאפוטרופוס שלו וחתימה על הסכם ייצוג נעשות רק בששת החודשים שלפני הגיל שבו, לפי הדין בישראל, קטין יכול לחתום על חוזה עבודה; הפנייה טעונה הסכמה בכתב מראש של האפוטרופוס; הסוכן צריך להשלים קודם את קורס פיפ"א בנושא קטינים; וההסכם אכיף רק אם חתמו עליו הקטין והאפוטרופוסים שלו. לפי סעיף 24, הפרה גוררת קנס, השעיה של הרישום כסוכן בהתאחדות עד שנתיים ודיווח לפיפ"א. לפי סעיף 28, סוכן לא מקבל עמלה על ייצוג של שחקן קטין או על עסקה שקשורה בו, אלא אם הקטין חתם על חוזה העבודה הראשון שלו או על חוזה מאוחר יותר.';
 const ifaAgentsHe = (c) => [
   'תקנון סוכני הכדורגל של ההתאחדות לכדורגל בישראל (גרסת יולי 2026) חל, לפי סעיפים 3 ו-4 שלו, על הסכמי ייצוג ועל עסקאות עם "ממד לאומי", ובהם העברה בין שני מועדונים בהתאחדות, או לקוח שרשום בהתאחדות או גר בישראל.',
   'סעיף 5 עוסק בתנאים למתן שירותי סוכן בישראל (רישיון סוכן בתוקף מפיפ"א, ולסוכן ישראלי גם רישום בהתאחדות), וסעיף 7 ברישום בפנקס הסוכנים, שמתחדש בכל עונה. לפי סעיף 12, הסכם ייצוג בין יחיד לסוכן הוא לתקופה שלא עולה על שנתיים, מאריכים אותו רק בהסכם חדש, וסעיף של חידוש אוטומטי בטל. סעיף 15 מפרט מה ההסכם כולל כדי להיות תקף, ולפי סעיף 31 סכסוכים עם ממד לאומי נדונים במוסד לבוררות ולגישור של ההתאחדות.',
@@ -135,24 +141,28 @@ const RULES = [
   },
   {
     // limitMonths is the article's own number: the code compares it with the
-    // agreement on record, and an agreement within it is not flagged.
+    // agreement on record by calendar dates (never by rounded months), and an
+    // agreement that ends within it is not flagged.
     id: 'agent_representation_length', area: 'agents', status: 'verified', readOn: READ_ON_PDF, limitMonths: 24,
+    topic: 'האורך של הסכם הייצוג עם השחקן',
     he: 'לפי סעיף 12(3) בתקנון סוכני הכדורגל של פיפ"א (FFAR), הסכם ייצוג בין סוכן ליחיד (Individual בלשון התקנון, כאן השחקן) לא יעלה על שנתיים; מאריכים אותו רק בהסכם ייצוג חדש, והסעיף קובע שסעיף של חידוש אוטומטי בטל.',
     source: ffarSource('art. 12 par. 3'),
     when: (c, r) => {
       if (c.reprMonths === null) return null;
-      if (r.status === 'verified' && Number.isFinite(r.limitMonths) && c.reprMonths <= r.limitMonths) return null;
-      return `הסכם הייצוג הרשום הוא ל-${c.reprMonths} חודשים`;
+      if (r.status === 'verified' && Number.isFinite(r.limitMonths) && c.reprEnd <= addMonths(c.reprStart, r.limitMonths)) return null;
+      return `הסכם הייצוג הרשום הוא מ-${dmyOf(c.reprStart)} עד ${dmyOf(c.reprEnd)}, כ-${c.reprMonths} חודשים`;
     },
   },
   {
     id: 'agent_minor_representation', area: 'minors', status: 'verified', readOn: READ_ON_PDF,
-    he: 'סעיף 13 בתקנון סוכני הכדורגל של פיפ"א (FFAR) עוסק בייצוג של קטינים. לפי הסעיף, פנייה לקטין או לאפוטרופוס שלו וחתימה על הסכם ייצוג נעשות רק בששת החודשים שלפני הגיל שבו הקטין רשאי לחתום על חוזה מקצועני ראשון לפי דין המדינה שבה יועסק, ורק אחרי הסכמה בכתב מראש של האפוטרופוס; הסוכן צריך להשלים קודם את קורס ההשתלמות של פיפ"א בנושא קטינים; ההסכם אכיף רק אם חתמו עליו הקטין והאפוטרופוס שלו; ולהפרה של הכלל על הפנייה הסעיף קובע לפחות קנס והשעיית רישיון של עד שנתיים.',
+    topic: 'פנייה של סוכן לקטין וייצוג של קטין',
+    he: 'סעיף 13 בתקנון סוכני הכדורגל של פיפ"א (FFAR) עוסק בייצוג של קטינים. לפי הסעיף, פנייה לקטין או לאפוטרופוס שלו וחתימה על הסכם ייצוג נעשות רק בששת החודשים שלפני הגיל שבו הקטין יכול לחתום על חוזה מקצועני ראשון לפי דין המדינה שבה יועסק, ורק אחרי הסכמה בכתב מראש של האפוטרופוס; הסוכן צריך להשלים קודם את קורס ההשתלמות של פיפ"א בנושא קטינים; ההסכם אכיף רק אם חתמו עליו הקטין והאפוטרופוס שלו; ולהפרה של הכלל על הפנייה הסעיף קובע לפחות קנס והשעיית רישיון של עד שנתיים.',
     source: ffarSource('art. 13 pars 1-4'),
     when: (c) => (c.minor ? ageWhy(c) : null),
   },
   {
     id: 'ifa_agents', area: 'agents', status: 'verified', readOn: READ_ON_PDF,
+    topic: 'תקנון סוכני הכדורגל של ההתאחדות לכדורגל בישראל',
     he: ifaAgentsHe,
     source: ifaSource('תקנון סוכני כדורגל', 'יולי 2026', 'סעיפים 3-5, 7, 12, 15, 21-24, 28, 31'),
     when: (c) => (c.israel && c.openDeal ? 'העסקה נוגעת למועדון או לשחקן בישראל' : null),
@@ -168,24 +178,27 @@ const RULES = [
     },
   },
   {
+    // Travels with a row marked rstp: one that was read before the new edition was (art. 19). It names that row, since rows read in both editions can stand next to it.
     id: 'rstp_new_2027', area: 'minors', status: 'verified', readOn: READ_ON, withRstp: true,
     he: (c) => (c.today < RSTP_NEW_FROM
-      ? 'פיפ"א אישרה תקנון RSTP חדש, ועיקר השינויים נכנסים לתוקף ב-1.1.2027: מה שכתוב כאן נכון למה שנקרא לפני כן ועשוי להשתנות.'
-      : 'תקנון RSTP חדש של פיפ"א נכנס לתוקף ב-1.1.2027, ומה שכתוב כאן נקרא לפני כן: צריך לבדוק מחדש מול התקנון החדש.'),
+      ? 'פיפ"א אישרה תקנון RSTP חדש, ועיקר השינויים נכנסים לתוקף ב-1.1.2027: מה שכתוב כאן על סעיף 19 (העברה בינלאומית של קטינים) נכון למה שנקרא לפני כן ועשוי להשתנות.'
+      : 'תקנון RSTP חדש של פיפ"א נכנס לתוקף ב-1.1.2027, ומה שכתוב כאן על סעיף 19 (העברה בינלאומית של קטינים) נקרא לפני כן: צריך לבדוק מחדש את הסעיף הזה מול התקנון החדש.'),
     source: { document: RSTP, article: '', readIn: 'FIFA news on the new regulatory framework for the transfer system, 10.6.2026', url: 'https://inside.fifa.com/transfer-system/news/bureau-council-new-regulatory-framework-global-football-transfer-system-2027' },
     when: () => null,
   },
   {
-    // Read in both editions, so the note about the new RSTP does not travel with it: the row says itself what each edition has.
+    // Read in both editions, so it does not bring the note about the new RSTP: the row says itself what each edition has.
     id: 'rstp_minor_contract', area: 'minors', status: 'verified', readOn: READ_ON_PDF,
+    topic: 'אורך החוזה המקצועני של שחקן קטין',
     he: (c) => (c.today < RSTP_NEW_FROM
       ? `לפי סעיף 18(2) בתקנון RSTP של פיפ"א (מהדורת יולי 2025), שחקן מתחת לגיל 18 לא יחתום על חוזה מקצועני לתקופה של יותר משלוש שנים, וסעיף בחוזה שמתייחס לתקופה ארוכה יותר לא יוכר. במהדורת ינואר 2027, שבתוקף מ-1.1.2027, נוסף לסעיף חריג של עד חמש שנים, בתנאים שמפורטים בו. ${RSTP_CIRCULAR_NOT_READ}`
-      : 'לפי סעיף 18(2) בתקנון RSTP של פיפ"א (מהדורת ינואר 2027), שחקן מתחת לגיל 18 לא יחתום על חוזה מקצועני לתקופה של יותר משלוש שנים, וסעיף בחוזה שמתייחס לתקופה ארוכה יותר לא יוכר. לסעיף יש חריג: כשהדין המקומי או הסכם קיבוצי לא מונעים זאת, שחקן שרשום במועדון 20 חודשים או שתי תקופות תחרות רצופות (הקצר מביניהם) לפני החתימה יכול לחתום באותו מועדון על חוזה של עד חמש שנים, בתנאים נוספים שמפורטים בסעיף.'),
+      : `לפי סעיף 18(2) בתקנון RSTP של פיפ"א (מהדורת ינואר 2027), שחקן מתחת לגיל 18 לא יחתום על חוזה מקצועני לתקופה של יותר משלוש שנים, וסעיף בחוזה שמתייחס לתקופה ארוכה יותר לא יוכר. לסעיף יש חריג: כשהדין המקומי או הסכם קיבוצי לא מונעים זאת, שחקן שרשום במועדון 20 חודשים או שתי תקופות תחרות רצופות (הקצר מביניהם) לפני החתימה יכול לחתום באותו מועדון על חוזה של עד חמש שנים, בתנאים נוספים שמפורטים בסעיף. ${RSTP_CIRCULAR_NOT_READ}`),
     source: rstpSource('art. 18 par. 2'),
     when: (c) => (c.minor && c.openDeal ? `${ageWhy(c)}, ויש עסקה פתוחה` : null),
   },
   {
     id: 'ifa_minors', area: 'minors', status: 'verified', readOn: READ_ON_PDF,
+    topic: 'תקנון מעמד והעברות של שחקנים קטינים של ההתאחדות לכדורגל בישראל',
     he: 'תקנון מעמד והעברות של שחקנים קטינים של ההתאחדות לכדורגל בישראל (גרסת אוגוסט 2026) מסדיר, לפי סעיף 1 שלו, את תנאי ההעברה של שחקנים מתחת לגיל 17 ואת הפיצוי והתגמול למועדונים על אימון ופיתוח. לפי סעיף 5, קטין נרשם רק אם הוא והאפוטרופוסים שלו חתמו על טופס ההצטרפות בפורטל המועדונים. לפי סעיף 6, קטין נרשם בעונה בלא יותר משלושה מועדונים ומשחק בשניים בלבד. לפי סעיף 9, הסכם בין מועדון לשחקן מתחת לגיל 18 לא יעלה על שלוש שנים, ותקופה ארוכה יותר בטלה בחלק העודף. סעיפים 10 עד 12 מפרטים באילו מקרים ובאילו מועדים קטין רשום עובר למועדון אחר, ובהם הודעה בכתב של הקטין להתאחדות ולמועדון שלו ותקופת המתנה של 14 יום. ההמשך של סעיף 12 והסעיפים שאחריו לא נקראו, וכדאי לקרוא את התקנון המלא.',
     source: ifaSource('תקנון מעמד והעברות של שחקנים קטינים', 'אוגוסט 2026', 'סעיפים 1, 5, 6, 9, 10-12'),
     when: (c) => (c.minor && c.israel ? `${ageWhy(c)}, ומשחק בישראל או עובר למועדון בישראל` : null),
@@ -193,12 +206,14 @@ const RULES = [
   // ── Transfer windows and timing ────────────────────────────────────────────
   {
     id: 'rstp_pre_contract', area: 'windows', status: 'verified', readOn: READ_ON_PDF,
-    he: 'לפי סעיף 18(3) בתקנון RSTP של פיפ"א, מועדון שמתכוון לחתום על חוזה עם שחקן מקצועני צריך להודיע על כך בכתב למועדון הנוכחי של השחקן לפני שהוא נכנס איתו למשא ומתן, ושחקן מקצועני חופשי לחתום במועדון אחר רק אם החוזה שלו במועדון הנוכחי הסתיים או עומד להסתיים בתוך שישה חודשים. הנוסח זהה במהדורת יולי 2025 ובמהדורת ינואר 2027.',
+    topic: 'פנייה של מועדון אחר לשחקן שעדיין בחוזה',
+    he: `לפי סעיף 18(3) בתקנון RSTP של פיפ"א, מועדון שמתכוון לחתום על חוזה עם שחקן מקצועני צריך להודיע על כך בכתב למועדון הנוכחי של השחקן לפני שהוא נכנס איתו למשא ומתן, ושחקן מקצועני חופשי לחתום במועדון אחר רק אם החוזה שלו במועדון הנוכחי הסתיים או עומד להסתיים בתוך שישה חודשים. הנוסח זהה במהדורת יולי 2025 ובמהדורת ינואר 2027. ${RSTP_CIRCULAR_NOT_READ}`,
     source: rstpSource('art. 18 par. 3'),
     when: (c) => (c.underContract && c.contractEnd && c.openDeal ? `השחקן בחוזה עד ${c.contractEnd} ויש עסקה פתוחה מול מועדון אחר` : null),
   },
   {
     id: 'ifa_registration_periods', area: 'windows', status: 'verified', readOn: READ_ON_PDF,
+    topic: 'תקופות הרישום בישראל לפי תקנון הרישום',
     he: `לפי סעיף 2 בנספח א' לתקנון הרישום של ההתאחדות לכדורגל בישראל (גרסת נובמבר 2026), פעולת רישום במועדון מקצועני נעשית רק בשתי תקופות רישום, שקובעת ועדת ליגה וגביע בהתאם לכללי פיפ"א, ושחקן מקצועני שהחוזה שלו הסתיים לפני תקופת הרישום הראשונה או במהלכה יכול להירשם גם בין שתי התקופות. סעיף 3 עוסק במועד ההגשה של פעולת רישום ובמסמכים בפורטל המועדונים. המועדים של העונה הנוכחית לא כתובים בתקנון, ולא נקראו.`,
     source: ifaSource('תקנון הרישום', 'נובמבר 2026', `נספח א', סעיפים 2-3`),
     when: (c) => (c.openDeal && c.clubCountry === 'Israel' ? 'העסקה מול מועדון בישראל' : null),
@@ -242,7 +257,8 @@ function contextOf({ player = null, deal = null, club = null, requirement = null
     playerCountry, clubCountry,
     international: playerCountry && clubCountry ? playerCountry.toLowerCase() !== clubCountry.toLowerCase() : null,
     israel: [playerCountry, clubCountry].some((x) => x.toLowerCase() === 'israel'),
-    reprMonths: p.reprStart && p.reprEnd ? monthsBetween(p.reprStart, p.reprEnd) : null,
+    reprMonths: isDay(p.reprStart) && isDay(p.reprEnd) ? monthsBetween(p.reprStart, p.reprEnd) : null,
+    reprStart: p.reprStart || '', reprEnd: p.reprEnd || '',
     underContract: ['Under Contract', 'Loan'].includes(p.contractStatus), contractEnd: p.contractEnd || '',
   };
 }
@@ -260,7 +276,7 @@ function flagOf(rule, ctx, why) {
     `נקרא ב-${dmy(rule.readOn)}${old ? ', לפני יותר מחצי שנה: כדאי לוודא שלא השתנה' : ''}${verified ? '' : '. לא אומת מול מקור רשמי'}.`,
     DISCLAIMER,
   ].join('\n');
-  return { id: rule.id, area: rule.area, status: rule.status, he, why: why || '', source: { document: s.document, article: s.article || '', readIn: s.readIn || '', url: s.url }, readOn: rule.readOn, line };
+  return { id: rule.id, area: rule.area, status: rule.status, ...(rule.topic ? { topic: rule.topic } : {}), he, why: why || '', source: { document: s.document, article: s.article || '', readIn: s.readIn || '', url: s.url }, readOn: rule.readOn, line };
 }
 
 /** The window of the deal's league today, from the league table (never an official source). */

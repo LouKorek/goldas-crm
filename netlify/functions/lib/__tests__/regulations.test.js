@@ -123,6 +123,7 @@ test('the rows read in the official documents on 27.11.2026: each states its art
     assert.equal(f.status, 'verified', id);
     assert.equal(f.readOn, READ_ON_PDF, id);
     assert.ok(f.source.article, `${id}: names the article`);
+    assert.ok(f.topic && f.topic.length < 80 && !/\d/.test(f.topic), `${id}: a short topic, with no number, for where only the name is shown`);
     assert.match(f.line, /נקרא ב-27\.11\.2026\./, id);
     assert.doesNotMatch(f.line, /לא אומת מול מקור רשמי/, id);
     assert.ok(f.line.endsWith(DISCLAIMER), id);
@@ -171,6 +172,13 @@ test('the RSTP rows follow the edition of the day: July 2025 until the end of 20
     assert.match(f.why, /בחוזה עד 2027-12-31/);
     assert.match(f.source.url, url);
   }
+  // The unread circular is said on every statement of art. 18, in both editions.
+  for (const out of [before, after]) for (const id of ['rstp_minor_contract', 'rstp_pre_contract']) assert.match(of(out, id).he, /חוזר של פיפ"א מספטמבר 2026 עם תיקונים ל-RSTP לא נקרא/, id);
+  // Next to a row read before the new edition (art. 19), the "check again" note names that row and not these two.
+  const note = of(after, 'rstp_new_2027');
+  assert.ok(of(after, 'minor_international_transfer') && note);
+  assert.match(note.he, /מה שכתוב כאן על סעיף 19 \(העברה בינלאומית של קטינים\) נקרא לפני כן: צריך לבדוק מחדש את הסעיף הזה/);
+  assert.match(of(before, 'rstp_new_2027').he, /מה שכתוב כאן על סעיף 19/);
   // Both rows were read in the new edition too, so they do not bring the "check again against the new RSTP" note by themselves.
   const alone = regulationFlags({ player: adult({ contractStatus: 'Under Contract', contractEnd: '2027-12-31' }), deal: deal({ playerId: 'p2' }), today: '2027-02-01' });
   assert.ok(ids(alone.flags).includes('rstp_pre_contract'));
@@ -181,8 +189,18 @@ test('the length of a representation agreement on record is compared with the tw
   assert.equal(row('agent_representation_length').limitMonths, 24);
   const long = regulationFlags({ player: adult({ reprStart: '2025-01-01', reprEnd: '2028-01-01' }), today: TODAY });
   assert.match(long.flags.find((x) => x.id === 'agent_representation_length').why, /36 חודשים/);
-  const two = regulationFlags({ player: adult({ reprStart: '2025-01-01', reprEnd: '2026-12-31' }), today: TODAY });
-  assert.ok(!ids(two.flags).includes('agent_representation_length'), 'an agreement of two years is not flagged');
+  const flagged = (reprStart, reprEnd) => ids(regulationFlags({ player: adult({ reprStart, reprEnd }), today: TODAY }).flags).includes('agent_representation_length');
+  // By calendar dates, never by rounded months: two years to the day is within it, a day more is not.
+  assert.equal(flagged('2025-01-01', '2026-12-31'), false, 'an agreement of two years is not flagged');
+  assert.equal(flagged('2025-01-01', '2027-01-01'), false, 'two years to the day');
+  assert.equal(flagged('2025-01-01', '2027-01-02'), true, 'two years and a day');
+  assert.equal(flagged('2025-01-01', '2027-01-11'), true, 'two years and ten days, which rounds to 24 months');
+  assert.equal(flagged('2025-03-01', '2027-03-15'), true);
+  assert.equal(flagged('2025-01-01', '2027-02-01'), true, 'two years and a month');
+  assert.equal(flagged('2024-02-29', '2026-02-28'), false, 'from a leap day');
+  // The flag names the dates on record.
+  const tenDays = regulationFlags({ player: adult({ reprStart: '2025-01-01', reprEnd: '2027-01-11' }), today: TODAY }).flags.find((x) => x.id === 'agent_representation_length');
+  assert.match(tenDays.why, /מ-1\.1\.2025 עד 11\.1\.2027, כ-24 חודשים/);
   const none = regulationFlags({ player: adult(), today: TODAY });
   assert.ok(!ids(none.flags).includes('agent_representation_length'), 'no dates on record: nothing to compare');
   // A general question shows the row whatever the records say.
@@ -265,7 +283,7 @@ test('every row reads as a pointer, never a legal conclusion', () => {
   assert.doesNotMatch(he('agent_rules_cjeu_2026'), /ניתנים להצדקה/);
   // Nothing in the table states a conclusion.
   for (const r of RULES.filter((x) => x.he)) {
-    for (const c of [{ today: TODAY }, { today: '2027-02-01' }, { today: TODAY, minor: true }]) assert.doesNotMatch(heOf(r, c), /חובה|אסור|מותר|חוקי|—/, r.id);
+    for (const c of [{ today: TODAY }, { today: '2027-02-01' }, { today: TODAY, minor: true }]) assert.doesNotMatch(heOf(r, c), /חובה|אסור|מותר|רשאי|חוקי|—/, r.id);
   }
   // A row is verified only by reading its document: the ones read on the regulators' pages on 25.11.2026,
   // and the ones read in the official PDFs on 27.11.2026. The season's dates in Israel stay unverified.

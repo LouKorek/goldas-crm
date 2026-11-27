@@ -537,7 +537,13 @@ function dealTools({ db, identity = {}, role, client = null }) {
         comparables: facts.comparables, paymentsOnDeal: facts.payments,
         ...(reasoning && !reasoning.skipped ? { reasoning } : {}),
         ...(reasoning && reasoning.skipped ? { reasoningSkipped: reasoning.skipped } : {}),
-        regulation: { flags: regs.flags.filter((f) => f.area !== 'agents').map((f) => f.line), notVerified: regs.notVerified.map((n) => n.topic), missing: regs.missing.map((m) => m.he), more: 'regulation_check with this dealId has the agent rules too.' },
+        // The deal room stays short: a rule read from a whole document is named here by its topic, and regulation_check shows it in full.
+        regulation: {
+          flags: regs.flags.filter((f) => f.area !== 'agents' && !f.topic).map((f) => f.line),
+          alsoTouches: regs.flags.filter((f) => f.area !== 'agents' && f.topic).map((f) => f.topic),
+          notVerified: regs.notVerified.map((n) => n.topic), missing: regs.missing.map((m) => m.he),
+          more: 'regulation_check with this dealId shows each topic of alsoTouches in full, with its article and source, and the agent rules too. Name those topics; do not state their rules from memory.',
+        },
         rule: 'Answer with `text` as it is (you may shorten, never change a number). Every number comes from the CRM: never add, round, convert or estimate one, and never fill what `missing` lists: say it is missing and ask; once the writer gives it, save it on the deal or in the contract terms and call again. `reasoning`, when present, is wording only. A scenario with salaryPerMonth null has no number: say which fact is missing. A counter-offer to the club is a draft the writer sends himself: outreach_prepare, then outreach_link. You never send it.',
       };
     },
