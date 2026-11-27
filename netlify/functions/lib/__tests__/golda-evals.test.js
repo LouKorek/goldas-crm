@@ -203,7 +203,9 @@ test('eval 9: a deal for a 16-year-old with a club abroad: the rule on minors, w
   assert.match(minor.source.url, /^https:\/\/inside\.fifa\.com\//);
   assert.ok(minor.text.includes(`בן ${MINOR_AGE}`) && minor.text.includes('Germany'));
   assert.ok(out.flags.some((f) => f.id === 'rstp_new_2027'), 'with the note that the RSTP is being replaced');
-  assert.ok(out.notVerified.some((n) => n.id === 'rstp_minor_contract') && out.notVerified.some((n) => n.id === 'agent_minor_representation'));
+  // The length of a minor's contract and an agent's approach to a minor were read in FIFA's documents: flags with their articles.
+  assert.equal(out.flags.find((f) => f.id === 'rstp_minor_contract').source.article, 'art. 18 par. 2');
+  assert.equal(out.flags.find((f) => f.id === 'agent_minor_representation').source.article, 'art. 13 pars 1-4');
   assert.equal(r.after, r.before);
 });
 
@@ -224,7 +226,9 @@ test('eval 11: the cap on an agent\'s fee: shown as suspended, with FIFA\'s noti
   assert.ok(cap.text.includes('לא אישור שהעמלה הרשומה בעסקה תקינה'), 'a pointer, never a clearance of the commission');
   assert.ok(!/\d+\s*%/.test(cap.text), 'no percentage is stated for a rule that was not read');
   assert.ok(out.flags.some((f) => f.id === 'agent_rules_cjeu_2026'));
-  assert.ok(out.notVerified.some((n) => n.id === 'ifa_agents'), 'the Israeli FA\'s agents regulations are listed as not checked');
+  const ifa = out.flags.find((f) => f.id === 'ifa_agents');
+  assert.ok(ifa && ifa.status === 'verified' && /football\.org\.il/.test(ifa.source.url), 'the Israel FA\'s agents regulations, read in the version it names');
+  assert.ok(!/\d+\s*%/.test(ifa.text), 'and no percentage there either');
 });
 
 test('eval 12: a deal in Israel: the Israeli windows are said to be unchecked, never stated', async () => {

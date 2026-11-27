@@ -9,18 +9,25 @@
 // with the same line telling the owner to check with a lawyer.
 //
 // status:
-//   verified    the statement was read on the regulator's own page (FIFA) on
-//               `readOn`. Only these carry a statement of the rule.
-//   unverified  the document could not be opened from here (FIFA's PDF library
-//               and the Israel FA's site refuse automated readers). Such a row
-//               names the topic and where to check it, and states no rule: no
-//               number, no limit, no article. It is shown as "not checked".
+//   verified    the statement was read in the regulator's own document (FIFA,
+//               the Israel FA) on `readOn`. Only these carry a statement of the
+//               rule, and only what was read: a part of the document that was
+//               not read is named as not read.
+//   unverified  the document was not read. Such a row names the topic and where
+//               to check it, and states no rule: no number, no limit, no
+//               article. It is shown as "not checked".
 // To verify a row: read the document, write the statement (he), the article
 // and readOn, and set status to 'verified'.
+// The rows dated READ_ON_PDF were read in the official PDFs through the owner's
+// browser (FIFA's PDF library and the Israel FA's site refuse automated
+// readers). The Israel FA replaces its files with every new version: its rules
+// page lists the current ones, so that page is the link, and each row names
+// the version that was read.
 const { israelDate, daysBetween, ageOn, stageOfPlayer, isClosedStage, stageIndex, playerName } = require('@goldas/domain');
 const { WINDOWS } = require('./transfer-windows.js');
 
 const READ_ON = '2026-11-25';
+const READ_ON_PDF = '2026-11-27';
 const WINDOWS_READ_ON = '2026-11-08';
 const DISCLAIMER = 'זו הפניה לכלל ולא קביעה משפטית. כדאי לבדוק מול עורך דין.';
 const ADULT_AGE = 18;
@@ -44,14 +51,36 @@ const SUSPENSION = {
 const SUSPENSION_NOTICE_ON = '8.9.2023';
 // A pointer, never a conclusion: who announced what and when, what was not found by the day it was read, and what may change it.
 const SUSPENDED_TAIL = `פיפ"א הודיעה ב-${SUSPENSION_NOTICE_ON} על השעיית הכלל הזה. נכון ל-${Number(READ_ON.slice(8, 10))}.${Number(READ_ON.slice(5, 7))}.${READ_ON.slice(0, 4)}, היום שבו נקרא, לא מצאתי הודעה רשמית שההשעיה הסתיימה, ואחרי פסק הדין של בית הדין של האיחוד האירופי מיולי 2026 זה עשוי להשתנות. מה שקבעה ההתאחדות המקומית לא נבדק כאן.`;
-// Where an unverified topic is to be checked. Only addresses that were found
-// while reading are written here; where the document's own address was not
-// found, the regulator's site is given and the document is named.
-const FFAR_PDF = { document: FFAR, url: 'https://digitalhub.fifa.com/m/1e7b741fa0fae779/original/FIFA-Football-Agent-Regulations.pdf' };
-const RSTP_DOC = { document: `${RSTP}, במסמכי הרגולציה באתר פיפ"א`, url: 'https://inside.fifa.com' };
+// Only addresses that were found while reading are written here; where a
+// document's own address was not found, the regulator's site is given and the
+// document is named.
 const IFA_SITE = 'https://www.football.org.il';
-const IFA_AGENTS_PDF = 'https://www.football.org.il/files/agent/%D7%AA%D7%A7%D7%A0%D7%95%D7%9F%20%D7%A1%D7%95%D7%9B%D7%A0%D7%99%20%D7%9B%D7%93%D7%95%D7%A8%D7%92%D7%9C.pdf';
-const IFA_REGISTRATION_PDF = 'https://www.football.org.il/files/Rules/Registration.pdf';
+// The documents read on READ_ON_PDF.
+const FFAR_PDF_URL = 'https://digitalhub.fifa.com/m/1e7b741fa0fae779/original/FIFA-Football-Agent-Regulations.pdf';
+const FFAR_READ_IN = 'FIFA Football Agent Regulations, the PDF in FIFA\'s document library (file title "FIFA Football Agent Regulations DEC 2024 EN v2")';
+const ffarSource = (article) => ({ document: FFAR, article, readIn: FFAR_READ_IN, url: FFAR_PDF_URL });
+// Two editions of the RSTP were read: the one of July 2025 and the one of
+// January 2027 (in force from RSTP_NEW_FROM). The link is to the edition of the day.
+const RSTP_2025_URL = 'https://digitalhub.fifa.com/m/4139b312ba9cfb4f/original/Regulations-on-the-Status-and-Transfer-of-Players-July-2025-edition.pdf';
+const RSTP_2027_URL = 'https://digitalhub.fifa.com/asset/e495d04b-ef95-4d07-ace2-ea4d7781d7de/Regulations-on-the-Status-and-Transfer-of-Players_January-2027.pdf';
+const rstpSource = (article) => (c) => ({
+  document: RSTP, article,
+  readIn: 'RSTP, July 2025 edition and January 2027 edition, the PDFs in FIFA\'s document library',
+  url: c.today < RSTP_NEW_FROM ? RSTP_2025_URL : RSTP_2027_URL,
+});
+const IFA = 'ההתאחדות לכדורגל בישראל';
+const IFA_RULES_PAGE = 'https://www.football.org.il/association/aboutassociation/rules/';
+const ifaSource = (name, version, article) => ({ document: `${IFA}, ${name}, גרסת ${version}`, article, readIn: `הקובץ "${name} - ${version}" בעמוד התקנונים באתר ההתאחדות`, url: IFA_RULES_PAGE });
+// A circular with amendments to the RSTP that was seen listed and not read.
+const RSTP_CIRCULAR_NOT_READ = 'חוזר של פיפ"א מספטמבר 2026 עם תיקונים ל-RSTP לא נקרא, אז לא בדקתי אם הוא נוגע לסעיף הזה.';
+// The Israel FA's agents regulations, by whether the player is a minor: the part on minors is spelled out only where it touches.
+const IFA_AGENTS_MINORS = 'לפי סעיפים 21 עד 23, סוכן רשאי לפנות לקטין או לאפוטרופוס שלו ולחתום איתו על הסכם ייצוג רק בששת החודשים שלפני הגיל שבו הקטין רשאי לפי הדין בישראל לחתום על חוזה עבודה; הפנייה טעונה הסכמה בכתב מראש של האפוטרופוס; הסוכן צריך להשלים קודם את קורס פיפ"א בנושא קטינים; וההסכם אכיף רק אם חתמו עליו הקטין והאפוטרופוסים שלו. לפי סעיף 24, הפרה גוררת קנס, השעיה של הרישום כסוכן בהתאחדות עד שנתיים ודיווח לפיפ"א. לפי סעיף 28, סוכן לא מקבל עמלה על ייצוג של שחקן קטין או על עסקה שקשורה בו, אלא אם הקטין חתם על חוזה העבודה הראשון שלו או על חוזה מאוחר יותר.';
+const ifaAgentsHe = (c) => [
+  'תקנון סוכני הכדורגל של ההתאחדות לכדורגל בישראל (גרסת יולי 2026) חל, לפי סעיפים 3 ו-4 שלו, על הסכמי ייצוג ועל עסקאות עם "ממד לאומי", ובהם העברה בין שני מועדונים בהתאחדות, או לקוח שרשום בהתאחדות או גר בישראל.',
+  'סעיף 5 עוסק בתנאים למתן שירותי סוכן בישראל (רישיון סוכן בתוקף מפיפ"א, ולסוכן ישראלי גם רישום בהתאחדות), וסעיף 7 ברישום בפנקס הסוכנים, שמתחדש בכל עונה. לפי סעיף 12, הסכם ייצוג בין יחיד לסוכן הוא לתקופה שלא עולה על שנתיים, מאריכים אותו רק בהסכם חדש, וסעיף של חידוש אוטומטי בטל. סעיף 15 מפרט מה ההסכם כולל כדי להיות תקף, ולפי סעיף 31 סכסוכים עם ממד לאומי נדונים במוסד לבוררות ולגישור של ההתאחדות.',
+  c && c.minor ? IFA_AGENTS_MINORS : 'סעיפים 21 עד 24 עוסקים בייצוג של קטינים, וסעיף 28 בעמלה על ייצוג של קטין.',
+  'סעיפים 29 ו-30 לא נקראו, וכדאי לקרוא את התקנון המלא מול העסקה הזאת.',
+].join(' ');
 
 // The deal's expected registration or start date, when one is on record: the age that decides is the age on that day.
 const DEAL_DATE_FIELDS = ['registrationDate', 'expectedRegistration', 'expectedStart', 'startDate', 'contractStart'];
@@ -105,12 +134,11 @@ const RULES = [
     when: () => null,
   },
   {
-    // The number is not in the table until someone reads the article: with
-    // limitMonths filled and the status set to verified, the code compares it
-    // with the agreement on record.
-    id: 'agent_representation_length', area: 'agents', status: 'unverified', limitMonths: null,
-    topic: 'האורך המרבי של הסכם ייצוג עם שחקן',
-    check: FFAR_PDF,
+    // limitMonths is the article's own number: the code compares it with the
+    // agreement on record, and an agreement within it is not flagged.
+    id: 'agent_representation_length', area: 'agents', status: 'verified', readOn: READ_ON_PDF, limitMonths: 24,
+    he: 'לפי סעיף 12(3) בתקנון סוכני הכדורגל של פיפ"א (FFAR), הסכם ייצוג בין סוכן ליחיד (Individual בלשון התקנון, כאן השחקן) לא יעלה על שנתיים; מאריכים אותו רק בהסכם ייצוג חדש, והסעיף קובע שסעיף של חידוש אוטומטי בטל.',
+    source: ffarSource('art. 12 par. 3'),
     when: (c, r) => {
       if (c.reprMonths === null) return null;
       if (r.status === 'verified' && Number.isFinite(r.limitMonths) && c.reprMonths <= r.limitMonths) return null;
@@ -118,15 +146,15 @@ const RULES = [
     },
   },
   {
-    id: 'agent_minor_representation', area: 'minors', status: 'unverified',
-    topic: 'פנייה לקטין וייצוג של קטין על ידי סוכן (מתי מותר לפנות, מי חותם)',
-    check: FFAR_PDF,
+    id: 'agent_minor_representation', area: 'minors', status: 'verified', readOn: READ_ON_PDF,
+    he: 'סעיף 13 בתקנון סוכני הכדורגל של פיפ"א (FFAR) עוסק בייצוג של קטינים. לפי הסעיף, פנייה לקטין או לאפוטרופוס שלו וחתימה על הסכם ייצוג נעשות רק בששת החודשים שלפני הגיל שבו הקטין רשאי לחתום על חוזה מקצועני ראשון לפי דין המדינה שבה יועסק, ורק אחרי הסכמה בכתב מראש של האפוטרופוס; הסוכן צריך להשלים קודם את קורס ההשתלמות של פיפ"א בנושא קטינים; ההסכם אכיף רק אם חתמו עליו הקטין והאפוטרופוס שלו; ולהפרה של הכלל על הפנייה הסעיף קובע לפחות קנס והשעיית רישיון של עד שנתיים.',
+    source: ffarSource('art. 13 pars 1-4'),
     when: (c) => (c.minor ? ageWhy(c) : null),
   },
   {
-    id: 'ifa_agents', area: 'agents', status: 'unverified',
-    topic: 'תקנון סוכני הכדורגל של ההתאחדות לכדורגל בישראל (רישום הסוכן, הסכם ייצוג, עמלות)',
-    check: { document: 'ההתאחדות לכדורגל בישראל, תקנון סוכני כדורגל', url: IFA_AGENTS_PDF },
+    id: 'ifa_agents', area: 'agents', status: 'verified', readOn: READ_ON_PDF,
+    he: ifaAgentsHe,
+    source: ifaSource('תקנון סוכני כדורגל', 'יולי 2026', 'סעיפים 3-5, 7, 12, 15, 21-24, 28, 31'),
     when: (c) => (c.israel && c.openDeal ? 'העסקה נוגעת למועדון או לשחקן בישראל' : null),
   },
   // ── Minors (RSTP) ──────────────────────────────────────────────────────────
@@ -148,28 +176,38 @@ const RULES = [
     when: () => null,
   },
   {
-    id: 'rstp_minor_contract', area: 'minors', status: 'unverified', rstp: true,
-    topic: 'אורך החוזה המקצועני של שחקן קטין',
-    check: RSTP_DOC,
+    // Read in both editions, so the note about the new RSTP does not travel with it: the row says itself what each edition has.
+    id: 'rstp_minor_contract', area: 'minors', status: 'verified', readOn: READ_ON_PDF,
+    he: (c) => (c.today < RSTP_NEW_FROM
+      ? `לפי סעיף 18(2) בתקנון RSTP של פיפ"א (מהדורת יולי 2025), שחקן מתחת לגיל 18 לא יחתום על חוזה מקצועני לתקופה של יותר משלוש שנים, וסעיף בחוזה שמתייחס לתקופה ארוכה יותר לא יוכר. במהדורת ינואר 2027, שבתוקף מ-1.1.2027, נוסף לסעיף חריג של עד חמש שנים, בתנאים שמפורטים בו. ${RSTP_CIRCULAR_NOT_READ}`
+      : 'לפי סעיף 18(2) בתקנון RSTP של פיפ"א (מהדורת ינואר 2027), שחקן מתחת לגיל 18 לא יחתום על חוזה מקצועני לתקופה של יותר משלוש שנים, וסעיף בחוזה שמתייחס לתקופה ארוכה יותר לא יוכר. לסעיף יש חריג: כשהדין המקומי או הסכם קיבוצי לא מונעים זאת, שחקן שרשום במועדון 20 חודשים או שתי תקופות תחרות רצופות (הקצר מביניהם) לפני החתימה יכול לחתום באותו מועדון על חוזה של עד חמש שנים, בתנאים נוספים שמפורטים בסעיף.'),
+    source: rstpSource('art. 18 par. 2'),
     when: (c) => (c.minor && c.openDeal ? `${ageWhy(c)}, ויש עסקה פתוחה` : null),
   },
   {
-    id: 'ifa_minors', area: 'minors', status: 'unverified',
-    topic: 'תקנון מעמד והעברות של שחקנים קטינים של ההתאחדות לכדורגל בישראל',
-    check: { document: 'ההתאחדות לכדורגל בישראל, תקנון מעמד והעברות של שחקנים קטינים', url: IFA_SITE },
+    id: 'ifa_minors', area: 'minors', status: 'verified', readOn: READ_ON_PDF,
+    he: 'תקנון מעמד והעברות של שחקנים קטינים של ההתאחדות לכדורגל בישראל (גרסת אוגוסט 2026) מסדיר, לפי סעיף 1 שלו, את תנאי ההעברה של שחקנים מתחת לגיל 17 ואת הפיצוי והתגמול למועדונים על אימון ופיתוח. לפי סעיף 5, קטין נרשם רק אם הוא והאפוטרופוסים שלו חתמו על טופס ההצטרפות בפורטל המועדונים. לפי סעיף 6, קטין נרשם בעונה בלא יותר משלושה מועדונים ומשחק בשניים בלבד. לפי סעיף 9, הסכם בין מועדון לשחקן מתחת לגיל 18 לא יעלה על שלוש שנים, ותקופה ארוכה יותר בטלה בחלק העודף. סעיפים 10 עד 12 מפרטים באילו מקרים ובאילו מועדים קטין רשום עובר למועדון אחר, ובהם הודעה בכתב של הקטין להתאחדות ולמועדון שלו ותקופת המתנה של 14 יום. ההמשך של סעיף 12 והסעיפים שאחריו לא נקראו, וכדאי לקרוא את התקנון המלא.',
+    source: ifaSource('תקנון מעמד והעברות של שחקנים קטינים', 'אוגוסט 2026', 'סעיפים 1, 5, 6, 9, 10-12'),
     when: (c) => (c.minor && c.israel ? `${ageWhy(c)}, ומשחק בישראל או עובר למועדון בישראל` : null),
   },
   // ── Transfer windows and timing ────────────────────────────────────────────
   {
-    id: 'rstp_pre_contract', area: 'windows', status: 'unverified', rstp: true,
-    topic: 'ממתי מותר למועדון אחר לפנות לשחקן שעדיין בחוזה ולחתום איתו',
-    check: RSTP_DOC,
+    id: 'rstp_pre_contract', area: 'windows', status: 'verified', readOn: READ_ON_PDF,
+    he: 'לפי סעיף 18(3) בתקנון RSTP של פיפ"א, מועדון שמתכוון לחתום על חוזה עם שחקן מקצועני צריך להודיע על כך בכתב למועדון הנוכחי של השחקן לפני שהוא נכנס איתו למשא ומתן, ושחקן מקצועני חופשי לחתום במועדון אחר רק אם החוזה שלו במועדון הנוכחי הסתיים או עומד להסתיים בתוך שישה חודשים. הנוסח זהה במהדורת יולי 2025 ובמהדורת ינואר 2027.',
+    source: rstpSource('art. 18 par. 3'),
     when: (c) => (c.underContract && c.contractEnd && c.openDeal ? `השחקן בחוזה עד ${c.contractEnd} ויש עסקה פתוחה מול מועדון אחר` : null),
   },
   {
+    id: 'ifa_registration_periods', area: 'windows', status: 'verified', readOn: READ_ON_PDF,
+    he: `לפי סעיף 2 בנספח א' לתקנון הרישום של ההתאחדות לכדורגל בישראל (גרסת נובמבר 2026), פעולת רישום במועדון מקצועני נעשית רק בשתי תקופות רישום, שקובעת ועדת ליגה וגביע בהתאם לכללי פיפ"א, ושחקן מקצועני שהחוזה שלו הסתיים לפני תקופת הרישום הראשונה או במהלכה יכול להירשם גם בין שתי התקופות. סעיף 3 עוסק במועד ההגשה של פעולת רישום ובמסמכים בפורטל המועדונים. המועדים של העונה הנוכחית לא כתובים בתקנון, ולא נקראו.`,
+    source: ifaSource('תקנון הרישום', 'נובמבר 2026', `נספח א', סעיפים 2-3`),
+    when: (c) => (c.openDeal && c.clubCountry === 'Israel' ? 'העסקה מול מועדון בישראל' : null),
+  },
+  {
+    // The regulations leave the dates to the League and Cup Committee: they are set every season and were not found.
     id: 'windows_israel', area: 'windows', status: 'unverified',
     topic: 'מועדי חלון ההעברות (תקופות הרישום) בישראל לעונה הנוכחית',
-    check: { document: 'ההתאחדות לכדורגל בישראל, תקנון הרישום והודעות על תקופות הרישום', url: IFA_REGISTRATION_PDF },
+    check: { document: `${IFA}, החלטות ועדת ליגה וגביע על תקופות הרישום של העונה`, url: IFA_SITE },
     when: (c) => (c.openDeal && c.clubCountry === 'Israel' ? 'העסקה מול מועדון בישראל' : null),
   },
 ];
@@ -212,7 +250,7 @@ function contextOf({ player = null, deal = null, club = null, requirement = null
 /** A flag as Golda shows it: the rule, why here, where it is written, when it was read, and the closing line. */
 function flagOf(rule, ctx, why) {
   const he = typeof rule.he === 'function' ? rule.he(ctx) : rule.he;
-  const s = rule.source;
+  const s = typeof rule.source === 'function' ? rule.source(ctx) : rule.source;
   const verified = rule.status === 'verified';
   const old = daysBetween(rule.readOn, ctx.today) > STALE_AFTER_DAYS;
   const where = [s.document, s.article, s.readIn && `נקרא ב: ${s.readIn}`].filter(Boolean).join(', ');
@@ -286,7 +324,7 @@ function regulationFlags({ player = null, deal = null, club = null, requirement 
 
 const REGULATION_TOOL_DEF = {
   name: 'regulation_check',
-  description: 'Pointers to football regulations that touch a player or a deal: agents (licence, who pays the agent, acting for both sides, the cap on the fee), minors (an international move under 18) and the transfer window of the deal\'s league. Each flag has the rule, why it touches this case, its source (document, article, link), the day it was read, and a closing line. notVerified lists topics that were NOT read at the source: say they were not checked and where to check; never state them as rules. This is a pointer, never a legal conclusion.',
+  description: 'Pointers to football regulations that touch a player or a deal: agents (licence, the length of a representation agreement, who pays the agent, acting for both sides, the cap on the fee, the Israel FA\'s agents regulations), minors (an international move under 18, an agent approaching and representing a minor, the length of a minor\'s contract, the Israel FA\'s minors regulations) and timing (approaching a player who is under contract, registration periods in Israel, the transfer window of the deal\'s league). Each flag has the rule, why it touches this case, its source (document, article, link), the day it was read, and a closing line. notVerified lists topics that were NOT read at the source: say they were not checked and where to check; never state them as rules. This is a pointer, never a legal conclusion.',
   input_schema: {
     type: 'object',
     properties: {
@@ -332,7 +370,7 @@ function regulationTools({ db, role, can = () => false }) {
 
 /** Her lines about regulations in the system prompt. */
 function regulationSection() {
-  return '- Regulations ("מה הכללים על קטינים / עמלה / ייצוג כפול", "יש בעיה רגולטורית בעסקה של…", a deal for a player under 18 or with a club abroad): regulation_check with the playerId and/or dealId (or a topic for a general question). Show each flag as returned: the rule, why it touches this case, the source link, the day it was read and its closing line, unchanged. What it lists under notVerified was not read at the source: say you did not check it and where to check, and never state it as a rule, not from memory either. You point to rules and never give a legal conclusion of your own ("מותר", "אסור", "חוקי"): that is a lawyer\'s.';
+  return '- Regulations ("מה הכללים על קטינים / עמלה / ייצוג כפול / אורך הסכם ייצוג", "יש בעיה רגולטורית בעסקה של…", a deal for a player under 18, with a club abroad or for a player who is under contract elsewhere): regulation_check with the playerId and/or dealId (or a topic for a general question). Show each flag as returned: the rule, why it touches this case, the source link, the day it was read and its closing line, unchanged. What it lists under notVerified was not read at the source: say you did not check it and where to check, and never state it as a rule, not from memory either. You point to rules and never give a legal conclusion of your own ("מותר", "אסור", "חוקי"): that is a lawyer\'s.';
 }
 
-module.exports = { RULES, regulationFlags, contextOf, regulationTools, regulationSection, REGULATION_TOOL_DEF, DISCLAIMER, READ_ON };
+module.exports = { RULES, regulationFlags, contextOf, regulationTools, regulationSection, REGULATION_TOOL_DEF, DISCLAIMER, READ_ON, READ_ON_PDF };
