@@ -216,6 +216,11 @@ test('deal_scenarios: the answer is built by code, saves nothing and sends nothi
   assert.match(out.rule, /outreach_prepare/);
   // The German window comes with it, marked as not officially verified, with the closing line.
   assert.ok(out.regulation.flags.some((l) => /Bundesliga/.test(l) && /לא אומת מול מקור רשמי/.test(l) && /עורך דין/.test(l)));
+  // A rule read from a whole document is named by its topic only: the deal room stays short, and regulation_check has it in full.
+  assert.ok(Array.isArray(out.regulation.alsoTouches));
+  for (const t of out.regulation.alsoTouches) assert.ok(t.length < 80 && !/מקור:/.test(t), t);
+  assert.ok(out.regulation.flags.every((l) => !/נקרא ב-27\.11\.2026/.test(l)), 'none of the long rows is spelled out here');
+  assert.match(out.regulation.more, /alsoTouches/);
 });
 
 test('deal_scenarios by player: one open deal is used, several are asked about, none still gives his contract', async () => {
